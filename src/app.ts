@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import authRoutes from './routes/authRoutes';
+import couponRoutes from './routes/couponRoutes';
 import orderRoutes from './routes/orderRoutes'; // Add this
 import { errorHandler } from './middleware/errorHandler';
 
@@ -25,6 +26,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/coupon', couponRoutes);
 app.use('/api/orders', orderRoutes); // Add this
 
 // Health check
