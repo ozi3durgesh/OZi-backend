@@ -1,31 +1,67 @@
+// utils/jwt.ts
 import jwt from 'jsonwebtoken';
 import { JwtPayload } from '../types';
+import { User } from '../models';
+import { UserAttributes } from '../types';
 
 export class JwtUtils {
-  static generateAccessToken(payload: JwtPayload): string {
+  static async generateAccessToken(user: any): Promise<string> {
     const secret = process.env.JWT_ACCESS_SECRET;
     if (!secret) {
       throw new Error('JWT_ACCESS_SECRET is not defined');
     }
 
-    return jwt.sign(
-      payload,
-      secret,
-      { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m' } as any
-    );
+    // Get user with role and permissions
+    const userWithPermissions = await User.findByPk(user.id, {
+      include: [
+        {
+          association: 'Role',
+          include: ['Permissions'],
+        }
+      ],
+      attributes: ['id', 'email']
+    });
+
+    if (!userWithPermissions) {
+      throw new Error('User not found');
+    }
+
+    const permissions = (userWithPermissions as any).Role?.Permissions 
+      ? (userWithPermissions as any).Role.Permissions.map((p: any) => `${p.module}:${p.action}`)
+      : [];
+
+    const payload: JwtPayload = {
+      userId: user.id,
+      email: user.email,
+      role: (userWithPermissions as any).Role?.name || '',
+      permissions
+    };
+
+    const options: jwt.SignOptions = {
+      expiresIn: (process.env.JWT_ACCESS_EXPIRES_IN || '15m') as jwt.SignOptions['expiresIn']
+    };
+
+    return jwt.sign(payload, secret, options);
   }
 
-  static generateRefreshToken(payload: JwtPayload): string {
+  static async generateRefreshToken(user: any): Promise<string> {
     const secret = process.env.JWT_REFRESH_SECRET;
     if (!secret) {
       throw new Error('JWT_REFRESH_SECRET is not defined');
     }
 
-    return jwt.sign(
-      payload,
-      secret,
-      { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' } as any
-    );
+    const payload: JwtPayload = {
+      userId: user.id,
+      email: user.email,
+      role: '',
+      permissions: []
+    };
+
+    const options: jwt.SignOptions = {
+      expiresIn: (process.env.JWT_REFRESH_EXPIRES_IN || '7d') as jwt.SignOptions['expiresIn']
+    };
+
+    return jwt.sign(payload, secret, options);
   }
 
   static verifyAccessToken(token: string): JwtPayload {

@@ -559,7 +559,7 @@ export class OrderController {
       }
 
       let couponDiscountAmount = 0;
-      let appliedCouponData = null;
+      let appliedCouponData: any = null;
 
       // Apply coupon if provided
       if (coupon_code) {
@@ -613,7 +613,7 @@ export class OrderController {
       });
 
       // Increment coupon usage if applied
-      if (appliedCouponData) {
+      if (appliedCouponData && appliedCouponData.id) {
         await OrderController.incrementCouponUsage(appliedCouponData.id);
       }
 
@@ -645,7 +645,7 @@ export class OrderController {
 
       if (appliedCouponData) {
         response.applied_coupon = {
-          ...appliedCouponData,
+          ...(appliedCouponData as any),
           calculated_discount: couponDiscountAmount
         };
       }

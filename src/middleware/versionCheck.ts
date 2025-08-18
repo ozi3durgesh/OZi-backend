@@ -10,7 +10,7 @@ export const versionCheck = (
   req: VersionCheckRequest,
   res: Response,
   next: NextFunction
-) => {
+): void => {
   try {
     const source = req.headers['source'] as string;
     const appVersion = req.headers['app-version'] as string;
@@ -18,7 +18,8 @@ export const versionCheck = (
 
     if (source && source.toLowerCase() === 'mobile') {
       if (!appVersion) {
-        return ResponseHandler.error(res, 'App version is required for mobile users', 400);
+        ResponseHandler.error(res, 'App version is required for mobile users', 400);
+        return;
       }
 
       // Simple semantic version compare
@@ -35,12 +36,13 @@ export const versionCheck = (
       };
 
       if (isLowerVersion(appVersion, minVersion)) {
-        return ResponseHandler.error(res, `Please update your app to version ${minVersion} or higher`, 426);
+        ResponseHandler.error(res, `Please update your app to version ${minVersion} or higher`, 426);
+        return;
       }
     }
 
     next();
   } catch (error) {
-    return ResponseHandler.error(res, 'Version check failed', 500);
+    ResponseHandler.error(res, 'Version check failed', 500);
   }
 };

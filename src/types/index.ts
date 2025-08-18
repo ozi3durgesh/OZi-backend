@@ -5,15 +5,46 @@ export interface ApiResponse<T = any> {
   error?: string | null;
 }
 
+export interface RoleAttributes {
+  id: number;
+  name: string;
+  description: string;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface PermissionAttributes {
+  id: number;
+  module: string;
+  action: string;
+  description: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface RolePermissionAttributes {
+  id: number;
+  roleId: number;
+  permissionId: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface JwtPayload {
   userId: number;
   email: string;
+  role: string;
+  permissions: string[];
 }
 
 export interface UserAttributes {
   id: number;
   email: string;
   password: string;
+  roleId: number;
+  isActive: boolean;
+  availabilityStatus: 'available' | 'break' | 'off-shift';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -21,6 +52,9 @@ export interface UserAttributes {
 export interface UserCreationAttributes {
   email: string;
   password: string;
+  roleId?: number;
+  isActive?: boolean;
+  availabilityStatus?: 'available' | 'break' | 'off-shift';
 }
 
 // Add these to your existing types/index.ts file

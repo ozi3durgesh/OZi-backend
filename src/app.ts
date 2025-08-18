@@ -1,10 +1,15 @@
+// app.ts
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import authRoutes from './routes/authRoutes';
+import userRoutes from './routes/userRoutes';
 import couponRoutes from './routes/couponRoutes';
-import orderRoutes from './routes/orderRoutes'; // Add this
+import orderRoutes from './routes/orderRoutes';
+import roleRoutes from './routes/roleRoutes';
+import permissionRoutes from './routes/permissionRoutes';
+import pickingRoutes from './routes/pickingRoutes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -26,8 +31,12 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/orders', orderRoutes);
 app.use('/api/coupon', couponRoutes);
-app.use('/api/orders', orderRoutes); // Add this
+app.use('/api/roles', roleRoutes);
+app.use('/api/permissions', permissionRoutes);
+app.use('/api/picking', pickingRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
