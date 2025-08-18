@@ -1,0 +1,14 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const orderController_1 = require("../controllers/orderController");
+const auth_1 = require("../middleware/auth");
+const versionCheck_1 = require("../middleware/versionCheck");
+const router = (0, express_1.Router)();
+router.use(versionCheck_1.versionCheck);
+router.use(auth_1.authenticate);
+router.post('/place', auth_1.checkAvailability, (0, auth_1.hasPermission)('orders:view_all'), orderController_1.OrderController.placeOrder);
+router.get('/:id', (0, auth_1.hasPermission)('orders:view_all'), orderController_1.OrderController.getOrderById);
+router.get('/', (0, auth_1.hasPermission)('orders:view_all'), orderController_1.OrderController.getUserOrders);
+router.put('/update/:id', auth_1.checkAvailability, (0, auth_1.hasPermission)('orders:view_all'), orderController_1.OrderController.updateOrder);
+exports.default = router;
