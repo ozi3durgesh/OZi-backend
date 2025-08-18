@@ -1,11 +1,12 @@
 // models/PickingWave.ts
 import { DataTypes, Model } from 'sequelize';
 import sequelize from '../config/database';
+import PicklistItem from './PicklistItem';
 
 interface PickingWaveAttributes {
   id: number;
   waveNumber: string;
-  status: 'GENERATED' | 'ASSIGNED' | 'PICKING' | 'COMPLETED' | 'CANCELLED';
+  status: 'GENERATED' | 'ASSIGNED' | 'PICKING' | 'PACKING' | 'COMPLETED' | 'CANCELLED';
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   pickerId?: number;
   assignedAt?: Date;
@@ -25,7 +26,7 @@ interface PickingWaveAttributes {
 class PickingWave extends Model<PickingWaveAttributes> implements PickingWaveAttributes {
   declare id: number;
   declare waveNumber: string;
-  declare status: 'GENERATED' | 'ASSIGNED' | 'PICKING' | 'COMPLETED' | 'CANCELLED';
+  declare status: 'GENERATED' | 'ASSIGNED' | 'PICKING' | 'PACKING' | 'COMPLETED' | 'CANCELLED';
   declare priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   declare pickerId?: number;
   declare assignedAt?: Date;
@@ -40,6 +41,9 @@ class PickingWave extends Model<PickingWaveAttributes> implements PickingWaveAtt
   declare tagsAndBags: boolean;
   declare createdAt: Date;
   declare updatedAt: Date;
+
+  // Associations
+  declare PicklistItems?: any[]; // PicklistItem instances
 }
 
 PickingWave.init({
@@ -54,7 +58,7 @@ PickingWave.init({
     unique: true,
   },
   status: {
-    type: DataTypes.ENUM('GENERATED', 'ASSIGNED', 'PICKING', 'COMPLETED', 'CANCELLED'),
+    type: DataTypes.ENUM('GENERATED', 'ASSIGNED', 'PICKING', 'PACKING', 'COMPLETED', 'CANCELLED'),
     allowNull: false,
     defaultValue: 'GENERATED',
   },

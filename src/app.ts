@@ -10,6 +10,8 @@ import orderRoutes from './routes/orderRoutes';
 import roleRoutes from './routes/roleRoutes';
 import permissionRoutes from './routes/permissionRoutes';
 import pickingRoutes from './routes/pickingRoutes';
+import packingRoutes from './routes/packingRoutes';
+import handoverRoutes from './routes/handoverRoutes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -37,6 +39,8 @@ app.use('/api/coupon', couponRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/api/permissions', permissionRoutes);
 app.use('/api/picking', pickingRoutes);
+app.use('/api/packing', packingRoutes);
+app.use('/api/handover', handoverRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

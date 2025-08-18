@@ -9,6 +9,14 @@ import RolePermission from './RolePermission';
 import PickingWave from './PickingWave';
 import PicklistItem from './PicklistItem';
 import PickingException from './PickingException';
+import PackingJob from './PackingJob';
+import PackingItem from './PackingItem';
+import PhotoEvidence from './PhotoEvidence';
+import Seal from './Seal';
+import Rider from './Rider';
+import Handover from './Handover';
+import LMSShipment from './LMSShipment';
+import PackingEvent from './PackingEvent';
 
 // Set up associations
 Coupon.hasMany(CouponTranslation, {
@@ -57,6 +65,58 @@ User.hasMany(PickingException, { foreignKey: 'reportedBy', as: 'ReportedExceptio
 PickingException.belongsTo(User, { foreignKey: 'assignedTo', as: 'AssignedTo' });
 User.hasMany(PickingException, { foreignKey: 'assignedTo', as: 'AssignedExceptions' });
 
+// Packing and Handover associations
+PickingWave.hasMany(PackingJob, { foreignKey: 'waveId', as: 'PackingJobs' });
+PackingJob.belongsTo(PickingWave, { foreignKey: 'waveId', as: 'Wave' });
+
+PackingJob.belongsTo(User, { foreignKey: 'packerId', as: 'Packer' });
+User.hasMany(PackingJob, { foreignKey: 'packerId', as: 'PackingJobs' });
+
+PackingJob.hasMany(PackingItem, { foreignKey: 'jobId', as: 'PackingItems' });
+PackingItem.belongsTo(PackingJob, { foreignKey: 'jobId', as: 'Job' });
+
+PackingItem.belongsTo(Order, { foreignKey: 'orderId', as: 'Order' });
+Order.hasMany(PackingItem, { foreignKey: 'orderId', as: 'PackingItems' });
+
+PackingJob.hasMany(PhotoEvidence, { foreignKey: 'jobId', as: 'PhotoEvidence' });
+PhotoEvidence.belongsTo(PackingJob, { foreignKey: 'jobId', as: 'Job' });
+
+PhotoEvidence.belongsTo(Order, { foreignKey: 'orderId', as: 'Order' });
+Order.hasMany(PhotoEvidence, { foreignKey: 'orderId', as: 'PhotoEvidence' });
+
+PhotoEvidence.belongsTo(User, { foreignKey: 'verifiedBy', as: 'VerifiedBy' });
+User.hasMany(PhotoEvidence, { foreignKey: 'verifiedBy', as: 'VerifiedPhotos' });
+
+PackingJob.hasMany(Seal, { foreignKey: 'jobId', as: 'Seals' });
+Seal.belongsTo(PackingJob, { foreignKey: 'jobId', as: 'Job' });
+
+Seal.belongsTo(Order, { foreignKey: 'orderId', as: 'Order' });
+Order.hasMany(Seal, { foreignKey: 'orderId', as: 'Seals' });
+
+Seal.belongsTo(User, { foreignKey: 'appliedBy', as: 'AppliedBy' });
+User.hasMany(Seal, { foreignKey: 'appliedBy', as: 'AppliedSeals' });
+
+Seal.belongsTo(User, { foreignKey: 'verifiedBy', as: 'VerifiedBy' });
+User.hasMany(Seal, { foreignKey: 'verifiedBy', as: 'VerifiedSeals' });
+
+PackingJob.hasOne(Handover, { foreignKey: 'jobId', as: 'Handover' });
+Handover.belongsTo(PackingJob, { foreignKey: 'jobId', as: 'Job' });
+
+Handover.belongsTo(Rider, { foreignKey: 'riderId', as: 'Rider' });
+Rider.hasMany(Handover, { foreignKey: 'riderId', as: 'Handovers' });
+
+Handover.belongsTo(User, { foreignKey: 'cancellationBy', as: 'CancelledBy' });
+User.hasMany(Handover, { foreignKey: 'cancellationBy', as: 'CancelledHandovers' });
+
+Handover.hasMany(LMSShipment, { foreignKey: 'handoverId', as: 'LMSShipments' });
+LMSShipment.belongsTo(Handover, { foreignKey: 'handoverId', as: 'Handover' });
+
+PackingJob.hasMany(PackingEvent, { foreignKey: 'jobId', as: 'Events' });
+PackingEvent.belongsTo(PackingJob, { foreignKey: 'jobId', as: 'Job' });
+
+PackingEvent.belongsTo(User, { foreignKey: 'userId', as: 'User' });
+User.hasMany(PackingEvent, { foreignKey: 'userId', as: 'PackingEvents' });
+
 export { 
   User, 
   Order, 
@@ -67,5 +127,13 @@ export {
   RolePermission,
   PickingWave,
   PicklistItem,
-  PickingException
+  PickingException,
+  PackingJob,
+  PackingItem,
+  PhotoEvidence,
+  Seal,
+  Rider,
+  Handover,
+  LMSShipment,
+  PackingEvent
 };
