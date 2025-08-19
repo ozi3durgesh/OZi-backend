@@ -530,8 +530,13 @@ export interface AuthRequest extends Request {
     availabilityStatus: 'available' | 'break' | 'off-shift';
     createdAt: Date;
   };
+  body: any;
+  params: any;
+  query: any;
+  headers: any;
 }
 
 export interface VersionCheckRequest extends Request {
   user?: any;
+  headers: any;
 }

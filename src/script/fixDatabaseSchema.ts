@@ -51,7 +51,7 @@ async function fixDatabaseSchema() {
 
     // Import models to ensure they are registered
     console.log('📦 Importing models...');
-    await import('../models');
+    await import('../models/index.js');
     console.log('✅ Models imported successfully');
 
     // Sync database with force: true to create fresh tables

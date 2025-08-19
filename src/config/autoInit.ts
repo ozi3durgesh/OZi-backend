@@ -1,6 +1,6 @@
 // config/autoInit.ts
 import sequelize from './database';
-import { User, Role, Permission, RolePermission } from '../models';
+import { User, Role, Permission, RolePermission } from '../models/index.js';
 
 // Function to check if RBAC is initialized
 export const isRBACInitialized = async (): Promise<boolean> => {

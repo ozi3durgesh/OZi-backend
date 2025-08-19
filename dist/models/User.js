@@ -5,7 +5,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const sequelize_1 = require("sequelize");
 const database_1 = __importDefault(require("../config/database"));
-const Role_1 = __importDefault(require("./Role"));
 const User = database_1.default.define('User', {
     id: {
         type: sequelize_1.DataTypes.INTEGER,
@@ -28,10 +27,11 @@ const User = database_1.default.define('User', {
         type: sequelize_1.DataTypes.INTEGER,
         allowNull: false,
         references: {
-            model: Role_1.default,
+            model: 'roles',
             key: 'id',
         },
         defaultValue: 3,
+        field: 'roleId',
     },
     isActive: {
         type: sequelize_1.DataTypes.BOOLEAN,
@@ -53,5 +53,13 @@ const User = database_1.default.define('User', {
         allowNull: false,
         defaultValue: sequelize_1.DataTypes.NOW,
     },
+}, {
+    tableName: 'users',
+    indexes: [
+        {
+            unique: true,
+            fields: ['email']
+        }
+    ]
 });
 exports.default = User;

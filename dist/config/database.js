@@ -74,8 +74,21 @@ const connectDatabase = async () => {
         }
         await sequelize.authenticate();
         console.log('Database connection established successfully.');
-        await sequelize.sync({ force: false });
+        console.log('Importing models...');
+        await import('../models/index.js');
+        console.log('Models imported successfully.');
+        await sequelize.sync({ force: false, alter: false });
         console.log('Database synchronized successfully.');
+        const { isRBACInitialized, autoInitializeRBAC, createInitialAdmin } = await import('./autoInit.js');
+        const rbacInitialized = await isRBACInitialized();
+        if (!rbacInitialized) {
+            console.log('🔧 RBAC system not initialized, auto-initializing...');
+            await autoInitializeRBAC();
+        }
+        else {
+            console.log('✅ RBAC system already initialized');
+        }
+        await createInitialAdmin();
     }
     catch (error) {
         console.error('Unable to connect to the database:', error);

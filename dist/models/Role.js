@@ -40,5 +40,11 @@ Role.init({
 }, {
     sequelize: database_1.default,
     tableName: 'roles',
+    indexes: [
+        {
+            unique: true,
+            fields: ['name']
+        }
+    ]
 });
 exports.default = Role;
