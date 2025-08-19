@@ -291,12 +291,16 @@ async function initializeRBAC() {
 }
 
 // Run the initialization
-initializeRBAC()
-  .then(() => {
-    console.log('RBAC setup completed');
-    process.exit(0);
-  })
-  .catch((error) => {
-    console.error('RBAC setup failed:', error);
-    process.exit(1);
-  });
+if (require.main === module) {
+  initializeRBAC()
+    .then(() => {
+      console.log('RBAC setup completed');
+      process.exit(0);
+    })
+    .catch((error) => {
+      console.error('RBAC setup failed:', error);
+      process.exit(1);
+    });
+}
+
+export { initializeRBAC };

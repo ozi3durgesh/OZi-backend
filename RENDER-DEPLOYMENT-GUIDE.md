@@ -1,177 +1,181 @@
-# Render Deployment Guide for OZi Backend
+# OZi Backend - Render Deployment Guide
 
 ## Overview
-This guide will help you deploy the OZi Backend to Render, addressing the common foreign key constraint conflicts that can occur during deployment.
+This guide will help you deploy the OZi Backend application on Render without needing to run manual commands like `npm run init-rbac`.
+
+## What's Been Fixed
+
+✅ **Automatic RBAC Initialization**: The system now automatically initializes roles and permissions on first startup  
+✅ **Automatic Admin User Creation**: Creates initial admin user from environment variables  
+✅ **No Manual Commands Required**: Everything happens automatically during deployment  
+✅ **Render-Ready Configuration**: Includes `render.yaml` for easy deployment  
 
 ## Prerequisites
-- GitHub repository with your OZi Backend code
-- Render account
-- MySQL database (AWS RDS, PlanetScale, or Render's MySQL service)
+
+1. **Render Account**: Sign up at [render.com](https://render.com)
+2. **GitHub Repository**: Your code should be in a GitHub repository
+3. **Database**: Your MySQL database should be accessible from Render
 
 ## Deployment Steps
 
-### 1. Prepare Your Code
-Make sure your code is committed and pushed to GitHub:
-```bash
-git add .
-git commit -m "Prepare for Render deployment"
-git push origin main
-```
+### 1. Connect Your Repository
 
-### 2. Create a New Web Service on Render
-1. Go to [Render Dashboard](https://dashboard.render.com/)
+1. Go to [render.com](https://render.com) and sign in
 2. Click "New +" and select "Web Service"
 3. Connect your GitHub repository
-4. Select the `ozi-backend-oms` repository
+4. Select the repository containing your OZi Backend code
 
-### 3. Configure the Web Service
+### 2. Configure Environment Variables
 
-#### Basic Settings:
-- **Name**: `ozi-backend` (or your preferred name)
-- **Environment**: `Node`
-- **Region**: Choose closest to your users
-- **Branch**: `main`
-- **Build Command**: `npm install && npm run build`
-- **Start Command**: `node dist/server.js`
+Set these environment variables in Render (Settings → Environment):
 
-#### Environment Variables:
-Set these in the Render dashboard:
-
-**Required:**
+#### Required Variables (Set these in Render dashboard)
 ```
-DATABASE_URL=mysql://username:password@host:port/database_name
-JWT_SECRET=your_jwt_secret_here
+DB_PASSWORD=rLfcu9Y80S8X
+JWT_ACCESS_SECRET=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWUsImlhdCI6MTUxNjIzOTAyMn0.KMUFsIDTnFmyG3nMiGM6H9FNFUROf3wh7SmqJp-QV30
+JWT_REFRESH_SECRET=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWUsImlhdCI6MTUxNjIzOTAyMn0.KMUFsIDTnFmyG3nMiGM6H9FNFUROf3wh7SmqJp-QV30
+INITIAL_ADMIN_PASSWORD=SecureAdminPassword123
+ADMIN_REGISTRATION_SECRET=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9
+```
+
+#### Optional Variables (Already set in render.yaml)
+```
 NODE_ENV=production
-```
-
-**Optional (if not using DATABASE_URL):**
-```
-DB_HOST=your_db_host
-DB_NAME=your_db_name
-DB_USER=your_db_user
-DB_PASSWORD=your_db_password
+PORT=3000
+DB_HOST=ozi-db1.c306iyoqqj8p.ap-south-1.rds.amazonaws.com
 DB_PORT=3306
+DB_NAME=ozi_backend
+DB_USER=admin
+JWT_ACCESS_EXPIRES_IN=15m
+JWT_REFRESH_EXPIRES_IN=7d
+INITIAL_ADMIN_EMAIL=admin@yourcompany.com
+MIN_APP_VERSION=1.0.0
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=100
+S3_BUCKET=your-photo-bucket
+LMS_BASE_URL=your-lms-url
+LMS_API_KEY=your-lms-key
+SEAL_SECRET=your-seal-secret
 ```
 
-**For Database Issues:**
+### 3. Build and Deploy Settings
+
+- **Build Command**: `npm install && npm run build`
+- **Start Command**: `npm start`
+- **Environment**: Node
+- **Region**: Choose closest to your database
+
+### 4. Deploy
+
+1. Click "Create Web Service"
+2. Render will automatically:
+   - Clone your repository
+   - Install dependencies
+   - Build the application
+   - Start the service
+
+## What Happens Automatically
+
+### On First Deployment
+1. **Database Connection**: Connects to your MySQL database
+2. **Table Creation**: Creates all necessary database tables
+3. **RBAC Initialization**: Automatically creates:
+   - 46 permissions for different modules
+   - 5 roles: admin, wh_manager, wh_staff_1, wh_staff_2, store_ops
+   - Role-permission mappings
+4. **Admin User Creation**: Creates initial admin user from environment variables
+
+### On Subsequent Deployments
+1. **Database Connection**: Connects to existing database
+2. **Schema Check**: Verifies existing tables
+3. **RBAC Check**: Confirms roles and permissions exist
+4. **Service Start**: Starts the application
+
+## Verification
+
+### 1. Check Deployment Logs
+In Render dashboard, go to your service → Logs to see:
 ```
-FORCE_DB_RESET=true
-```
-⚠️ **Warning**: This will drop all existing tables and recreate them. Only use this if you're okay with losing data.
-
-### 4. Advanced Configuration
-
-#### Auto-Deploy Settings:
-- **Auto-Deploy**: Enable if you want automatic deployments on push
-- **Health Check Path**: `/health` (if you have a health check endpoint)
-
-#### Resource Allocation:
-- **Instance Type**: Start with "Free" for testing, upgrade to "Starter" or higher for production
-- **Memory**: Minimum 512MB recommended
-
-### 5. Deploy
-
-Click "Create Web Service" and wait for the deployment to complete.
-
-## Troubleshooting Common Issues
-
-### Foreign Key Constraint Error
-If you see this error:
-```
-Duplicate foreign key constraint name 'Users_ibfk_1'
+✅ Database connection established successfully
+✅ Models imported successfully
+✅ Database synchronized successfully
+🔧 RBAC system not initialized, auto-initializing...
+✅ RBAC system auto-initialized successfully
+👤 Creating initial admin user...
+✅ Initial admin user created successfully
 ```
 
-**Solution 1: Use FORCE_DB_RESET (Recommended for first deployment)**
-1. Set `FORCE_DB_RESET=true` in your environment variables
-2. Redeploy the service
-3. After successful deployment, remove this variable
+### 2. Test the API
+Once deployed, test your endpoints:
 
-**Solution 2: Manual Database Cleanup**
-If you can't use FORCE_DB_RESET, the application will automatically:
-1. Detect existing tables
-2. Clean up foreign key constraints
-3. Sync the database schema
+```bash
+# Health check
+curl https://your-app-name.onrender.com/health
 
-### Database Connection Issues
-- Verify your `DATABASE_URL` format: `mysql://user:pass@host:port/db`
-- Ensure your database is accessible from Render's IP addresses
-- Check that your database user has proper permissions
+# Register a new user
+curl -X POST https://your-app-name.onrender.com/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "test@company.com",
+    "password": "TestPassword123",
+    "roleName": "wh_staff_1"
+  }'
+```
 
-### Build Failures
-- Ensure all dependencies are in `package.json`
-- Check that the build script runs successfully locally
-- Verify Node.js version compatibility (the app uses Node 22)
+## Troubleshooting
 
-## Post-Deployment
+### Common Issues
 
-### 1. Verify Deployment
-- Check the service logs for any errors
-- Test your API endpoints
-- Verify database tables were created correctly
+1. **Database Connection Failed**
+   - Verify database credentials
+   - Check if database is accessible from Render's IP range
+   - Ensure database is running
 
-### 2. Monitor Performance
-- Use Render's built-in monitoring
-- Set up logging and error tracking
-- Monitor database performance
+2. **Build Failed**
+   - Check Node.js version compatibility
+   - Verify all dependencies are in package.json
+   - Check build logs for specific errors
 
-### 3. Scale if Needed
-- Upgrade instance type for better performance
-- Add more instances for load balancing
-- Consider using Render's managed MySQL service
+3. **RBAC Initialization Failed**
+   - Check database permissions
+   - Verify models are properly exported
+   - Check logs for specific error messages
 
-## Environment Variables Reference
+### Environment Variable Issues
 
-| Variable | Required | Description | Example |
-|----------|----------|-------------|---------|
-| `DATABASE_URL` | Yes* | Full database connection string | `mysql://user:pass@host:port/db` |
-| `DB_HOST` | Yes* | Database host | `your-db.amazonaws.com` |
-| `DB_NAME` | Yes* | Database name | `ozi_backend` |
-| `DB_USER` | Yes* | Database username | `admin` |
-| `DB_PASSWORD` | Yes* | Database password | `your_password` |
-| `DB_PORT` | No | Database port | `3306` |
-| `JWT_SECRET` | Yes | Secret for JWT tokens | `your_secret_key` |
-| `NODE_ENV` | No | Environment | `production` |
-| `FORCE_DB_RESET` | No | Force database reset | `true` |
-
-*Use either `DATABASE_URL` or the individual `DB_*` variables.
+- **Missing Required Variables**: Set all required environment variables
+- **Invalid Values**: Ensure values match expected format
+- **Special Characters**: Escape special characters properly
 
 ## Security Considerations
 
-1. **Environment Variables**: Never commit sensitive information to your repository
-2. **Database Access**: Use least-privilege database users
-3. **HTTPS**: Render automatically provides HTTPS
-4. **Secrets Management**: Consider using Render's secret management for sensitive data
+1. **Environment Variables**: Never commit sensitive data to your repository
+2. **Database Access**: Use strong passwords and limit database access
+3. **JWT Secrets**: Use strong, unique JWT secrets
+4. **Rate Limiting**: Configure appropriate rate limits for production
+
+## Monitoring
+
+1. **Health Checks**: Monitor `/health` endpoint
+2. **Logs**: Regularly check Render logs for errors
+3. **Performance**: Monitor response times and error rates
+4. **Database**: Monitor database connection and performance
 
 ## Support
 
 If you encounter issues:
-1. Check the Render service logs
-2. Verify your environment variables
-3. Test database connectivity locally
-4. Check the [Render documentation](https://render.com/docs)
-5. Review the application logs for specific error messages
+1. Check the deployment logs in Render
+2. Verify all environment variables are set correctly
+3. Ensure database is accessible
+4. Check the application logs for specific error messages
 
-## Quick Fix Commands
+## Success Indicators
 
-### Local Testing
-```bash
-# Test build
-npm run build
+✅ **Deployment Status**: Shows "Live" in Render dashboard  
+✅ **Health Check**: `/health` endpoint returns 200 OK  
+✅ **Database**: All tables created successfully  
+✅ **RBAC**: Roles and permissions initialized  
+✅ **Admin User**: Initial admin user created  
+✅ **API Endpoints**: Registration and login working  
 
-# Test database connection
-npm run setup-db
-
-# Run locally
-npm run dev
-```
-
-### Render Deployment
-```bash
-# Use the deployment script
-./deploy-render.sh
-
-# Or deploy manually
-git push origin main
-```
-
-Remember: The first deployment might take longer as it sets up the database schema. Subsequent deployments will be faster.
+Your OZi Backend is now ready for production use on Render! 🚀

@@ -19,6 +19,7 @@
     "test-rbac": "tsx src/script/testRBAC.ts",
     "test-registration": "tsx src/script/testRegistration.ts",
     "debug-permissions": "tsx src/script/debugPermissions.ts",
+    "debug-roles": "tsx src/script/debugRoles.ts",
     "test-simple-registration": "tsx src/script/testSimpleRegistration.ts",
     "test-full-registration": "tsx src/script/testFullRegistration.ts",
     "db:setup": "tsx src/script/setupDatabase.ts",
