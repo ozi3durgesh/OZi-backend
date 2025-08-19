@@ -39,7 +39,7 @@ services:
       - key: RATE_LIMIT_WINDOW_MS
         value: 900000
       - key: RATE_LIMIT_MAX_REQUESTS
-        value: 100
+        value: 9999999
       - key: S3_BUCKET
         value: your-photo-bucket
       - key: LMS_BASE_URL

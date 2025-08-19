@@ -44,3 +44,6 @@ temp/
 
 # Optional npm cache
 .npm/
+
+# Technical documentation and interview preparation materials
+info-doc/
