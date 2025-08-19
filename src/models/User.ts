@@ -32,10 +32,11 @@ const User = sequelize.define<UserInstance>('User', {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
-      model: Role,
+      model: 'roles',
       key: 'id',
     },
     defaultValue: 3, // Default to WH Staff 1
+    field: 'roleId',
   },
   isActive: {
     type: DataTypes.BOOLEAN,
@@ -57,6 +58,14 @@ const User = sequelize.define<UserInstance>('User', {
     allowNull: false,
     defaultValue: DataTypes.NOW,
   },
+}, {
+  tableName: 'users',
+  indexes: [
+    {
+      unique: true,
+      fields: ['email']
+    }
+  ]
 });
 
 // Associations are set up in models/index.ts
