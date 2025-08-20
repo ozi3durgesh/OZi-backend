@@ -2,6 +2,8 @@
 
 This document covers all permission management endpoints for the OZi Backend system. These endpoints are restricted to users with admin privileges.
 
+**Base URL:** `http://13.232.150.239`
+
 ## 🔐 Permission Operations
 
 ### Get All Permissions
@@ -25,7 +27,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/permissions?page=1&limit=10&module=users&action=read&status=active" \
+curl -X GET "http://13.232.150.239/api/v1/permissions?page=1&limit=10&module=users&action=read&status=active" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
@@ -83,7 +85,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/permissions/1" \
+curl -X GET "http://13.232.150.239/api/v1/permissions/1" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
@@ -142,7 +144,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X POST "https://your-app.onrender.com/api/v1/permissions" \
+curl -X POST "http://13.232.150.239/api/v1/permissions" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
@@ -200,7 +202,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X PUT "https://your-app.onrender.com/api/v1/permissions/25" \
+curl -X PUT "http://13.232.150.239/api/v1/permissions/25" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
@@ -245,7 +247,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X DELETE "https://your-app.onrender.com/api/v1/permissions/25" \
+curl -X DELETE "http://13.232.150.239/api/v1/permissions/25" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
@@ -279,7 +281,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X PATCH "https://your-app.onrender.com/api/v1/permissions/25/status" \
+curl -X PATCH "http://13.232.150.239/api/v1/permissions/25/status" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
@@ -318,7 +320,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/permissions/modules" \
+curl -X GET "http://13.232.150.239/api/v1/permissions/modules" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
@@ -366,7 +368,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/permissions/actions" \
+curl -X GET "http://13.232.150.239/api/v1/permissions/actions" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
@@ -425,7 +427,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/permissions/search?q=user&module=users&action=write&status=active" \
+curl -X GET "http://13.232.150.239/api/v1/permissions/search?q=user&module=users&action=write&status=active" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
@@ -444,7 +446,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/permissions/module/users" \
+curl -X GET "http://13.232.150.239/api/v1/permissions/module/users" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
@@ -491,7 +493,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/permissions/statistics" \
+curl -X GET "http://13.232.150.239/api/v1/permissions/statistics" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
@@ -558,7 +560,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/permissions/usage-report?format=json&dateFrom=2024-01-01&dateTo=2024-01-31" \
+curl -X GET "http://13.232.150.239/api/v1/permissions/usage-report?format=json&dateFrom=2024-01-01&dateTo=2024-01-31" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
@@ -599,7 +601,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X POST "https://your-app.onrender.com/api/v1/permissions/bulk" \
+curl -X POST "http://13.232.150.239/api/v1/permissions/bulk" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
@@ -650,7 +652,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X PUT "https://your-app.onrender.com/api/v1/permissions/bulk" \
+curl -X PUT "http://13.232.150.239/api/v1/permissions/bulk" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
@@ -683,7 +685,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/permissions/templates" \
+curl -X GET "http://13.232.150.239/api/v1/permissions/templates" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
@@ -739,7 +741,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X POST "https://your-app.onrender.com/api/v1/permissions/templates/Basic%20User/apply" \
+curl -X POST "http://13.232.150.239/api/v1/permissions/templates/Basic%20User/apply" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{

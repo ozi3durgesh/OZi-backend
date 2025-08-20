@@ -1,14 +1,16 @@
-# User Management
+# User Management (Admin Only)
 
-This document covers all user management endpoints for the OZi Backend system.
+This document covers all user management endpoints for the OZi Backend system. These endpoints are restricted to users with admin privileges.
+
+**Base URL:** `http://13.232.150.239`
 
 ## 👥 User Operations
 
 ### Get All Users
 
-**Endpoint:** `GET /api/v1/users`
+**Endpoint:** `GET /api/users`
 
-**Description:** Retrieves all users in the system (requires appropriate permissions).
+**Description:** Retrieves all users in the system with optional filtering and pagination.
 
 **Headers:**
 ```bash
@@ -19,18 +21,27 @@ Authorization: Bearer your_jwt_token
 **Query Parameters:**
 - `page` (optional): Page number for pagination (default: 1)
 - `limit` (optional): Number of items per page (default: 10)
-- `search` (optional): Search term for user names or emails
-- `role` (optional): Filter by role ID
-- `status` (optional): Filter by status (active, inactive, pending_approval, suspended)
+- `search` (optional): Search term for user names, emails, or employee IDs
+- `status` (optional): Filter by status (active, inactive, pending_approval, locked)
 - `department` (optional): Filter by department
-- `createdAfter` (optional): Filter by creation date
-- `createdBefore` (optional): Filter by creation date
+- `role` (optional): Filter by role name
 
-**cURL Example:**
+**cURL Examples:**
+
+**Web Client:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/users?page=1&limit=10&search=john&status=active&department=Operations" \
+curl -X GET "http://13.232.150.239/api/users?page=1&limit=10&search=john&status=active&department=Operations" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
+```
+
+**Mobile Client:**
+```bash
+curl -X GET "http://13.232.150.239/api/users?page=1&limit=10&search=john&status=active&department=Operations" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "source: mobile" \
+  -H "app-version: 1.2.0"
 ```
 
 **Response:**
@@ -44,24 +55,17 @@ curl -X GET "https://your-app.onrender.com/api/v1/users?page=1&limit=10&search=j
         "email": "john.doe@ozi.com",
         "firstName": "John",
         "lastName": "Doe",
-        "phone": "+1234567890",
-        "role": {
-          "id": 2,
-          "name": "Admin"
-        },
+        "role": "Admin",
         "department": "Operations",
-        "employeeId": "EMP001",
         "status": "active",
-        "lastLogin": "2024-01-15T09:00:00.000Z",
-        "createdAt": "2024-01-01T00:00:00.000Z",
-        "updatedAt": "2024-01-15T09:00:00.000Z"
+        "createdAt": "2024-01-01T00:00:00.000Z"
       }
     ],
     "pagination": {
       "page": 1,
       "limit": 10,
-      "total": 15,
-      "totalPages": 2
+      "total": 1,
+      "totalPages": 1
     }
   }
 }
@@ -69,7 +73,7 @@ curl -X GET "https://your-app.onrender.com/api/v1/users?page=1&limit=10&search=j
 
 ### Get User by ID
 
-**Endpoint:** `GET /api/v1/users/:id`
+**Endpoint:** `GET /api/users/:userId`
 
 **Description:** Retrieves a specific user by their ID.
 
@@ -79,11 +83,22 @@ Content-Type: application/json
 Authorization: Bearer your_jwt_token
 ```
 
-**cURL Example:**
+**cURL Examples:**
+
+**Web Client:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/users/1" \
+curl -X GET "http://13.232.150.239/api/users/1" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
+```
+
+**Mobile Client:**
+```bash
+curl -X GET "http://13.232.150.239/api/users/1" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "source: mobile" \
+  -H "app-version: 1.2.0"
 ```
 
 **Response:**
@@ -97,24 +112,12 @@ curl -X GET "https://your-app.onrender.com/api/v1/users/1" \
       "firstName": "John",
       "lastName": "Doe",
       "phone": "+1234567890",
-      "role": {
-        "id": 2,
-        "name": "Admin",
-        "permissions": ["read:users", "write:users", "read:orders"]
-      },
+      "role": "Admin",
       "department": "Operations",
       "employeeId": "EMP001",
       "status": "active",
-      "lastLogin": "2024-01-15T09:00:00.000Z",
-      "loginHistory": [
-        {
-          "timestamp": "2024-01-15T09:00:00.000Z",
-          "ipAddress": "192.168.1.100",
-          "device": "Chrome on Windows"
-        }
-      ],
-      "createdAt": "2024-01-01T00:00:00.000Z",
-      "updatedAt": "2024-01-15T09:00:00.000Z"
+      "lastLogin": "2024-01-15T10:30:00.000Z",
+      "createdAt": "2024-01-01T00:00:00.000Z"
     }
   }
 }
@@ -122,9 +125,9 @@ curl -X GET "https://your-app.onrender.com/api/v1/users/1" \
 
 ### Create New User
 
-**Endpoint:** `POST /api/v1/users`
+**Endpoint:** `POST /api/users`
 
-**Description:** Creates a new user in the system (requires admin permissions).
+**Description:** Creates a new user in the system (admin only).
 
 **Headers:**
 ```bash
@@ -135,33 +138,52 @@ Authorization: Bearer your_jwt_token
 **Request Body:**
 ```json
 {
-  "email": "jane.smith@ozi.com",
+  "email": "newuser@ozi.com",
   "password": "SecurePassword123!",
   "firstName": "Jane",
   "lastName": "Smith",
-  "phone": "+1234567891",
-  "roleId": 3,
-  "department": "Warehouse",
-  "employeeId": "EMP002",
-  "status": "active"
+  "phone": "+1234567890",
+  "roleId": 2,
+  "department": "Operations",
+  "employeeId": "EMP002"
 }
 ```
 
-**cURL Example:**
+**cURL Examples:**
+
+**Web Client:**
 ```bash
-curl -X POST "https://your-app.onrender.com/api/v1/users" \
+curl -X POST "http://13.232.150.239/api/users" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "email": "jane.smith@ozi.com",
+    "email": "newuser@ozi.com",
     "password": "SecurePassword123!",
     "firstName": "Jane",
     "lastName": "Smith",
-    "phone": "+1234567891",
-    "roleId": 3,
-    "department": "Warehouse",
-    "employeeId": "EMP002",
-    "status": "active"
+    "phone": "+1234567890",
+    "roleId": 2,
+    "department": "Operations",
+    "employeeId": "EMP002"
+  }'
+```
+
+**Mobile Client:**
+```bash
+curl -X POST "http://13.232.150.239/api/users" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "source: mobile" \
+  -H "app-version: 1.2.0" \
+  -d '{
+    "email": "newuser@ozi.com",
+    "password": "SecurePassword123!",
+    "firstName": "Jane",
+    "lastName": "Smith",
+    "phone": "+1234567890",
+    "roleId": 2,
+    "department": "Operations",
+    "employeeId": "EMP002"
   }'
 ```
 
@@ -173,13 +195,10 @@ curl -X POST "https://your-app.onrender.com/api/v1/users" \
   "data": {
     "user": {
       "id": 2,
-      "email": "jane.smith@ozi.com",
+      "email": "newuser@ozi.com",
       "firstName": "Jane",
       "lastName": "Smith",
-      "role": {
-        "id": 3,
-        "name": "Manager"
-      },
+      "role": "Manager",
       "status": "active",
       "createdAt": "2024-01-15T10:30:00.000Z"
     }
@@ -189,9 +208,9 @@ curl -X POST "https://your-app.onrender.com/api/v1/users" \
 
 ### Update User
 
-**Endpoint:** `PUT /api/v1/users/:id`
+**Endpoint:** `PUT /api/users/:userId`
 
-**Description:** Updates an existing user (requires appropriate permissions).
+**Description:** Updates an existing user's information.
 
 **Headers:**
 ```bash
@@ -205,22 +224,40 @@ Authorization: Bearer your_jwt_token
   "firstName": "John",
   "lastName": "Doe",
   "phone": "+1234567890",
-  "department": "Senior Operations",
-  "roleId": 2
+  "department": "Operations",
+  "roleId": 1
 }
 ```
 
-**cURL Example:**
+**cURL Examples:**
+
+**Web Client:**
 ```bash
-curl -X PUT "https://your-app.onrender.com/api/v1/users/1" \
+curl -X PUT "http://13.232.150.239/api/users/1" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
     "firstName": "John",
     "lastName": "Doe",
     "phone": "+1234567890",
-    "department": "Senior Operations",
-    "roleId": 2
+    "department": "Operations",
+    "roleId": 1
+  }'
+```
+
+**Mobile Client:**
+```bash
+curl -X PUT "http://13.232.150.239/api/users/1" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "source: mobile" \
+  -H "app-version: 1.2.0" \
+  -d '{
+    "firstName": "John",
+    "lastName": "Doe",
+    "phone": "+1234567890",
+    "department": "Operations",
+    "roleId": 1
   }'
 ```
 
@@ -235,9 +272,9 @@ curl -X PUT "https://your-app.onrender.com/api/v1/users/1" \
       "firstName": "John",
       "lastName": "Doe",
       "phone": "+1234567890",
-      "department": "Senior Operations",
-      "roleId": 2,
-      "updatedAt": "2024-01-15T11:00:00.000Z"
+      "department": "Operations",
+      "roleId": 1,
+      "updatedAt": "2024-01-15T10:30:00.000Z"
     }
   }
 }
@@ -245,9 +282,9 @@ curl -X PUT "https://your-app.onrender.com/api/v1/users/1" \
 
 ### Delete User
 
-**Endpoint:** `DELETE /api/v1/users/:id`
+**Endpoint:** `DELETE /api/users/:userId`
 
-**Description:** Deletes a user from the system (requires admin permissions).
+**Description:** Deactivates a user account (soft delete).
 
 **Headers:**
 ```bash
@@ -255,26 +292,37 @@ Content-Type: application/json
 Authorization: Bearer your_jwt_token
 ```
 
-**cURL Example:**
+**cURL Examples:**
+
+**Web Client:**
 ```bash
-curl -X DELETE "https://your-app.onrender.com/api/v1/users/2" \
+curl -X DELETE "http://13.232.150.239/api/users/2" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
+```
+
+**Mobile Client:**
+```bash
+curl -X DELETE "http://13.232.150.239/api/users/2" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "source: mobile" \
+  -H "app-version: 1.2.0"
 ```
 
 **Response:**
 ```json
 {
   "success": true,
-  "message": "User deleted successfully"
+  "message": "User deactivated successfully"
 }
 ```
 
-### Activate/Deactivate User
+### Update User Status
 
-**Endpoint:** `PATCH /api/v1/users/:id/status`
+**Endpoint:** `PUT /api/users/:userId/status`
 
-**Description:** Changes the status of a user (requires admin permissions).
+**Description:** Updates a user's status (active, inactive, locked).
 
 **Headers:**
 ```bash
@@ -285,19 +333,34 @@ Authorization: Bearer your_jwt_token
 **Request Body:**
 ```json
 {
-  "status": "suspended",
-  "reason": "Violation of company policies"
+  "status": "inactive",
+  "reason": "Temporary suspension"
 }
 ```
 
-**cURL Example:**
+**cURL Examples:**
+
+**Web Client:**
 ```bash
-curl -X PATCH "https://your-app.onrender.com/api/v1/users/1/status" \
+curl -X PUT "http://13.232.150.239/api/users/1/status" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "status": "suspended",
-    "reason": "Violation of company policies"
+    "status": "inactive",
+    "reason": "Temporary suspension"
+  }'
+```
+
+**Mobile Client:**
+```bash
+curl -X PUT "http://13.232.150.239/api/users/1/status" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "source: mobile" \
+  -H "app-version: 1.2.0" \
+  -d '{
+    "status": "inactive",
+    "reason": "Temporary suspension"
   }'
 ```
 
@@ -307,22 +370,19 @@ curl -X PATCH "https://your-app.onrender.com/api/v1/users/1/status" \
   "success": true,
   "message": "User status updated successfully",
   "data": {
-    "user": {
-      "id": 1,
-      "status": "suspended",
-      "updatedAt": "2024-01-15T11:30:00.000Z"
-    }
+    "userId": 1,
+    "status": "inactive",
+    "reason": "Temporary suspension",
+    "updatedAt": "2024-01-15T10:30:00.000Z"
   }
 }
 ```
 
-## 🔐 User Authentication Management
+### Change User Role
 
-### Reset User Password
+**Endpoint:** `PUT /api/users/:userId/role`
 
-**Endpoint:** `POST /api/v1/users/:id/reset-password`
-
-**Description:** Resets a user's password (requires admin permissions).
+**Description:** Changes a user's role in the system.
 
 **Headers:**
 ```bash
@@ -333,19 +393,34 @@ Authorization: Bearer your_jwt_token
 **Request Body:**
 ```json
 {
-  "newPassword": "NewSecurePassword123!",
-  "forceChange": true
+  "roleId": 2,
+  "reason": "Promotion to manager"
 }
 ```
 
-**cURL Example:**
+**cURL Examples:**
+
+**Web Client:**
 ```bash
-curl -X POST "https://your-app.onrender.com/api/v1/users/1/reset-password" \
+curl -X PUT "http://13.232.150.239/api/users/1/role" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "newPassword": "NewSecurePassword123!",
-    "forceChange": true
+    "roleId": 2,
+    "reason": "Promotion to manager"
+  }'
+```
+
+**Mobile Client:**
+```bash
+curl -X PUT "http://13.232.150.239/api/users/1/role" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "source: mobile" \
+  -H "app-version: 1.2.0" \
+  -d '{
+    "roleId": 2,
+    "reason": "Promotion to manager"
   }'
 ```
 
@@ -353,143 +428,24 @@ curl -X POST "https://your-app.onrender.com/api/v1/users/1/reset-password" \
 ```json
 {
   "success": true,
-  "message": "Password reset successfully",
+  "message": "User role changed successfully",
   "data": {
-    "user": {
-      "id": 1,
-      "passwordChangedAt": "2024-01-15T12:00:00.000Z",
-      "forcePasswordChange": true
-    }
+    "userId": 1,
+    "oldRoleId": 1,
+    "newRoleId": 2,
+    "reason": "Promotion to manager",
+    "updatedAt": "2024-01-15T10:30:00.000Z"
   }
 }
 ```
 
-### Unlock User Account
-
-**Endpoint:** `POST /api/v1/users/:id/unlock`
-
-**Description:** Unlocks a locked user account (requires admin permissions).
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**cURL Example:**
-```bash
-curl -X POST "https://your-app.onrender.com/api/v1/users/1/unlock" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "User account unlocked successfully",
-  "data": {
-    "user": {
-      "id": 1,
-      "status": "active",
-      "loginAttempts": 0,
-      "lockedUntil": null,
-      "updatedAt": "2024-01-15T12:30:00.000Z"
-    }
-  }
-}
-```
-
-## 👥 User Role Management
-
-### Assign Role to User
-
-**Endpoint:** `POST /api/v1/users/:id/roles`
-
-**Description:** Assigns a role to a user (requires admin permissions).
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Request Body:**
-```json
-{
-  "roleId": 3
-}
-```
-
-**cURL Example:**
-```bash
-curl -X POST "https://your-app.onrender.com/api/v1/users/1/roles" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -d '{
-    "roleId": 3
-  }'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Role assigned successfully",
-  "data": {
-    "user": {
-      "id": 1,
-      "role": {
-        "id": 3,
-        "name": "Manager"
-      },
-      "updatedAt": "2024-01-15T13:00:00.000Z"
-    }
-  }
-}
-```
-
-### Remove Role from User
-
-**Endpoint:** `DELETE /api/v1/users/:id/roles`
-
-**Description:** Removes a role assignment from a user (requires admin permissions).
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**cURL Example:**
-```bash
-curl -X DELETE "https://your-app.onrender.com/api/v1/users/1/roles" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Role removed successfully",
-  "data": {
-    "user": {
-      "id": 1,
-      "role": null,
-      "updatedAt": "2024-01-15T13:30:00.000Z"
-    }
-  }
-}
-```
-
-## 📊 User Analytics
+## 📊 User Statistics
 
 ### Get User Statistics
 
-**Endpoint:** `GET /api/v1/users/statistics`
+**Endpoint:** `GET /api/users/statistics`
 
-**Description:** Retrieves statistics about users in the system.
+**Description:** Retrieves user statistics and analytics.
 
 **Headers:**
 ```bash
@@ -497,11 +453,22 @@ Content-Type: application/json
 Authorization: Bearer your_jwt_token
 ```
 
-**cURL Example:**
+**cURL Examples:**
+
+**Web Client:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/users/statistics" \
+curl -X GET "http://13.232.150.239/api/users/statistics" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
+```
+
+**Mobile Client:**
+```bash
+curl -X GET "http://13.232.150.239/api/users/statistics" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "source: mobile" \
+  -H "app-version: 1.2.0"
 ```
 
 **Response:**
@@ -509,76 +476,32 @@ curl -X GET "https://your-app.onrender.com/api/v1/users/statistics" \
 {
   "success": true,
   "data": {
-    "totalUsers": 15,
-    "activeUsers": 12,
-    "inactiveUsers": 2,
-    "pendingApproval": 1,
-    "suspendedUsers": 0,
-    "roleDistribution": [
-      {
-        "roleName": "Super Admin",
-        "userCount": 1,
-        "percentage": 6.67
-      },
-      {
-        "roleName": "Admin",
-        "userCount": 3,
-        "percentage": 20.0
-      }
-    ],
-    "departmentDistribution": [
-      {
-        "department": "Operations",
-        "userCount": 8,
-        "percentage": 53.33
-      },
-      {
-        "department": "Warehouse",
-        "userCount": 4,
-        "percentage": 26.67
-      }
-    ],
-    "recentActivity": {
-      "last24Hours": 5,
-      "last7Days": 12,
-      "last30Days": 15
+    "totalUsers": 150,
+    "activeUsers": 120,
+    "inactiveUsers": 20,
+    "lockedUsers": 10,
+    "usersByRole": {
+      "Admin": 5,
+      "Manager": 15,
+      "Operator": 100,
+      "Picker": 30
+    },
+    "usersByDepartment": {
+      "Operations": 80,
+      "Management": 20,
+      "Warehouse": 50
     }
   }
 }
 ```
 
-### Get User Activity Report
-
-**Endpoint:** `GET /api/v1/users/activity-report`
-
-**Description:** Generates a detailed report of user activity.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Query Parameters:**
-- `format` (optional): Report format (json, csv, pdf)
-- `dateFrom` (optional): Start date for the report
-- `dateTo` (optional): End date for the report
-- `userId` (optional): Specific user ID for detailed report
-
-**cURL Example:**
-```bash
-curl -X GET "https://your-app.onrender.com/api/v1/users/activity-report?format=json&dateFrom=2024-01-01&dateTo=2024-01-31" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-## 🔍 User Search and Filtering
+## 🔍 User Search & Reports
 
 ### Search Users
 
-**Endpoint:** `GET /api/v1/users/search`
+**Endpoint:** `GET /api/users/search`
 
-**Description:** Advanced search for users with multiple criteria.
+**Description:** Advanced user search with multiple filters.
 
 **Headers:**
 ```bash
@@ -587,23 +510,54 @@ Authorization: Bearer your_jwt_token
 ```
 
 **Query Parameters:**
-- `q` (required): Search query
+- `q` (optional): Search query
 - `role` (optional): Filter by role
-- `department` (optional): Filter by department
 - `status` (optional): Filter by status
+- `department` (optional): Filter by department
 - `lastLoginAfter` (optional): Filter by last login date
-- `lastLoginBefore` (optional): Filter by last login date
 
-**cURL Example:**
+**cURL Examples:**
+
+**Web Client:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/users/search?q=john&role=admin&status=active&lastLoginAfter=2024-01-01" \
+curl -X GET "http://13.232.150.239/api/users/search?q=john&role=admin&status=active&lastLoginAfter=2024-01-01" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
+```
+
+**Mobile Client:**
+```bash
+curl -X GET "http://13.232.150.239/api/users/search?q=john&role=admin&status=active&lastLoginAfter=2024-01-01" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "source: mobile" \
+  -H "app-version: 1.2.0"
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "users": [
+      {
+        "id": 1,
+        "email": "john.doe@ozi.com",
+        "firstName": "John",
+        "lastName": "Doe",
+        "role": "Admin",
+        "status": "active",
+        "lastLogin": "2024-01-15T10:30:00.000Z"
+      }
+    ],
+    "total": 1
+  }
+}
 ```
 
 ### Get Users by Department
 
-**Endpoint:** `GET /api/v1/users/department/:departmentName`
+**Endpoint:** `GET /api/users/department/:department`
 
 **Description:** Retrieves all users in a specific department.
 
@@ -613,212 +567,77 @@ Content-Type: application/json
 Authorization: Bearer your_jwt_token
 ```
 
-**cURL Example:**
+**cURL Examples:**
+
+**Web Client:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/users/department/Operations" \
+curl -X GET "http://13.232.150.239/api/users/department/Operations" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
 
-## 🔄 Bulk User Operations
-
-### Bulk Create Users
-
-**Endpoint:** `POST /api/v1/users/bulk`
-
-**Description:** Creates multiple users at once (requires admin permissions).
-
-**Headers:**
+**Mobile Client:**
 ```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Request Body:**
-```json
-{
-  "users": [
-    {
-      "email": "user1@ozi.com",
-      "password": "SecurePassword123!",
-      "firstName": "User",
-      "lastName": "One",
-      "roleId": 3,
-      "department": "Warehouse"
-    },
-    {
-      "email": "user2@ozi.com",
-      "password": "SecurePassword123!",
-      "firstName": "User",
-      "lastName": "Two",
-      "roleId": 4,
-      "department": "Operations"
-    }
-  ]
-}
-```
-
-**cURL Example:**
-```bash
-curl -X POST "https://your-app.onrender.com/api/v1/users/bulk" \
+curl -X GET "http://13.232.150.239/api/users/department/Operations" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
-  -d '{
-    "users": [
-      {
-        "email": "user1@ozi.com",
-        "password": "SecurePassword123!",
-        "firstName": "User",
-        "lastName": "One",
-        "roleId": 3,
-        "department": "Warehouse"
-      },
-      {
-        "email": "user2@ozi.com",
-        "password": "SecurePassword123!",
-        "firstName": "User",
-        "lastName": "Two",
-        "roleId": 4,
-        "department": "Operations"
-      }
-    ]
-  }'
-```
-
-### Bulk Update Users
-
-**Endpoint:** `PUT /api/v1/users/bulk`
-
-**Description:** Updates multiple users at once (requires admin permissions).
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Request Body:**
-```json
-{
-  "updates": [
-    {
-      "id": 1,
-      "department": "Senior Operations"
-    },
-    {
-      "id": 2,
-      "roleId": 3
-    }
-  ]
-}
-```
-
-**cURL Example:**
-```bash
-curl -X PUT "https://your-app.onrender.com/api/v1/users/bulk" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -d '{
-    "updates": [
-      {
-        "id": 1,
-        "department": "Senior Operations"
-      },
-      {
-        "id": 2,
-        "roleId": 3
-      }
-    ]
-  }'
-```
-
-## 📱 User Invitations
-
-### Send User Invitation
-
-**Endpoint:** `POST /api/v1/users/invite`
-
-**Description:** Sends an invitation to a new user (requires admin permissions).
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Request Body:**
-```json
-{
-  "email": "newuser@ozi.com",
-  "firstName": "New",
-  "lastName": "User",
-  "roleId": 4,
-  "department": "Operations",
-  "invitationMessage": "Welcome to OZi Logistics! Please complete your registration."
-}
-```
-
-**cURL Example:**
-```bash
-curl -X POST "https://your-app.onrender.com/api/v1/users/invite" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -d '{
-    "email": "newuser@ozi.com",
-    "firstName": "New",
-    "lastName": "User",
-    "roleId": 4,
-    "department": "Operations",
-    "invitationMessage": "Welcome to OZi Logistics! Please complete your registration."
-  }'
+  -H "source: mobile" \
+  -H "app-version: 1.2.0"
 ```
 
 **Response:**
 ```json
 {
   "success": true,
-  "message": "Invitation sent successfully",
   "data": {
-    "invitation": {
-      "id": "inv_12345",
-      "email": "newuser@ozi.com",
-      "invitationCode": "INV123456",
-      "expiresAt": "2024-02-15T10:30:00.000Z",
-      "status": "sent"
-    }
+    "department": "Operations",
+    "users": [
+      {
+        "id": 1,
+        "email": "john.doe@ozi.com",
+        "firstName": "John",
+        "lastName": "Doe",
+        "role": "Manager",
+        "status": "active"
+      }
+    ],
+    "total": 1
   }
 }
 ```
 
-### Resend User Invitation
+## 📱 Mobile App Considerations
 
-**Endpoint:** `POST /api/v1/users/invite/:invitationId/resend`
+### Version Check Headers
+For mobile clients, the following headers are required:
+- `source: mobile` - Identifies the request as coming from a mobile app
+- `app-version: 1.2.0` - Current app version for compatibility checking
 
-**Description:** Resends an expired invitation (requires admin permissions).
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**cURL Example:**
-```bash
-curl -X POST "https://your-app.onrender.com/api/v1/users/invite/inv_12345/resend" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
+### Version Compatibility
+- Minimum supported version: 1.0.0
+- If app version is below minimum, API returns 426 status code
+- Web clients don't require version checking
 
 ## ⚠️ Error Responses
 
 ### Common Error Responses
+
+**Unauthorized Access:**
+```json
+{
+  "success": false,
+  "error": "Unauthorized",
+  "message": "Invalid access token",
+  "statusCode": 401
+}
+```
 
 **Insufficient Permissions:**
 ```json
 {
   "success": false,
   "error": "Forbidden",
-  "message": "Insufficient permissions to manage users",
+  "message": "Insufficient permissions to access this resource",
   "statusCode": 403
 }
 ```
@@ -833,52 +652,41 @@ curl -X POST "https://your-app.onrender.com/api/v1/users/invite/inv_12345/resend
 }
 ```
 
-**Duplicate Email:**
+**App Version Too Old (Mobile Only):**
 ```json
 {
   "success": false,
-  "error": "Conflict",
-  "message": "User with this email already exists",
-  "statusCode": 409
+  "error": "Upgrade Required",
+  "message": "Please update your app to version 1.0.0 or higher",
+  "statusCode": 426
 }
 ```
 
-**Invalid Role:**
-```json
-{
-  "success": false,
-  "error": "Bad Request",
-  "message": "Invalid role ID provided",
-  "statusCode": 400
-}
-```
+## 🔐 Security Features
 
-**User Account Locked:**
-```json
-{
-  "success": false,
-  "error": "Forbidden",
-  "message": "User account is locked",
-  "statusCode": 403
-}
-```
+1. **Authentication Required**: All endpoints require valid JWT token
+2. **Permission-Based Access**: Role-based access control (RBAC)
+3. **Version Control**: Mobile app compatibility checking
+4. **Audit Logging**: Track all user management actions
+5. **Input Validation**: Comprehensive request validation
 
-## 🔐 Security Considerations
+## 📋 User Management Flow
 
-1. **Permission-Based Access**: User management requires appropriate permissions
-2. **Password Security**: Passwords are hashed and never stored in plain text
-3. **Account Lockout**: Failed login attempts can lock accounts
-4. **Audit Logging**: All user changes are logged for security tracking
-5. **Role Validation**: Role assignments are validated against existing roles
-6. **Status Management**: User status changes require proper authorization
+### Web Client Flow
+1. Admin authenticates with valid JWT token
+2. Admin performs user management operations
+3. System validates permissions and processes request
+4. Response is returned with operation result
 
-## 📋 Best Practices
+### Mobile Client Flow
+1. App sends request with version headers
+2. System validates app version compatibility
+3. Admin authenticates with valid JWT token
+4. Admin performs user management operations
+5. System validates permissions and processes request
+6. Response is returned with operation result
+7. Version checking on every request
 
-1. **Regular Review**: Periodically review user accounts and permissions
-2. **Strong Passwords**: Enforce strong password policies
-3. **Role Assignment**: Assign minimal required permissions to users
-4. **Account Cleanup**: Remove inactive or terminated user accounts
-5. **Invitation Management**: Use invitation system for new user onboarding
-6. **Activity Monitoring**: Monitor user activity for security purposes
-7. **Backup**: Keep backups of user configurations before major changes
-8. **Documentation**: Maintain clear documentation of user roles and permissions
+---
+
+This document covers all user management endpoints with examples for both web and mobile clients. Mobile clients must include version headers for compatibility checking. All endpoints require admin authentication and appropriate permissions.

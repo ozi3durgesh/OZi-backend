@@ -2,6 +2,8 @@
 
 This document covers all role management endpoints for the OZi Backend system. These endpoints are restricted to users with admin privileges.
 
+**Base URL:** `http://13.232.150.239`
+
 ## 👑 Role Operations
 
 ### Get All Roles
@@ -24,7 +26,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/roles?page=1&limit=10&search=admin&status=active" \
+curl -X GET "http://13.232.150.239/api/v1/roles?page=1&limit=10&search=admin&status=active" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
@@ -80,7 +82,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/roles/2" \
+curl -X GET "http://13.232.150.239/api/v1/roles/2" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
@@ -139,7 +141,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X POST "https://your-app.onrender.com/api/v1/roles" \
+curl -X POST "http://13.232.150.239/api/v1/roles" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
@@ -194,7 +196,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X PUT "https://your-app.onrender.com/api/v1/roles/5" \
+curl -X PUT "http://13.232.150.239/api/v1/roles/5" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
@@ -237,7 +239,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X DELETE "https://your-app.onrender.com/api/v1/roles/5" \
+curl -X DELETE "http://13.232.150.239/api/v1/roles/5" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
@@ -271,7 +273,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X PATCH "https://your-app.onrender.com/api/v1/roles/5/status" \
+curl -X PATCH "http://13.232.150.239/api/v1/roles/5/status" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
@@ -310,7 +312,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/roles/2/permissions" \
+curl -X GET "http://13.232.150.239/api/v1/roles/2/permissions" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
@@ -365,7 +367,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X PUT "https://your-app.onrender.com/api/v1/roles/2/permissions" \
+curl -X PUT "http://13.232.150.239/api/v1/roles/2/permissions" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
@@ -408,7 +410,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X POST "https://your-app.onrender.com/api/v1/roles/2/permissions" \
+curl -X POST "http://13.232.150.239/api/v1/roles/2/permissions" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
@@ -430,7 +432,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X DELETE "https://your-app.onrender.com/api/v1/roles/2/permissions/5" \
+curl -X DELETE "http://13.232.150.239/api/v1/roles/2/permissions/5" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
@@ -456,7 +458,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/roles/2/users?page=1&limit=10&status=active" \
+curl -X GET "http://13.232.150.239/api/v1/roles/2/users?page=1&limit=10&status=active" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
@@ -511,7 +513,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X POST "https://your-app.onrender.com/api/v1/roles/2/assign" \
+curl -X POST "http://13.232.150.239/api/v1/roles/2/assign" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
@@ -533,7 +535,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X DELETE "https://your-app.onrender.com/api/v1/roles/2/assign/5" \
+curl -X DELETE "http://13.232.150.239/api/v1/roles/2/assign/5" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
@@ -554,7 +556,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/roles/statistics" \
+curl -X GET "http://13.232.150.239/api/v1/roles/statistics" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
@@ -612,7 +614,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/roles/search?q=warehouse&permissions=read:orders&status=active" \
+curl -X GET "http://13.232.150.239/api/v1/roles/search?q=warehouse&permissions=read:orders&status=active" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```

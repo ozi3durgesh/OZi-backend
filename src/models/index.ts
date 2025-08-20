@@ -17,6 +17,9 @@ import Rider from './Rider';
 import Handover from './Handover';
 import LMSShipment from './LMSShipment';
 import PackingEvent from './PackingEvent';
+import Warehouse from './Warehouse';
+import WarehouseZone from './WarehouseZone';
+import WarehouseStaffAssignment from './WarehouseStaffAssignment';
 
 // Set up associations
 Coupon.hasMany(CouponTranslation, {
@@ -117,6 +120,21 @@ PackingEvent.belongsTo(PackingJob, { foreignKey: 'jobId', as: 'Job' });
 PackingEvent.belongsTo(User, { foreignKey: 'userId', as: 'User' });
 User.hasMany(PackingEvent, { foreignKey: 'userId', as: 'PackingEvents' });
 
+// Warehouse associations
+Warehouse.belongsTo(User, { foreignKey: 'created_by', as: 'CreatedBy' });
+Warehouse.belongsTo(User, { foreignKey: 'updated_by', as: 'UpdatedBy' });
+User.hasMany(Warehouse, { foreignKey: 'created_by', as: 'CreatedWarehouses' });
+User.hasMany(Warehouse, { foreignKey: 'updated_by', as: 'UpdatedWarehouses' });
+
+Warehouse.hasMany(WarehouseZone, { foreignKey: 'warehouse_id', as: 'Zones' });
+WarehouseZone.belongsTo(Warehouse, { foreignKey: 'warehouse_id', as: 'Warehouse' });
+
+Warehouse.hasMany(WarehouseStaffAssignment, { foreignKey: 'warehouse_id', as: 'StaffAssignments' });
+WarehouseStaffAssignment.belongsTo(Warehouse, { foreignKey: 'warehouse_id', as: 'Warehouse' });
+
+WarehouseStaffAssignment.belongsTo(User, { foreignKey: 'user_id', as: 'User' });
+User.hasMany(WarehouseStaffAssignment, { foreignKey: 'user_id', as: 'StaffAssignments' });
+
 export { 
   User, 
   Order, 
@@ -135,5 +153,8 @@ export {
   Rider,
   Handover,
   LMSShipment,
-  PackingEvent
+  PackingEvent,
+  Warehouse,
+  WarehouseZone,
+  WarehouseStaffAssignment
 };

@@ -2,6 +2,8 @@
 
 This document covers the initial setup process and admin registration for the OZi Backend system.
 
+**Base URL:** `http://13.232.150.239`
+
 ## 🔧 System Initialization
 
 ### Initialize RBAC System
@@ -29,7 +31,7 @@ X-Admin-Secret: your_admin_registration_secret
 
 **cURL Example:**
 ```bash
-curl -X POST "https://your-app.onrender.com/api/v1/system/init-rbac" \
+curl -X POST "http://13.232.150.239/api/v1/system/init-rbac" \
   -H "Content-Type: application/json" \
   -H "X-Admin-Secret: your_admin_registration_secret" \
   -d '{
@@ -73,7 +75,7 @@ Content-Type: application/json
 
 **cURL Example:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/system/status" \
+curl -X GET "http://13.232.150.239/api/v1/system/status" \
   -H "Content-Type: application/json"
 ```
 
@@ -121,7 +123,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X POST "https://your-app.onrender.com/api/v1/auth/register-admin" \
+curl -X POST "http://13.232.150.239/api/v1/auth/register-admin" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
@@ -171,7 +173,7 @@ X-Admin-Secret: your_admin_registration_secret
 
 **cURL Example:**
 ```bash
-curl -X POST "https://your-app.onrender.com/api/v1/system/setup-database" \
+curl -X POST "http://13.232.150.239/api/v1/system/setup-database" \
   -H "Content-Type: application/json" \
   -H "X-Admin-Secret: your_admin_registration_secret"
 ```
@@ -211,7 +213,7 @@ X-Admin-Secret: your_admin_registration_secret
 
 **cURL Example:**
 ```bash
-curl -X POST "https://your-app.onrender.com/api/v1/system/setup-picking" \
+curl -X POST "http://13.232.150.239/api/v1/system/setup-picking" \
   -H "Content-Type: application/json" \
   -H "X-Admin-Secret: your_admin_registration_secret"
 ```
@@ -230,7 +232,7 @@ X-Admin-Secret: your_admin_registration_secret
 
 **cURL Example:**
 ```bash
-curl -X POST "https://your-app.onrender.com/api/v1/system/setup-packing" \
+curl -X POST "http://13.232.150.239/api/v1/system/setup-packing" \
   -H "Content-Type: application/json" \
   -H "X-Admin-Secret: your_admin_registration_secret"
 ```
@@ -262,7 +264,7 @@ X-Admin-Secret: your_admin_registration_secret
 
 **cURL Example:**
 ```bash
-curl -X POST "https://your-app.onrender.com/api/v1/system/generate-mock-data" \
+curl -X POST "http://13.232.150.239/api/v1/system/generate-mock-data" \
   -H "Content-Type: application/json" \
   -H "X-Admin-Secret: your_admin_registration_secret" \
   -d '{
@@ -304,7 +306,7 @@ Content-Type: application/json
 
 **cURL Example:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/system/health" \
+curl -X GET "http://13.232.150.239/api/v1/system/health" \
   -H "Content-Type: application/json"
 ```
 
@@ -342,7 +344,7 @@ X-Platform: ios
 
 **cURL Example:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/system/version-check" \
+curl -X GET "http://13.232.150.239/api/v1/system/version-check" \
   -H "Content-Type: application/json" \
   -H "X-App-Version: 1.0.0" \
   -H "X-Platform: ios"

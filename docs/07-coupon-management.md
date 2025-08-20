@@ -2,6 +2,8 @@
 
 This document covers all coupon management endpoints for the OZi Backend system.
 
+**Base URL:** `http://13.232.150.239`
+
 ## 🎫 Coupon Operations
 
 ### Create New Coupon
@@ -20,47 +22,41 @@ Authorization: Bearer your_jwt_token
 ```json
 {
   "code": "SAVE20",
+  "name": "20% Off Electronics",
+  "description": "Get 20% off on all electronics",
   "type": "percentage",
   "value": 20,
-  "minOrderAmount": 100.00,
-  "maxDiscountAmount": 50.00,
-  "validFrom": "2024-01-15T00:00:00.000Z",
-  "validUntil": "2024-02-15T23:59:59.000Z",
-  "maxUsage": 1000,
-  "maxUsagePerUser": 1,
-  "applicableProducts": ["PROD001", "PROD002"],
-  "excludedProducts": ["PROD003"],
-  "applicableCategories": ["electronics", "accessories"],
-  "excludedCategories": ["sale"],
-  "customerGroups": ["vip", "regular"],
-  "description": "Save 20% on your order",
-  "terms": "Valid on orders above $100. Maximum discount $50.",
+  "minOrderAmount": 100,
+  "maxDiscountAmount": 50,
+  "validFrom": "2024-01-01T00:00:00.000Z",
+  "validUntil": "2024-12-31T23:59:59.000Z",
+  "usageLimit": 1000,
+  "perUserLimit": 1,
+  "categories": ["electronics", "gadgets"],
+  "excludedProducts": ["PROD-001", "PROD-002"],
   "isActive": true
 }
 ```
 
 **cURL Example:**
 ```bash
-curl -X POST "https://your-app.onrender.com/api/v1/coupons" \
+curl -X POST "http://13.232.150.239/api/v1/coupons" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
     "code": "SAVE20",
+    "name": "20% Off Electronics",
+    "description": "Get 20% off on all electronics",
     "type": "percentage",
     "value": 20,
-    "minOrderAmount": 100.00,
-    "maxDiscountAmount": 50.00,
-    "validFrom": "2024-01-15T00:00:00.000Z",
-    "validUntil": "2024-02-15T23:59:59.000Z",
-    "maxUsage": 1000,
-    "maxUsagePerUser": 1,
-    "applicableProducts": ["PROD001", "PROD002"],
-    "excludedProducts": ["PROD003"],
-    "applicableCategories": ["electronics", "accessories"],
-    "excludedCategories": ["sale"],
-    "customerGroups": ["vip", "regular"],
-    "description": "Save 20% on your order",
-    "terms": "Valid on orders above $100. Maximum discount $50.",
+    "minOrderAmount": 100,
+    "maxDiscountAmount": 50,
+    "validFrom": "2024-01-01T00:00:00.000Z",
+    "validUntil": "2024-12-31T23:59:59.000Z",
+    "usageLimit": 1000,
+    "perUserLimit": 1,
+    "categories": ["electronics", "gadgets"],
+    "excludedProducts": ["PROD-001", "PROD-002"],
     "isActive": true
   }'
 ```
@@ -112,7 +108,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/coupons?page=1&limit=10&status=active&type=percentage" \
+curl -X GET "http://13.232.150.239/api/v1/coupons?page=1&limit=10&status=active&type=percentage" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
@@ -162,7 +158,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/coupons/CPN001" \
+curl -X GET "http://13.232.150.239/api/v1/coupons/CPN001" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
@@ -225,7 +221,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X PUT "https://your-app.onrender.com/api/v1/coupons/CPN001" \
+curl -X PUT "http://13.232.150.239/api/v1/coupons/CPN001" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
@@ -272,7 +268,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X DELETE "https://your-app.onrender.com/api/v1/coupons/CPN001" \
+curl -X DELETE "http://13.232.150.239/api/v1/coupons/CPN001" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
@@ -307,7 +303,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X PATCH "https://your-app.onrender.com/api/v1/coupons/CPN001/status" \
+curl -X PATCH "http://13.232.150.239/api/v1/coupons/CPN001/status" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
@@ -363,7 +359,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X POST "https://your-app.onrender.com/api/v1/coupons/validate" \
+curl -X POST "http://13.232.150.239/api/v1/coupons/validate" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
@@ -426,7 +422,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X POST "https://your-app.onrender.com/api/v1/coupons/CPN001/apply" \
+curl -X POST "http://13.232.150.239/api/v1/coupons/CPN001/apply" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
@@ -480,7 +476,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X POST "https://your-app.onrender.com/api/v1/coupons/CPN001/translations" \
+curl -X POST "http://13.232.150.239/api/v1/coupons/CPN001/translations" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
@@ -522,7 +518,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/coupons/CPN001/translations" \
+curl -X GET "http://13.232.150.239/api/v1/coupons/CPN001/translations" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
@@ -573,7 +569,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/coupons/statistics?dateFrom=2024-01-01&dateTo=2024-01-31" \
+curl -X GET "http://13.232.150.239/api/v1/coupons/statistics?dateFrom=2024-01-01&dateTo=2024-01-31" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
@@ -633,7 +629,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/coupons/usage-report?format=json&dateFrom=2024-01-01&dateTo=2024-01-31" \
+curl -X GET "http://13.232.150.239/api/v1/coupons/usage-report?format=json&dateFrom=2024-01-01&dateTo=2024-01-31" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
@@ -662,7 +658,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/coupons/search?q=SAVE&type=percentage&status=active&minValue=10" \
+curl -X GET "http://13.232.150.239/api/v1/coupons/search?q=SAVE&type=percentage&status=active&minValue=10" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
@@ -681,7 +677,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/coupons/category/electronics" \
+curl -X GET "http://13.232.150.239/api/v1/coupons/category/electronics" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
@@ -725,7 +721,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X POST "https://your-app.onrender.com/api/v1/coupons/bulk" \
+curl -X POST "http://13.232.150.239/api/v1/coupons/bulk" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
@@ -780,7 +776,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X PUT "https://your-app.onrender.com/api/v1/coupons/bulk/status" \
+curl -X PUT "http://13.232.150.239/api/v1/coupons/bulk/status" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
@@ -814,7 +810,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/coupons/templates" \
+curl -X GET "http://13.232.150.239/api/v1/coupons/templates" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
@@ -881,7 +877,7 @@ Authorization: Bearer your_jwt_token
 
 **cURL Example:**
 ```bash
-curl -X POST "https://your-app.onrender.com/api/v1/coupons/templates/Welcome%20Discount/apply" \
+curl -X POST "http://13.232.150.239/api/v1/coupons/templates/Welcome%20Discount/apply" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
@@ -892,76 +888,3 @@ curl -X POST "https://your-app.onrender.com/api/v1/coupons/templates/Welcome%20D
     "customMaxUsage": 500
   }'
 ```
-
-## ⚠️ Error Responses
-
-### Common Error Responses
-
-**Coupon Not Found:**
-```json
-{
-  "success": false,
-  "error": "Not Found",
-  "message": "Coupon not found",
-  "statusCode": 404
-}
-```
-
-**Invalid Coupon Code:**
-```json
-{
-  "success": false,
-  "error": "Bad Request",
-  "message": "Invalid coupon code format",
-  "statusCode": 400
-}
-```
-
-**Coupon Expired:**
-```json
-{
-  "success": false,
-  "error": "Bad Request",
-  "message": "Coupon has expired",
-  "statusCode": 400
-}
-```
-
-**Coupon Usage Limit Reached:**
-```json
-{
-  "success": false,
-  "error": "Conflict",
-  "message": "Coupon usage limit has been reached",
-  "statusCode": 409
-}
-```
-
-**Order Amount Too Low:**
-```json
-{
-  "success": false,
-  "error": "Bad Request",
-  "message": "Order amount does not meet minimum requirement",
-  "statusCode": 400
-}
-```
-
-## 🔐 Security Considerations
-
-1. **Permission-Based Access**: Coupon management requires appropriate permissions
-2. **Validation Rules**: Coupon validation follows strict business rules
-3. **Usage Tracking**: All coupon usage is tracked and audited
-4. **Fraud Prevention**: Multiple validation layers prevent coupon abuse
-5. **Data Integrity**: Coupon data is validated and sanitized
-
-## 📋 Best Practices
-
-1. **Code Uniqueness**: Ensure coupon codes are unique and memorable
-2. **Validation Rules**: Implement comprehensive validation logic
-3. **Usage Limits**: Set appropriate usage limits to prevent abuse
-4. **Expiration Management**: Regular cleanup of expired coupons
-5. **Performance Monitoring**: Monitor coupon validation performance
-6. **Analytics**: Track coupon performance and effectiveness
-7. **Testing**: Test coupon logic thoroughly before production
-8. **Documentation**: Maintain clear documentation of coupon rules

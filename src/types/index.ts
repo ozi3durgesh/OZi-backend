@@ -519,6 +519,163 @@ export interface RiderLocationUpdate {
   timestamp: Date;
 }
 
+// Warehouse Module Types
+export interface WarehouseAttributes {
+  id: number;
+  warehouse_code: string;
+  name: string;
+  type: 'MAIN' | 'SATELLITE' | 'STOREFRONT' | 'DISTRIBUTION';
+  status: 'ACTIVE' | 'INACTIVE' | 'UNDER_MAINTENANCE';
+  
+  // Location Information
+  address: string;
+  city: string;
+  state: string;
+  country: string;
+  pincode: string;
+  latitude?: number;
+  longitude?: number;
+  
+  // Contact Information
+  contact_person?: string;
+  contact_email?: string;
+  contact_phone?: string;
+  emergency_contact?: string;
+  
+  // Operational Details
+  operational_hours?: any;
+  capacity_sqft?: number;
+  storage_capacity_units?: number;
+  current_utilization_percentage: number;
+  
+  // Services & Capabilities
+  services_offered?: any;
+  supported_fulfillment_types?: any;
+  
+  // Configuration
+  is_auto_assignment_enabled: boolean;
+  max_orders_per_day: number;
+  sla_hours: number;
+  
+  // Integration Details
+  lms_warehouse_id?: string;
+  integration_status: 'PENDING' | 'COMPLETED' | 'FAILED';
+  
+  // Audit Fields
+  created_by: number;
+  updated_by?: number;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface WarehouseCreationAttributes extends Omit<WarehouseAttributes, 'id' | 'created_at' | 'updated_at'> {}
+
+export interface WarehouseZoneAttributes {
+  id: number;
+  warehouse_id: number;
+  zone_code: string;
+  zone_name: string;
+  zone_type: 'PICKING' | 'STORAGE' | 'RECEIVING' | 'PACKING' | 'SHIPPING' | 'RETURNS';
+  temperature_zone: 'AMBIENT' | 'CHILLED' | 'FROZEN' | 'CONTROLLED';
+  capacity_units?: number;
+  current_utilization: number;
+  is_active: boolean;
+  
+  // Audit Fields
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface WarehouseZoneCreationAttributes extends Omit<WarehouseZoneAttributes, 'id' | 'created_at' | 'updated_at'> {}
+
+export interface WarehouseStaffAssignmentAttributes {
+  id: number;
+  warehouse_id: number;
+  user_id: number;
+  role: 'MANAGER' | 'SUPERVISOR' | 'OPERATOR' | 'PICKER' | 'PACKER';
+  assigned_date: Date;
+  end_date?: Date;
+  is_active: boolean;
+  
+  // Audit Fields
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface WarehouseStaffAssignmentCreationAttributes extends Omit<WarehouseStaffAssignmentAttributes, 'id' | 'created_at' | 'updated_at'> {}
+
+// Warehouse API Request/Response Types
+export interface CreateWarehouseRequest {
+  warehouse_code: string;
+  name: string;
+  type: 'MAIN' | 'SATELLITE' | 'STOREFRONT' | 'DISTRIBUTION';
+  address: string;
+  city: string;
+  state: string;
+  country?: string;
+  pincode: string;
+  latitude?: number;
+  longitude?: number;
+  contact_person?: string;
+  contact_email?: string;
+  contact_phone?: string;
+  emergency_contact?: string;
+  operational_hours?: any;
+  capacity_sqft?: number;
+  storage_capacity_units?: number;
+  services_offered?: any;
+  supported_fulfillment_types?: any;
+  is_auto_assignment_enabled?: boolean;
+  max_orders_per_day?: number;
+  sla_hours?: number;
+  lms_warehouse_id?: string;
+}
+
+export interface UpdateWarehouseRequest extends Partial<CreateWarehouseRequest> {}
+
+export interface WarehouseStatusUpdateRequest {
+  status: 'ACTIVE' | 'INACTIVE' | 'UNDER_MAINTENANCE';
+}
+
+export interface CreateZoneRequest {
+  zone_code: string;
+  zone_name: string;
+  zone_type: 'PICKING' | 'STORAGE' | 'RECEIVING' | 'PACKING' | 'SHIPPING' | 'RETURNS';
+  temperature_zone?: 'AMBIENT' | 'CHILLED' | 'FROZEN' | 'CONTROLLED';
+  capacity_units?: number;
+}
+
+export interface UpdateZoneRequest extends Partial<CreateZoneRequest> {}
+
+export interface AssignStaffRequest {
+  user_id: number;
+  role: 'MANAGER' | 'SUPERVISOR' | 'OPERATOR' | 'PICKER' | 'PACKER';
+  assigned_date: Date;
+  end_date?: Date;
+}
+
+export interface WarehouseFilters {
+  status?: 'ACTIVE' | 'INACTIVE' | 'UNDER_MAINTENANCE';
+  type?: 'MAIN' | 'SATELLITE' | 'STOREFRONT' | 'DISTRIBUTION';
+  city?: string;
+  state?: string;
+  country?: string;
+  has_capacity?: boolean;
+  page?: number;
+  limit?: number;
+  search?: string;
+}
+
+export interface WarehouseListResponse {
+  warehouses: WarehouseAttributes[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
 // Request type extensions for middleware
 export interface AuthRequest extends Request {
   user?: {

@@ -1,12 +1,14 @@
-# Place Order
+# Order Management
 
-This document covers all order placement and management endpoints for the OZi Backend system.
+This document covers all order management endpoints for the OZi Backend system.
+
+**Base URL:** `http://13.232.150.239`
 
 ## 📦 Order Operations
 
 ### Create New Order
 
-**Endpoint:** `POST /api/v1/orders`
+**Endpoint:** `POST /api/orders/place`
 
 **Description:** Creates a new order in the system.
 
@@ -33,42 +35,24 @@ Authorization: Bearer your_jwt_token
   },
   "items": [
     {
-      "productId": "PROD001",
+      "productId": "PROD-001",
       "productName": "Wireless Headphones",
       "quantity": 2,
       "unitPrice": 99.99,
-      "sku": "WH-001",
-      "weight": 0.5,
-      "dimensions": {
-        "length": 20,
-        "width": 15,
-        "height": 8
-      }
-    },
-    {
-      "productId": "PROD002",
-      "productName": "Smartphone Case",
-      "quantity": 1,
-      "unitPrice": 29.99,
-      "sku": "SC-001",
-      "weight": 0.1,
-      "dimensions": {
-        "length": 15,
-        "width": 8,
-        "height": 2
-      }
+      "sku": "WH-001"
     }
   ],
   "shippingMethod": "express",
-  "priority": "high",
-  "notes": "Handle with care - fragile items",
-  "expectedDeliveryDate": "2024-01-20"
+  "priority": "normal",
+  "notes": "Handle with care"
 }
 ```
 
-**cURL Example:**
+**cURL Examples:**
+
+**Web Client:**
 ```bash
-curl -X POST "https://your-app.onrender.com/api/v1/orders" \
+curl -X POST "http://13.232.150.239/api/orders/place" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
@@ -86,23 +70,51 @@ curl -X POST "https://your-app.onrender.com/api/v1/orders" \
     },
     "items": [
       {
-        "productId": "PROD001",
+        "productId": "PROD-001",
         "productName": "Wireless Headphones",
         "quantity": 2,
         "unitPrice": 99.99,
-        "sku": "WH-001",
-        "weight": 0.5,
-        "dimensions": {
-          "length": 20,
-          "width": 15,
-          "height": 8
-        }
+        "sku": "WH-001"
       }
     ],
     "shippingMethod": "express",
-    "priority": "high",
-    "notes": "Handle with care - fragile items",
-    "expectedDeliveryDate": "2024-01-20"
+    "priority": "normal",
+    "notes": "Handle with care"
+  }'
+```
+
+**Mobile Client:**
+```bash
+curl -X POST "http://13.232.150.239/api/orders/place" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "source: mobile" \
+  -H "app-version: 1.2.0" \
+  -d '{
+    "customerInfo": {
+      "name": "John Doe",
+      "email": "john.doe@example.com",
+      "phone": "+1234567890",
+      "address": {
+        "street": "123 Main St",
+        "city": "New York",
+        "state": "NY",
+        "zipCode": "10001",
+        "country": "USA"
+      }
+    },
+    "items": [
+      {
+        "productId": "PROD-001",
+        "productName": "Wireless Headphones",
+        "quantity": 2,
+        "unitPrice": 99.99,
+        "sku": "WH-001"
+      }
+    ],
+    "shippingMethod": "express",
+    "priority": "normal",
+    "notes": "Handle with care"
   }'
 ```
 
@@ -114,28 +126,11 @@ curl -X POST "https://your-app.onrender.com/api/v1/orders" \
   "data": {
     "order": {
       "id": "ORD-2024-001",
+      "orderNumber": "ORD-2024-001",
       "status": "pending",
-      "customerInfo": {
-        "name": "John Doe",
-        "email": "john.doe@example.com",
-        "phone": "+1234567890"
-      },
-      "items": [
-        {
-          "id": 1,
-          "productId": "PROD001",
-          "productName": "Wireless Headphones",
-          "quantity": 2,
-          "unitPrice": 99.99,
-          "totalPrice": 199.98
-        }
-      ],
       "totalAmount": 199.98,
-      "shippingMethod": "express",
-      "priority": "high",
-      "expectedDeliveryDate": "2024-01-20",
-      "createdAt": "2024-01-15T10:30:00.000Z",
-      "estimatedProcessingTime": "2-3 business days"
+      "customerName": "John Doe",
+      "createdAt": "2024-01-15T10:30:00.000Z"
     }
   }
 }
@@ -143,9 +138,9 @@ curl -X POST "https://your-app.onrender.com/api/v1/orders" \
 
 ### Get All Orders
 
-**Endpoint:** `GET /api/v1/orders`
+**Endpoint:** `GET /api/orders`
 
-**Description:** Retrieves all orders with filtering and pagination.
+**Description:** Retrieves all orders with optional filtering and pagination.
 
 **Headers:**
 ```bash
@@ -156,18 +151,25 @@ Authorization: Bearer your_jwt_token
 **Query Parameters:**
 - `page` (optional): Page number for pagination (default: 1)
 - `limit` (optional): Number of items per page (default: 10)
-- `status` (optional): Filter by status (pending, processing, picked, packed, shipped, delivered, cancelled)
-- `priority` (optional): Filter by priority (low, medium, high, urgent)
-- `customerEmail` (optional): Filter by customer email
-- `dateFrom` (optional): Filter by creation date
-- `dateTo` (optional): Filter by creation date
-- `shippingMethod` (optional): Filter by shipping method
+- `status` (optional): Filter by status (pending, processing, shipped, delivered)
+- `priority` (optional): Filter by priority (low, normal, high, urgent)
 
-**cURL Example:**
+**cURL Examples:**
+
+**Web Client:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/orders?page=1&limit=10&status=pending&priority=high" \
+curl -X GET "http://13.232.150.239/api/orders?page=1&limit=10&status=pending&priority=high" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
+```
+
+**Mobile Client:**
+```bash
+curl -X GET "http://13.232.150.239/api/orders?page=1&limit=10&status=pending&priority=high" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "source: mobile" \
+  -H "app-version: 1.2.0"
 ```
 
 **Response:**
@@ -178,23 +180,19 @@ curl -X GET "https://your-app.onrender.com/api/v1/orders?page=1&limit=10&status=
     "orders": [
       {
         "id": "ORD-2024-001",
+        "orderNumber": "ORD-2024-001",
+        "customerName": "John Doe",
         "status": "pending",
-        "customerInfo": {
-          "name": "John Doe",
-          "email": "john.doe@example.com"
-        },
-        "totalAmount": 199.98,
         "priority": "high",
-        "shippingMethod": "express",
-        "expectedDeliveryDate": "2024-01-20",
+        "totalAmount": 199.98,
         "createdAt": "2024-01-15T10:30:00.000Z"
       }
     ],
     "pagination": {
       "page": 1,
       "limit": 10,
-      "total": 25,
-      "totalPages": 3
+      "total": 1,
+      "totalPages": 1
     }
   }
 }
@@ -202,7 +200,7 @@ curl -X GET "https://your-app.onrender.com/api/v1/orders?page=1&limit=10&status=
 
 ### Get Order by ID
 
-**Endpoint:** `GET /api/v1/orders/:id`
+**Endpoint:** `GET /api/orders/:id`
 
 **Description:** Retrieves a specific order by its ID.
 
@@ -212,11 +210,22 @@ Content-Type: application/json
 Authorization: Bearer your_jwt_token
 ```
 
-**cURL Example:**
+**cURL Examples:**
+
+**Web Client:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/orders/ORD-2024-001" \
+curl -X GET "http://13.232.150.239/api/orders/ORD-2024-001" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
+```
+
+**Mobile Client:**
+```bash
+curl -X GET "http://13.232.150.239/api/orders/ORD-2024-001" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "source: mobile" \
+  -H "app-version: 1.2.0"
 ```
 
 **Response:**
@@ -226,7 +235,7 @@ curl -X GET "https://your-app.onrender.com/api/v1/orders/ORD-2024-001" \
   "data": {
     "order": {
       "id": "ORD-2024-001",
-      "status": "pending",
+      "orderNumber": "ORD-2024-001",
       "customerInfo": {
         "name": "John Doe",
         "email": "john.doe@example.com",
@@ -241,32 +250,20 @@ curl -X GET "https://your-app.onrender.com/api/v1/orders/ORD-2024-001" \
       },
       "items": [
         {
-          "id": 1,
-          "productId": "PROD001",
+          "productId": "PROD-001",
           "productName": "Wireless Headphones",
           "quantity": 2,
           "unitPrice": 99.99,
-          "totalPrice": 199.98,
           "sku": "WH-001",
-          "weight": 0.5,
-          "dimensions": {
-            "length": 20,
-            "width": 15,
-            "height": 8
-          }
+          "totalPrice": 199.98
         }
       ],
-      "totalAmount": 199.98,
+      "status": "pending",
+      "priority": "normal",
       "shippingMethod": "express",
-      "priority": "high",
-      "notes": "Handle with care - fragile items",
-      "expectedDeliveryDate": "2024-01-20",
-      "createdAt": "2024-01-15T10:30:00.000Z",
-      "updatedAt": "2024-01-15T10:30:00.000Z",
-      "estimatedProcessingTime": "2-3 business days",
-      "trackingNumber": null,
-      "shippedAt": null,
-      "deliveredAt": null
+      "totalAmount": 199.98,
+      "notes": "Handle with care",
+      "createdAt": "2024-01-15T10:30:00.000Z"
     }
   }
 }
@@ -274,7 +271,7 @@ curl -X GET "https://your-app.onrender.com/api/v1/orders/ORD-2024-001" \
 
 ### Update Order
 
-**Endpoint:** `PUT /api/v1/orders/:id`
+**Endpoint:** `PUT /api/orders/update/:id`
 
 **Description:** Updates an existing order.
 
@@ -288,26 +285,45 @@ Authorization: Bearer your_jwt_token
 ```json
 {
   "customerInfo": {
-    "phone": "+1234567891"
+    "name": "John Doe",
+    "phone": "+1234567890"
   },
-  "shippingMethod": "standard",
-  "priority": "medium",
-  "notes": "Updated notes - standard shipping preferred"
+  "priority": "high",
+  "notes": "Updated notes"
 }
 ```
 
-**cURL Example:**
+**cURL Examples:**
+
+**Web Client:**
 ```bash
-curl -X PUT "https://your-app.onrender.com/api/v1/orders/ORD-2024-001" \
+curl -X PUT "http://13.232.150.239/api/orders/update/ORD-2024-001" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
     "customerInfo": {
-      "phone": "+1234567891"
+      "name": "John Doe",
+      "phone": "+1234567890"
     },
-    "shippingMethod": "standard",
-    "priority": "medium",
-    "notes": "Updated notes - standard shipping preferred"
+    "priority": "high",
+    "notes": "Updated notes"
+  }'
+```
+
+**Mobile Client:**
+```bash
+curl -X PUT "http://13.232.150.239/api/orders/update/ORD-2024-001" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "source: mobile" \
+  -H "app-version: 1.2.0" \
+  -d '{
+    "customerInfo": {
+      "name": "John Doe",
+      "phone": "+1234567890"
+    },
+    "priority": "high",
+    "notes": "Updated notes"
   }'
 ```
 
@@ -319,12 +335,8 @@ curl -X PUT "https://your-app.onrender.com/api/v1/orders/ORD-2024-001" \
   "data": {
     "order": {
       "id": "ORD-2024-001",
-      "customerInfo": {
-        "phone": "+1234567891"
-      },
-      "shippingMethod": "standard",
-      "priority": "medium",
-      "notes": "Updated notes - standard shipping preferred",
+      "priority": "high",
+      "notes": "Updated notes",
       "updatedAt": "2024-01-15T11:00:00.000Z"
     }
   }
@@ -333,9 +345,9 @@ curl -X PUT "https://your-app.onrender.com/api/v1/orders/ORD-2024-001" \
 
 ### Cancel Order
 
-**Endpoint:** `POST /api/v1/orders/:id/cancel`
+**Endpoint:** `POST /api/orders/:id/cancel`
 
-**Description:** Cancels an order.
+**Description:** Cancels an existing order.
 
 **Headers:**
 ```bash
@@ -346,19 +358,34 @@ Authorization: Bearer your_jwt_token
 **Request Body:**
 ```json
 {
-  "reason": "Customer requested cancellation",
-  "refundRequired": true
+  "reason": "Customer request",
+  "notes": "Customer called to cancel"
 }
 ```
 
-**cURL Example:**
+**cURL Examples:**
+
+**Web Client:**
 ```bash
-curl -X POST "https://your-app.onrender.com/api/v1/orders/ORD-2024-001/cancel" \
+curl -X POST "http://13.232.150.239/api/orders/ORD-2024-001/cancel" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "reason": "Customer requested cancellation",
-    "refundRequired": true
+    "reason": "Customer request",
+    "notes": "Customer called to cancel"
+  }'
+```
+
+**Mobile Client:**
+```bash
+curl -X POST "http://13.232.150.239/api/orders/ORD-2024-001/cancel" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "source: mobile" \
+  -H "app-version: 1.2.0" \
+  -d '{
+    "reason": "Customer request",
+    "notes": "Customer called to cancel"
   }'
 ```
 
@@ -368,22 +395,17 @@ curl -X POST "https://your-app.onrender.com/api/v1/orders/ORD-2024-001/cancel" \
   "success": true,
   "message": "Order cancelled successfully",
   "data": {
-    "order": {
-      "id": "ORD-2024-001",
-      "status": "cancelled",
-      "cancelledAt": "2024-01-15T11:30:00.000Z",
-      "cancellationReason": "Customer requested cancellation",
-      "refundRequired": true
-    }
+    "orderId": "ORD-2024-001",
+    "status": "cancelled",
+    "cancelledAt": "2024-01-15T11:30:00.000Z",
+    "reason": "Customer request"
   }
 }
 ```
 
-## 📋 Order Status Management
-
 ### Update Order Status
 
-**Endpoint:** `PATCH /api/v1/orders/:id/status`
+**Endpoint:** `PATCH /api/orders/:id/status`
 
 **Description:** Updates the status of an order.
 
@@ -397,18 +419,33 @@ Authorization: Bearer your_jwt_token
 ```json
 {
   "status": "processing",
-  "notes": "Order moved to processing queue"
+  "notes": "Order is now being processed"
 }
 ```
 
-**cURL Example:**
+**cURL Examples:**
+
+**Web Client:**
 ```bash
-curl -X PATCH "https://your-app.onrender.com/api/v1/orders/ORD-2024-001/status" \
+curl -X PATCH "http://13.232.150.239/api/orders/ORD-2024-001/status" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
     "status": "processing",
-    "notes": "Order moved to processing queue"
+    "notes": "Order is now being processed"
+  }'
+```
+
+**Mobile Client:**
+```bash
+curl -X PATCH "http://13.232.150.239/api/orders/ORD-2024-001/status" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "source: mobile" \
+  -H "app-version: 1.2.0" \
+  -d '{
+    "status": "processing",
+    "notes": "Order is now being processed"
   }'
 ```
 
@@ -418,21 +455,19 @@ curl -X PATCH "https://your-app.onrender.com/api/v1/orders/ORD-2024-001/status" 
   "success": true,
   "message": "Order status updated successfully",
   "data": {
-    "order": {
-      "id": "ORD-2024-001",
-      "status": "processing",
-      "statusUpdatedAt": "2024-01-15T12:00:00.000Z",
-      "statusNotes": "Order moved to processing queue"
-    }
+    "orderId": "ORD-2024-001",
+    "oldStatus": "pending",
+    "newStatus": "processing",
+    "updatedAt": "2024-01-15T12:00:00.000Z"
   }
 }
 ```
 
 ### Get Order Status History
 
-**Endpoint:** `GET /api/v1/orders/:id/status-history`
+**Endpoint:** `GET /api/orders/:id/status-history`
 
-**Description:** Retrieves the status change history of an order.
+**Description:** Retrieves the status history of an order.
 
 **Headers:**
 ```bash
@@ -440,11 +475,22 @@ Content-Type: application/json
 Authorization: Bearer your_jwt_token
 ```
 
-**cURL Example:**
+**cURL Examples:**
+
+**Web Client:**
 ```bash
-curl -X GET "https://your-app.onrender.com/api/v1/orders/ORD-2024-001/status-history" \
+curl -X GET "http://13.232.150.239/api/orders/ORD-2024-001/status-history" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
+```
+
+**Mobile Client:**
+```bash
+curl -X GET "http://13.232.150.239/api/orders/ORD-2024-001/status-history" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "source: mobile" \
+  -H "app-version: 1.2.0"
 ```
 
 **Response:**
@@ -457,468 +503,55 @@ curl -X GET "https://your-app.onrender.com/api/v1/orders/ORD-2024-001/status-his
       {
         "status": "pending",
         "timestamp": "2024-01-15T10:30:00.000Z",
-        "updatedBy": "system",
-        "notes": "Order created"
+        "notes": "Order created",
+        "updatedBy": "system"
       },
       {
         "status": "processing",
         "timestamp": "2024-01-15T12:00:00.000Z",
-        "updatedBy": "john.doe@ozi.com",
-        "notes": "Order moved to processing queue"
+        "notes": "Order is now being processed",
+        "updatedBy": "admin@ozi.com"
       }
     ]
   }
 }
 ```
 
-## 📦 Order Items Management
-
-### Add Item to Order
-
-**Endpoint:** `POST /api/v1/orders/:id/items`
-
-**Description:** Adds a new item to an existing order.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Request Body:**
-```json
-{
-  "productId": "PROD003",
-  "productName": "Bluetooth Speaker",
-  "quantity": 1,
-  "unitPrice": 79.99,
-  "sku": "BS-001",
-  "weight": 0.8,
-  "dimensions": {
-    "length": 25,
-    "width": 20,
-    "height": 15
-  }
-}
-```
-
-**cURL Example:**
-```bash
-curl -X POST "https://your-app.onrender.com/api/v1/orders/ORD-2024-001/items" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -d '{
-    "productId": "PROD003",
-    "productName": "Bluetooth Speaker",
-    "quantity": 1,
-    "unitPrice": 79.99,
-    "sku": "BS-001",
-    "weight": 0.8,
-    "dimensions": {
-      "length": 25,
-      "width": 20,
-      "height": 15
-    }
-  }'
-```
-
-### Update Order Item
-
-**Endpoint:** `PUT /api/v1/orders/:id/items/:itemId`
-
-**Description:** Updates an existing item in an order.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Request Body:**
-```json
-{
-  "quantity": 3,
-  "notes": "Increased quantity as requested by customer"
-}
-```
-
-**cURL Example:**
-```bash
-curl -X PUT "https://your-app.onrender.com/api/v1/orders/ORD-2024-001/items/1" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -d '{
-    "quantity": 3,
-    "notes": "Increased quantity as requested by customer"
-  }'
-```
-
-### Remove Item from Order
-
-**Endpoint:** `DELETE /api/v1/orders/:id/items/:itemId`
-
-**Description:** Removes an item from an order.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**cURL Example:**
-```bash
-curl -X DELETE "https://your-app.onrender.com/api/v1/orders/ORD-2024-001/items/2" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-## 🚚 Shipping and Delivery
-
-### Update Shipping Information
-
-**Endpoint:** `PUT /api/v1/orders/:id/shipping`
-
-**Description:** Updates shipping information for an order.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Request Body:**
-```json
-{
-  "shippingMethod": "overnight",
-  "trackingNumber": "TRK123456789",
-  "carrier": "FedEx",
-  "estimatedDeliveryDate": "2024-01-16"
-}
-```
-
-**cURL Example:**
-```bash
-curl -X PUT "https://your-app.onrender.com/api/v1/orders/ORD-2024-001/shipping" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -d '{
-    "shippingMethod": "overnight",
-    "trackingNumber": "TRK123456789",
-    "carrier": "FedEx",
-    "estimatedDeliveryDate": "2024-01-16"
-  }'
-```
-
-### Mark Order as Shipped
-
-**Endpoint:** `POST /api/v1/orders/:id/ship`
-
-**Description:** Marks an order as shipped.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Request Body:**
-```json
-{
-  "trackingNumber": "TRK123456789",
-  "carrier": "FedEx",
-  "shippedAt": "2024-01-15T14:00:00.000Z",
-  "estimatedDeliveryDate": "2024-01-16"
-}
-```
-
-**cURL Example:**
-```bash
-curl -X POST "https://your-app.onrender.com/api/v1/orders/ORD-2024-001/ship" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -d '{
-    "trackingNumber": "TRK123456789",
-    "carrier": "FedEx",
-    "shippedAt": "2024-01-15T14:00:00.000Z",
-    "estimatedDeliveryDate": "2024-01-16"
-  }'
-```
-
-### Mark Order as Delivered
-
-**Endpoint:** `POST /api/v1/orders/:id/deliver`
-
-**Description:** Marks an order as delivered.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Request Body:**
-```json
-{
-  "deliveredAt": "2024-01-16T10:00:00.000Z",
-  "deliveryNotes": "Delivered to front desk",
-  "signature": "John Doe"
-}
-```
-
-**cURL Example:**
-```bash
-curl -X POST "https://your-app.onrender.com/api/v1/orders/ORD-2024-001/deliver" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -d '{
-    "deliveredAt": "2024-01-16T10:00:00.000Z",
-    "deliveryNotes": "Delivered to front desk",
-    "signature": "John Doe"
-  }'
-```
-
-## 📊 Order Analytics
-
-### Get Order Statistics
-
-**Endpoint:** `GET /api/v1/orders/statistics`
-
-**Description:** Retrieves statistics about orders.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Query Parameters:**
-- `dateFrom` (optional): Start date for statistics
-- `dateTo` (optional): End date for statistics
-
-**cURL Example:**
-```bash
-curl -X GET "https://your-app.onrender.com/api/v1/orders/statistics?dateFrom=2024-01-01&dateTo=2024-01-31" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "totalOrders": 150,
-    "totalRevenue": 15750.50,
-    "averageOrderValue": 105.00,
-    "statusDistribution": [
-      {
-        "status": "pending",
-        "count": 25,
-        "percentage": 16.67
-      },
-      {
-        "status": "processing",
-        "count": 30,
-        "percentage": 20.0
-      }
-    ],
-    "priorityDistribution": [
-      {
-        "priority": "high",
-        "count": 45,
-        "percentage": 30.0
-      }
-    ],
-    "shippingMethodDistribution": [
-      {
-        "method": "express",
-        "count": 60,
-        "percentage": 40.0
-      }
-    ]
-  }
-}
-```
-
-### Get Order Report
-
-**Endpoint:** `GET /api/v1/orders/report`
-
-**Description:** Generates a detailed order report.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Query Parameters:**
-- `format` (optional): Report format (json, csv, pdf)
-- `dateFrom` (required): Start date for the report
-- `dateTo` (required): End date for the report
-- `status` (optional): Filter by status
-- `priority` (optional): Filter by priority
-
-**cURL Example:**
-```bash
-curl -X GET "https://your-app.onrender.com/api/v1/orders/report?format=json&dateFrom=2024-01-01&dateTo=2024-01-31&status=delivered" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-## 🔍 Order Search and Filtering
-
-### Search Orders
-
-**Endpoint:** `GET /api/v1/orders/search`
-
-**Description:** Advanced search for orders with multiple criteria.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Query Parameters:**
-- `q` (required): Search query
-- `status` (optional): Filter by status
-- `priority` (optional): Filter by priority
-- `customerEmail` (optional): Filter by customer email
-- `dateFrom` (optional): Filter by creation date
-- `dateTo` (optional): Filter by creation date
-
-**cURL Example:**
-```bash
-curl -X GET "https://your-app.onrender.com/api/v1/orders/search?q=wireless&status=pending&priority=high" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-## 🔄 Bulk Order Operations
-
-### Bulk Create Orders
-
-**Endpoint:** `POST /api/v1/orders/bulk`
-
-**Description:** Creates multiple orders at once.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Request Body:**
-```json
-{
-  "orders": [
-    {
-      "customerInfo": {
-        "name": "Customer 1",
-        "email": "customer1@example.com"
-      },
-      "items": [
-        {
-          "productId": "PROD001",
-          "quantity": 1,
-          "unitPrice": 99.99
-        }
-      ]
-    },
-    {
-      "customerInfo": {
-        "name": "Customer 2",
-        "email": "customer2@example.com"
-      },
-      "items": [
-        {
-          "productId": "PROD002",
-          "quantity": 2,
-          "unitPrice": 29.99
-        }
-      ]
-    }
-  ]
-}
-```
-
-**cURL Example:**
-```bash
-curl -X POST "https://your-app.onrender.com/api/v1/orders/bulk" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -d '{
-    "orders": [
-      {
-        "customerInfo": {
-          "name": "Customer 1",
-          "email": "customer1@example.com"
-        },
-        "items": [
-          {
-            "productId": "PROD001",
-            "quantity": 1,
-            "unitPrice": 99.99
-          }
-        ]
-      }
-    ]
-  }'
-```
-
-### Bulk Update Order Status
-
-**Endpoint:** `PUT /api/v1/orders/bulk/status`
-
-**Description:** Updates the status of multiple orders at once.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Request Body:**
-```json
-{
-  "orders": [
-    {
-      "id": "ORD-2024-001",
-      "status": "processing"
-    },
-    {
-      "id": "ORD-2024-002",
-      "status": "processing"
-    }
-  ],
-  "notes": "Bulk status update to processing"
-}
-```
-
-**cURL Example:**
-```bash
-curl -X PUT "https://your-app.onrender.com/api/v1/orders/bulk/status" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -d '{
-    "orders": [
-      {
-        "id": "ORD-2024-001",
-        "status": "processing"
-      },
-      {
-        "id": "ORD-2024-002",
-        "status": "processing"
-      }
-    ],
-    "notes": "Bulk status update to processing"
-  }'
-```
+## 📱 Mobile App Considerations
+
+### Version Check Headers
+For mobile clients, the following headers are required:
+- `source: mobile` - Identifies the request as coming from a mobile app
+- `app-version: 1.2.0` - Current app version for compatibility checking
+
+### Version Compatibility
+- Minimum supported version: 1.0.0
+- If app version is below minimum, API returns 426 status code
+- Web clients don't require version checking
 
 ## ⚠️ Error Responses
 
 ### Common Error Responses
+
+**Unauthorized Access:**
+```json
+{
+  "success": false,
+  "error": "Unauthorized",
+  "message": "Invalid access token",
+  "statusCode": 401
+}
+```
+
+**Insufficient Permissions:**
+```json
+{
+  "success": false,
+  "error": "Forbidden",
+  "message": "Insufficient permissions to access this resource",
+  "statusCode": 403
+}
+```
 
 **Order Not Found:**
 ```json
@@ -935,46 +568,48 @@ curl -X PUT "https://your-app.onrender.com/api/v1/orders/bulk/status" \
 {
   "success": false,
   "error": "Bad Request",
-  "message": "Invalid order status transition",
+  "message": "Invalid order status",
   "statusCode": 400
 }
 ```
 
-**Order Already Shipped:**
+**App Version Too Old (Mobile Only):**
 ```json
 {
   "success": false,
-  "error": "Conflict",
-  "message": "Cannot modify shipped order",
-  "statusCode": 409
+  "error": "Upgrade Required",
+  "message": "Please update your app to version 1.0.0 or higher",
+  "statusCode": 426
 }
 ```
 
-**Insufficient Stock:**
-```json
-{
-  "success": false,
-  "error": "Conflict",
-  "message": "Insufficient stock for requested items",
-  "statusCode": 409
-}
-```
+## 🔐 Security Features
 
-## 🔐 Security Considerations
+1. **Authentication Required**: All endpoints require valid JWT token
+2. **Permission-Based Access**: Role-based access control (RBAC)
+3. **Version Control**: Mobile app compatibility checking
+4. **Input Validation**: Comprehensive request validation
+5. **Audit Logging**: Track all order operations
 
-1. **Permission-Based Access**: Order management requires appropriate permissions
-2. **Status Validation**: Order status changes follow business rules
-3. **Audit Logging**: All order changes are logged for tracking
-4. **Customer Data Protection**: Customer information is handled securely
-5. **Financial Validation**: Order amounts and pricing are validated
+## 📋 Order Management Flow
 
-## 📋 Best Practices
+### Web Client Flow
+1. User authenticates with valid JWT token
+2. User performs order operations
+3. System validates permissions and processes request
+4. Response is returned with operation result
 
-1. **Status Management**: Follow proper order status workflow
-2. **Data Validation**: Validate all order data before processing
-3. **Customer Communication**: Keep customers informed of order status
-4. **Inventory Management**: Check stock availability before order confirmation
-5. **Shipping Integration**: Integrate with shipping carriers for tracking
-6. **Order Tracking**: Maintain comprehensive order history
-7. **Performance Monitoring**: Monitor order processing performance
+### Mobile Client Flow
+1. App sends request with version headers
+2. System validates app version compatibility
+3. User authenticates with valid JWT token
+4. User performs order operations
+5. System validates permissions and processes request
+6. Response is returned with operation result
+7. Version checking on every request
+
+---
+
+This document covers all order management endpoints with examples for both web and mobile clients. Mobile clients must include version headers for compatibility checking. All endpoints require authentication and appropriate permissions.
+
 8. **Data Backup**: Regular backup of order data
