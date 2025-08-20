@@ -2,15 +2,15 @@
 
 This document covers all order management endpoints for the OZi Backend system.
 
-**Base URL:** `http://13.232.150.239`
+**Base URL:** `http://localhost:3000`
 
 ## 📦 Order Operations
 
-### Create New Order
+### Place Order
 
 **Endpoint:** `POST /api/orders/place`
 
-**Description:** Creates a new order in the system.
+**Description:** Creates a new order with cart items and optional coupon.
 
 **Headers:**
 ```bash
@@ -21,30 +21,33 @@ Authorization: Bearer your_jwt_token
 **Request Body:**
 ```json
 {
-  "customerInfo": {
-    "name": "John Doe",
-    "email": "john.doe@example.com",
-    "phone": "+1234567890",
-    "address": {
-      "street": "123 Main St",
-      "city": "New York",
-      "state": "NY",
-      "zipCode": "10001",
-      "country": "USA"
-    }
-  },
-  "items": [
+  "cart": [
     {
-      "productId": "PROD-001",
-      "productName": "Wireless Headphones",
-      "quantity": 2,
-      "unitPrice": 99.99,
-      "sku": "WH-001"
+      "sku": 12345,
+      "amount": 29.99
+    },
+    {
+      "sku": 67890,
+      "amount": 15.50
     }
   ],
-  "shippingMethod": "express",
-  "priority": "normal",
-  "notes": "Handle with care"
+  "coupon_code": "SAVE20",
+  "order_amount": 45.49,
+  "order_type": "delivery",
+  "payment_method": "cash_on_delivery",
+  "store_id": 1,
+  "distance": 5.2,
+  "discount_amount": 0,
+  "tax_amount": 2.27,
+  "address": "123 Main St, City, State 12345",
+  "latitude": 40.7128,
+  "longitude": -74.0060,
+  "contact_person_name": "John Doe",
+  "contact_person_number": "+1234567890",
+  "address_type": "home",
+  "is_scheduled": 0,
+  "scheduled_timestamp": 1642233600,
+  "promised_delv_tat": "24"
 }
 ```
 
@@ -52,69 +55,53 @@ Authorization: Bearer your_jwt_token
 
 **Web Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/orders/place" \
+curl -X POST "http://localhost:3000/api/orders/place" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "customerInfo": {
-      "name": "John Doe",
-      "email": "john.doe@example.com",
-      "phone": "+1234567890",
-      "address": {
-        "street": "123 Main St",
-        "city": "New York",
-        "state": "NY",
-        "zipCode": "10001",
-        "country": "USA"
-      }
-    },
-    "items": [
+    "cart": [
       {
-        "productId": "PROD-001",
-        "productName": "Wireless Headphones",
-        "quantity": 2,
-        "unitPrice": 99.99,
-        "sku": "WH-001"
+        "sku": 12345,
+        "amount": 29.99
+      },
+      {
+        "sku": 67890,
+        "amount": 15.50
       }
     ],
-    "shippingMethod": "express",
-    "priority": "normal",
-    "notes": "Handle with care"
+    "order_amount": 45.49,
+    "order_type": "delivery",
+    "payment_method": "cash_on_delivery",
+    "store_id": 1,
+    "address": "123 Main St, City, State 12345",
+    "contact_person_number": "+1234567890"
   }'
 ```
 
 **Mobile Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/orders/place" \
+curl -X POST "http://localhost:3000/api/orders/place" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -H "source: mobile" \
   -H "app-version: 1.2.0" \
   -d '{
-    "customerInfo": {
-      "name": "John Doe",
-      "email": "john.doe@example.com",
-      "phone": "+1234567890",
-      "address": {
-        "street": "123 Main St",
-        "city": "New York",
-        "state": "NY",
-        "zipCode": "10001",
-        "country": "USA"
-      }
-    },
-    "items": [
+    "cart": [
       {
-        "productId": "PROD-001",
-        "productName": "Wireless Headphones",
-        "quantity": 2,
-        "unitPrice": 99.99,
-        "sku": "WH-001"
+        "sku": 12345,
+        "amount": 29.99
+      },
+      {
+        "sku": 67890,
+        "amount": 15.50
       }
     ],
-    "shippingMethod": "express",
-    "priority": "normal",
-    "notes": "Handle with care"
+    "order_amount": 45.49,
+    "order_type": "delivery",
+    "payment_method": "cash_on_delivery",
+    "store_id": 1,
+    "address": "123 Main St, City, State 12345",
+    "contact_person_number": "+1234567890"
   }'
 ```
 
@@ -122,77 +109,38 @@ curl -X POST "http://13.232.150.239/api/orders/place" \
 ```json
 {
   "success": true,
-  "message": "Order created successfully",
   "data": {
     "order": {
-      "id": "ORD-2024-001",
-      "orderNumber": "ORD-2024-001",
-      "status": "pending",
-      "totalAmount": 199.98,
-      "customerName": "John Doe",
-      "createdAt": "2024-01-15T10:30:00.000Z"
-    }
-  }
-}
-```
-
-### Get All Orders
-
-**Endpoint:** `GET /api/orders`
-
-**Description:** Retrieves all orders with optional filtering and pagination.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Query Parameters:**
-- `page` (optional): Page number for pagination (default: 1)
-- `limit` (optional): Number of items per page (default: 10)
-- `status` (optional): Filter by status (pending, processing, shipped, delivered)
-- `priority` (optional): Filter by priority (low, normal, high, urgent)
-
-**cURL Examples:**
-
-**Web Client:**
-```bash
-curl -X GET "http://13.232.150.239/api/orders?page=1&limit=10&status=pending&priority=high" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-**Mobile Client:**
-```bash
-curl -X GET "http://13.232.150.239/api/orders?page=1&limit=10&status=pending&priority=high" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "orders": [
-      {
-        "id": "ORD-2024-001",
-        "orderNumber": "ORD-2024-001",
-        "customerName": "John Doe",
-        "status": "pending",
-        "priority": "high",
-        "totalAmount": 199.98,
-        "createdAt": "2024-01-15T10:30:00.000Z"
-      }
-    ],
-    "pagination": {
-      "page": 1,
-      "limit": 10,
-      "total": 1,
-      "totalPages": 1
+      "id": 1,
+      "user_id": 1,
+      "cart": [
+        {
+          "sku": 12345,
+          "amount": 29.99
+        },
+        {
+          "sku": 67890,
+          "amount": 15.50
+        }
+      ],
+      "coupon_discount_amount": 0,
+      "order_amount": 45.49,
+      "order_type": "delivery",
+      "payment_method": "cash_on_delivery",
+      "store_id": 1,
+      "distance": 5.2,
+      "discount_amount": 0,
+      "tax_amount": 2.27,
+      "address": "123 Main St, City, State 12345",
+      "latitude": 40.7128,
+      "longitude": -74.0060,
+      "contact_person_name": "John Doe",
+      "contact_person_number": "+1234567890",
+      "address_type": "home",
+      "is_scheduled": 0,
+      "scheduled_timestamp": 1642233600,
+      "promised_delv_tat": "24",
+      "created_at": 1642233600
     }
   }
 }
@@ -214,14 +162,14 @@ Authorization: Bearer your_jwt_token
 
 **Web Client:**
 ```bash
-curl -X GET "http://13.232.150.239/api/orders/ORD-2024-001" \
+curl -X GET "http://localhost:3000/api/orders/1" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
 
 **Mobile Client:**
 ```bash
-curl -X GET "http://13.232.150.239/api/orders/ORD-2024-001" \
+curl -X GET "http://localhost:3000/api/orders/1" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -H "source: mobile" \
@@ -234,36 +182,103 @@ curl -X GET "http://13.232.150.239/api/orders/ORD-2024-001" \
   "success": true,
   "data": {
     "order": {
-      "id": "ORD-2024-001",
-      "orderNumber": "ORD-2024-001",
-      "customerInfo": {
-        "name": "John Doe",
-        "email": "john.doe@example.com",
-        "phone": "+1234567890",
-        "address": {
-          "street": "123 Main St",
-          "city": "New York",
-          "state": "NY",
-          "zipCode": "10001",
-          "country": "USA"
-        }
-      },
-      "items": [
+      "id": 1,
+      "user_id": 1,
+      "cart": [
         {
-          "productId": "PROD-001",
-          "productName": "Wireless Headphones",
-          "quantity": 2,
-          "unitPrice": 99.99,
-          "sku": "WH-001",
-          "totalPrice": 199.98
+          "sku": 12345,
+          "amount": 29.99
+        },
+        {
+          "sku": 67890,
+          "amount": 15.50
         }
       ],
-      "status": "pending",
-      "priority": "normal",
-      "shippingMethod": "express",
-      "totalAmount": 199.98,
-      "notes": "Handle with care",
-      "createdAt": "2024-01-15T10:30:00.000Z"
+      "coupon_discount_amount": 0,
+      "order_amount": 45.49,
+      "order_type": "delivery",
+      "payment_method": "cash_on_delivery",
+      "store_id": 1,
+      "distance": 5.2,
+      "discount_amount": 0,
+      "tax_amount": 2.27,
+      "address": "123 Main St, City, State 12345",
+      "latitude": 40.7128,
+      "longitude": -74.0060,
+      "contact_person_name": "John Doe",
+      "contact_person_number": "+1234567890",
+      "address_type": "home",
+      "is_scheduled": 0,
+      "scheduled_timestamp": 1642233600,
+      "promised_delv_tat": "24",
+      "created_at": 1642233600,
+      "updated_at": 1642233600
+    }
+  }
+}
+```
+
+### Get User Orders
+
+**Endpoint:** `GET /api/orders`
+
+**Description:** Retrieves all orders for the authenticated user with pagination.
+
+**Headers:**
+```bash
+Content-Type: application/json
+Authorization: Bearer your_jwt_token
+```
+
+**Query Parameters:**
+- `page` (optional): Page number (default: 1)
+- `limit` (optional): Items per page (default: 10)
+
+**cURL Examples:**
+
+**Web Client:**
+```bash
+curl -X GET "http://localhost:3000/api/orders?page=1&limit=10" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token"
+```
+
+**Mobile Client:**
+```bash
+curl -X GET "http://localhost:3000/api/orders?page=1&limit=10" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "source: mobile" \
+  -H "app-version: 1.2.0"
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "orders": [
+      {
+        "id": 1,
+        "user_id": 1,
+        "cart": [
+          {
+            "sku": 12345,
+            "amount": 29.99
+          }
+        ],
+        "order_amount": 29.99,
+        "order_type": "delivery",
+        "payment_method": "cash_on_delivery",
+        "store_id": 1,
+        "address": "123 Main St, City, State 12345",
+        "created_at": 1642233600
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 10,
+      "total_orders": 1
     }
   }
 }
@@ -273,7 +288,7 @@ curl -X GET "http://13.232.150.239/api/orders/ORD-2024-001" \
 
 **Endpoint:** `PUT /api/orders/update/:id`
 
-**Description:** Updates an existing order.
+**Description:** Updates an existing order (requires availability check).
 
 **Headers:**
 ```bash
@@ -284,82 +299,23 @@ Authorization: Bearer your_jwt_token
 **Request Body:**
 ```json
 {
-  "customerInfo": {
-    "name": "John Doe",
-    "phone": "+1234567890"
-  },
-  "priority": "high",
-  "notes": "Updated notes"
-}
-```
-
-**cURL Examples:**
-
-**Web Client:**
-```bash
-curl -X PUT "http://13.232.150.239/api/orders/update/ORD-2024-001" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -d '{
-    "customerInfo": {
-      "name": "John Doe",
-      "phone": "+1234567890"
+  "cart": [
+    {
+      "sku": 12345,
+      "amount": 29.99
     },
-    "priority": "high",
-    "notes": "Updated notes"
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X PUT "http://13.232.150.239/api/orders/update/ORD-2024-001" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "customerInfo": {
-      "name": "John Doe",
-      "phone": "+1234567890"
-    },
-    "priority": "high",
-    "notes": "Updated notes"
-  }'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Order updated successfully",
-  "data": {
-    "order": {
-      "id": "ORD-2024-001",
-      "priority": "high",
-      "notes": "Updated notes",
-      "updatedAt": "2024-01-15T11:00:00.000Z"
+    {
+      "sku": 67890,
+      "amount": 15.50
     }
-  }
-}
-```
-
-### Cancel Order
-
-**Endpoint:** `POST /api/orders/:id/cancel`
-
-**Description:** Cancels an existing order.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Request Body:**
-```json
-{
-  "reason": "Customer request",
-  "notes": "Customer called to cancel"
+  ],
+  "coupon_code": "SAVE20",
+  "order_amount": 45.49,
+  "discount_amount": 5.00,
+  "tax_amount": 2.27,
+  "address": "456 Oak St, City, State 12345",
+  "contact_person_name": "Jane Smith",
+  "contact_person_number": "+1234567891"
 }
 ```
 
@@ -367,152 +323,85 @@ Authorization: Bearer your_jwt_token
 
 **Web Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/orders/ORD-2024-001/cancel" \
+curl -X PUT "http://localhost:3000/api/orders/update/1" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "reason": "Customer request",
-    "notes": "Customer called to cancel"
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X POST "http://13.232.150.239/api/orders/ORD-2024-001/cancel" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "reason": "Customer request",
-    "notes": "Customer called to cancel"
-  }'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Order cancelled successfully",
-  "data": {
-    "orderId": "ORD-2024-001",
-    "status": "cancelled",
-    "cancelledAt": "2024-01-15T11:30:00.000Z",
-    "reason": "Customer request"
-  }
-}
-```
-
-### Update Order Status
-
-**Endpoint:** `PATCH /api/orders/:id/status`
-
-**Description:** Updates the status of an order.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Request Body:**
-```json
-{
-  "status": "processing",
-  "notes": "Order is now being processed"
-}
-```
-
-**cURL Examples:**
-
-**Web Client:**
-```bash
-curl -X PATCH "http://13.232.150.239/api/orders/ORD-2024-001/status" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -d '{
-    "status": "processing",
-    "notes": "Order is now being processed"
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X PATCH "http://13.232.150.239/api/orders/ORD-2024-001/status" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "status": "processing",
-    "notes": "Order is now being processed"
-  }'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Order status updated successfully",
-  "data": {
-    "orderId": "ORD-2024-001",
-    "oldStatus": "pending",
-    "newStatus": "processing",
-    "updatedAt": "2024-01-15T12:00:00.000Z"
-  }
-}
-```
-
-### Get Order Status History
-
-**Endpoint:** `GET /api/orders/:id/status-history`
-
-**Description:** Retrieves the status history of an order.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**cURL Examples:**
-
-**Web Client:**
-```bash
-curl -X GET "http://13.232.150.239/api/orders/ORD-2024-001/status-history" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-**Mobile Client:**
-```bash
-curl -X GET "http://13.232.150.239/api/orders/ORD-2024-001/status-history" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "orderId": "ORD-2024-001",
-    "statusHistory": [
+    "cart": [
       {
-        "status": "pending",
-        "timestamp": "2024-01-15T10:30:00.000Z",
-        "notes": "Order created",
-        "updatedBy": "system"
+        "sku": 12345,
+        "amount": 29.99
       },
       {
-        "status": "processing",
-        "timestamp": "2024-01-15T12:00:00.000Z",
-        "notes": "Order is now being processed",
-        "updatedBy": "admin@ozi.com"
+        "sku": 67890,
+        "amount": 15.50
       }
-    ]
+    ],
+    "order_amount": 45.49,
+    "discount_amount": 5.00,
+    "address": "456 Oak St, City, State 12345"
+  }'
+```
+
+**Mobile Client:**
+```bash
+curl -X PUT "http://localhost:3000/api/orders/update/1" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "source: mobile" \
+  -H "app-version: 1.2.0" \
+  -d '{
+    "cart": [
+      {
+        "sku": 12345,
+        "amount": 29.99
+      },
+      {
+        "sku": 67890,
+        "amount": 15.50
+      }
+    ],
+    "order_amount": 45.49,
+    "discount_amount": 5.00,
+    "address": "456 Oak St, City, State 12345"
+  }'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "order": {
+      "id": 1,
+      "user_id": 1,
+      "cart": [
+        {
+          "sku": 12345,
+          "amount": 29.99
+        },
+        {
+          "sku": 67890,
+          "amount": 15.50
+        }
+      ],
+      "coupon_discount_amount": 9.10,
+      "order_amount": 40.39,
+      "discount_amount": 5.00,
+      "tax_amount": 2.27,
+      "address": "456 Oak St, City, State 12345",
+      "contact_person_name": "Jane Smith",
+      "contact_person_number": "+1234567891",
+      "updated_at": 1642233600
+    },
+    "updated_fields": ["cart", "order_amount", "discount_amount", "address", "contact_person_name", "contact_person_number"],
+    "applied_coupon": {
+      "id": 1,
+      "code": "SAVE20",
+      "discount": 20,
+      "discount_type": "percentage",
+      "calculated_discount": 9.10
+    }
   }
 }
 ```
@@ -529,6 +418,11 @@ For mobile clients, the following headers are required:
 - If app version is below minimum, API returns 426 status code
 - Web clients don't require version checking
 
+### Device Management
+- Mobile apps should provide unique device identifiers
+- Platform detection (ios/android) for analytics
+- Secure token storage using platform-specific methods
+
 ## ⚠️ Error Responses
 
 ### Common Error Responses
@@ -538,7 +432,7 @@ For mobile clients, the following headers are required:
 {
   "success": false,
   "error": "Unauthorized",
-  "message": "Invalid access token",
+  "message": "Invalid token",
   "statusCode": 401
 }
 ```
@@ -553,23 +447,63 @@ For mobile clients, the following headers are required:
 }
 ```
 
+**User Not Available:**
+```json
+{
+  "success": false,
+  "error": "User not available",
+  "message": "User is currently off-shift or unavailable",
+  "statusCode": 403
+}
+```
+
+**Invalid Cart:**
+```json
+{
+  "success": false,
+  "error": "Invalid cart",
+  "message": "Cart must be an array with at least one item",
+  "statusCode": 400
+}
+```
+
+**Invalid SKU:**
+```json
+{
+  "success": false,
+  "error": "Invalid SKU",
+  "message": "Cart item 1: SKU is required and must be a number",
+  "statusCode": 400
+}
+```
+
+**Invalid Amount:**
+```json
+{
+  "success": false,
+  "error": "Invalid amount",
+  "message": "Cart item 1: Amount is required and must be a positive number",
+  "statusCode": 400
+}
+```
+
+**Invalid Coupon:**
+```json
+{
+  "success": false,
+  "error": "Invalid coupon",
+  "message": "Minimum purchase amount of 100 required",
+  "statusCode": 400
+}
+```
+
 **Order Not Found:**
 ```json
 {
   "success": false,
-  "error": "Not Found",
+  "error": "Order not found",
   "message": "Order not found",
   "statusCode": 404
-}
-```
-
-**Invalid Order Status:**
-```json
-{
-  "success": false,
-  "error": "Bad Request",
-  "message": "Invalid order status",
-  "statusCode": 400
 }
 ```
 
@@ -583,33 +517,52 @@ For mobile clients, the following headers are required:
 }
 ```
 
+**Missing App Version (Mobile Only):**
+```json
+{
+  "success": false,
+  "error": "Bad Request",
+  "message": "App version is required for mobile users",
+  "statusCode": 400
+}
+```
+
 ## 🔐 Security Features
 
-1. **Authentication Required**: All endpoints require valid JWT token
-2. **Permission-Based Access**: Role-based access control (RBAC)
-3. **Version Control**: Mobile app compatibility checking
-4. **Input Validation**: Comprehensive request validation
-5. **Audit Logging**: Track all order operations
+1. **JWT Authentication**: All endpoints require valid JWT tokens
+2. **Permission Validation**: `orders:view_all` permission required
+3. **Availability Check**: Users must be available (not off-shift)
+4. **User Isolation**: Users can only access their own orders
+5. **Input Validation**: Comprehensive request validation
+6. **Version Control**: Mobile app compatibility checking
+7. **Audit Logging**: Track all order operations
 
-## 📋 Order Management Flow
+## 📋 Operation Flow
 
-### Web Client Flow
-1. User authenticates with valid JWT token
-2. User performs order operations
-3. System validates permissions and processes request
-4. Response is returned with operation result
+### Order Creation Flow
+1. User provides cart items and order details
+2. System validates cart structure and item data
+3. System applies coupon if provided
+4. System calculates final order amounts
+5. Order is created in database
+6. Coupon usage is incremented if applied
+7. Success response with order details
 
-### Mobile Client Flow
-1. App sends request with version headers
-2. System validates app version compatibility
-3. User authenticates with valid JWT token
-4. User performs order operations
-5. System validates permissions and processes request
-6. Response is returned with operation result
-7. Version checking on every request
+### Order Update Flow
+1. User provides update data
+2. System validates input data
+3. System recalculates amounts if cart changes
+4. System revalidates coupon if provided
+5. Order is updated in database
+6. Success response with updated order details
+
+### Order Retrieval Flow
+1. User requests order information
+2. System validates user authentication
+3. System checks user permissions
+4. System retrieves order data
+5. Success response with order details
 
 ---
 
-This document covers all order management endpoints with examples for both web and mobile clients. Mobile clients must include version headers for compatibility checking. All endpoints require authentication and appropriate permissions.
-
-8. **Data Backup**: Regular backup of order data
+This document covers all order management endpoints with examples for both web and mobile clients. Mobile clients must include version headers for compatibility checking. All endpoints are verified against the actual controller code and will work correctly with localhost:3000.

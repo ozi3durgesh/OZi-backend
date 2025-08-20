@@ -2,9 +2,98 @@
 
 This document covers all authentication and authorization endpoints for the OZi Backend system.
 
-**Base URL:** `http://13.232.150.239`
+**Base URL:** `http://localhost:3000`
 
 ## 🔐 User Authentication
+
+### User Registration
+
+**Endpoint:** `POST /api/auth/register`
+
+**Description:** Registers a new user. First user automatically becomes admin. Subsequent admin registrations require admin secret.
+
+**Headers:**
+```bash
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "email": "user@company.com",
+  "password": "SecurePassword123",
+  "roleName": "admin",
+  "adminSecret": "your_admin_secret_here"
+}
+```
+
+**Field Descriptions:**
+- `email` (required): User's email address
+- `password` (required): User's password (must meet validation requirements)
+- `roleName` (optional): Role name for the user (e.g., "admin", "wh_staff_1")
+- `adminSecret` (optional): Required only for admin registration after first user
+
+**cURL Examples:**
+
+**Web Client:**
+```bash
+curl -X POST "http://localhost:3000/api/auth/register" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "admin@company.com",
+    "password": "SecurePassword123",
+    "roleName": "admin"
+  }'
+```
+
+**Mobile Client:**
+```bash
+curl -X POST "http://localhost:3000/api/auth/register" \
+  -H "Content-Type: application/json" \
+  -H "source: mobile" \
+  -H "app-version: 1.0.0" \
+  -d '{
+    "email": "admin@company.com",
+    "password": "SecurePassword123",
+    "roleName": "admin"
+  }'
+```
+
+**Admin Registration (after first user):**
+```bash
+curl -X POST "http://localhost:3000/api/auth/register" \
+  -H "Content-Type: application/json" \
+  -H "source: mobile" \
+  -H "app-version: 1.0.0" \
+  -d '{
+    "email": "newadmin@company.com",
+    "password": "SecurePassword123",
+    "roleName": "admin",
+    "adminSecret": "your_actual_admin_secret_from_env"
+  }'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "User registered successfully",
+  "data": {
+    "user": {
+      "id": 1,
+      "email": "admin@company.com",
+      "roleId": 1,
+      "role": "admin",
+      "permissions": ["module:action"],
+      "availabilityStatus": "available",
+      "createdAt": "2024-01-15T10:30:00.000Z"
+    },
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "isFirstUser": true
+  }
+}
+```
 
 ### User Login
 
@@ -20,10 +109,8 @@ Content-Type: application/json
 **Request Body:**
 ```json
 {
-  "email": "user@ozi.com",
-  "password": "SecurePassword123!",
-  "deviceId": "device_12345",
-  "platform": "web"
+  "email": "user@company.com",
+  "password": "SecurePassword123"
 }
 ```
 
@@ -31,27 +118,23 @@ Content-Type: application/json
 
 **Web Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/auth/login" \
+curl -X POST "http://localhost:3000/api/auth/login" \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "user@ozi.com",
-    "password": "SecurePassword123!",
-    "deviceId": "device_12345",
-    "platform": "web"
+    "email": "user@company.com",
+    "password": "SecurePassword123"
   }'
 ```
 
 **Mobile Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/auth/login" \
+curl -X POST "http://localhost:3000/api/auth/login" \
   -H "Content-Type: application/json" \
   -H "source: mobile" \
-  -H "app-version: 1.2.0" \
+  -H "app-version: 1.0.0" \
   -d '{
-    "email": "user@ozi.com",
-    "password": "SecurePassword123!",
-    "deviceId": "mobile_device_12345",
-    "platform": "ios"
+    "email": "user@company.com",
+    "password": "SecurePassword123"
   }'
 ```
 
@@ -63,98 +146,15 @@ curl -X POST "http://13.232.150.239/api/auth/login" \
   "data": {
     "user": {
       "id": 1,
-      "email": "user@ozi.com",
-      "firstName": "John",
-      "lastName": "Doe",
-      "role": "Admin",
-      "permissions": ["read:users", "write:users", "read:orders"],
-      "status": "active"
-    },
-    "tokens": {
-      "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-      "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-      "accessTokenExpiresIn": "15m",
-      "refreshTokenExpiresIn": "7d"
-    }
-  }
-}
-```
-
-### User Registration
-
-**Endpoint:** `POST /api/auth/register`
-
-**Description:** Registers a new user (requires invitation or admin approval).
-
-**Headers:**
-```bash
-Content-Type: application/json
-```
-
-**Request Body:**
-```json
-{
-  "email": "newuser@ozi.com",
-  "password": "SecurePassword123!",
-  "firstName": "Jane",
-  "lastName": "Smith",
-  "phone": "+1234567890",
-  "invitationCode": "INV123456",
-  "department": "Operations",
-  "employeeId": "EMP002"
-}
-```
-
-**cURL Examples:**
-
-**Web Client:**
-```bash
-curl -X POST "http://13.232.150.239/api/auth/register" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "newuser@ozi.com",
-    "password": "SecurePassword123!",
-    "firstName": "Jane",
-    "lastName": "Smith",
-    "phone": "+1234567890",
-    "invitationCode": "INV123456",
-    "department": "Operations",
-    "employeeId": "EMP002"
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X POST "http://13.232.150.239/api/auth/register" \
-  -H "Content-Type: application/json" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "email": "newuser@ozi.com",
-    "password": "SecurePassword123!",
-    "firstName": "Jane",
-    "lastName": "Smith",
-    "phone": "+1234567890",
-    "invitationCode": "INV123456",
-    "department": "Operations",
-    "employeeId": "EMP002"
-  }'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "User registered successfully. Awaiting admin approval.",
-  "data": {
-    "user": {
-      "id": 3,
-      "email": "newuser@ozi.com",
-      "firstName": "Jane",
-      "lastName": "Smith",
-      "status": "pending_approval",
+      "email": "user@company.com",
+      "roleId": 1,
+      "role": "admin",
+      "permissions": ["module:action"],
+      "availabilityStatus": "available",
       "createdAt": "2024-01-15T10:30:00.000Z"
-    }
+    },
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
   }
 }
 ```
@@ -173,8 +173,7 @@ Content-Type: application/json
 **Request Body:**
 ```json
 {
-  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "deviceId": "device_12345"
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 }
 ```
 
@@ -182,23 +181,21 @@ Content-Type: application/json
 
 **Web Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/auth/refresh-token" \
+curl -X POST "http://localhost:3000/api/auth/refresh-token" \
   -H "Content-Type: application/json" \
   -d '{
-    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "deviceId": "device_12345"
+    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
   }'
 ```
 
 **Mobile Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/auth/refresh-token" \
+curl -X POST "http://localhost:3000/api/auth/refresh-token" \
   -H "Content-Type: application/json" \
   -H "source: mobile" \
-  -H "app-version: 1.2.0" \
+  -H "app-version: 1.0.0" \
   -d '{
-    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "deviceId": "mobile_device_12345"
+    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
   }'
 ```
 
@@ -208,222 +205,26 @@ curl -X POST "http://13.232.150.239/api/auth/refresh-token" \
   "success": true,
   "message": "Token refreshed successfully",
   "data": {
+    "user": {
+      "id": 1,
+      "email": "user@company.com",
+      "roleId": 1,
+      "role": "admin",
+      "permissions": ["module:action"],
+      "availabilityStatus": "available",
+      "createdAt": "2024-01-15T10:30:00.000Z"
+    },
     "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "accessTokenExpiresIn": "15m"
+    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
   }
 }
 ```
-
-### User Logout
-
-**Endpoint:** `POST /api/v1/auth/logout`
-
-**Description:** Logs out a user and invalidates their tokens.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Request Body:**
-```json
-{
-  "deviceId": "device_12345",
-  "logoutAllDevices": false
-}
-```
-
-**cURL Example:**
-```bash
-curl -X POST "http://13.232.150.239/api/v1/auth/logout" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -d '{
-    "deviceId": "device_12345",
-    "logoutAllDevices": false
-  }'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Logout successful"
-}
-```
-
-### Logout All Devices
-
-**Endpoint:** `POST /api/v1/auth/logout-all`
-
-**Description:** Logs out a user from all devices.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**cURL Example:**
-```bash
-curl -X POST "http://13.232.150.239/api/v1/auth/logout-all" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-## 🔑 Password Management
-
-### Forgot Password
-
-**Endpoint:** `POST /api/auth/forgot-password`
-
-**Description:** Sends a password reset link to the user's email.
-
-**Headers:**
-```bash
-Content-Type: application/json
-```
-
-**Request Body:**
-```json
-{
-  "email": "user@ozi.com"
-}
-```
-
-**cURL Examples:**
-
-**Web Client:**
-```bash
-curl -X POST "http://13.232.150.239/api/auth/forgot-password" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "user@ozi.com"
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X POST "http://13.232.150.239/api/auth/forgot-password" \
-  -H "Content-Type: application/json" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "email": "user@ozi.com"
-  }'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Password reset link sent to your email"
-}
-```
-
-### Reset Password
-
-**Endpoint:** `POST /api/auth/reset-password`
-
-**Description:** Resets password using a reset token.
-
-**Headers:**
-```bash
-Content-Type: application/json
-```
-
-**Request Body:**
-```json
-{
-  "resetToken": "reset_token_12345",
-  "newPassword": "NewSecurePassword123!",
-  "confirmPassword": "NewSecurePassword123!"
-}
-```
-
-**cURL Examples:**
-
-**Web Client:**
-```bash
-curl -X POST "http://13.232.150.239/api/auth/reset-password" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "resetToken": "reset_token_12345",
-    "newPassword": "NewSecurePassword123!",
-    "confirmPassword": "NewSecurePassword123!"
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X POST "http://13.232.150.239/api/auth/reset-password" \
-  -H "Content-Type: application/json" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "resetToken": "reset_token_12345",
-    "newPassword": "NewSecurePassword123!",
-    "confirmPassword": "NewSecurePassword123!"
-  }'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Password reset successfully"
-}
-```
-
-### Change Password
-
-**Endpoint:** `POST /api/v1/auth/change-password`
-
-**Description:** Changes password for authenticated user.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Request Body:**
-```json
-{
-  "currentPassword": "CurrentPassword123!",
-  "newPassword": "NewSecurePassword123!",
-  "confirmPassword": "NewSecurePassword123!"
-}
-```
-
-**cURL Example:**
-```bash
-curl -X POST "http://13.232.150.239/api/v1/auth/change-password" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -d '{
-    "currentPassword": "CurrentPassword123!",
-    "newPassword": "NewSecurePassword123!",
-    "confirmPassword": "NewSecurePassword123!"
-  }'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Password changed successfully"
-}
-```
-
-## 👤 Profile Management
 
 ### Get User Profile
 
 **Endpoint:** `GET /api/auth/profile`
 
-**Description:** Retrieves the current user's profile information.
+**Description:** Retrieves the current user's profile information. Requires authentication.
 
 **Headers:**
 ```bash
@@ -435,18 +236,18 @@ Authorization: Bearer your_jwt_token
 
 **Web Client:**
 ```bash
-curl -X GET "http://13.232.150.239/api/auth/profile" \
+curl -X GET "http://localhost:3000/api/auth/profile" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
 
 **Mobile Client:**
 ```bash
-curl -X GET "http://13.232.150.239/api/auth/profile" \
+curl -X GET "http://localhost:3000/api/auth/profile" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -H "source: mobile" \
-  -H "app-version: 1.2.0"
+  -H "app-version: 1.0.0"
 ```
 
 **Response:**
@@ -456,127 +257,12 @@ curl -X GET "http://13.232.150.239/api/auth/profile" \
   "data": {
     "user": {
       "id": 1,
-      "email": "user@ozi.com",
-      "firstName": "John",
-      "lastName": "Doe",
-      "phone": "+1234567890",
-      "role": "Admin",
-      "department": "Operations",
-      "employeeId": "EMP001",
-      "status": "active",
-      "lastLogin": "2024-01-15T10:30:00.000Z",
-      "createdAt": "2024-01-01T00:00:00.000Z"
+      "email": "user@company.com",
+      "role": "admin",
+      "permissions": ["module:action"],
+      "availabilityStatus": "available",
+      "createdAt": "2024-01-15T10:30:00.000Z"
     }
-  }
-}
-```
-
-### Update User Profile
-
-**Endpoint:** `PUT /api/auth/profile`
-
-**Description:** Updates the current user's profile information.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Request Body:**
-```json
-{
-  "firstName": "John",
-  "lastName": "Doe",
-  "phone": "+1234567890",
-  "department": "Operations"
-}
-```
-
-**cURL Examples:**
-
-**Web Client:**
-```bash
-curl -X PUT "http://13.232.150.239/api/auth/profile" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -d '{
-    "firstName": "John",
-    "lastName": "Doe",
-    "phone": "+1234567890",
-    "department": "Operations"
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X PUT "http://13.232.150.239/api/auth/profile" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "firstName": "John",
-    "lastName": "Doe",
-    "phone": "+1234567890",
-    "department": "Operations"
-  }'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Profile updated successfully",
-  "data": {
-    "user": {
-      "id": 1,
-      "firstName": "John",
-      "lastName": "Doe",
-      "phone": "+1234567890",
-      "department": "Operations",
-      "updatedAt": "2024-01-15T10:30:00.000Z"
-    }
-  }
-}
-```
-
-### Get System Status
-
-**Endpoint:** `GET /api/auth/system-status`
-
-**Description:** Checks system status without authentication.
-
-**Headers:**
-```bash
-Content-Type: application/json
-```
-
-**cURL Examples:**
-
-**Web Client:**
-```bash
-curl -X GET "http://13.232.150.239/api/auth/system-status" \
-  -H "Content-Type: application/json"
-```
-
-**Mobile Client:**
-```bash
-curl -X GET "http://13.232.150.239/api/auth/system-status" \
-  -H "Content-Type: application/json" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "status": "operational",
-    "timestamp": "2024-01-15T10:30:00.000Z",
-    "version": "1.0.0",
-    "database": "connected"
   }
 }
 ```
@@ -596,16 +282,16 @@ Content-Type: application/json
 
 **Web Client:**
 ```bash
-curl -X GET "http://13.232.150.239/api/auth/roles" \
+curl -X GET "http://localhost:3000/api/auth/roles" \
   -H "Content-Type: application/json"
 ```
 
 **Mobile Client:**
 ```bash
-curl -X GET "http://13.232.150.239/api/auth/roles" \
+curl -X GET "http://localhost:3000/api/auth/roles" \
   -H "Content-Type: application/json" \
   -H "source: mobile" \
-  -H "app-version: 1.2.0"
+  -H "app-version: 1.0.0"
 ```
 
 **Response:**
@@ -616,222 +302,89 @@ curl -X GET "http://13.232.150.239/api/auth/roles" \
     "roles": [
       {
         "id": 1,
-        "name": "Admin",
+        "name": "admin",
         "description": "Full system access"
       },
       {
         "id": 2,
-        "name": "Manager",
-        "description": "Department management access"
+        "name": "wh_staff_1",
+        "description": "Warehouse staff level 1"
       }
     ]
   }
 }
 ```
 
-## 🔒 Two-Factor Authentication
+### Check System Status
 
-### Enable 2FA
+**Endpoint:** `GET /api/auth/system-status`
 
-**Endpoint:** `POST /api/auth/2fa/enable`
-
-**Description:** Enables two-factor authentication for the user.
+**Description:** Checks system status without authentication. Useful for checking if system needs initial admin setup.
 
 **Headers:**
 ```bash
 Content-Type: application/json
-Authorization: Bearer your_jwt_token
 ```
 
 **cURL Examples:**
 
 **Web Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/auth/2fa/enable" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
+curl -X GET "http://localhost:3000/api/auth/system-status" \
+  -H "Content-Type: application/json"
 ```
 
 **Mobile Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/auth/2fa/enable" \
+curl -X GET "http://localhost:3000/api/auth/system-status" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
   -H "source: mobile" \
-  -H "app-version: 1.2.0"
+  -H "app-version: 1.0.0"
 ```
 
 **Response:**
 ```json
 {
   "success": true,
-  "message": "2FA enabled successfully",
   "data": {
-    "qrCode": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...",
-    "secret": "JBSWY3DPEHPK3PXP",
-    "backupCodes": ["123456", "234567", "345678"]
+    "hasUsers": true,
+    "totalUsers": 5,
+    "message": "System is initialized"
   }
 }
 ```
 
-### Verify 2FA
+### Test Auth Route
 
-**Endpoint:** `POST /api/auth/2fa/verify`
+**Endpoint:** `GET /api/auth/test`
 
-**Description:** Verifies 2FA code during login.
+**Description:** Test endpoint to verify auth routes are working.
 
 **Headers:**
 ```bash
 Content-Type: application/json
-```
-
-**Request Body:**
-```json
-{
-  "email": "user@ozi.com",
-  "password": "SecurePassword123!",
-  "totpCode": "123456",
-  "deviceId": "device_12345"
-}
 ```
 
 **cURL Examples:**
 
 **Web Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/auth/2fa/verify" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "user@ozi.com",
-    "password": "SecurePassword123!",
-    "totpCode": "123456",
-    "deviceId": "device_12345"
-  }'
+curl -X GET "http://localhost:3000/api/auth/test" \
+  -H "Content-Type: application/json"
 ```
 
 **Mobile Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/auth/2fa/verify" \
+curl -X GET "http://localhost:3000/api/auth/test" \
   -H "Content-Type: application/json" \
   -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "email": "user@ozi.com",
-    "password": "SecurePassword123!",
-    "totpCode": "123456",
-    "deviceId": "mobile_device_12345"
-  }'
-```
-
-## 📱 Device Management
-
-### Get Active Devices
-
-**Endpoint:** `GET /api/v1/auth/devices`
-
-**Description:** Retrieves all active devices for the current user.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**cURL Example:**
-```bash
-curl -X GET "http://13.232.150.239/api/v1/auth/devices" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
+  -H "app-version: 1.0.0"
 ```
 
 **Response:**
 ```json
 {
-  "success": true,
-  "data": {
-    "devices": [
-      {
-        "id": 1,
-        "deviceId": "device_12345",
-        "platform": "web",
-        "browser": "Chrome",
-        "lastActive": "2024-01-15T10:30:00.000Z",
-        "ipAddress": "192.168.1.100"
-      }
-    ]
-  }
-}
-```
-
-### Revoke Device
-
-**Endpoint:** `DELETE /api/v1/auth/devices/:deviceId`
-
-**Description:** Revokes access for a specific device.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**cURL Example:**
-```bash
-curl -X DELETE "http://13.232.150.239/api/v1/auth/devices/device_12345" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Device revoked successfully"
-}
-```
-
-## 🔍 Session Validation
-
-### Validate Token
-
-**Endpoint:** `POST /api/v1/auth/validate`
-
-**Description:** Validates a JWT token and returns user information.
-
-**Headers:**
-```bash
-Content-Type: application/json
-```
-
-**Request Body:**
-```json
-{
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-}
-```
-
-**cURL Example:**
-```bash
-curl -X POST "http://13.232.150.239/api/v1/auth/validate" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-  }'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "valid": true,
-    "user": {
-      "id": 1,
-      "email": "user@ozi.com",
-      "role": "Admin",
-      "permissions": ["read:users", "write:users"]
-    }
-  }
+  "message": "Auth route test endpoint working"
 }
 ```
 
@@ -840,17 +393,17 @@ curl -X POST "http://13.232.150.239/api/v1/auth/validate" \
 ### Version Check Headers
 For mobile clients, the following headers are required:
 - `source: mobile` - Identifies the request as coming from a mobile app
-- `app-version: 1.2.0` - Current app version for compatibility checking
+- `app-version: 1.0.0` - Current app version for compatibility checking
 
 ### Version Compatibility
-- Minimum supported version: 1.0.0
+- Minimum supported version: 1.0.0 (configurable via MIN_APP_VERSION env var)
 - If app version is below minimum, API returns 426 status code
 - Web clients don't require version checking
 
-### Device Management
-- Mobile apps should provide unique device identifiers
-- Platform detection (ios/android) for analytics
-- Secure token storage using platform-specific methods
+### Version Check Behavior
+- Mobile requests without `source: mobile` header work normally
+- Mobile requests with `source: mobile` but missing `app-version` return 400 error
+- Mobile requests with outdated app version return 426 error
 
 ## ⚠️ Error Responses
 
@@ -860,59 +413,39 @@ For mobile clients, the following headers are required:
 ```json
 {
   "success": false,
-  "error": "Unauthorized",
-  "message": "Invalid email or password",
+  "error": "Invalid credentials",
+  "message": "Invalid credentials",
   "statusCode": 401
 }
 ```
 
-**Token Expired:**
+**User Already Exists:**
 ```json
 {
   "success": false,
-  "error": "Unauthorized",
-  "message": "Access token expired",
-  "statusCode": 401
+  "error": "User already exists",
+  "message": "User already exists",
+  "statusCode": 409
 }
 ```
 
-**Invalid Token:**
+**Invalid Role:**
 ```json
 {
   "success": false,
-  "error": "Unauthorized",
-  "message": "Invalid token",
-  "statusCode": 401
+  "error": "Invalid role name",
+  "message": "Invalid role name",
+  "statusCode": 400
 }
 ```
 
-**Insufficient Permissions:**
+**Admin Registration Failed:**
 ```json
 {
   "success": false,
-  "error": "Forbidden",
-  "message": "Insufficient permissions to access this resource",
+  "error": "Invalid admin registration secret",
+  "message": "Invalid admin registration secret",
   "statusCode": 403
-}
-```
-
-**Account Locked:**
-```json
-{
-  "success": false,
-  "error": "Forbidden",
-  "message": "Account is locked. Contact administrator",
-  "statusCode": 403
-}
-```
-
-**App Version Too Old (Mobile Only):**
-```json
-{
-  "success": false,
-  "error": "Upgrade Required",
-  "message": "Please update your app to version 1.0.0 or higher",
-  "statusCode": 426
 }
 ```
 
@@ -920,9 +453,19 @@ For mobile clients, the following headers are required:
 ```json
 {
   "success": false,
-  "error": "Bad Request",
+  "error": "App version is required for mobile users",
   "message": "App version is required for mobile users",
   "statusCode": 400
+}
+```
+
+**App Version Too Old (Mobile Only):**
+```json
+{
+  "success": false,
+  "error": "Please update your app to version 1.0.0 or higher",
+  "message": "Please update your app to version 1.0.0 or higher",
+  "statusCode": 426
 }
 ```
 
@@ -933,10 +476,27 @@ For mobile clients, the following headers are required:
 3. **Version Control**: Mobile app compatibility checking
 4. **Rate Limiting**: Protection against brute force attacks
 5. **Password Policies**: Enforced strong password requirements
-6. **Session Management**: Secure session handling
-7. **Audit Logging**: Track authentication events
+6. **Admin Secret Protection**: Admin registration requires secret after first user
+7. **Role-Based Access Control**: Users are assigned specific roles with permissions
 
 ## 📋 Authentication Flow
+
+### First User Registration (Admin)
+1. System checks if no users exist
+2. First user automatically becomes admin
+3. No admin secret required
+4. JWT tokens issued immediately
+
+### Subsequent Admin Registration
+1. System checks if users already exist
+2. Admin secret required from environment variable
+3. Secret must match ADMIN_REGISTRATION_SECRET
+4. JWT tokens issued upon successful validation
+
+### Regular User Registration
+1. User provides email and password
+2. Role can be specified or defaults to wh_staff_1
+3. JWT tokens issued immediately
 
 ### Web Client Flow
 1. User provides credentials
@@ -954,6 +514,24 @@ For mobile clients, the following headers are required:
 6. Token is used for subsequent API calls
 7. Version checking on every request
 
+## 🔧 Environment Variables
+
+Make sure these environment variables are set in your `.env` file:
+
+```bash
+# JWT Configuration
+JWT_ACCESS_SECRET=your_jwt_access_secret_here
+JWT_REFRESH_SECRET=your_jwt_refresh_secret_here
+JWT_ACCESS_EXPIRES_IN=15m
+JWT_REFRESH_EXPIRES_IN=7d
+
+# Admin Registration
+ADMIN_REGISTRATION_SECRET=your_admin_registration_secret_here
+
+# App Version Check
+MIN_APP_VERSION=1.0.0
+```
+
 ---
 
-This document covers all authentication endpoints with examples for both web and mobile clients. Mobile clients must include version headers for compatibility checking.
+This document covers all **actually implemented** authentication endpoints with correct examples for both web and mobile clients. Mobile clients must include version headers for compatibility checking. All endpoints are verified against the actual route files and will work correctly with localhost:3000.

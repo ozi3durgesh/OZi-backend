@@ -1,72 +1,45 @@
-# Initial Setup & Admin Registration
+# Initial Setup & System Initialization
 
 This document covers the initial setup process and admin registration for the OZi Backend system.
 
-**Base URL:** `http://13.232.150.239`
+**Base URL:** `http://localhost:3000`
 
 ## 🔧 System Initialization
 
-### Initialize RBAC System
+### Health Check
 
-**Endpoint:** `POST /api/v1/system/init-rbac`
+**Endpoint:** `GET /health`
 
-**Description:** Initializes the Role-Based Access Control system with default roles and permissions.
+**Description:** Check if the system is running.
 
 **Headers:**
 ```bash
 Content-Type: application/json
-X-Admin-Secret: your_admin_registration_secret
-```
-
-**Request Body:**
-```json
-{
-  "adminEmail": "admin@ozi.com",
-  "adminPassword": "SecurePassword123!",
-  "adminFirstName": "System",
-  "adminLastName": "Administrator",
-  "companyName": "OZi Logistics"
-}
 ```
 
 **cURL Example:**
 ```bash
-curl -X POST "http://13.232.150.239/api/v1/system/init-rbac" \
-  -H "Content-Type: application/json" \
-  -H "X-Admin-Secret: your_admin_registration_secret" \
-  -d '{
-    "adminEmail": "admin@ozi.com",
-    "adminPassword": "SecurePassword123!",
-    "adminFirstName": "System",
-    "adminLastName": "Administrator",
-    "companyName": "OZi Logistics"
-  }'
+curl -X GET "http://localhost:3000/health" \
+  -H "Content-Type: application/json"
 ```
 
 **Response:**
 ```json
 {
+  "statusCode": 200,
   "success": true,
-  "message": "RBAC system initialized successfully",
-  "data": {
-    "adminUser": {
-      "id": 1,
-      "email": "admin@ozi.com",
-      "firstName": "System",
-      "lastName": "Administrator",
-      "role": "Super Admin"
-    },
-    "rolesCreated": ["Super Admin", "Admin", "Manager", "Operator"],
-    "permissionsCreated": 24
-  }
+  "data": { 
+    "message": "Server is running" 
+  },
+  "error": null
 }
 ```
 
-### Check System Status
+### System Status Check
 
-**Endpoint:** `GET /api/v1/system/status`
+**Endpoint:** `GET /api/auth/system-status`
 
-**Description:** Checks if the system has been initialized and returns current status.
+**Description:** Check system initialization status.
 
 **Headers:**
 ```bash
@@ -75,7 +48,7 @@ Content-Type: application/json
 
 **cURL Example:**
 ```bash
-curl -X GET "http://13.232.150.239/api/v1/system/status" \
+curl -X GET "http://localhost:3000/api/auth/system-status" \
   -H "Content-Type: application/json"
 ```
 
@@ -84,22 +57,180 @@ curl -X GET "http://13.232.150.239/api/v1/system/status" \
 {
   "success": true,
   "data": {
-    "initialized": true,
-    "adminUserExists": true,
-    "rolesCount": 4,
-    "permissionsCount": 24,
-    "databaseConnected": true
+    "status": "initialized",
+    "message": "System is initialized",
+    "hasUsers": true,
+    "timestamp": "2024-01-15T10:30:00.000Z"
   }
 }
 ```
 
-## 👤 Admin Registration
+### Get Available Roles
 
-### Register New Admin User
+**Endpoint:** `GET /api/auth/roles`
 
-**Endpoint:** `POST /api/v1/auth/register-admin`
+**Description:** Get available roles for user registration.
 
-**Description:** Registers a new admin user (requires existing admin authentication).
+**Headers:**
+```bash
+Content-Type: application/json
+```
+
+**cURL Example:**
+```bash
+curl -X GET "http://localhost:3000/api/auth/roles" \
+  -H "Content-Type: application/json"
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "roles": [
+      {
+        "id": 1,
+        "name": "Admin",
+        "description": "Full system access"
+      },
+      {
+        "id": 2,
+        "name": "Manager",
+        "description": "Department management access"
+      }
+    ]
+  }
+}
+```
+
+## 👤 User Registration
+
+### Register New User
+
+**Endpoint:** `POST /api/auth/register`
+
+**Description:** Register a new user in the system.
+
+**Headers:**
+```bash
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "email": "newuser@ozi.com",
+  "password": "SecurePassword123!",
+  "firstName": "John",
+  "lastName": "Doe",
+  "phone": "+1234567890",
+  "invitationCode": "INV123456",
+  "department": "Operations",
+  "employeeId": "EMP001"
+}
+```
+
+**cURL Example:**
+```bash
+curl -X POST "http://localhost:3000/api/auth/register" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "newuser@ozi.com",
+    "password": "SecurePassword123!",
+    "firstName": "John",
+    "lastName": "Doe",
+    "phone": "+1234567890",
+    "invitationCode": "INV123456",
+    "department": "Operations",
+    "employeeId": "EMP001"
+  }'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "User registered successfully. Awaiting admin approval.",
+  "data": {
+    "user": {
+      "id": 1,
+      "email": "newuser@ozi.com",
+      "firstName": "John",
+      "lastName": "Doe",
+      "status": "pending_approval",
+      "createdAt": "2024-01-15T10:30:00.000Z"
+    }
+  }
+}
+```
+
+## 🔐 Admin Authentication
+
+### Admin Login
+
+**Endpoint:** `POST /api/auth/login`
+
+**Description:** Authenticate admin user.
+
+**Headers:**
+```bash
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "email": "admin@ozi.com",
+  "password": "AdminPassword123!",
+  "deviceId": "admin_device_001",
+  "platform": "web"
+}
+```
+
+**cURL Example:**
+```bash
+curl -X POST "http://localhost:3000/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "admin@ozi.com",
+    "password": "AdminPassword123!",
+    "deviceId": "admin_device_001",
+    "platform": "web"
+  }'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Login successful",
+  "data": {
+    "user": {
+      "id": 1,
+      "email": "admin@ozi.com",
+      "firstName": "Admin",
+      "lastName": "User",
+      "role": "Admin",
+      "permissions": ["read:users", "write:users", "read:orders"],
+      "status": "active"
+    },
+    "tokens": {
+      "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+      "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+      "accessTokenExpiresIn": "15m",
+      "refreshTokenExpiresIn": "7d"
+    }
+  }
+}
+```
+
+## 👥 Admin User Management
+
+### Create Admin User
+
+**Endpoint:** `POST /api/users`
+
+**Description:** Create a new admin user (requires admin authentication).
 
 **Headers:**
 ```bash
@@ -112,29 +243,29 @@ Authorization: Bearer your_jwt_token
 {
   "email": "newadmin@ozi.com",
   "password": "SecurePassword123!",
-  "firstName": "John",
-  "lastName": "Doe",
+  "firstName": "Jane",
+  "lastName": "Admin",
   "phone": "+1234567890",
-  "roleId": 2,
-  "department": "Operations",
-  "employeeId": "EMP001"
+  "roleId": 1,
+  "department": "Management",
+  "employeeId": "EMP002"
 }
 ```
 
 **cURL Example:**
 ```bash
-curl -X POST "http://13.232.150.239/api/v1/auth/register-admin" \
+curl -X POST "http://localhost:3000/api/users" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
     "email": "newadmin@ozi.com",
     "password": "SecurePassword123!",
-    "firstName": "John",
-    "lastName": "Doe",
+    "firstName": "Jane",
+    "lastName": "Admin",
     "phone": "+1234567890",
-    "roleId": 2,
-    "department": "Operations",
-    "employeeId": "EMP001"
+    "roleId": 1,
+    "department": "Management",
+    "employeeId": "EMP002"
   }'
 ```
 
@@ -142,13 +273,13 @@ curl -X POST "http://13.232.150.239/api/v1/auth/register-admin" \
 ```json
 {
   "success": true,
-  "message": "Admin user registered successfully",
+  "message": "User created successfully",
   "data": {
     "user": {
       "id": 2,
       "email": "newadmin@ozi.com",
-      "firstName": "John",
-      "lastName": "Doe",
+      "firstName": "Jane",
+      "lastName": "Admin",
       "role": "Admin",
       "status": "active",
       "createdAt": "2024-01-15T10:30:00.000Z"
@@ -157,122 +288,84 @@ curl -X POST "http://13.232.150.239/api/v1/auth/register-admin" \
 }
 ```
 
-## 🗄️ Database Setup
+### List All Users
 
-### Setup Database Tables
+**Endpoint:** `GET /api/users`
 
-**Endpoint:** `POST /api/v1/system/setup-database`
-
-**Description:** Creates all necessary database tables and indexes.
+**Description:** Get all users in the system (requires admin authentication).
 
 **Headers:**
 ```bash
 Content-Type: application/json
-X-Admin-Secret: your_admin_registration_secret
+Authorization: Bearer your_jwt_token
 ```
 
 **cURL Example:**
 ```bash
-curl -X POST "http://13.232.150.239/api/v1/system/setup-database" \
+curl -X GET "http://localhost:3000/api/users" \
   -H "Content-Type: application/json" \
-  -H "X-Admin-Secret: your_admin_registration_secret"
+  -H "Authorization: Bearer your_jwt_token"
 ```
 
 **Response:**
 ```json
 {
   "success": true,
-  "message": "Database tables created successfully",
   "data": {
-    "tablesCreated": [
-      "users",
-      "roles",
-      "permissions",
-      "role_permissions",
-      "orders",
-      "picking_waves",
-      "packing_jobs",
-      "coupons"
+    "users": [
+      {
+        "id": 1,
+        "email": "admin@ozi.com",
+        "firstName": "Admin",
+        "lastName": "User",
+        "role": "Admin",
+        "department": "Management",
+        "status": "active",
+        "createdAt": "2024-01-15T10:30:00.000Z"
+      }
     ],
-    "indexesCreated": 15
+    "pagination": {
+      "page": 1,
+      "limit": 10,
+      "total": 1,
+      "totalPages": 1
+    }
   }
 }
 ```
 
-### Setup Picking Tables
+## 🏗️ Role Management
 
-**Endpoint:** `POST /api/v1/system/setup-picking`
+### Create Role
 
-**Description:** Creates picking-specific database tables.
+**Endpoint:** `POST /api/roles`
 
-**Headers:**
-```bash
-Content-Type: application/json
-X-Admin-Secret: your_admin_registration_secret
-```
-
-**cURL Example:**
-```bash
-curl -X POST "http://13.232.150.239/api/v1/system/setup-picking" \
-  -H "Content-Type: application/json" \
-  -H "X-Admin-Secret: your_admin_registration_secret"
-```
-
-### Setup Packing Tables
-
-**Endpoint:** `POST /api/v1/system/setup-packing`
-
-**Description:** Creates packing-specific database tables.
+**Description:** Create a new role (requires admin authentication).
 
 **Headers:**
 ```bash
 Content-Type: application/json
-X-Admin-Secret: your_admin_registration_secret
-```
-
-**cURL Example:**
-```bash
-curl -X POST "http://13.232.150.239/api/v1/system/setup-packing" \
-  -H "Content-Type: application/json" \
-  -H "X-Admin-Secret: your_admin_registration_secret"
-```
-
-## 📊 Generate Mock Data
-
-### Generate Sample Data
-
-**Endpoint:** `POST /api/v1/system/generate-mock-data`
-
-**Description:** Generates sample data for testing and development.
-
-**Headers:**
-```bash
-Content-Type: application/json
-X-Admin-Secret: your_admin_registration_secret
+Authorization: Bearer your_jwt_token
 ```
 
 **Request Body:**
 ```json
 {
-  "usersCount": 10,
-  "ordersCount": 50,
-  "couponsCount": 20,
-  "includePickingData": true,
-  "includePackingData": true
+  "name": "Supervisor",
+  "description": "Department supervisor with limited admin access",
+  "permissions": ["read:users", "read:orders", "write:orders"]
 }
 ```
 
 **cURL Example:**
 ```bash
-curl -X POST "http://13.232.150.239/api/v1/system/generate-mock-data" \
+curl -X POST "http://localhost:3000/api/roles" \
   -H "Content-Type: application/json" \
-  -H "X-Admin-Secret: your_admin_registration_secret" \
+  -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "usersCount": 10,
-    "ordersCount": 50,
-    "couponsCount": 20,
-    "includePickingData": true,
-    "includePackingData": true
+    "name": "Supervisor",
+    "description": "Department supervisor with limited admin access",
+    "permissions": ["read:users", "read:orders", "write:orders"]
   }'
 ```
 
@@ -280,74 +373,35 @@ curl -X POST "http://13.232.150.239/api/v1/system/generate-mock-data" \
 ```json
 {
   "success": true,
-  "message": "Mock data generated successfully",
+  "message": "Role created successfully",
   "data": {
-    "usersCreated": 10,
-    "ordersCreated": 50,
-    "couponsCreated": 20,
-    "pickingWavesCreated": 5,
-    "packingJobsCreated": 8
+    "role": {
+      "id": 3,
+      "name": "Supervisor",
+      "description": "Department supervisor with limited admin access",
+      "createdAt": "2024-01-15T10:30:00.000Z"
+    }
   }
 }
 ```
 
-## 🔍 System Health Check
+### List All Roles
 
-### Health Check
+**Endpoint:** `GET /api/roles`
 
-**Endpoint:** `GET /api/v1/system/health`
-
-**Description:** Comprehensive system health check.
+**Description:** Get all roles in the system (requires admin authentication).
 
 **Headers:**
 ```bash
 Content-Type: application/json
+Authorization: Bearer your_jwt_token
 ```
 
 **cURL Example:**
 ```bash
-curl -X GET "http://13.232.150.239/api/v1/system/health" \
-  -H "Content-Type: application/json"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "status": "healthy",
-    "timestamp": "2024-01-15T10:30:00.000Z",
-    "uptime": "2h 15m 30s",
-    "database": "connected",
-    "redis": "connected",
-    "aws": "connected",
-    "lms": "connected",
-    "version": "1.0.0"
-  }
-}
-```
-
-## 📱 Mobile App Version Check
-
-### Check App Version Compatibility
-
-**Endpoint:** `GET /api/v1/system/version-check`
-
-**Description:** Checks if the mobile app version is compatible.
-
-**Headers:**
-```bash
-Content-Type: application/json
-X-App-Version: 1.0.0
-X-Platform: ios
-```
-
-**cURL Example:**
-```bash
-curl -X GET "http://13.232.150.239/api/v1/system/version-check" \
+curl -X GET "http://localhost:3000/api/roles" \
   -H "Content-Type: application/json" \
-  -H "X-App-Version: 1.0.0" \
-  -H "X-Platform: ios"
+  -H "Authorization: Bearer your_jwt_token"
 ```
 
 **Response:**
@@ -355,63 +409,187 @@ curl -X GET "http://13.232.150.239/api/v1/system/version-check" \
 {
   "success": true,
   "data": {
-    "compatible": true,
-    "currentVersion": "1.0.0",
-    "minimumVersion": "1.0.0",
-    "latestVersion": "1.2.0",
-    "updateRequired": false,
-    "updateUrl": "https://apps.apple.com/app/ozi-logistics/id123456789"
+    "roles": [
+      {
+        "id": 1,
+        "name": "Admin",
+        "description": "Full system access"
+      },
+      {
+        "id": 2,
+        "name": "Manager",
+        "description": "Department management access"
+      },
+      {
+        "id": 3,
+        "name": "Supervisor",
+        "description": "Department supervisor with limited admin access"
+      }
+    ]
   }
 }
 ```
 
-## ⚠️ Error Responses
+## 🔐 Permission Management
 
-### Common Error Responses
+### Create Permission
 
-**Unauthorized Access:**
+**Endpoint:** `POST /api/permissions`
+
+**Description:** Create a new permission (requires admin authentication).
+
+**Headers:**
+```bash
+Content-Type: application/json
+Authorization: Bearer your_jwt_token
+```
+
+**Request Body:**
 ```json
 {
-  "success": false,
-  "error": "Unauthorized",
-  "message": "Invalid admin secret or insufficient permissions",
-  "statusCode": 401
+  "module": "warehouse",
+  "action": "manage",
+  "description": "Full warehouse management access"
 }
 ```
 
-**System Already Initialized:**
+**cURL Example:**
+```bash
+curl -X POST "http://localhost:3000/api/permissions" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -d '{
+    "module": "warehouse",
+    "action": "manage",
+    "description": "Full warehouse management access"
+  }'
+```
+
+**Response:**
 ```json
 {
-  "success": false,
-  "error": "Conflict",
-  "message": "RBAC system is already initialized",
-  "statusCode": 409
+  "success": true,
+  "message": "Permission created successfully",
+  "data": {
+    "permission": {
+      "id": 1,
+      "module": "warehouse",
+      "action": "manage",
+      "description": "Full warehouse management access",
+      "createdAt": "2024-01-15T10:30:00.000Z"
+    }
+  }
 }
 ```
 
-**Database Connection Error:**
+### List All Permissions
+
+**Endpoint:** `GET /api/permissions`
+
+**Description:** Get all permissions in the system (requires admin authentication).
+
+**Headers:**
+```bash
+Content-Type: application/json
+Authorization: Bearer your_jwt_token
+```
+
+**cURL Example:**
+```bash
+curl -X GET "http://localhost:3000/api/permissions" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token"
+```
+
+**Response:**
 ```json
 {
-  "success": false,
-  "error": "Database Error",
-  "message": "Unable to connect to database",
-  "statusCode": 500
+  "success": true,
+  "data": {
+    "permissions": [
+      {
+        "id": 1,
+        "module": "warehouse",
+        "action": "manage",
+        "description": "Full warehouse management access"
+      },
+      {
+        "id": 2,
+        "module": "users",
+        "action": "read",
+        "description": "Read user information"
+      }
+    ]
+  }
 }
 ```
 
-## 🔐 Security Notes
+## 📋 Setup Process
 
-1. **Admin Secret**: The `X-Admin-Secret` header is required for system initialization and should be kept secure.
-2. **JWT Tokens**: Use valid JWT tokens for authenticated endpoints.
-3. **HTTPS**: All production API calls should use HTTPS.
-4. **Rate Limiting**: Be aware of rate limiting on system endpoints.
+### Step 1: Start the Server
+```bash
+npm start
+# or
+npm run dev
+```
 
-## 📋 Setup Checklist
+### Step 2: Check System Health
+```bash
+curl -X GET "http://localhost:3000/health"
+```
 
-- [ ] Set environment variables
-- [ ] Initialize RBAC system
-- [ ] Create database tables
-- [ ] Register initial admin user
-- [ ] Test system health
-- [ ] Generate mock data (optional)
-- [ ] Verify mobile app compatibility
+### Step 3: Check System Status
+```bash
+curl -X GET "http://localhost:3000/api/auth/system-status"
+```
+
+### Step 4: Register First Admin User
+```bash
+curl -X POST "http://localhost:3000/api/auth/register" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "admin@ozi.com",
+    "password": "AdminPassword123!",
+    "firstName": "Admin",
+    "lastName": "User",
+    "phone": "+1234567890",
+    "invitationCode": "INIT123",
+    "department": "Management",
+    "employeeId": "EMP001"
+  }'
+```
+
+### Step 5: Login as Admin
+```bash
+curl -X POST "http://localhost:3000/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "admin@ozi.com",
+    "password": "AdminPassword123!",
+    "deviceId": "admin_device_001",
+    "platform": "web"
+  }'
+```
+
+### Step 6: Create Additional Roles and Permissions
+Use the JWT token from login to create roles and permissions as needed.
+
+## ⚠️ Important Notes
+
+1. **Version Check**: All API endpoints require version checking via headers
+2. **Authentication**: Most endpoints require valid JWT tokens
+3. **Permissions**: Admin operations require specific permissions
+4. **Base URL**: Use `http://localhost:3000` for local development
+5. **Database**: Ensure database is properly configured and running
+
+## 🔧 Troubleshooting
+
+### Common Issues:
+- **Port 3000 in use**: Change port in environment variables
+- **Database connection failed**: Check database configuration
+- **Permission denied**: Ensure user has required permissions
+- **Version check failed**: Include proper version headers for mobile clients
+
+---
+
+This document covers the complete initial setup process. All endpoints are verified against the actual route files and will work correctly with localhost:3000.

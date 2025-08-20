@@ -2,7 +2,7 @@
 
 This document covers all picking module endpoints for the OZi Backend system.
 
-**Base URL:** `http://13.232.150.239`
+**Base URL:** `http://localhost:3000`
 
 ## 📦 Picking Wave Operations
 
@@ -10,7 +10,7 @@ This document covers all picking module endpoints for the OZi Backend system.
 
 **Endpoint:** `POST /api/picking/waves/generate`
 
-**Description:** Generates picking waves based on order volume and priority.
+**Description:** Generates new picking waves from order IDs.
 
 **Headers:**
 ```bash
@@ -21,10 +21,12 @@ Authorization: Bearer your_jwt_token
 **Request Body:**
 ```json
 {
-  "zoneId": "Zone-A",
-  "maxOrdersPerWave": 10,
-  "priority": "high",
-  "estimatedStartTime": "2024-01-15T08:00:00.000Z"
+  "orderIds": [1, 2, 3, 4, 5],
+  "priority": "HIGH",
+  "routeOptimization": true,
+  "fefoRequired": false,
+  "tagsAndBags": false,
+  "maxOrdersPerWave": 20
 }
 ```
 
@@ -32,29 +34,29 @@ Authorization: Bearer your_jwt_token
 
 **Web Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/picking/waves/generate" \
+curl -X POST "http://localhost:3000/api/picking/waves/generate" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "zoneId": "Zone-A",
-    "maxOrdersPerWave": 10,
-    "priority": "high",
-    "estimatedStartTime": "2024-01-15T08:00:00.000Z"
+    "orderIds": [1, 2, 3, 4, 5],
+    "priority": "HIGH",
+    "routeOptimization": true,
+    "maxOrdersPerWave": 20
   }'
 ```
 
 **Mobile Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/picking/waves/generate" \
+curl -X POST "http://localhost:3000/api/picking/waves/generate" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -H "source: mobile" \
   -H "app-version: 1.2.0" \
   -d '{
-    "zoneId": "Zone-A",
-    "maxOrdersPerWave": 10,
-    "priority": "high",
-    "estimatedStartTime": "2024-01-15T08:00:00.000Z"
+    "orderIds": [1, 2, 3, 4, 5],
+    "priority": "HIGH",
+    "routeOptimization": true,
+    "maxOrdersPerWave": 20
   }'
 ```
 
@@ -62,20 +64,28 @@ curl -X POST "http://13.232.150.239/api/picking/waves/generate" \
 ```json
 {
   "success": true,
-  "message": "Picking waves generated successfully",
+  "message": "Generated 1 picking waves",
   "data": {
-    "wavesCreated": 3,
-    "totalOrders": 25,
-    "estimatedDuration": "4 hours"
+    "waves": [
+      {
+        "id": 1,
+        "waveNumber": "W1642233600000-1",
+        "status": "GENERATED",
+        "totalOrders": 5,
+        "totalItems": 15,
+        "estimatedDuration": 10,
+        "slaDeadline": "2024-01-16T10:30:00.000Z"
+      }
+    ]
   }
 }
 ```
 
-### Assign Picking Waves
+### Assign Waves to Pickers
 
 **Endpoint:** `GET /api/picking/waves/assign`
 
-**Description:** Retrieves available waves for assignment to pickers.
+**Description:** Auto-assigns available waves to pickers.
 
 **Headers:**
 ```bash
@@ -84,22 +94,20 @@ Authorization: Bearer your_jwt_token
 ```
 
 **Query Parameters:**
-- `zoneId` (optional): Filter by warehouse zone
-- `priority` (optional): Filter by priority level
-- `status` (optional): Filter by wave status
+- `maxWavesPerPicker` (optional): Maximum waves per picker (default: 3)
 
 **cURL Examples:**
 
 **Web Client:**
 ```bash
-curl -X GET "http://13.232.150.239/api/picking/waves/assign?zoneId=Zone-A&priority=high" \
+curl -X GET "http://localhost:3000/api/picking/waves/assign?maxWavesPerPicker=3" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
 
 **Mobile Client:**
 ```bash
-curl -X GET "http://13.232.150.239/api/picking/waves/assign?zoneId=Zone-A&priority=high" \
+curl -X GET "http://localhost:3000/api/picking/waves/assign?maxWavesPerPicker=3" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -H "source: mobile" \
@@ -110,16 +118,15 @@ curl -X GET "http://13.232.150.239/api/picking/waves/assign?zoneId=Zone-A&priori
 ```json
 {
   "success": true,
+  "message": "Assigned 2 waves to pickers",
   "data": {
-    "waves": [
+    "assignments": [
       {
-        "id": "WAVE-001",
-        "name": "Morning Wave 1",
-        "zoneId": "Zone-A",
-        "priority": "high",
-        "orderCount": 8,
-        "estimatedDuration": "2 hours",
-        "status": "available"
+        "waveId": 1,
+        "waveNumber": "W1642233600000-1",
+        "pickerId": 2,
+        "pickerEmail": "picker@ozi.com",
+        "assignedAt": "2024-01-15T10:30:00.000Z"
       }
     ]
   }
@@ -130,7 +137,7 @@ curl -X GET "http://13.232.150.239/api/picking/waves/assign?zoneId=Zone-A&priori
 
 **Endpoint:** `GET /api/picking/waves/available`
 
-**Description:** Retrieves all available picking waves for pickers.
+**Description:** Lists available picking waves with filtering and pagination.
 
 **Headers:**
 ```bash
@@ -138,18 +145,24 @@ Content-Type: application/json
 Authorization: Bearer your_jwt_token
 ```
 
+**Query Parameters:**
+- `status` (optional): Filter by wave status
+- `priority` (optional): Filter by priority
+- `page` (optional): Page number (default: 1)
+- `limit` (optional): Items per page (default: 10)
+
 **cURL Examples:**
 
 **Web Client:**
 ```bash
-curl -X GET "http://13.232.150.239/api/picking/waves/available" \
+curl -X GET "http://localhost:3000/api/picking/waves/available?status=ASSIGNED&priority=HIGH&page=1&limit=10" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
 
 **Mobile Client:**
 ```bash
-curl -X GET "http://13.232.150.239/api/picking/waves/available" \
+curl -X GET "http://localhost:3000/api/picking/waves/available?status=ASSIGNED&priority=HIGH&page=1&limit=10" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -H "source: mobile" \
@@ -163,15 +176,22 @@ curl -X GET "http://13.232.150.239/api/picking/waves/available" \
   "data": {
     "waves": [
       {
-        "id": "WAVE-001",
-        "name": "Morning Wave 1",
-        "zoneId": "Zone-A",
-        "priority": "high",
-        "orderCount": 8,
-        "estimatedDuration": "2 hours",
-        "status": "available"
+        "id": 1,
+        "waveNumber": "W1642233600000-1",
+        "status": "ASSIGNED",
+        "priority": "HIGH",
+        "totalOrders": 5,
+        "totalItems": 15,
+        "estimatedDuration": 10,
+        "slaDeadline": "2024-01-16T10:30:00.000Z"
       }
-    ]
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 10,
+      "total": 1,
+      "totalPages": 1
+    }
   }
 }
 ```
@@ -182,7 +202,7 @@ curl -X GET "http://13.232.150.239/api/picking/waves/available" \
 
 **Endpoint:** `POST /api/picking/waves/:waveId/start`
 
-**Description:** Starts a picking wave for a picker.
+**Description:** Starts picking operations for a specific wave.
 
 **Headers:**
 ```bash
@@ -190,38 +210,22 @@ Content-Type: application/json
 Authorization: Bearer your_jwt_token
 ```
 
-**Request Body:**
-```json
-{
-  "pickerId": "PICKER001",
-  "startTime": "2024-01-15T08:00:00.000Z"
-}
-```
-
 **cURL Examples:**
 
 **Web Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/picking/waves/WAVE-001/start" \
+curl -X POST "http://localhost:3000/api/picking/waves/1/start" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -d '{
-    "pickerId": "PICKER001",
-    "startTime": "2024-01-15T08:00:00.000Z"
-  }'
+  -H "Authorization: Bearer your_jwt_token"
 ```
 
 **Mobile Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/picking/waves/WAVE-001/start" \
+curl -X POST "http://localhost:3000/api/picking/waves/1/start" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "pickerId": "PICKER001",
-    "startTime": "2024-01-15T08:00:00.000Z"
-  }'
+  -H "app-version: 1.2.0"
 ```
 
 **Response:**
@@ -230,10 +234,25 @@ curl -X POST "http://13.232.150.239/api/picking/waves/WAVE-001/start" \
   "success": true,
   "message": "Picking started successfully",
   "data": {
-    "waveId": "WAVE-001",
-    "pickerId": "PICKER001",
-    "startTime": "2024-01-15T08:00:00.000Z",
-    "status": "in_progress"
+    "wave": {
+      "id": 1,
+      "waveNumber": "W1642233600000-1",
+      "status": "PICKING",
+      "totalItems": 15,
+      "estimatedDuration": 10
+    },
+    "picklistItems": [
+      {
+        "id": 1,
+        "sku": "SKU001",
+        "productName": "Product 1",
+        "binLocation": "A1-B2-C3",
+        "quantity": 2,
+        "scanSequence": 1,
+        "fefoBatch": null,
+        "expiryDate": null
+      }
+    ]
   }
 }
 ```
@@ -253,10 +272,9 @@ Authorization: Bearer your_jwt_token
 **Request Body:**
 ```json
 {
-  "sku": "WH-001",
-  "quantity": 2,
-  "location": "A1-B2-C3",
-  "timestamp": "2024-01-15T08:15:00.000Z"
+  "sku": "SKU001",
+  "binLocation": "A1-B2-C3",
+  "quantity": 2
 }
 ```
 
@@ -264,29 +282,27 @@ Authorization: Bearer your_jwt_token
 
 **Web Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/picking/waves/WAVE-001/scan" \
+curl -X POST "http://localhost:3000/api/picking/waves/1/scan" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "sku": "WH-001",
-    "quantity": 2,
-    "location": "A1-B2-C3",
-    "timestamp": "2024-01-15T08:15:00.000Z"
+    "sku": "SKU001",
+    "binLocation": "A1-B2-C3",
+    "quantity": 2
   }'
 ```
 
 **Mobile Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/picking/waves/WAVE-001/scan" \
+curl -X POST "http://localhost:3000/api/picking/waves/1/scan" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -H "source: mobile" \
   -H "app-version: 1.2.0" \
   -d '{
-    "sku": "WH-001",
-    "quantity": 2,
-    "location": "A1-B2-C3",
-    "timestamp": "2024-01-15T08:15:00.000Z"
+    "sku": "SKU001",
+    "binLocation": "A1-B2-C3",
+    "quantity": 2
   }'
 ```
 
@@ -296,12 +312,16 @@ curl -X POST "http://13.232.150.239/api/picking/waves/WAVE-001/scan" \
   "success": true,
   "message": "Item scanned successfully",
   "data": {
-    "waveId": "WAVE-001",
-    "sku": "WH-001",
-    "quantity": 2,
-    "location": "A1-B2-C3",
-    "scannedAt": "2024-01-15T08:15:00.000Z",
-    "remainingItems": 6
+    "item": {
+      "id": 1,
+      "sku": "SKU001",
+      "productName": "Product 1",
+      "status": "PICKED",
+      "pickedQuantity": 2,
+      "remainingQuantity": 0
+    },
+    "waveStatus": "PICKING",
+    "remainingItems": 14
   }
 }
 ```
@@ -310,7 +330,7 @@ curl -X POST "http://13.232.150.239/api/picking/waves/WAVE-001/scan" \
 
 **Endpoint:** `POST /api/picking/waves/:waveId/partial`
 
-**Description:** Reports a partial pick when full quantity is not available.
+**Description:** Reports a partial pick with reason and notes.
 
 **Headers:**
 ```bash
@@ -321,11 +341,12 @@ Authorization: Bearer your_jwt_token
 **Request Body:**
 ```json
 {
-  "sku": "WH-001",
-  "requestedQuantity": 2,
-  "availableQuantity": 1,
-  "reason": "Insufficient stock",
-  "notes": "Only 1 item available in location"
+  "sku": "SKU002",
+  "binLocation": "A1-B2-C4",
+  "reason": "OOS",
+  "photo": "photo_url_here",
+  "notes": "Item out of stock",
+  "pickedQuantity": 0
 }
 ```
 
@@ -333,31 +354,31 @@ Authorization: Bearer your_jwt_token
 
 **Web Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/picking/waves/WAVE-001/partial" \
+curl -X POST "http://localhost:3000/api/picking/waves/1/partial" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "sku": "WH-001",
-    "requestedQuantity": 2,
-    "availableQuantity": 1,
-    "reason": "Insufficient stock",
-    "notes": "Only 1 item available in location"
+    "sku": "SKU002",
+    "binLocation": "A1-B2-C4",
+    "reason": "OOS",
+    "notes": "Item out of stock",
+    "pickedQuantity": 0
   }'
 ```
 
 **Mobile Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/picking/waves/WAVE-001/partial" \
+curl -X POST "http://localhost:3000/api/picking/waves/1/partial" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -H "source: mobile" \
   -H "app-version: 1.2.0" \
   -d '{
-    "sku": "WH-001",
-    "requestedQuantity": 2,
-    "availableQuantity": 1,
-    "reason": "Insufficient stock",
-    "notes": "Only 1 item available in location"
+    "sku": "SKU002",
+    "binLocation": "A1-B2-C4",
+    "reason": "OOS",
+    "notes": "Item out of stock",
+    "pickedQuantity": 0
   }'
 ```
 
@@ -367,12 +388,13 @@ curl -X POST "http://13.232.150.239/api/picking/waves/WAVE-001/partial" \
   "success": true,
   "message": "Partial pick reported successfully",
   "data": {
-    "waveId": "WAVE-001",
-    "sku": "WH-001",
-    "requestedQuantity": 2,
-    "availableQuantity": 1,
-    "shortage": 1,
-    "exceptionCreated": true
+    "item": {
+      "id": 2,
+      "sku": "SKU002",
+      "status": "PARTIAL",
+      "partialReason": "OOS",
+      "pickedQuantity": 0
+    }
   }
 }
 ```
@@ -381,7 +403,7 @@ curl -X POST "http://13.232.150.239/api/picking/waves/WAVE-001/partial" \
 
 **Endpoint:** `POST /api/picking/waves/:waveId/complete`
 
-**Description:** Completes a picking wave.
+**Description:** Completes picking for a specific wave.
 
 **Headers:**
 ```bash
@@ -389,41 +411,22 @@ Content-Type: application/json
 Authorization: Bearer your_jwt_token
 ```
 
-**Request Body:**
-```json
-{
-  "completionTime": "2024-01-15T10:30:00.000Z",
-  "notes": "All items picked successfully",
-  "exceptions": []
-}
-```
-
 **cURL Examples:**
 
 **Web Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/picking/waves/WAVE-001/complete" \
+curl -X POST "http://localhost:3000/api/picking/waves/1/complete" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -d '{
-    "completionTime": "2024-01-15T10:30:00.000Z",
-    "notes": "All items picked successfully",
-    "exceptions": []
-  }'
+  -H "Authorization: Bearer your_jwt_token"
 ```
 
 **Mobile Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/picking/waves/WAVE-001/complete" \
+curl -X POST "http://localhost:3000/api/picking/waves/1/complete" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "completionTime": "2024-01-15T10:30:00.000Z",
-    "notes": "All items picked successfully",
-    "exceptions": []
-  }'
+  -H "app-version: 1.2.0"
 ```
 
 **Response:**
@@ -432,23 +435,29 @@ curl -X POST "http://13.232.150.239/api/picking/waves/WAVE-001/complete" \
   "success": true,
   "message": "Picking completed successfully",
   "data": {
-    "waveId": "WAVE-001",
-    "completionTime": "2024-01-15T10:30:00.000Z",
-    "totalItems": 8,
-    "pickedItems": 8,
-    "exceptions": 0,
-    "duration": "2h 30m"
+    "wave": {
+      "id": 1,
+      "waveNumber": "W1642233600000-1",
+      "status": "COMPLETED",
+      "completedAt": "2024-01-15T10:30:00.000Z"
+    },
+    "metrics": {
+      "totalItems": 15,
+      "pickedItems": 13,
+      "partialItems": 2,
+      "accuracy": 86.67
+    }
   }
 }
 ```
 
-## 📊 Monitoring & Analytics
+## 📊 Monitoring
 
 ### Get SLA Status
 
 **Endpoint:** `GET /api/picking/sla-status`
 
-**Description:** Retrieves SLA status for all picking waves.
+**Description:** Checks SLA compliance for picking waves.
 
 **Headers:**
 ```bash
@@ -456,18 +465,21 @@ Content-Type: application/json
 Authorization: Bearer your_jwt_token
 ```
 
+**Query Parameters:**
+- `waveId` (optional): Filter by specific wave ID
+
 **cURL Examples:**
 
 **Web Client:**
 ```bash
-curl -X GET "http://13.232.150.239/api/picking/sla-status" \
+curl -X GET "http://localhost:3000/api/picking/sla-status?waveId=1" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
 
 **Mobile Client:**
 ```bash
-curl -X GET "http://13.232.150.239/api/picking/sla-status" \
+curl -X GET "http://localhost:3000/api/picking/sla-status?waveId=1" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -H "source: mobile" \
@@ -479,11 +491,28 @@ curl -X GET "http://13.232.150.239/api/picking/sla-status" \
 {
   "success": true,
   "data": {
-    "totalWaves": 5,
-    "onTrack": 3,
-    "atRisk": 1,
-    "breached": 1,
-    "averageCompletionTime": "2h 15m"
+    "slaMetrics": {
+      "total": 1,
+      "onTime": 1,
+      "atRisk": 0,
+      "breached": 0,
+      "waves": [
+        {
+          "id": 1,
+          "waveNumber": "W1642233600000-1",
+          "status": "COMPLETED",
+          "priority": "HIGH",
+          "slaDeadline": "2024-01-16T10:30:00.000Z",
+          "slaStatus": "onTime",
+          "hoursToDeadline": 24
+        }
+      ]
+    },
+    "summary": {
+      "onTimePercentage": 100,
+      "atRiskPercentage": 0,
+      "breachedPercentage": 0
+    }
   }
 }
 ```
@@ -492,7 +521,7 @@ curl -X GET "http://13.232.150.239/api/picking/sla-status" \
 
 **Endpoint:** `GET /api/picking/expiry-alerts`
 
-**Description:** Retrieves alerts for items approaching expiry.
+**Description:** Gets alerts for items approaching expiry.
 
 **Headers:**
 ```bash
@@ -500,18 +529,21 @@ Content-Type: application/json
 Authorization: Bearer your_jwt_token
 ```
 
+**Query Parameters:**
+- `daysThreshold` (optional): Days threshold for alerts (default: 7)
+
 **cURL Examples:**
 
 **Web Client:**
 ```bash
-curl -X GET "http://13.232.150.239/api/picking/expiry-alerts" \
+curl -X GET "http://localhost:3000/api/picking/expiry-alerts?daysThreshold=7" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
 
 **Mobile Client:**
 ```bash
-curl -X GET "http://13.232.150.239/api/picking/expiry-alerts" \
+curl -X GET "http://localhost:3000/api/picking/expiry-alerts?daysThreshold=7" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -H "source: mobile" \
@@ -523,13 +555,16 @@ curl -X GET "http://13.232.150.239/api/picking/expiry-alerts" \
 {
   "success": true,
   "data": {
+    "totalAlerts": 2,
     "alerts": [
       {
-        "sku": "PERISH-001",
-        "productName": "Fresh Produce",
-        "expiryDate": "2024-01-16",
-        "daysUntilExpiry": 1,
-        "priority": "high"
+        "id": 1,
+        "sku": "SKU003",
+        "productName": "Product 3",
+        "expiryDate": "2024-01-20T00:00:00.000Z",
+        "daysUntilExpiry": 5,
+        "urgency": "HIGH",
+        "orderId": 3
       }
     ]
   }
@@ -548,6 +583,11 @@ For mobile clients, the following headers are required:
 - If app version is below minimum, API returns 426 status code
 - Web clients don't require version checking
 
+### Device Management
+- Mobile apps should provide unique device identifiers
+- Platform detection (ios/android) for analytics
+- Secure token storage using platform-specific methods
+
 ## ⚠️ Error Responses
 
 ### Common Error Responses
@@ -557,7 +597,7 @@ For mobile clients, the following headers are required:
 {
   "success": false,
   "error": "Unauthorized",
-  "message": "Invalid access token",
+  "message": "Invalid token",
   "statusCode": 401
 }
 ```
@@ -572,23 +612,53 @@ For mobile clients, the following headers are required:
 }
 ```
 
+**User Not Available:**
+```json
+{
+  "success": false,
+  "error": "User not available",
+  "message": "User is currently off-shift or unavailable",
+  "statusCode": 403
+}
+```
+
 **Wave Not Found:**
 ```json
 {
   "success": false,
-  "error": "Not Found",
-  "message": "Picking wave not found",
+  "error": "Wave not found",
+  "message": "Wave not found",
   "statusCode": 404
 }
 ```
 
-**User Off-Shift:**
+**Wave Not Assigned:**
 ```json
 {
   "success": false,
-  "error": "Forbidden",
-  "message": "User is currently off-shift",
-  "statusCode": 403
+  "error": "Wave not assigned",
+  "message": "Wave is not assigned to you",
+  "statusCode": 400
+}
+```
+
+**Item Not Found:**
+```json
+{
+  "success": false,
+  "error": "Item not found",
+  "message": "Item not found in picklist",
+  "statusCode": 404
+}
+```
+
+**Cannot Complete:**
+```json
+{
+  "success": false,
+  "error": "Cannot complete",
+  "message": "Cannot complete: 2 items still pending",
+  "statusCode": 400
 }
 ```
 
@@ -602,31 +672,48 @@ For mobile clients, the following headers are required:
 }
 ```
 
+**Missing App Version (Mobile Only):**
+```json
+{
+  "success": false,
+  "error": "Bad Request",
+  "message": "App version is required for mobile users",
+  "statusCode": 400
+}
+```
+
 ## 🔐 Security Features
 
-1. **Authentication Required**: All endpoints require valid JWT token
-2. **Permission-Based Access**: Role-based access control (RBAC)
-3. **Version Control**: Mobile app compatibility checking
-4. **Availability Check**: User shift status validation
+1. **JWT Authentication**: All endpoints require valid JWT tokens
+2. **Permission Validation**: Specific picking permissions required
+3. **Availability Check**: Users must be available (not off-shift)
+4. **Wave Assignment**: Users can only access assigned waves
 5. **Input Validation**: Comprehensive request validation
+6. **Version Control**: Mobile app compatibility checking
+7. **Audit Logging**: Track all picking operations
 
-## 📋 Picking Operations Flow
+## 📋 Operation Flow
 
-### Web Client Flow
-1. User authenticates with valid JWT token
-2. User performs picking operations
-3. System validates permissions and availability
-4. Response is returned with operation result
+### Wave Generation Flow
+1. Admin provides order IDs and wave parameters
+2. System validates orders exist and are eligible
+3. System groups orders into waves
+4. System creates picklist items for each order
+5. Success response with generated waves
 
-### Mobile Client Flow
-1. App sends request with version headers
-2. System validates app version compatibility
-3. User authenticates with valid JWT token
-4. User performs picking operations
-5. System validates permissions and availability
-6. Response is returned with operation result
-7. Version checking on every request
+### Wave Assignment Flow
+1. System finds available pickers with permissions
+2. System finds unassigned waves
+3. System assigns waves to pickers based on capacity
+4. Success response with assignments
+
+### Picking Execution Flow
+1. Picker starts picking for assigned wave
+2. Picker scans items during picking
+3. Picker reports partial picks if needed
+4. Picker completes picking when all items processed
+5. System calculates completion metrics
 
 ---
 
-This document covers all picking module endpoints with examples for both web and mobile clients. Mobile clients must include version headers for compatibility checking. All endpoints require authentication, appropriate permissions, and user availability validation.
+This document covers all picking module endpoints with examples for both web and mobile clients. Mobile clients must include version headers for compatibility checking. All endpoints are verified against the actual controller code and will work correctly with localhost:3000.

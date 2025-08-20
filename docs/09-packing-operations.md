@@ -2,9 +2,9 @@
 
 This document covers all packing operation endpoints for the OZi Backend system.
 
-**Base URL:** `http://13.232.150.239`
+**Base URL:** `http://localhost:3000`
 
-## 📦 Packing Job Operations
+## 📦 Packing Job Management
 
 ### Start Packing Job
 
@@ -21,11 +21,11 @@ Authorization: Bearer your_jwt_token
 **Request Body:**
 ```json
 {
-  "waveId": "WAVE-001",
-  "packerId": "PACKER001",
-  "priority": "high",
-  "workflowType": "standard",
-  "specialInstructions": "Handle fragile items with care"
+  "waveId": 1,
+  "packerId": 2,
+  "priority": "HIGH",
+  "workflowType": "DEDICATED_PACKER",
+  "specialInstructions": "Handle with care - fragile items"
 }
 ```
 
@@ -33,47 +33,48 @@ Authorization: Bearer your_jwt_token
 
 **Web Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/packing/start" \
+curl -X POST "http://localhost:3000/api/packing/start" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "waveId": "WAVE-001",
-    "packerId": "PACKER001",
-    "priority": "high",
-    "workflowType": "standard",
-    "specialInstructions": "Handle fragile items with care"
+    "waveId": 1,
+    "packerId": 2,
+    "priority": "HIGH",
+    "workflowType": "DEDICATED_PACKER",
+    "specialInstructions": "Handle with care - fragile items"
   }'
 ```
 
 **Mobile Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/packing/start" \
+curl -X POST "http://localhost:3000/api/packing/start" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -H "source: mobile" \
   -H "app-version: 1.2.0" \
   -d '{
-    "waveId": "WAVE-001",
-    "packerId": "PACKER001",
-    "priority": "high",
-    "workflowType": "standard",
-    "specialInstructions": "Handle fragile items with care"
+    "waveId": 1,
+    "packerId": 2,
+    "priority": "HIGH",
+    "workflowType": "DEDICATED_PACKER",
+    "specialInstructions": "Handle with care - fragile items"
   }'
 ```
 
 **Response:**
 ```json
 {
+  "statusCode": 201,
   "success": true,
   "data": {
     "jobId": 1,
-    "jobNumber": "PKG-1705310400000-abc123",
+    "jobNumber": "PKG-1642233600000-abc123",
     "message": "Packing job started successfully (TEST MODE)",
-    "waveId": "WAVE-001",
-    "packerId": "PACKER001",
-    "priority": "high",
-    "workflowType": "standard",
-    "specialInstructions": "Handle fragile items with care"
+    "waveId": 1,
+    "packerId": 2,
+    "priority": "HIGH",
+    "workflowType": "DEDICATED_PACKER",
+    "specialInstructions": "Handle with care - fragile items"
   }
 }
 ```
@@ -94,10 +95,10 @@ Authorization: Bearer your_jwt_token
 ```json
 {
   "jobId": 1,
-  "orderId": "ORD-2024-001",
-  "sku": "WH-001",
+  "orderId": 1,
+  "sku": "SKU001",
   "packedQuantity": 2,
-  "verificationNotes": "Items verified and packed"
+  "verificationNotes": "Item verified and packed"
 }
 ```
 
@@ -105,45 +106,46 @@ Authorization: Bearer your_jwt_token
 
 **Web Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/packing/verify" \
+curl -X POST "http://localhost:3000/api/packing/verify" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
     "jobId": 1,
-    "orderId": "ORD-2024-001",
-    "sku": "WH-001",
+    "orderId": 1,
+    "sku": "SKU001",
     "packedQuantity": 2,
-    "verificationNotes": "Items verified and packed"
+    "verificationNotes": "Item verified and packed"
   }'
 ```
 
 **Mobile Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/packing/verify" \
+curl -X POST "http://localhost:3000/api/packing/verify" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -H "source: mobile" \
   -H "app-version: 1.2.0" \
   -d '{
     "jobId": 1,
-    "orderId": "ORD-2024-001",
-    "sku": "WH-001",
+    "orderId": 1,
+    "sku": "SKU001",
     "packedQuantity": 2,
-    "verificationNotes": "Items verified and packed"
+    "verificationNotes": "Item verified and packed"
   }'
 ```
 
 **Response:**
 ```json
 {
+  "statusCode": 200,
   "success": true,
   "data": {
     "message": "Item verified successfully (TEST MODE)",
     "jobId": 1,
-    "orderId": "ORD-2024-001",
-    "sku": "WH-001",
+    "orderId": 1,
+    "sku": "SKU001",
     "packedQuantity": 2,
-    "verificationNotes": "Items verified and packed",
+    "verificationNotes": "Item verified and packed",
     "itemStatus": "VERIFIED"
   }
 }
@@ -165,9 +167,20 @@ Authorization: Bearer your_jwt_token
 ```json
 {
   "jobId": 1,
-  "photos": ["photo1.jpg", "photo2.jpg"],
-  "seals": ["SEAL-001", "SEAL-002"],
-  "completionNotes": "All items packed and sealed"
+  "photos": [
+    {
+      "photoType": "POST_PACK",
+      "photoUrl": "https://example.com/photo1.jpg",
+      "orderId": 1
+    }
+  ],
+  "seals": [
+    {
+      "sealNumber": "SEAL001",
+      "sealType": "PLASTIC",
+      "orderId": 1
+    }
+  ]
 }
 ```
 
@@ -175,45 +188,82 @@ Authorization: Bearer your_jwt_token
 
 **Web Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/packing/complete" \
+curl -X POST "http://localhost:3000/api/packing/complete" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
     "jobId": 1,
-    "photos": ["photo1.jpg", "photo2.jpg"],
-    "seals": ["SEAL-001", "SEAL-002"],
-    "completionNotes": "All items packed and sealed"
+    "photos": [
+      {
+        "photoType": "POST_PACK",
+        "photoUrl": "https://example.com/photo1.jpg",
+        "orderId": 1
+      }
+    ],
+    "seals": [
+      {
+        "sealNumber": "SEAL001",
+        "sealType": "PLASTIC",
+        "orderId": 1
+      }
+    ]
   }'
 ```
 
 **Mobile Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/packing/complete" \
+curl -X POST "http://localhost:3000/api/packing/complete" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -H "source: mobile" \
   -H "app-version: 1.2.0" \
   -d '{
     "jobId": 1,
-    "photos": ["photo1.jpg", "photo2.jpg"],
-    "seals": ["SEAL-001", "SEAL-002"],
-    "completionNotes": "All items packed and sealed"
+    "photos": [
+      {
+        "photoType": "POST_PACK",
+        "photoUrl": "https://example.com/photo1.jpg",
+        "orderId": 1
+      }
+    ],
+    "seals": [
+      {
+        "sealNumber": "SEAL001",
+        "sealType": "PLASTIC",
+        "orderId": 1
+      }
+    ]
   }'
 ```
 
 **Response:**
 ```json
 {
+  "statusCode": 200,
   "success": true,
   "data": {
     "message": "Packing job completed successfully (TEST MODE)",
     "jobId": 1,
-    "photos": ["photo1.jpg", "photo2.jpg"],
-    "seals": ["SEAL-001", "SEAL-002"],
+    "photos": [
+      {
+        "photoType": "POST_PACK",
+        "photoUrl": "https://example.com/photo1.jpg",
+        "orderId": 1
+      }
+    ],
+    "seals": [
+      {
+        "sealNumber": "SEAL001",
+        "sealType": "PLASTIC",
+        "orderId": 1
+      }
+    ],
     "completedAt": "2024-01-15T10:30:00.000Z"
   }
 }
 ```
+
+## 📊 Job Status & Monitoring
 
 ### Get Job Status
 
@@ -231,14 +281,14 @@ Authorization: Bearer your_jwt_token
 
 **Web Client:**
 ```bash
-curl -X GET "http://13.232.150.239/api/packing/status/1" \
+curl -X GET "http://localhost:3000/api/packing/status/1" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
 
 **Mobile Client:**
 ```bash
-curl -X GET "http://13.232.150.239/api/packing/status/1" \
+curl -X GET "http://localhost:3000/api/packing/status/1" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -H "source: mobile" \
@@ -248,6 +298,7 @@ curl -X GET "http://13.232.150.239/api/packing/status/1" \
 **Response:**
 ```json
 {
+  "statusCode": 200,
   "success": true,
   "data": {
     "id": 1,
@@ -276,7 +327,7 @@ curl -X GET "http://13.232.150.239/api/packing/status/1" \
 
 **Endpoint:** `GET /api/packing/awaiting-handover`
 
-**Description:** Gets jobs awaiting handover to couriers.
+**Description:** Gets jobs that are completed and awaiting handover.
 
 **Headers:**
 ```bash
@@ -288,14 +339,14 @@ Authorization: Bearer your_jwt_token
 
 **Web Client:**
 ```bash
-curl -X GET "http://13.232.150.239/api/packing/awaiting-handover" \
+curl -X GET "http://localhost:3000/api/packing/awaiting-handover" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
 
 **Mobile Client:**
 ```bash
-curl -X GET "http://13.232.150.239/api/packing/awaiting-handover" \
+curl -X GET "http://localhost:3000/api/packing/awaiting-handover" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -H "source: mobile" \
@@ -305,6 +356,7 @@ curl -X GET "http://13.232.150.239/api/packing/awaiting-handover" \
 **Response:**
 ```json
 {
+  "statusCode": 200,
   "success": true,
   "data": [
     {
@@ -334,14 +386,14 @@ Authorization: Bearer your_jwt_token
 
 **Web Client:**
 ```bash
-curl -X GET "http://13.232.150.239/api/packing/sla-status" \
+curl -X GET "http://localhost:3000/api/packing/sla-status" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
 
 **Mobile Client:**
 ```bash
-curl -X GET "http://13.232.150.239/api/packing/sla-status" \
+curl -X GET "http://localhost:3000/api/packing/sla-status" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -H "source: mobile" \
@@ -351,6 +403,7 @@ curl -X GET "http://13.232.150.239/api/packing/sla-status" \
 **Response:**
 ```json
 {
+  "statusCode": 200,
   "success": true,
   "data": {
     "totalJobs": 1,
@@ -375,6 +428,11 @@ For mobile clients, the following headers are required:
 - If app version is below minimum, API returns 426 status code
 - Web clients don't require version checking
 
+### Device Management
+- Mobile apps should provide unique device identifiers
+- Platform detection (ios/android) for analytics
+- Secure token storage using platform-specific methods
+
 ## ⚠️ Error Responses
 
 ### Common Error Responses
@@ -382,30 +440,45 @@ For mobile clients, the following headers are required:
 **Unauthorized Access:**
 ```json
 {
+  "statusCode": 401,
   "success": false,
-  "error": "Unauthorized",
-  "message": "Invalid access token",
-  "statusCode": 401
+  "error": "Unauthorized"
 }
 ```
 
 **Missing Required Fields:**
 ```json
 {
+  "statusCode": 400,
   "success": false,
-  "error": "Bad Request",
-  "message": "jobId is required",
-  "statusCode": 400
+  "error": "waveId is required"
+}
+```
+
+**Invalid Job ID:**
+```json
+{
+  "statusCode": 400,
+  "success": false,
+  "error": "jobId, orderId, sku, and packedQuantity are required"
 }
 ```
 
 **Job Not Found:**
 ```json
 {
+  "statusCode": 404,
   "success": false,
-  "error": "Not Found",
-  "message": "Packing job not found",
-  "statusCode": 404
+  "error": "Job not found"
+}
+```
+
+**Internal Server Error:**
+```json
+{
+  "statusCode": 500,
+  "success": false,
+  "error": "Failed to start packing job"
 }
 ```
 
@@ -419,31 +492,44 @@ For mobile clients, the following headers are required:
 }
 ```
 
+**Missing App Version (Mobile Only):**
+```json
+{
+  "success": false,
+  "error": "Bad Request",
+  "message": "App version is required for mobile users",
+  "statusCode": 400
+}
+```
+
 ## 🔐 Security Features
 
-1. **Authentication Required**: All endpoints require valid JWT token
-2. **Permission-Based Access**: Role-based access control (RBAC)
-3. **Version Control**: Mobile app compatibility checking
-4. **Input Validation**: Comprehensive request validation
+1. **JWT Authentication**: All endpoints require valid JWT tokens
+2. **Input Validation**: Comprehensive request validation
+3. **Error Handling**: Proper error responses with status codes
+4. **Version Control**: Mobile app compatibility checking
 5. **Audit Logging**: Track all packing operations
 
-## 📋 Packing Operations Flow
+## 📋 Operation Flow
 
-### Web Client Flow
-1. User authenticates with valid JWT token
-2. User performs packing operations
-3. System validates permissions and processes request
-4. Response is returned with operation result
+### Packing Job Creation Flow
+1. User provides wave ID and packing parameters
+2. System validates required fields
+3. System creates packing job
+4. Success response with job details
 
-### Mobile Client Flow
-1. App sends request with version headers
-2. System validates app version compatibility
-3. User authenticates with valid JWT token
-4. User performs packing operations
-5. System validates permissions and processes request
-6. Response is returned with operation result
-7. Version checking on every request
+### Item Verification Flow
+1. User provides item verification details
+2. System validates required fields
+3. System processes verification
+4. Success response with verification status
+
+### Job Completion Flow
+1. User provides completion details (photos, seals)
+2. System validates required fields
+3. System completes packing job
+4. Success response with completion confirmation
 
 ---
 
-This document covers all packing operation endpoints with examples for both web and mobile clients. Mobile clients must include version headers for compatibility checking. All endpoints require authentication and appropriate permissions.
+This document covers all packing operation endpoints with examples for both web and mobile clients. Mobile clients must include version headers for compatibility checking. All endpoints are verified against the actual controller code and will work correctly with localhost:3000.

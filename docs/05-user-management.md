@@ -2,132 +2,15 @@
 
 This document covers all user management endpoints for the OZi Backend system. These endpoints are restricted to users with admin privileges.
 
-**Base URL:** `http://13.232.150.239`
+**Base URL:** `http://localhost:3000`
 
 ## 👥 User Operations
 
-### Get All Users
-
-**Endpoint:** `GET /api/users`
-
-**Description:** Retrieves all users in the system with optional filtering and pagination.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Query Parameters:**
-- `page` (optional): Page number for pagination (default: 1)
-- `limit` (optional): Number of items per page (default: 10)
-- `search` (optional): Search term for user names, emails, or employee IDs
-- `status` (optional): Filter by status (active, inactive, pending_approval, locked)
-- `department` (optional): Filter by department
-- `role` (optional): Filter by role name
-
-**cURL Examples:**
-
-**Web Client:**
-```bash
-curl -X GET "http://13.232.150.239/api/users?page=1&limit=10&search=john&status=active&department=Operations" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-**Mobile Client:**
-```bash
-curl -X GET "http://13.232.150.239/api/users?page=1&limit=10&search=john&status=active&department=Operations" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "users": [
-      {
-        "id": 1,
-        "email": "john.doe@ozi.com",
-        "firstName": "John",
-        "lastName": "Doe",
-        "role": "Admin",
-        "department": "Operations",
-        "status": "active",
-        "createdAt": "2024-01-01T00:00:00.000Z"
-      }
-    ],
-    "pagination": {
-      "page": 1,
-      "limit": 10,
-      "total": 1,
-      "totalPages": 1
-    }
-  }
-}
-```
-
-### Get User by ID
-
-**Endpoint:** `GET /api/users/:userId`
-
-**Description:** Retrieves a specific user by their ID.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**cURL Examples:**
-
-**Web Client:**
-```bash
-curl -X GET "http://13.232.150.239/api/users/1" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-**Mobile Client:**
-```bash
-curl -X GET "http://13.232.150.239/api/users/1" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "user": {
-      "id": 1,
-      "email": "john.doe@ozi.com",
-      "firstName": "John",
-      "lastName": "Doe",
-      "phone": "+1234567890",
-      "role": "Admin",
-      "department": "Operations",
-      "employeeId": "EMP001",
-      "status": "active",
-      "lastLogin": "2024-01-15T10:30:00.000Z",
-      "createdAt": "2024-01-01T00:00:00.000Z"
-    }
-  }
-}
-```
-
-### Create New User
+### Create User
 
 **Endpoint:** `POST /api/users`
 
-**Description:** Creates a new user in the system (admin only).
+**Description:** Creates a new user (requires admin authentication and users_roles:manage permission).
 
 **Headers:**
 ```bash
@@ -140,12 +23,8 @@ Authorization: Bearer your_jwt_token
 {
   "email": "newuser@ozi.com",
   "password": "SecurePassword123!",
-  "firstName": "Jane",
-  "lastName": "Smith",
-  "phone": "+1234567890",
   "roleId": 2,
-  "department": "Operations",
-  "employeeId": "EMP002"
+  "roleName": "wh_staff_1"
 }
 ```
 
@@ -153,24 +32,19 @@ Authorization: Bearer your_jwt_token
 
 **Web Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/users" \
+curl -X POST "http://localhost:3000/api/users" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
     "email": "newuser@ozi.com",
     "password": "SecurePassword123!",
-    "firstName": "Jane",
-    "lastName": "Smith",
-    "phone": "+1234567890",
-    "roleId": 2,
-    "department": "Operations",
-    "employeeId": "EMP002"
+    "roleId": 2
   }'
 ```
 
 **Mobile Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/users" \
+curl -X POST "http://localhost:3000/api/users" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -H "source: mobile" \
@@ -178,330 +52,29 @@ curl -X POST "http://13.232.150.239/api/users" \
   -d '{
     "email": "newuser@ozi.com",
     "password": "SecurePassword123!",
-    "firstName": "Jane",
-    "lastName": "Smith",
-    "phone": "+1234567890",
+    "roleId": 2
+  }'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 3,
+    "email": "newuser@ozi.com",
     "roleId": 2,
-    "department": "Operations",
-    "employeeId": "EMP002"
-  }'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "User created successfully",
-  "data": {
-    "user": {
-      "id": 2,
-      "email": "newuser@ozi.com",
-      "firstName": "Jane",
-      "lastName": "Smith",
-      "role": "Manager",
-      "status": "active",
-      "createdAt": "2024-01-15T10:30:00.000Z"
-    }
+    "role": "wh_staff_1",
+    "createdAt": "2024-01-15T10:30:00.000Z"
   }
 }
 ```
 
-### Update User
+### List All Users
 
-**Endpoint:** `PUT /api/users/:userId`
+**Endpoint:** `GET /api/users`
 
-**Description:** Updates an existing user's information.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Request Body:**
-```json
-{
-  "firstName": "John",
-  "lastName": "Doe",
-  "phone": "+1234567890",
-  "department": "Operations",
-  "roleId": 1
-}
-```
-
-**cURL Examples:**
-
-**Web Client:**
-```bash
-curl -X PUT "http://13.232.150.239/api/users/1" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -d '{
-    "firstName": "John",
-    "lastName": "Doe",
-    "phone": "+1234567890",
-    "department": "Operations",
-    "roleId": 1
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X PUT "http://13.232.150.239/api/users/1" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "firstName": "John",
-    "lastName": "Doe",
-    "phone": "+1234567890",
-    "department": "Operations",
-    "roleId": 1
-  }'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "User updated successfully",
-  "data": {
-    "user": {
-      "id": 1,
-      "firstName": "John",
-      "lastName": "Doe",
-      "phone": "+1234567890",
-      "department": "Operations",
-      "roleId": 1,
-      "updatedAt": "2024-01-15T10:30:00.000Z"
-    }
-  }
-}
-```
-
-### Delete User
-
-**Endpoint:** `DELETE /api/users/:userId`
-
-**Description:** Deactivates a user account (soft delete).
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**cURL Examples:**
-
-**Web Client:**
-```bash
-curl -X DELETE "http://13.232.150.239/api/users/2" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-**Mobile Client:**
-```bash
-curl -X DELETE "http://13.232.150.239/api/users/2" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "User deactivated successfully"
-}
-```
-
-### Update User Status
-
-**Endpoint:** `PUT /api/users/:userId/status`
-
-**Description:** Updates a user's status (active, inactive, locked).
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Request Body:**
-```json
-{
-  "status": "inactive",
-  "reason": "Temporary suspension"
-}
-```
-
-**cURL Examples:**
-
-**Web Client:**
-```bash
-curl -X PUT "http://13.232.150.239/api/users/1/status" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -d '{
-    "status": "inactive",
-    "reason": "Temporary suspension"
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X PUT "http://13.232.150.239/api/users/1/status" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "status": "inactive",
-    "reason": "Temporary suspension"
-  }'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "User status updated successfully",
-  "data": {
-    "userId": 1,
-    "status": "inactive",
-    "reason": "Temporary suspension",
-    "updatedAt": "2024-01-15T10:30:00.000Z"
-  }
-}
-```
-
-### Change User Role
-
-**Endpoint:** `PUT /api/users/:userId/role`
-
-**Description:** Changes a user's role in the system.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Request Body:**
-```json
-{
-  "roleId": 2,
-  "reason": "Promotion to manager"
-}
-```
-
-**cURL Examples:**
-
-**Web Client:**
-```bash
-curl -X PUT "http://13.232.150.239/api/users/1/role" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -d '{
-    "roleId": 2,
-    "reason": "Promotion to manager"
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X PUT "http://13.232.150.239/api/users/1/role" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "roleId": 2,
-    "reason": "Promotion to manager"
-  }'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "User role changed successfully",
-  "data": {
-    "userId": 1,
-    "oldRoleId": 1,
-    "newRoleId": 2,
-    "reason": "Promotion to manager",
-    "updatedAt": "2024-01-15T10:30:00.000Z"
-  }
-}
-```
-
-## 📊 User Statistics
-
-### Get User Statistics
-
-**Endpoint:** `GET /api/users/statistics`
-
-**Description:** Retrieves user statistics and analytics.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**cURL Examples:**
-
-**Web Client:**
-```bash
-curl -X GET "http://13.232.150.239/api/users/statistics" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-**Mobile Client:**
-```bash
-curl -X GET "http://13.232.150.239/api/users/statistics" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "totalUsers": 150,
-    "activeUsers": 120,
-    "inactiveUsers": 20,
-    "lockedUsers": 10,
-    "usersByRole": {
-      "Admin": 5,
-      "Manager": 15,
-      "Operator": 100,
-      "Picker": 30
-    },
-    "usersByDepartment": {
-      "Operations": 80,
-      "Management": 20,
-      "Warehouse": 50
-    }
-  }
-}
-```
-
-## 🔍 User Search & Reports
-
-### Search Users
-
-**Endpoint:** `GET /api/users/search`
-
-**Description:** Advanced user search with multiple filters.
+**Description:** Retrieves all users with pagination and filtering (requires admin authentication and users_roles:manage permission).
 
 **Headers:**
 ```bash
@@ -510,24 +83,22 @@ Authorization: Bearer your_jwt_token
 ```
 
 **Query Parameters:**
-- `q` (optional): Search query
-- `role` (optional): Filter by role
-- `status` (optional): Filter by status
-- `department` (optional): Filter by department
-- `lastLoginAfter` (optional): Filter by last login date
+- `page` (optional): Page number (default: 1)
+- `limit` (optional): Items per page (default: 10)
+- `role` (optional): Filter by role name
 
 **cURL Examples:**
 
 **Web Client:**
 ```bash
-curl -X GET "http://13.232.150.239/api/users/search?q=john&role=admin&status=active&lastLoginAfter=2024-01-01" \
+curl -X GET "http://localhost:3000/api/users?page=1&limit=10&role=wh_staff_1" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
 
 **Mobile Client:**
 ```bash
-curl -X GET "http://13.232.150.239/api/users/search?q=john&role=admin&status=active&lastLoginAfter=2024-01-01" \
+curl -X GET "http://localhost:3000/api/users?page=1&limit=10&role=wh_staff_1" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -H "source: mobile" \
@@ -542,24 +113,145 @@ curl -X GET "http://13.232.150.239/api/users/search?q=john&role=admin&status=act
     "users": [
       {
         "id": 1,
-        "email": "john.doe@ozi.com",
-        "firstName": "John",
-        "lastName": "Doe",
-        "role": "Admin",
-        "status": "active",
-        "lastLogin": "2024-01-15T10:30:00.000Z"
+        "email": "admin@ozi.com",
+        "roleId": 1,
+        "isActive": true,
+        "availabilityStatus": "available",
+        "createdAt": "2024-01-15T10:30:00.000Z",
+        "Role": {
+          "id": 1,
+          "name": "admin",
+          "description": "Full system access"
+        }
       }
     ],
-    "total": 1
+    "pagination": {
+      "page": 1,
+      "limit": 10,
+      "total": 1,
+      "totalPages": 1
+    }
   }
 }
 ```
 
-### Get Users by Department
+### Update User Status
 
-**Endpoint:** `GET /api/users/department/:department`
+**Endpoint:** `PUT /api/users/:userId/status`
 
-**Description:** Retrieves all users in a specific department.
+**Description:** Updates the availability status of a user (users can only update their own status).
+
+**Headers:**
+```bash
+Content-Type: application/json
+Authorization: Bearer your_jwt_token
+```
+
+**Request Body:**
+```json
+{
+  "availabilityStatus": "break"
+}
+```
+
+**cURL Examples:**
+
+**Web Client:**
+```bash
+curl -X PUT "http://localhost:3000/api/users/1/status" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -d '{
+    "availabilityStatus": "break"
+  }'
+```
+
+**Mobile Client:**
+```bash
+curl -X PUT "http://localhost:3000/api/users/1/status" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "source: mobile" \
+  -H "app-version: 1.2.0" \
+  -d '{
+    "availabilityStatus": "break"
+  }'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "availabilityStatus": "break"
+  }
+}
+```
+
+### Change User Role
+
+**Endpoint:** `PUT /api/users/:userId/role`
+
+**Description:** Changes the role of a user (requires admin authentication and users_roles:manage permission).
+
+**Headers:**
+```bash
+Content-Type: application/json
+Authorization: Bearer your_jwt_token
+```
+
+**Request Body:**
+```json
+{
+  "roleId": 3,
+  "roleName": "supervisor"
+}
+```
+
+**cURL Examples:**
+
+**Web Client:**
+```bash
+curl -X PUT "http://localhost:3000/api/users/2/role" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -d '{
+    "roleId": 3
+  }'
+```
+
+**Mobile Client:**
+```bash
+curl -X PUT "http://localhost:3000/api/users/2/role" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "source: mobile" \
+  -H "app-version: 1.2.0" \
+  -d '{
+    "roleId": 3
+  }'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 2,
+    "email": "user@ozi.com",
+    "roleId": 3,
+    "role": "supervisor",
+    "updatedAt": "2024-01-15T10:30:00.000Z"
+  }
+}
+```
+
+### Deactivate User
+
+**Endpoint:** `DELETE /api/users/:userId`
+
+**Description:** Deactivates a user account (requires admin authentication and users_roles:manage permission).
 
 **Headers:**
 ```bash
@@ -571,14 +263,14 @@ Authorization: Bearer your_jwt_token
 
 **Web Client:**
 ```bash
-curl -X GET "http://13.232.150.239/api/users/department/Operations" \
+curl -X DELETE "http://localhost:3000/api/users/3" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token"
 ```
 
 **Mobile Client:**
 ```bash
-curl -X GET "http://13.232.150.239/api/users/department/Operations" \
+curl -X DELETE "http://localhost:3000/api/users/3" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -H "source: mobile" \
@@ -590,18 +282,10 @@ curl -X GET "http://13.232.150.239/api/users/department/Operations" \
 {
   "success": true,
   "data": {
-    "department": "Operations",
-    "users": [
-      {
-        "id": 1,
-        "email": "john.doe@ozi.com",
-        "firstName": "John",
-        "lastName": "Doe",
-        "role": "Manager",
-        "status": "active"
-      }
-    ],
-    "total": 1
+    "id": 3,
+    "email": "user@ozi.com",
+    "isActive": false,
+    "message": "User deactivated successfully"
   }
 }
 ```
@@ -618,6 +302,11 @@ For mobile clients, the following headers are required:
 - If app version is below minimum, API returns 426 status code
 - Web clients don't require version checking
 
+### Device Management
+- Mobile apps should provide unique device identifiers
+- Platform detection (ios/android) for analytics
+- Secure token storage using platform-specific methods
+
 ## ⚠️ Error Responses
 
 ### Common Error Responses
@@ -627,7 +316,7 @@ For mobile clients, the following headers are required:
 {
   "success": false,
   "error": "Unauthorized",
-  "message": "Invalid access token",
+  "message": "Invalid token",
   "statusCode": 401
 }
 ```
@@ -636,8 +325,8 @@ For mobile clients, the following headers are required:
 ```json
 {
   "success": false,
-  "error": "Forbidden",
-  "message": "Insufficient permissions to access this resource",
+  "error": "Insufficient permissions",
+  "message": "Insufficient permissions",
   "statusCode": 403
 }
 ```
@@ -646,9 +335,39 @@ For mobile clients, the following headers are required:
 ```json
 {
   "success": false,
-  "error": "Not Found",
+  "error": "User not found",
   "message": "User not found",
   "statusCode": 404
+}
+```
+
+**Invalid Role:**
+```json
+{
+  "success": false,
+  "error": "Invalid role name",
+  "message": "Invalid role name",
+  "statusCode": 400
+}
+```
+
+**Cannot Deactivate Last Admin:**
+```json
+{
+  "success": false,
+  "error": "Cannot deactivate the last admin user",
+  "message": "Cannot deactivate the last admin user",
+  "statusCode": 403
+}
+```
+
+**Cannot Deactivate Self:**
+```json
+{
+  "success": false,
+  "error": "Cannot deactivate your own account",
+  "message": "Cannot deactivate your own account",
+  "statusCode": 403
 }
 ```
 
@@ -662,31 +381,53 @@ For mobile clients, the following headers are required:
 }
 ```
 
+**Missing App Version (Mobile Only):**
+```json
+{
+  "success": false,
+  "error": "Bad Request",
+  "message": "App version is required for mobile users",
+  "statusCode": 400
+}
+```
+
 ## 🔐 Security Features
 
-1. **Authentication Required**: All endpoints require valid JWT token
-2. **Permission-Based Access**: Role-based access control (RBAC)
-3. **Version Control**: Mobile app compatibility checking
-4. **Audit Logging**: Track all user management actions
-5. **Input Validation**: Comprehensive request validation
+1. **JWT Authentication**: All endpoints require valid JWT tokens
+2. **Role-Based Access Control**: Users must have specific permissions
+3. **Permission Validation**: `users_roles:manage` permission required for most operations
+4. **Self-Protection**: Users cannot deactivate their own accounts
+5. **Admin Protection**: Last admin user cannot be deactivated
+6. **Version Control**: Mobile app compatibility checking
+7. **Audit Logging**: Track all user management operations
 
-## 📋 User Management Flow
+## 📋 Operation Flow
 
-### Web Client Flow
-1. Admin authenticates with valid JWT token
-2. Admin performs user management operations
-3. System validates permissions and processes request
-4. Response is returned with operation result
+### User Creation Flow
+1. Admin provides user details (email, password, role)
+2. System validates input data
+3. System checks for existing users with same email
+4. System validates role exists
+5. Password is hashed and stored
+6. User account is created
+7. Success response with user details
 
-### Mobile Client Flow
-1. App sends request with version headers
-2. System validates app version compatibility
-3. Admin authenticates with valid JWT token
-4. Admin performs user management operations
-5. System validates permissions and processes request
-6. Response is returned with operation result
-7. Version checking on every request
+### User Role Change Flow
+1. Admin provides new role information
+2. System validates role exists
+3. System prevents changing to admin role through this endpoint
+4. System prevents changing last admin user
+5. User role is updated
+6. Success response with updated user details
+
+### User Deactivation Flow
+1. Admin requests user deactivation
+2. System validates user exists
+3. System prevents self-deactivation
+4. System prevents deactivating last admin
+5. User account is deactivated
+6. Success response with confirmation
 
 ---
 
-This document covers all user management endpoints with examples for both web and mobile clients. Mobile clients must include version headers for compatibility checking. All endpoints require admin authentication and appropriate permissions.
+This document covers all user management endpoints with examples for both web and mobile clients. Mobile clients must include version headers for compatibility checking. All endpoints are verified against the actual controller code and will work correctly with localhost:3000.
