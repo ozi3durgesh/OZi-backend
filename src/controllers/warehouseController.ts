@@ -51,7 +51,12 @@ export class WarehouseController {
         created_by: userId,
         updated_by: userId,
         current_utilization_percentage: 0.00,
-        integration_status: 'PENDING'
+        integration_status: 'PENDING',
+        status: 'ACTIVE',
+        country: warehouseData.country || 'India',
+        is_auto_assignment_enabled: warehouseData.is_auto_assignment_enabled ?? true,
+        max_orders_per_day: warehouseData.max_orders_per_day || 1000,
+        sla_hours: warehouseData.sla_hours || 24
       });
 
       // Fetch created warehouse with associations
@@ -432,7 +437,9 @@ export class WarehouseController {
       const zone = await WarehouseZone.create({
         ...zoneData,
         warehouse_id: parseInt(warehouseId),
-        current_utilization: 0
+        current_utilization: 0,
+        is_active: true,
+        temperature_zone: zoneData.temperature_zone || 'AMBIENT'
       });
 
       // Fetch created zone with warehouse info
@@ -669,7 +676,8 @@ export class WarehouseController {
       // Create assignment
       const assignment = await WarehouseStaffAssignment.create({
         ...staffData,
-        warehouse_id: parseInt(warehouseId)
+        warehouse_id: parseInt(warehouseId),
+        is_active: true
       });
 
       // Fetch created assignment with associations

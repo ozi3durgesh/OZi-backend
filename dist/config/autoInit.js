@@ -1,0 +1,223 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.createInitialAdmin = exports.autoInitializeRBAC = exports.isRBACInitialized = void 0;
+const database_1 = __importDefault(require("./database"));
+const index_js_1 = require("../models/index.js");
+const isRBACInitialized = async () => {
+    try {
+        const rolesCount = await database_1.default.query('SELECT COUNT(*) as count FROM roles', { type: 'SELECT' });
+        return rolesCount[0]?.count > 0;
+    }
+    catch (error) {
+        return false;
+    }
+};
+exports.isRBACInitialized = isRBACInitialized;
+const autoInitializeRBAC = async () => {
+    try {
+        console.log('🔄 Auto-initializing RBAC system...');
+        const permissions = [
+            { module: 'users_roles', action: 'manage', description: 'Manage users and roles' },
+            { module: 'sites', action: 'create_config', description: 'Create and configure sites' },
+            { module: 'sites', action: 'view', description: 'View all sites' },
+            { module: 'sites', action: 'view_own', description: 'View own site' },
+            { module: 'orders', action: 'view_all', description: 'View all orders' },
+            { module: 'orders', action: 'view_wh', description: 'View warehouse orders' },
+            { module: 'orders', action: 'view_store', description: 'View store orders' },
+            { module: 'orders', action: 'view_task', description: 'View task orders' },
+            { module: 'picking', action: 'view', description: 'View picking operations' },
+            { module: 'picking', action: 'assign_manage', description: 'Assign and manage picking' },
+            { module: 'picking', action: 'execute', description: 'Execute picking tasks' },
+            { module: 'picking', action: 'monitor', description: 'Monitor SLA and expiry alerts' },
+            { module: 'inbound', action: 'view', description: 'View inbound operations' },
+            { module: 'inbound', action: 'approve_variances', description: 'Approve variances' },
+            { module: 'inbound', action: 'execute', description: 'Execute inbound tasks' },
+            { module: 'putaway', action: 'view', description: 'View putaway operations' },
+            { module: 'putaway', action: 'manage', description: 'Manage putaway' },
+            { module: 'putaway', action: 'execute', description: 'Execute putaway tasks' },
+            { module: 'inventory', action: 'approve', description: 'Approve inventory adjustments' },
+            { module: 'inventory', action: 'raise', description: 'Raise inventory adjustments' },
+            { module: 'cycle_count', action: 'view', description: 'View cycle count' },
+            { module: 'cycle_count', action: 'schedule_approve', description: 'Schedule and approve cycle count' },
+            { module: 'cycle_count', action: 'execute', description: 'Execute cycle count' },
+            { module: 'replenishment', action: 'config', description: 'Configure replenishment' },
+            { module: 'replenishment', action: 'approve', description: 'Approve replenishment' },
+            { module: 'rtv', action: 'config_approve', description: 'Configure and approve RTV' },
+            { module: 'rtv', action: 'create_approve', description: 'Create and approve RTV' },
+            { module: 'rtv', action: 'execute', description: 'Execute RTV' },
+            { module: 'pos', action: 'view', description: 'View POS operations' },
+            { module: 'pos', action: 'execute', description: 'Execute POS operations' },
+            { module: 'store_wh_requests', action: 'view', description: 'View store-WH requests' },
+            { module: 'store_wh_requests', action: 'create_checkin', description: 'Create and check in requests' },
+            { module: 'exceptions', action: 'all_actions', description: 'All exception actions' },
+            { module: 'exceptions', action: 'resolve', description: 'Resolve exceptions' },
+            { module: 'exceptions', action: 'raise', description: 'Raise exceptions' },
+            { module: 'exceptions', action: 'raise_store', description: 'Raise store exceptions' },
+            { module: 'dashboards', action: 'view_all', description: 'View all dashboards' },
+            { module: 'dashboards', action: 'view_wh', description: 'View warehouse dashboards' },
+            { module: 'dashboards', action: 'view_task', description: 'View task dashboards' },
+            { module: 'dashboards', action: 'view_store', description: 'View store dashboards' },
+            { module: 'sla', action: 'configure', description: 'Configure SLA' },
+            { module: 'sla', action: 'view', description: 'View SLA' },
+            { module: 'store_ops', action: 'pos_checkout', description: 'POS checkout operations' },
+            { module: 'store_ops', action: 'invoice_create', description: 'Create invoices' },
+            { module: 'store_ops', action: 'store_status', description: 'Manage store status' },
+            { module: 'store_ops', action: 'surge_toggle', description: 'Toggle surge mode' },
+            { module: 'store_ops', action: 'stock_check', description: 'Check stock' },
+        ];
+        console.log('Creating permissions...');
+        await index_js_1.Permission.bulkCreate(permissions, { ignoreDuplicates: true });
+        console.log(`Created ${permissions.length} permissions`);
+        const roles = [
+            { name: 'admin', description: 'System Administrator - Full system access' },
+            { name: 'wh_manager', description: 'Warehouse Manager - Manage WH staff and operations' },
+            { name: 'wh_staff_1', description: 'WH Staff (Inbound/QC/Putaway/Audit) - Execute inbound tasks' },
+            { name: 'wh_staff_2', description: 'WH Staff (Picker/Packer) - Execute picking and packing' },
+            { name: 'store_ops', description: 'Store Operations - Manage store and POS operations' },
+        ];
+        console.log('Creating roles...');
+        await index_js_1.Role.bulkCreate(roles, { ignoreDuplicates: true });
+        console.log(`Created ${roles.length} roles`);
+        const adminRole = await index_js_1.Role.findOne({ where: { name: 'admin' } });
+        const whManagerRole = await index_js_1.Role.findOne({ where: { name: 'wh_manager' } });
+        const whStaff1Role = await index_js_1.Role.findOne({ where: { name: 'wh_staff_1' } });
+        const whStaff2Role = await index_js_1.Role.findOne({ where: { name: 'wh_staff_2' } });
+        const storeOpsRole = await index_js_1.Role.findOne({ where: { name: 'store_ops' } });
+        if (!adminRole || !whManagerRole || !whStaff1Role || !whStaff2Role || !storeOpsRole) {
+            throw new Error('Failed to find all roles');
+        }
+        const allPermissions = await index_js_1.Permission.findAll();
+        const permissionMap = new Map();
+        allPermissions.forEach(p => {
+            permissionMap.set(`${p.module}:${p.action}`, p.id);
+        });
+        console.log('Available permissions for mapping:');
+        allPermissions.forEach(p => {
+            console.log(`- ${p.module}:${p.action} (ID: ${p.id})`);
+        });
+        console.log('\nPermission map size:', permissionMap.size);
+        console.log('Assigning permissions to roles...');
+        const adminPermissions = allPermissions.map(p => `${p.module}:${p.action}`);
+        const whManagerPermissions = [
+            'users_roles:manage',
+            'sites:view',
+            'orders:view_wh',
+            'picking:assign_manage',
+            'inbound:approve_variances',
+            'putaway:manage',
+            'inventory:approve',
+            'cycle_count:schedule_approve',
+            'replenishment:approve',
+            'rtv:create_approve',
+            'store_wh_requests:view',
+            'exceptions:resolve',
+            'dashboards:view_wh',
+            'sla:view',
+        ];
+        const whStaff1Permissions = [
+            'orders:view_task',
+            'inbound:execute',
+            'putaway:execute',
+            'inventory:raise',
+            'cycle_count:execute',
+            'rtv:execute',
+            'exceptions:raise',
+            'dashboards:view_task',
+        ];
+        const whStaff2Permissions = [
+            'orders:view_task',
+            'picking:execute',
+            'exceptions:raise',
+            'dashboards:view_task',
+        ];
+        const storeOpsPermissions = [
+            'sites:view_own',
+            'orders:view_store',
+            'pos:execute',
+            'store_ops:pos_checkout',
+            'store_ops:invoice_create',
+            'store_ops:store_status',
+            'store_ops:surge_toggle',
+            'store_ops:stock_check',
+        ];
+        await index_js_1.RolePermission.destroy({ where: {} });
+        const adminRolePermissions = adminPermissions.map(key => ({
+            roleId: adminRole.id,
+            permissionId: permissionMap.get(key)
+        })).filter(p => p.permissionId);
+        const whManagerRolePermissions = whManagerPermissions.map(key => ({
+            roleId: whManagerRole.id,
+            permissionId: permissionMap.get(key)
+        })).filter(p => p.permissionId);
+        const whStaff1RolePermissions = whStaff1Permissions.map(key => ({
+            roleId: whStaff1Role.id,
+            permissionId: permissionMap.get(key)
+        })).filter(p => p.permissionId);
+        const whStaff2RolePermissions = whStaff2Permissions.map(key => ({
+            roleId: whStaff2Role.id,
+            permissionId: permissionMap.get(key)
+        })).filter(p => p.permissionId);
+        const storeOpsRolePermissions = storeOpsPermissions.map(key => ({
+            roleId: storeOpsRole.id,
+            permissionId: permissionMap.get(key)
+        })).filter(p => p.permissionId);
+        const allRolePermissions = [
+            ...adminRolePermissions,
+            ...whManagerRolePermissions,
+            ...whStaff1RolePermissions,
+            ...whStaff2RolePermissions,
+            ...storeOpsRolePermissions
+        ];
+        await index_js_1.RolePermission.bulkCreate(allRolePermissions, { ignoreDuplicates: true });
+        console.log('Role permissions assigned:');
+        console.log(`- Admin: ${adminPermissions.length} permissions`);
+        console.log(`- WH Manager: ${whManagerPermissions.length} permissions`);
+        console.log(`- WH Staff 1: ${whStaff1Permissions.length} permissions`);
+        console.log(`- WH Staff 2: ${whStaff2Permissions.length} permissions`);
+        console.log(`- Store Ops: ${storeOpsPermissions.length} permissions`);
+        console.log('✅ RBAC system auto-initialized successfully');
+    }
+    catch (error) {
+        console.error('❌ Failed to auto-initialize RBAC:', error);
+        throw error;
+    }
+};
+exports.autoInitializeRBAC = autoInitializeRBAC;
+const createInitialAdmin = async () => {
+    try {
+        const adminEmail = process.env.INITIAL_ADMIN_EMAIL;
+        const adminPassword = process.env.INITIAL_ADMIN_PASSWORD;
+        if (!adminEmail || !adminPassword) {
+            console.log('ℹ️  No initial admin credentials provided in environment variables');
+            return;
+        }
+        console.log('👤 Creating initial admin user...');
+        const existingAdmin = await index_js_1.User.findOne({ where: { email: adminEmail } });
+        if (existingAdmin) {
+            console.log('ℹ️  Initial admin user already exists');
+            return;
+        }
+        const adminRole = await index_js_1.Role.findOne({ where: { name: 'admin' } });
+        if (!adminRole) {
+            console.log('⚠️  Admin role not found, skipping initial admin creation');
+            return;
+        }
+        const bcrypt = await import('bcryptjs');
+        const hashedPassword = await bcrypt.default.hash(adminPassword, 10);
+        await index_js_1.User.create({
+            email: adminEmail,
+            password: hashedPassword,
+            roleId: adminRole.id,
+            isActive: true,
+            availabilityStatus: 'available'
+        });
+        console.log('✅ Initial admin user created successfully');
+    }
+    catch (error) {
+        console.error('❌ Failed to create initial admin user:', error);
+    }
+};
+exports.createInitialAdmin = createInitialAdmin;

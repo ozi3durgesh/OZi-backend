@@ -1,0 +1,74 @@
+import { Model } from 'sequelize';
+export interface WarehouseAttributes {
+    id: number;
+    warehouse_code: string;
+    name: string;
+    type: 'MAIN' | 'SATELLITE' | 'STOREFRONT' | 'DISTRIBUTION';
+    status: 'ACTIVE' | 'INACTIVE' | 'UNDER_MAINTENANCE';
+    address: string;
+    city: string;
+    state: string;
+    country: string;
+    pincode: string;
+    latitude?: number;
+    longitude?: number;
+    contact_person?: string;
+    contact_email?: string;
+    contact_phone?: string;
+    emergency_contact?: string;
+    operational_hours?: any;
+    capacity_sqft?: number;
+    storage_capacity_units?: number;
+    current_utilization_percentage: number;
+    services_offered?: any;
+    supported_fulfillment_types?: any;
+    is_auto_assignment_enabled: boolean;
+    max_orders_per_day: number;
+    sla_hours: number;
+    lms_warehouse_id?: string;
+    integration_status: 'PENDING' | 'COMPLETED' | 'FAILED';
+    created_by: number;
+    updated_by?: number;
+    created_at: Date;
+    updated_at: Date;
+    Zones?: any[];
+    StaffAssignments?: any[];
+    CreatedBy?: any;
+    UpdatedBy?: any;
+}
+export interface WarehouseCreationAttributes extends Omit<WarehouseAttributes, 'id' | 'created_at' | 'updated_at'> {
+}
+declare class Warehouse extends Model<WarehouseAttributes, WarehouseCreationAttributes> implements WarehouseAttributes {
+    id: number;
+    warehouse_code: string;
+    name: string;
+    type: 'MAIN' | 'SATELLITE' | 'STOREFRONT' | 'DISTRIBUTION';
+    status: 'ACTIVE' | 'INACTIVE' | 'UNDER_MAINTENANCE';
+    address: string;
+    city: string;
+    state: string;
+    country: string;
+    pincode: string;
+    latitude?: number;
+    longitude?: number;
+    contact_person?: string;
+    contact_email?: string;
+    contact_phone?: string;
+    emergency_contact?: string;
+    operational_hours?: any;
+    capacity_sqft?: number;
+    storage_capacity_units?: number;
+    current_utilization_percentage: number;
+    services_offered?: any;
+    supported_fulfillment_types?: any;
+    is_auto_assignment_enabled: boolean;
+    max_orders_per_day: number;
+    sla_hours: number;
+    lms_warehouse_id?: string;
+    integration_status: 'PENDING' | 'COMPLETED' | 'FAILED';
+    created_by: number;
+    updated_by?: number;
+    created_at: Date;
+    updated_at: Date;
+}
+export default Warehouse;

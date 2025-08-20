@@ -1,4 +1,4 @@
-import { sequelize } from '../config/database';
+import sequelize from '../config/database';
 import { Warehouse, WarehouseZone, WarehouseStaffAssignment, User } from '../models';
 
 async function testWarehouseModule() {
@@ -79,8 +79,8 @@ async function testWarehouseModule() {
 
     if (warehouseWithAssociations) {
       console.log('✅ Warehouse associations working:');
-      console.log(`   - Zones: ${warehouseWithAssociations.Zones?.length || 0}`);
-      console.log(`   - Staff: ${warehouseWithAssociations.StaffAssignments?.length || 0}`);
+      console.log(`   - Zones: ${(warehouseWithAssociations as any).Zones?.length || 0}`);
+      console.log(`   - Staff: ${(warehouseWithAssociations as any).StaffAssignments?.length || 0}`);
     }
 
     // Test 6: Test queries

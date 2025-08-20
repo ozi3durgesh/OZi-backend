@@ -1,4 +1,4 @@
-import { sequelize } from '../config/database';
+import sequelize from '../config/database';
 import { Warehouse, WarehouseZone, WarehouseStaffAssignment } from '../models';
 
 async function setupWarehouseTables() {

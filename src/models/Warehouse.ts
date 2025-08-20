@@ -47,6 +47,12 @@ export interface WarehouseAttributes {
   updated_by?: number;
   created_at: Date;
   updated_at: Date;
+  
+  // Associations
+  Zones?: any[];
+  StaffAssignments?: any[];
+  CreatedBy?: any;
+  UpdatedBy?: any;
 }
 
 export interface WarehouseCreationAttributes extends Omit<WarehouseAttributes, 'id' | 'created_at' | 'updated_at'> {}

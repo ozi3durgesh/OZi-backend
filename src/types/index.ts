@@ -660,7 +660,7 @@ export interface WarehouseFilters {
   city?: string;
   state?: string;
   country?: string;
-  has_capacity?: boolean;
+  has_capacity?: string | boolean;
   page?: number;
   limit?: number;
   search?: string;
