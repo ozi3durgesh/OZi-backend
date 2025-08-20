@@ -9,6 +9,9 @@ import {
   AssignStaffRequest,
   WarehouseFilters,
   WarehouseListResponse,
+  ZoneListResponse,
+  StaffListResponse,
+  WarehouseDetailResponse,
   ApiResponse
 } from '../types';
 import { AuthRequest } from '../types';
@@ -166,26 +169,17 @@ export class WarehouseController {
   static async getWarehouseById(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
+      const { 
+        zonesPage = 1, 
+        zonesLimit = 10, 
+        staffPage = 1, 
+        staffLimit = 10 
+      } = req.query;
 
       const warehouse = await Warehouse.findByPk(parseInt(id), {
         include: [
           { model: User, as: 'CreatedBy', attributes: ['id', 'email'] },
-          { model: User, as: 'UpdatedBy', attributes: ['id', 'email'] },
-          { 
-            model: WarehouseZone, 
-            as: 'Zones',
-            where: { is_active: true },
-            required: false
-          },
-          {
-            model: WarehouseStaffAssignment,
-            as: 'StaffAssignments',
-            where: { is_active: true },
-            required: false,
-            include: [
-              { model: User, as: 'User', attributes: ['id', 'email'] }
-            ]
-          }
+          { model: User, as: 'UpdatedBy', attributes: ['id', 'email'] }
         ]
       });
 
@@ -199,10 +193,59 @@ export class WarehouseController {
         return;
       }
 
+      // Get zones with pagination
+      const zonesOffset = (parseInt(zonesPage.toString()) - 1) * parseInt(zonesLimit.toString());
+      const { count: zonesCount, rows: zones } = await WarehouseZone.findAndCountAll({
+        where: { 
+          warehouse_id: parseInt(id),
+          is_active: true 
+        },
+        limit: parseInt(zonesLimit.toString()),
+        offset: zonesOffset,
+        order: [['zone_code', 'ASC']]
+      });
+
+      // Get staff assignments with pagination
+      const staffOffset = (parseInt(staffPage.toString()) - 1) * parseInt(staffLimit.toString());
+      const { count: staffCount, rows: staffAssignments } = await WarehouseStaffAssignment.findAndCountAll({
+        where: { 
+          warehouse_id: parseInt(id),
+          is_active: true 
+        },
+        include: [
+          { model: User, as: 'User', attributes: ['id', 'email'] }
+        ],
+        limit: parseInt(staffLimit.toString()),
+        offset: staffOffset,
+        order: [['role', 'ASC'], ['assigned_date', 'DESC']]
+      });
+
+      const response: WarehouseDetailResponse = {
+        warehouse: warehouse.toJSON(),
+        zones: {
+          data: zones,
+          pagination: {
+            page: parseInt(zonesPage.toString()),
+            limit: parseInt(zonesLimit.toString()),
+            total: zonesCount,
+            totalPages: Math.ceil(zonesCount / parseInt(zonesLimit.toString()))
+          }
+        },
+        staff: {
+          data: staffAssignments,
+          pagination: {
+            page: parseInt(staffPage.toString()),
+            limit: parseInt(staffLimit.toString()),
+            total: staffCount,
+            totalPages: Math.ceil(staffCount / parseInt(staffLimit.toString()))
+          }
+        }
+      };
+
       res.status(200).json({
         statusCode: 200,
         success: true,
-        data: warehouse,
+        data: response,
         error: null
       });
     } catch (error) {
@@ -470,6 +513,7 @@ export class WarehouseController {
   static async getWarehouseZones(req: Request, res: Response): Promise<void> {
     try {
       const { warehouseId } = req.params;
+      const { page = 1, limit = 10 } = req.query;
 
       // Check if warehouse exists
       const warehouse = await Warehouse.findByPk(parseInt(warehouseId));
@@ -484,18 +528,33 @@ export class WarehouseController {
         return;
       }
 
-      const zones = await WarehouseZone.findAll({
+      const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
+      const { count, rows } = await WarehouseZone.findAndCountAll({
         where: { warehouse_id: parseInt(warehouseId) },
         include: [
           { model: Warehouse, as: 'Warehouse', attributes: ['id', 'name', 'warehouse_code'] }
         ],
+        limit: parseInt(limit.toString()),
+        offset,
         order: [['zone_code', 'ASC']]
       });
+
+      const totalPages = Math.ceil(count / parseInt(limit.toString()));
+
+      const response: ZoneListResponse = {
+        zones: rows,
+        pagination: {
+          page: parseInt(page.toString()),
+          limit: parseInt(limit.toString()),
+          total: count,
+          totalPages
+        }
+      };
 
       res.status(200).json({
         statusCode: 200,
         success: true,
-        data: zones,
+        data: response,
         error: null
       });
     } catch (error) {
@@ -709,6 +768,7 @@ export class WarehouseController {
   static async getWarehouseStaff(req: Request, res: Response): Promise<void> {
     try {
       const { warehouseId } = req.params;
+      const { page = 1, limit = 10 } = req.query;
 
       // Check if warehouse exists
       const warehouse = await Warehouse.findByPk(parseInt(warehouseId));
@@ -723,7 +783,8 @@ export class WarehouseController {
         return;
       }
 
-      const staffAssignments = await WarehouseStaffAssignment.findAll({
+      const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
+      const { count, rows } = await WarehouseStaffAssignment.findAndCountAll({
         where: { 
           warehouse_id: parseInt(warehouseId),
           is_active: true
@@ -732,13 +793,27 @@ export class WarehouseController {
           { model: Warehouse, as: 'Warehouse', attributes: ['id', 'name', 'warehouse_code'] },
           { model: User, as: 'User', attributes: ['id', 'email'] }
         ],
+        limit: parseInt(limit.toString()),
+        offset,
         order: [['role', 'ASC'], ['assigned_date', 'DESC']]
       });
+
+      const totalPages = Math.ceil(count / parseInt(limit.toString()));
+
+      const response: StaffListResponse = {
+        staff: rows,
+        pagination: {
+          page: parseInt(page.toString()),
+          limit: parseInt(limit.toString()),
+          total: count,
+          totalPages
+        }
+      };
 
       res.status(200).json({
         statusCode: 200,
         success: true,
-        data: staffAssignments,
+        data: response,
         error: null
       });
     } catch (error) {

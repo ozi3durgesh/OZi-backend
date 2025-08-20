@@ -129,25 +129,11 @@ class WarehouseController {
     static async getWarehouseById(req, res) {
         try {
             const { id } = req.params;
+            const { zonesPage = 1, zonesLimit = 10, staffPage = 1, staffLimit = 10 } = req.query;
             const warehouse = await models_1.Warehouse.findByPk(parseInt(id), {
                 include: [
                     { model: models_1.User, as: 'CreatedBy', attributes: ['id', 'email'] },
-                    { model: models_1.User, as: 'UpdatedBy', attributes: ['id', 'email'] },
-                    {
-                        model: models_1.WarehouseZone,
-                        as: 'Zones',
-                        where: { is_active: true },
-                        required: false
-                    },
-                    {
-                        model: models_1.WarehouseStaffAssignment,
-                        as: 'StaffAssignments',
-                        where: { is_active: true },
-                        required: false,
-                        include: [
-                            { model: models_1.User, as: 'User', attributes: ['id', 'email'] }
-                        ]
-                    }
+                    { model: models_1.User, as: 'UpdatedBy', attributes: ['id', 'email'] }
                 ]
             });
             if (!warehouse) {
@@ -159,10 +145,54 @@ class WarehouseController {
                 });
                 return;
             }
+            const zonesOffset = (parseInt(zonesPage.toString()) - 1) * parseInt(zonesLimit.toString());
+            const { count: zonesCount, rows: zones } = await models_1.WarehouseZone.findAndCountAll({
+                where: {
+                    warehouse_id: parseInt(id),
+                    is_active: true
+                },
+                limit: parseInt(zonesLimit.toString()),
+                offset: zonesOffset,
+                order: [['zone_code', 'ASC']]
+            });
+            const staffOffset = (parseInt(staffPage.toString()) - 1) * parseInt(staffLimit.toString());
+            const { count: staffCount, rows: staffAssignments } = await models_1.WarehouseStaffAssignment.findAndCountAll({
+                where: {
+                    warehouse_id: parseInt(id),
+                    is_active: true
+                },
+                include: [
+                    { model: models_1.User, as: 'User', attributes: ['id', 'email'] }
+                ],
+                limit: parseInt(staffLimit.toString()),
+                offset: staffOffset,
+                order: [['role', 'ASC'], ['assigned_date', 'DESC']]
+            });
+            const response = {
+                warehouse: warehouse.toJSON(),
+                zones: {
+                    data: zones,
+                    pagination: {
+                        page: parseInt(zonesPage.toString()),
+                        limit: parseInt(zonesLimit.toString()),
+                        total: zonesCount,
+                        totalPages: Math.ceil(zonesCount / parseInt(zonesLimit.toString()))
+                    }
+                },
+                staff: {
+                    data: staffAssignments,
+                    pagination: {
+                        page: parseInt(staffPage.toString()),
+                        limit: parseInt(staffLimit.toString()),
+                        total: staffCount,
+                        totalPages: Math.ceil(staffCount / parseInt(staffLimit.toString()))
+                    }
+                }
+            };
             res.status(200).json({
                 statusCode: 200,
                 success: true,
-                data: warehouse,
+                data: response,
                 error: null
             });
         }
@@ -391,6 +421,7 @@ class WarehouseController {
     static async getWarehouseZones(req, res) {
         try {
             const { warehouseId } = req.params;
+            const { page = 1, limit = 10 } = req.query;
             const warehouse = await models_1.Warehouse.findByPk(parseInt(warehouseId));
             if (!warehouse) {
                 res.status(404).json({
@@ -401,17 +432,30 @@ class WarehouseController {
                 });
                 return;
             }
-            const zones = await models_1.WarehouseZone.findAll({
+            const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
+            const { count, rows } = await models_1.WarehouseZone.findAndCountAll({
                 where: { warehouse_id: parseInt(warehouseId) },
                 include: [
                     { model: models_1.Warehouse, as: 'Warehouse', attributes: ['id', 'name', 'warehouse_code'] }
                 ],
+                limit: parseInt(limit.toString()),
+                offset,
                 order: [['zone_code', 'ASC']]
             });
+            const totalPages = Math.ceil(count / parseInt(limit.toString()));
+            const response = {
+                zones: rows,
+                pagination: {
+                    page: parseInt(page.toString()),
+                    limit: parseInt(limit.toString()),
+                    total: count,
+                    totalPages
+                }
+            };
             res.status(200).json({
                 statusCode: 200,
                 success: true,
-                data: zones,
+                data: response,
                 error: null
             });
         }
@@ -590,6 +634,7 @@ class WarehouseController {
     static async getWarehouseStaff(req, res) {
         try {
             const { warehouseId } = req.params;
+            const { page = 1, limit = 10 } = req.query;
             const warehouse = await models_1.Warehouse.findByPk(parseInt(warehouseId));
             if (!warehouse) {
                 res.status(404).json({
@@ -600,7 +645,8 @@ class WarehouseController {
                 });
                 return;
             }
-            const staffAssignments = await models_1.WarehouseStaffAssignment.findAll({
+            const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
+            const { count, rows } = await models_1.WarehouseStaffAssignment.findAndCountAll({
                 where: {
                     warehouse_id: parseInt(warehouseId),
                     is_active: true
@@ -609,12 +655,24 @@ class WarehouseController {
                     { model: models_1.Warehouse, as: 'Warehouse', attributes: ['id', 'name', 'warehouse_code'] },
                     { model: models_1.User, as: 'User', attributes: ['id', 'email'] }
                 ],
+                limit: parseInt(limit.toString()),
+                offset,
                 order: [['role', 'ASC'], ['assigned_date', 'DESC']]
             });
+            const totalPages = Math.ceil(count / parseInt(limit.toString()));
+            const response = {
+                staff: rows,
+                pagination: {
+                    page: parseInt(page.toString()),
+                    limit: parseInt(limit.toString()),
+                    total: count,
+                    totalPages
+                }
+            };
             res.status(200).json({
                 statusCode: 200,
                 success: true,
-                data: staffAssignments,
+                data: response,
                 error: null
             });
         }

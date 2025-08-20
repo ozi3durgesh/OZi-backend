@@ -616,6 +616,45 @@ export interface WarehouseListResponse {
         totalPages: number;
     };
 }
+export interface ZoneListResponse {
+    zones: any[];
+    pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+    };
+}
+export interface StaffListResponse {
+    staff: any[];
+    pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+    };
+}
+export interface WarehouseDetailResponse {
+    warehouse: any;
+    zones: {
+        data: any[];
+        pagination: {
+            page: number;
+            limit: number;
+            total: number;
+            totalPages: number;
+        };
+    };
+    staff: {
+        data: any[];
+        pagination: {
+            page: number;
+            limit: number;
+            total: number;
+            totalPages: number;
+        };
+    };
+}
 export interface AuthRequest extends Request {
     user?: {
         id: number;
