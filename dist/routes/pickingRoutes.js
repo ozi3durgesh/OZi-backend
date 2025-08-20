@@ -1,0 +1,22 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = __importDefault(require("express"));
+const pickingController_1 = require("../controllers/pickingController");
+const auth_1 = require("../middleware/auth");
+const versionCheck_1 = require("../middleware/versionCheck");
+const router = express_1.default.Router();
+router.use(versionCheck_1.versionCheck);
+router.post('/waves/generate', auth_1.authenticate, (0, auth_1.hasPermission)('picking:assign_manage'), pickingController_1.PickingController.generateWaves);
+router.get('/waves/assign', auth_1.authenticate, (0, auth_1.hasPermission)('picking:assign_manage'), pickingController_1.PickingController.assignWaves);
+router.get('/waves/available', auth_1.authenticate, (0, auth_1.hasPermission)('picking:view'), pickingController_1.PickingController.getAvailableWaves);
+router.post('/waves/:waveId/start', auth_1.authenticate, (0, auth_1.hasPermission)('picking:execute'), auth_1.checkAvailability, pickingController_1.PickingController.startPicking);
+router.get('/waves/:waveId/items', auth_1.authenticate, (0, auth_1.hasPermission)('picking:view'), pickingController_1.PickingController.getPicklistItems);
+router.post('/waves/:waveId/scan', auth_1.authenticate, (0, auth_1.hasPermission)('picking:execute'), auth_1.checkAvailability, pickingController_1.PickingController.scanItem);
+router.post('/waves/:waveId/partial', auth_1.authenticate, (0, auth_1.hasPermission)('picking:execute'), auth_1.checkAvailability, pickingController_1.PickingController.reportPartialPick);
+router.post('/waves/:waveId/complete', auth_1.authenticate, (0, auth_1.hasPermission)('picking:execute'), auth_1.checkAvailability, pickingController_1.PickingController.completePicking);
+router.get('/sla-status', auth_1.authenticate, (0, auth_1.hasPermission)('picking:view'), pickingController_1.PickingController.getSlaStatus);
+router.get('/expiry-alerts', auth_1.authenticate, (0, auth_1.hasPermission)('picking:view'), pickingController_1.PickingController.getExpiryAlerts);
+exports.default = router;
