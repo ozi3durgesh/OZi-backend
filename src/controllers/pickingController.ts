@@ -122,7 +122,8 @@ export class PickingController {
    */
   static async assignWaves(req: AuthRequest, res: Response): Promise<Response> {
     try {
-      const { maxWavesPerPicker = 3 } = req.query;
+      const { maxWavesPerPicker = 3, page = 1, limit = 10 } = req.query;
+      const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
 
       // Find available pickers (users with picking permissions)
       const availablePickers = await User.findAll({
@@ -149,21 +150,31 @@ export class PickingController {
         return ResponseHandler.error(res, 'No available pickers found', 404);
       }
 
-      // Find unassigned waves
-      const unassignedWaves = await PickingWave.findAll({
+      // Find unassigned waves with pagination
+      const unassignedWaves = await PickingWave.findAndCountAll({
         where: { status: 'GENERATED' },
-        order: [['priority', 'DESC'], ['slaDeadline', 'ASC']]
+        order: [['priority', 'DESC'], ['slaDeadline', 'ASC']],
+        limit: parseInt(limit.toString()),
+        offset
       });
 
-      if (unassignedWaves.length === 0) {
-        return ResponseHandler.success(res, { message: 'No unassigned waves found' });
+      if (unassignedWaves.count === 0) {
+        return ResponseHandler.success(res, { 
+          message: 'No unassigned waves found',
+          pagination: {
+            page: parseInt(page.toString()),
+            limit: parseInt(limit.toString()),
+            total: 0,
+            totalPages: 0
+          }
+        });
       }
 
-      // Assign waves to pickers
+      // Assign waves to pickers (only from current page)
       const assignments: any[] = [];
       let pickerIndex = 0;
 
-      for (const wave of unassignedWaves) {
+      for (const wave of unassignedWaves.rows) {
         // Check if picker can handle more waves
         const picker = pickers[pickerIndex % pickers.length];
         const pickerWaves = await PickingWave.count({
@@ -191,7 +202,13 @@ export class PickingController {
 
       return ResponseHandler.success(res, {
         message: `Assigned ${assignments.length} waves to pickers`,
-        assignments
+        assignments,
+        pagination: {
+          page: parseInt(page.toString()),
+          limit: parseInt(limit.toString()),
+          total: unassignedWaves.count,
+          totalPages: Math.ceil(unassignedWaves.count / parseInt(limit.toString()))
+        }
       });
 
     } catch (error) {
@@ -243,7 +260,9 @@ export class PickingController {
   static async startPicking(req: AuthRequest, res: Response): Promise<Response> {
     try {
       const { waveId } = req.params;
+      const { page = 1, limit = 20 } = req.query;
       const pickerId = req.user!.id;
+      const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
 
       const wave = await PickingWave.findByPk(waveId);
 
@@ -265,10 +284,12 @@ export class PickingController {
         startedAt: new Date()
       });
 
-      // Get picklist items
-      const picklistItems = await PicklistItem.findAll({
+      // Get picklist items with pagination
+      const picklistItems = await PicklistItem.findAndCountAll({
         where: { waveId },
-        order: [['scanSequence', 'ASC']]
+        order: [['scanSequence', 'ASC']],
+        limit: parseInt(limit.toString()),
+        offset
       });
 
       return ResponseHandler.success(res, {
@@ -280,7 +301,7 @@ export class PickingController {
           totalItems: wave.totalItems,
           estimatedDuration: wave.estimatedDuration
         },
-        picklistItems: picklistItems.map(item => ({
+        picklistItems: picklistItems.rows.map(item => ({
           id: item.id,
           sku: item.sku,
           productName: item.productName,
@@ -289,7 +310,13 @@ export class PickingController {
           scanSequence: item.scanSequence,
           fefoBatch: item.fefoBatch,
           expiryDate: item.expiryDate
-        }))
+        })),
+        pagination: {
+          page: parseInt(page.toString()),
+          limit: parseInt(limit.toString()),
+          total: picklistItems.count,
+          totalPages: Math.ceil(picklistItems.count / parseInt(limit.toString()))
+        }
       });
 
     } catch (error) {
@@ -551,26 +578,29 @@ export class PickingController {
    */
   static async getSlaStatus(req: AuthRequest, res: Response): Promise<Response> {
     try {
-      const { waveId } = req.query;
+      const { waveId, page = 1, limit = 10 } = req.query;
+      const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
 
       const whereClause: any = {};
       if (waveId) whereClause.id = parseInt(waveId.toString());
 
-      const waves = await PickingWave.findAll({
+      const waves = await PickingWave.findAndCountAll({
         where: whereClause,
-        order: [['slaDeadline', 'ASC']]
+        order: [['slaDeadline', 'ASC']],
+        limit: parseInt(limit.toString()),
+        offset
       });
 
       const now = new Date();
       const slaMetrics = {
-        total: waves.length,
+        total: waves.count,
         onTime: 0,
         atRisk: 0,
         breached: 0,
         waves: [] as any[]
       };
 
-      for (const wave of waves) {
+      for (const wave of waves.rows) {
         const timeToDeadline = wave.slaDeadline.getTime() - now.getTime();
         const hoursToDeadline = timeToDeadline / (1000 * 60 * 60);
 
@@ -603,6 +633,12 @@ export class PickingController {
           onTimePercentage: Math.round((slaMetrics.onTime / slaMetrics.total) * 100),
           atRiskPercentage: Math.round((slaMetrics.atRisk / slaMetrics.total) * 100),
           breachedPercentage: Math.round((slaMetrics.breached / slaMetrics.total) * 100)
+        },
+        pagination: {
+          page: parseInt(page.toString()),
+          limit: parseInt(limit.toString()),
+          total: waves.count,
+          totalPages: Math.ceil(waves.count / parseInt(limit.toString()))
         }
       });
 
@@ -617,20 +653,23 @@ export class PickingController {
    */
   static async getExpiryAlerts(req: AuthRequest, res: Response): Promise<Response> {
     try {
-      const { daysThreshold = 7 } = req.query;
+      const { daysThreshold = 7, page = 1, limit = 10 } = req.query;
+      const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
       const thresholdDate = new Date(Date.now() + parseInt(daysThreshold.toString()) * 24 * 60 * 60 * 1000);
 
-      const expiringItems = await PicklistItem.findAll({
+      const expiringItems = await PicklistItem.findAndCountAll({
         where: {
           expiryDate: {
             [require('sequelize').Op.lte]: thresholdDate
           },
           status: ['PENDING', 'PICKING']
         },
-        order: [['expiryDate', 'ASC']]
+        order: [['expiryDate', 'ASC']],
+        limit: parseInt(limit.toString()),
+        offset
       });
 
-      const alerts = expiringItems.map(item => ({
+      const alerts = expiringItems.rows.map(item => ({
         id: item.id,
         sku: item.sku,
         productName: item.productName,
@@ -645,15 +684,92 @@ export class PickingController {
       }));
 
       return ResponseHandler.success(res, {
-        totalAlerts: alerts.length,
+        totalAlerts: expiringItems.count,
         alerts: alerts.sort((a, b) => {
           const urgencyOrder = { 'EXPIRED': 0, 'CRITICAL': 1, 'HIGH': 2, 'MEDIUM': 3 };
           return urgencyOrder[a.urgency as keyof typeof urgencyOrder] - urgencyOrder[b.urgency as keyof typeof urgencyOrder];
-        })
+        }),
+        pagination: {
+          page: parseInt(page.toString()),
+          limit: parseInt(limit.toString()),
+          total: expiringItems.count,
+          totalPages: Math.ceil(expiringItems.count / parseInt(limit.toString()))
+        }
       });
 
     } catch (error) {
       console.error('Get expiry alerts error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+  /**
+   * Get picklist items for a wave with pagination
+   */
+  static async getPicklistItems(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { waveId } = req.params;
+      const { page = 1, limit = 20, status } = req.query;
+      const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
+
+      // Verify wave exists and user has access
+      const wave = await PickingWave.findByPk(waveId);
+      if (!wave) {
+        return ResponseHandler.error(res, 'Wave not found', 404);
+      }
+
+      // Check if user has permission to view this wave
+      const userPermissions = req.user!.permissions || [];
+      const canView = userPermissions.includes('picking:view') || 
+                     userPermissions.includes('picking:assign_manage') ||
+                     (userPermissions.includes('picking:execute') && wave.pickerId === req.user!.id);
+
+      if (!canView) {
+        return ResponseHandler.error(res, 'Insufficient permissions to view this wave', 403);
+      }
+
+      // Build where clause
+      const whereClause: any = { waveId: parseInt(waveId) };
+      if (status) whereClause.status = status;
+
+      // Get picklist items with pagination
+      const picklistItems = await PicklistItem.findAndCountAll({
+        where: whereClause,
+        order: [['scanSequence', 'ASC']],
+        limit: parseInt(limit.toString()),
+        offset
+      });
+
+      return ResponseHandler.success(res, {
+        wave: {
+          id: wave.id,
+          waveNumber: wave.waveNumber,
+          status: wave.status,
+          totalItems: wave.totalItems
+        },
+        items: picklistItems.rows.map(item => ({
+          id: item.id,
+          sku: item.sku,
+          productName: item.productName,
+          binLocation: item.binLocation,
+          quantity: item.quantity,
+          status: item.status,
+          scanSequence: item.scanSequence,
+          fefoBatch: item.fefoBatch,
+          expiryDate: item.expiryDate,
+          pickedQuantity: item.pickedQuantity,
+          partialReason: item.partialReason
+        })),
+        pagination: {
+          page: parseInt(page.toString()),
+          limit: parseInt(limit.toString()),
+          total: picklistItems.count,
+          totalPages: Math.ceil(picklistItems.count / parseInt(limit.toString()))
+        }
+      });
+
+    } catch (error) {
+      console.error('Get picklist items error:', error);
       return ResponseHandler.error(res, 'Internal server error', 500);
     }
   }

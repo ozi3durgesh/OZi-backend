@@ -1,568 +1,637 @@
-# Order Management
+# Place Order
 
-This document covers all order management endpoints for the OZi Backend system.
+This module handles order creation, management, and tracking. Users need `orders:view_all` permission to access these endpoints.
 
-**Base URL:** `http://localhost:3000`
+## Place Order
 
-## 📦 Order Operations
-
-### Place Order
+### Create New Order
+Create a new order in the system.
 
 **Endpoint:** `POST /api/orders/place`
 
-**Description:** Creates a new order with cart items and optional coupon.
-
 **Headers:**
 ```bash
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 Content-Type: application/json
-Authorization: Bearer your_jwt_token
 ```
 
 **Request Body:**
 ```json
 {
-  "cart": [
+  "customerInfo": {
+    "name": "John Doe",
+    "email": "john.doe@example.com",
+    "phone": "+1234567890",
+    "address": {
+      "street": "123 Main St",
+      "city": "New York",
+      "state": "NY",
+      "zipCode": "10001",
+      "country": "USA"
+    }
+  },
+  "items": [
     {
-      "sku": 12345,
-      "amount": 29.99
+      "sku": "PROD-001",
+      "quantity": 2,
+      "unitPrice": 29.99,
+      "description": "Product Description"
     },
     {
-      "sku": 67890,
-      "amount": 15.50
+      "sku": "PROD-002",
+      "quantity": 1,
+      "unitPrice": 49.99,
+      "description": "Another Product"
     }
   ],
-  "coupon_code": "SAVE20",
-  "order_amount": 45.49,
-  "order_type": "delivery",
-  "payment_method": "cash_on_delivery",
-  "store_id": 1,
-  "distance": 5.2,
-  "discount_amount": 0,
-  "tax_amount": 2.27,
-  "address": "123 Main St, City, State 12345",
-  "latitude": 40.7128,
-  "longitude": -74.0060,
-  "contact_person_name": "John Doe",
-  "contact_person_number": "+1234567890",
-  "address_type": "home",
-  "is_scheduled": 0,
-  "scheduled_timestamp": 1642233600,
-  "promised_delv_tat": "24"
+  "shippingMethod": "standard",
+  "priority": "normal",
+  "specialInstructions": "Handle with care"
 }
 ```
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
 curl -X POST "http://localhost:3000/api/orders/place" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "cart": [
+    "customerInfo": {
+      "name": "John Doe",
+      "email": "john.doe@example.com",
+      "phone": "+1234567890",
+      "address": {
+        "street": "123 Main St",
+        "city": "New York",
+        "state": "NY",
+        "zipCode": "10001",
+        "country": "USA"
+      }
+    },
+    "items": [
       {
-        "sku": 12345,
-        "amount": 29.99
+        "sku": "PROD-001",
+        "quantity": 2,
+        "unitPrice": 29.99,
+        "description": "Product Description"
       },
       {
-        "sku": 67890,
-        "amount": 15.50
+        "sku": "PROD-002",
+        "quantity": 1,
+        "unitPrice": 49.99,
+        "description": "Another Product"
       }
     ],
-    "order_amount": 45.49,
-    "order_type": "delivery",
-    "payment_method": "cash_on_delivery",
-    "store_id": 1,
-    "address": "123 Main St, City, State 12345",
-    "contact_person_number": "+1234567890"
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X POST "http://localhost:3000/api/orders/place" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "cart": [
-      {
-        "sku": 12345,
-        "amount": 29.99
-      },
-      {
-        "sku": 67890,
-        "amount": 15.50
-      }
-    ],
-    "order_amount": 45.49,
-    "order_type": "delivery",
-    "payment_method": "cash_on_delivery",
-    "store_id": 1,
-    "address": "123 Main St, City, State 12345",
-    "contact_person_number": "+1234567890"
+    "shippingMethod": "standard",
+    "priority": "normal",
+    "specialInstructions": "Handle with care"
   }'
 ```
 
 **Response:**
 ```json
 {
+  "statusCode": 201,
   "success": true,
   "data": {
-    "order": {
-      "id": 1,
-      "user_id": 1,
-      "cart": [
-        {
-          "sku": 12345,
-          "amount": 29.99
-        },
-        {
-          "sku": 67890,
-          "amount": 15.50
-        }
-      ],
-      "coupon_discount_amount": 0,
-      "order_amount": 45.49,
-      "order_type": "delivery",
-      "payment_method": "cash_on_delivery",
-      "store_id": 1,
-      "distance": 5.2,
-      "discount_amount": 0,
-      "tax_amount": 2.27,
-      "address": "123 Main St, City, State 12345",
-      "latitude": 40.7128,
-      "longitude": -74.0060,
-      "contact_person_name": "John Doe",
-      "contact_person_number": "+1234567890",
-      "address_type": "home",
-      "is_scheduled": 0,
-      "scheduled_timestamp": 1642233600,
-      "promised_delv_tat": "24",
-      "created_at": 1642233600
-    }
-  }
+    "orderId": "ORD-2024-001",
+    "orderNumber": "ORD-2024-001",
+    "status": "pending",
+    "customerInfo": {
+      "name": "John Doe",
+      "email": "john.doe@example.com",
+      "phone": "+1234567890",
+      "address": {
+        "street": "123 Main St",
+        "city": "New York",
+        "state": "NY",
+        "zipCode": "10001",
+        "country": "USA"
+      }
+    },
+    "items": [
+      {
+        "sku": "PROD-001",
+        "quantity": 2,
+        "unitPrice": 29.99,
+        "description": "Product Description",
+        "totalPrice": 59.98
+      },
+      {
+        "sku": "PROD-002",
+        "quantity": 1,
+        "unitPrice": 49.99,
+        "description": "Another Product",
+        "totalPrice": 49.99
+      }
+    ],
+    "orderSummary": {
+      "subtotal": 109.97,
+      "tax": 8.80,
+      "shipping": 5.99,
+      "total": 124.76
+    },
+    "shippingMethod": "standard",
+    "priority": "normal",
+    "specialInstructions": "Handle with care",
+    "estimatedDelivery": "2024-01-05T00:00:00.000Z",
+    "createdAt": "2024-01-01T19:00:00.000Z",
+    "createdBy": 1
+  },
+  "error": null
 }
 ```
 
-### Get Order by ID
+## Get Order by ID
+
+### Retrieve Order Details
+Get detailed information about a specific order.
 
 **Endpoint:** `GET /api/orders/:id`
 
-**Description:** Retrieves a specific order by its ID.
-
 **Headers:**
 ```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 ```
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
-curl -X GET "http://localhost:3000/api/orders/1" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-**Mobile Client:**
-```bash
-curl -X GET "http://localhost:3000/api/orders/1" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0"
+curl -X GET "http://localhost:3000/api/orders/ORD-2024-001" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
 ```
 
 **Response:**
 ```json
 {
+  "statusCode": 200,
   "success": true,
   "data": {
-    "order": {
-      "id": 1,
-      "user_id": 1,
-      "cart": [
-        {
-          "sku": 12345,
-          "amount": 29.99
-        },
-        {
-          "sku": 67890,
-          "amount": 15.50
-        }
-      ],
-      "coupon_discount_amount": 0,
-      "order_amount": 45.49,
-      "order_type": "delivery",
-      "payment_method": "cash_on_delivery",
-      "store_id": 1,
-      "distance": 5.2,
-      "discount_amount": 0,
-      "tax_amount": 2.27,
-      "address": "123 Main St, City, State 12345",
-      "latitude": 40.7128,
-      "longitude": -74.0060,
-      "contact_person_name": "John Doe",
-      "contact_person_number": "+1234567890",
-      "address_type": "home",
-      "is_scheduled": 0,
-      "scheduled_timestamp": 1642233600,
-      "promised_delv_tat": "24",
-      "created_at": 1642233600,
-      "updated_at": 1642233600
-    }
-  }
+    "orderId": "ORD-2024-001",
+    "orderNumber": "ORD-2024-001",
+    "status": "pending",
+    "customerInfo": {
+      "name": "John Doe",
+      "email": "john.doe@example.com",
+      "phone": "+1234567890",
+      "address": {
+        "street": "123 Main St",
+        "city": "New York",
+        "state": "NY",
+        "zipCode": "10001",
+        "country": "USA"
+      }
+    },
+    "items": [
+      {
+        "sku": "PROD-001",
+        "quantity": 2,
+        "unitPrice": 29.99,
+        "description": "Product Description",
+        "totalPrice": 59.98,
+        "pickingStatus": "pending",
+        "packingStatus": "pending"
+      },
+      {
+        "sku": "PROD-002",
+        "quantity": 1,
+        "unitPrice": 49.99,
+        "description": "Another Product",
+        "totalPrice": 49.99,
+        "pickingStatus": "pending",
+        "packingStatus": "pending"
+      }
+    ],
+    "orderSummary": {
+      "subtotal": 109.97,
+      "tax": 8.80,
+      "shipping": 5.99,
+      "total": 124.76
+    },
+    "shippingMethod": "standard",
+    "priority": "normal",
+    "specialInstructions": "Handle with care",
+    "estimatedDelivery": "2024-01-05T00:00:00.000Z",
+    "workflowStatus": {
+      "picking": "pending",
+      "packing": "pending",
+      "handover": "pending"
+    },
+    "createdAt": "2024-01-01T19:00:00.000Z",
+    "createdBy": 1,
+    "updatedAt": "2024-01-01T19:00:00.000Z"
+  },
+  "error": null
 }
 ```
 
-### Get User Orders
+## Get User Orders
+
+### List User's Orders
+Retrieve a list of orders for the authenticated user.
 
 **Endpoint:** `GET /api/orders`
 
-**Description:** Retrieves all orders for the authenticated user with pagination.
-
 **Headers:**
 ```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 ```
 
 **Query Parameters:**
-- `page` (optional): Page number (default: 1)
-- `limit` (optional): Items per page (default: 10)
+- `status` (optional): Filter by order status
+- `priority` (optional): Filter by priority level
+- `dateFrom` (optional): Filter orders from date (YYYY-MM-DD)
+- `dateTo` (optional): Filter orders to date (YYYY-MM-DD)
+- `limit` (optional): Number of orders to return (default: 50)
+- `offset` (optional): Number of orders to skip (default: 0)
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
-curl -X GET "http://localhost:3000/api/orders?page=1&limit=10" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
+# Get all orders
+curl -X GET "http://localhost:3000/api/orders" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
 
-**Mobile Client:**
-```bash
-curl -X GET "http://localhost:3000/api/orders?page=1&limit=10" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0"
+# Filter by status
+curl -X GET "http://localhost:3000/api/orders?status=pending" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
+
+# Filter by priority
+curl -X GET "http://localhost:3000/api/orders?priority=high" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
+
+# Filter by date range
+curl -X GET "http://localhost:3000/api/orders?dateFrom=2024-01-01&dateTo=2024-01-31" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
 ```
 
 **Response:**
 ```json
 {
+  "statusCode": 200,
   "success": true,
   "data": {
     "orders": [
       {
-        "id": 1,
-        "user_id": 1,
-        "cart": [
-          {
-            "sku": 12345,
-            "amount": 29.99
-          }
-        ],
-        "order_amount": 29.99,
-        "order_type": "delivery",
-        "payment_method": "cash_on_delivery",
-        "store_id": 1,
-        "address": "123 Main St, City, State 12345",
-        "created_at": 1642233600
+        "orderId": "ORD-2024-001",
+        "orderNumber": "ORD-2024-001",
+        "status": "pending",
+        "customerInfo": {
+          "name": "John Doe",
+          "email": "john.doe@example.com"
+        },
+        "orderSummary": {
+          "total": 124.76,
+          "itemCount": 2
+        },
+        "priority": "normal",
+        "estimatedDelivery": "2024-01-05T00:00:00.000Z",
+        "workflowStatus": {
+          "picking": "pending",
+          "packing": "pending",
+          "handover": "pending"
+        },
+        "createdAt": "2024-01-01T19:00:00.000Z"
+      },
+      {
+        "orderId": "ORD-2024-002",
+        "orderNumber": "ORD-2024-002",
+        "status": "in_progress",
+        "customerInfo": {
+          "name": "Jane Smith",
+          "email": "jane.smith@example.com"
+        },
+        "orderSummary": {
+          "total": 89.99,
+          "itemCount": 1
+        },
+        "priority": "high",
+        "estimatedDelivery": "2024-01-03T00:00:00.000Z",
+        "workflowStatus": {
+          "picking": "completed",
+          "packing": "in_progress",
+          "handover": "pending"
+        },
+        "createdAt": "2024-01-01T18:00:00.000Z"
       }
     ],
     "pagination": {
-      "page": 1,
-      "limit": 10,
-      "total_orders": 1
+      "total": 2,
+      "limit": 50,
+      "offset": 0,
+      "hasMore": false
     }
-  }
+  },
+  "error": null
 }
 ```
 
-### Update Order
+## Update Order
+
+### Modify Existing Order
+Update order information before it enters the picking phase.
 
 **Endpoint:** `PUT /api/orders/update/:id`
 
-**Description:** Updates an existing order (requires availability check).
-
 **Headers:**
 ```bash
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 Content-Type: application/json
-Authorization: Bearer your_jwt_token
 ```
 
 **Request Body:**
 ```json
 {
-  "cart": [
+  "customerInfo": {
+    "phone": "+1234567899"
+  },
+  "items": [
     {
-      "sku": 12345,
-      "amount": 29.99
-    },
-    {
-      "sku": 67890,
-      "amount": 15.50
+      "sku": "PROD-001",
+      "quantity": 3
     }
   ],
-  "coupon_code": "SAVE20",
-  "order_amount": 45.49,
-  "discount_amount": 5.00,
-  "tax_amount": 2.27,
-  "address": "456 Oak St, City, State 12345",
-  "contact_person_name": "Jane Smith",
-  "contact_person_number": "+1234567891"
+  "specialInstructions": "Updated special instructions"
 }
 ```
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
-curl -X PUT "http://localhost:3000/api/orders/update/1" \
+curl -X PUT "http://localhost:3000/api/orders/update/ORD-2024-001" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "cart": [
+    "customerInfo": {
+      "phone": "+1234567899"
+    },
+    "items": [
       {
-        "sku": 12345,
-        "amount": 29.99
-      },
-      {
-        "sku": 67890,
-        "amount": 15.50
+        "sku": "PROD-001",
+        "quantity": 3
       }
     ],
-    "order_amount": 45.49,
-    "discount_amount": 5.00,
-    "address": "456 Oak St, City, State 12345"
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X PUT "http://localhost:3000/api/orders/update/1" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "cart": [
-      {
-        "sku": 12345,
-        "amount": 29.99
-      },
-      {
-        "sku": 67890,
-        "amount": 15.50
-      }
-    ],
-    "order_amount": 45.49,
-    "discount_amount": 5.00,
-    "address": "456 Oak St, City, State 12345"
+    "specialInstructions": "Updated special instructions"
   }'
 ```
 
 **Response:**
 ```json
 {
+  "statusCode": 200,
   "success": true,
   "data": {
-    "order": {
-      "id": 1,
-      "user_id": 1,
-      "cart": [
-        {
-          "sku": 12345,
-          "amount": 29.99
-        },
-        {
-          "sku": 67890,
-          "amount": 15.50
-        }
-      ],
-      "coupon_discount_amount": 9.10,
-      "order_amount": 40.39,
-      "discount_amount": 5.00,
-      "tax_amount": 2.27,
-      "address": "456 Oak St, City, State 12345",
-      "contact_person_name": "Jane Smith",
-      "contact_person_number": "+1234567891",
-      "updated_at": 1642233600
+    "orderId": "ORD-2024-001",
+    "orderNumber": "ORD-2024-001",
+    "status": "updated",
+    "message": "Order updated successfully",
+    "updatedFields": [
+      "customerInfo.phone",
+      "items[0].quantity",
+      "specialInstructions"
+    ],
+    "updatedAt": "2024-01-01T20:00:00.000Z",
+    "updatedBy": 1
+  },
+  "error": null
+}
+```
+
+## Order Status Workflow
+
+### Order Lifecycle
+Orders follow a specific workflow:
+
+1. **pending** - Order created, awaiting processing
+2. **confirmed** - Order confirmed, ready for picking
+3. **picking** - Items being picked from warehouse
+4. **picked** - All items picked successfully
+5. **packing** - Items being packed for shipment
+6. **packed** - Order packed and ready for handover
+7. **handover** - Order handed over to delivery partner
+8. **in_transit** - Order in delivery
+9. **delivered** - Order delivered successfully
+10. **cancelled** - Order cancelled
+
+### Priority Levels
+- **low** - Standard processing time
+- **normal** - Regular processing time
+- **high** - Expedited processing
+- **urgent** - Highest priority processing
+
+### Shipping Methods
+- **standard** - 3-5 business days
+- **express** - 1-2 business days
+- **overnight** - Next business day
+
+## Order Creation Examples
+
+### 1. High Priority Order
+```bash
+curl -X POST "http://localhost:3000/api/orders/place" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customerInfo": {
+      "name": "VIP Customer",
+      "email": "vip@example.com",
+      "phone": "+1234567890",
+      "address": {
+        "street": "456 VIP Ave",
+        "city": "Los Angeles",
+        "state": "CA",
+        "zipCode": "90210",
+        "country": "USA"
+      }
     },
-    "updated_fields": ["cart", "order_amount", "discount_amount", "address", "contact_person_name", "contact_person_number"],
-    "applied_coupon": {
-      "id": 1,
-      "code": "SAVE20",
-      "discount": 20,
-      "discount_type": "percentage",
-      "calculated_discount": 9.10
-    }
-  }
-}
+    "items": [
+      {
+        "sku": "VIP-001",
+        "quantity": 1,
+        "unitPrice": 199.99,
+        "description": "Premium Product"
+      }
+    ],
+    "shippingMethod": "overnight",
+    "priority": "urgent",
+    "specialInstructions": "VIP customer - handle with extra care"
+  }'
 ```
 
-## 📱 Mobile App Considerations
+### 2. Bulk Order
+```bash
+curl -X POST "http://localhost:3000/api/orders/place" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customerInfo": {
+      "name": "Bulk Customer",
+      "email": "bulk@example.com",
+      "phone": "+1234567890",
+      "address": {
+        "street": "789 Bulk St",
+        "city": "Chicago",
+        "state": "IL",
+        "zipCode": "60601",
+        "country": "USA"
+      }
+    },
+    "items": [
+      {
+        "sku": "BULK-001",
+        "quantity": 100,
+        "unitPrice": 9.99,
+        "description": "Bulk Product A"
+      },
+      {
+        "sku": "BULK-002",
+        "quantity": 50,
+        "unitPrice": 19.99,
+        "description": "Bulk Product B"
+      }
+    ],
+    "shippingMethod": "standard",
+    "priority": "normal",
+    "specialInstructions": "Bulk order - palletize if possible"
+  }'
+```
 
-### Version Check Headers
-For mobile clients, the following headers are required:
-- `source: mobile` - Identifies the request as coming from a mobile app
-- `app-version: 1.2.0` - Current app version for compatibility checking
+### 3. International Order
+```bash
+curl -X POST "http://localhost:3000/api/orders/place" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customerInfo": {
+      "name": "International Customer",
+      "email": "international@example.com",
+      "phone": "+44123456789",
+      "address": {
+        "street": "10 International Lane",
+        "city": "London",
+        "state": "",
+        "zipCode": "SW1A 1AA",
+        "country": "UK"
+      }
+    },
+    "items": [
+      {
+        "sku": "INT-001",
+        "quantity": 2,
+        "unitPrice": 79.99,
+        "description": "International Product"
+      }
+    ],
+    "shippingMethod": "express",
+    "priority": "high",
+    "specialInstructions": "International shipping - customs documentation required"
+  }'
+```
 
-### Version Compatibility
-- Minimum supported version: 1.0.0
-- If app version is below minimum, API returns 426 status code
-- Web clients don't require version checking
+## Error Responses
 
-### Device Management
-- Mobile apps should provide unique device identifiers
-- Platform detection (ios/android) for analytics
-- Secure token storage using platform-specific methods
-
-## ⚠️ Error Responses
-
-### Common Error Responses
-
-**Unauthorized Access:**
+### Insufficient Permissions
 ```json
 {
+  "statusCode": 403,
   "success": false,
-  "error": "Unauthorized",
-  "message": "Invalid token",
-  "statusCode": 401
+  "data": null,
+  "error": "Insufficient permissions. Required: orders:view_all"
 }
 ```
 
-**Insufficient Permissions:**
+### Order Not Found
 ```json
 {
+  "statusCode": 404,
   "success": false,
-  "error": "Forbidden",
-  "message": "Insufficient permissions to access this resource",
-  "statusCode": 403
+  "data": null,
+  "error": "Order not found"
 }
 ```
 
-**User Not Available:**
+### Invalid Order Data
 ```json
 {
+  "statusCode": 400,
   "success": false,
-  "error": "User not available",
-  "message": "User is currently off-shift or unavailable",
-  "statusCode": 403
+  "data": null,
+  "error": "Invalid order data: missing required fields"
 }
 ```
 
-**Invalid Cart:**
+### Order Cannot Be Updated
 ```json
 {
+  "statusCode": 400,
   "success": false,
-  "error": "Invalid cart",
-  "message": "Cart must be an array with at least one item",
-  "statusCode": 400
+  "data": null,
+  "error": "Order cannot be updated in current status"
 }
 ```
 
-**Invalid SKU:**
+### Insufficient Inventory
 ```json
 {
+  "statusCode": 400,
   "success": false,
-  "error": "Invalid SKU",
-  "message": "Cart item 1: SKU is required and must be a number",
-  "statusCode": 400
+  "data": null,
+  "error": "Insufficient inventory for SKU: PROD-001"
 }
 ```
 
-**Invalid Amount:**
-```json
-{
-  "success": false,
-  "error": "Invalid amount",
-  "message": "Cart item 1: Amount is required and must be a positive number",
-  "statusCode": 400
-}
-```
+## Best Practices
 
-**Invalid Coupon:**
-```json
-{
-  "success": false,
-  "error": "Invalid coupon",
-  "message": "Minimum purchase amount of 100 required",
-  "statusCode": 400
-}
-```
+### Order Creation
+- Validate all customer information
+- Check inventory availability
+- Use appropriate priority levels
+- Include clear special instructions
 
-**Order Not Found:**
-```json
-{
-  "success": false,
-  "error": "Order not found",
-  "message": "Order not found",
-  "statusCode": 404
-}
-```
+### Order Management
+- Update orders promptly
+- Communicate status changes
+- Handle cancellations gracefully
+- Maintain audit trail
 
-**App Version Too Old (Mobile Only):**
-```json
-{
-  "success": false,
-  "error": "Upgrade Required",
-  "message": "Please update your app to version 1.0.0 or higher",
-  "statusCode": 426
-}
-```
+### Customer Experience
+- Provide clear order confirmations
+- Send status update notifications
+- Handle special requests professionally
+- Resolve issues quickly
 
-**Missing App Version (Mobile Only):**
-```json
-{
-  "success": false,
-  "error": "Bad Request",
-  "message": "App version is required for mobile users",
-  "statusCode": 400
-}
-```
+## Mobile App Integration
 
-## 🔐 Security Features
+### Order Display
+- Show order status clearly
+- Display progress indicators
+- Provide estimated delivery times
+- Show order history
 
-1. **JWT Authentication**: All endpoints require valid JWT tokens
-2. **Permission Validation**: `orders:view_all` permission required
-3. **Availability Check**: Users must be available (not off-shift)
-4. **User Isolation**: Users can only access their own orders
-5. **Input Validation**: Comprehensive request validation
-6. **Version Control**: Mobile app compatibility checking
-7. **Audit Logging**: Track all order operations
+### Order Management
+- Allow order updates when possible
+- Implement order tracking
+- Handle offline order creation
+- Sync order changes
 
-## 📋 Operation Flow
-
-### Order Creation Flow
-1. User provides cart items and order details
-2. System validates cart structure and item data
-3. System applies coupon if provided
-4. System calculates final order amounts
-5. Order is created in database
-6. Coupon usage is incremented if applied
-7. Success response with order details
-
-### Order Update Flow
-1. User provides update data
-2. System validates input data
-3. System recalculates amounts if cart changes
-4. System revalidates coupon if provided
-5. Order is updated in database
-6. Success response with updated order details
-
-### Order Retrieval Flow
-1. User requests order information
-2. System validates user authentication
-3. System checks user permissions
-4. System retrieves order data
-5. Success response with order details
-
----
-
-This document covers all order management endpoints with examples for both web and mobile clients. Mobile clients must include version headers for compatibility checking. All endpoints are verified against the actual controller code and will work correctly with localhost:3000.
+### Offline Handling
+- Cache order information
+- Queue order updates
+- Sync when connection restored
+- Handle conflicts gracefully

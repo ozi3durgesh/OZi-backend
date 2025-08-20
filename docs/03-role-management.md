@@ -1,61 +1,52 @@
-# Role Management Module
+# Role Management (Admin Only)
 
-This document covers all role management endpoints for the OZi Backend system.
+This module handles the creation and management of user roles in the system. Only users with `users_roles:manage` permission can access these endpoints.
 
-**Base URL:** `http://localhost:3000`
-
-## Overview
-
-The role management module provides functionality for creating and managing user roles in the system. It supports role-based access control (RBAC) and allows administrators to assign permissions to roles.
-
-## 👥 Role Operations
+## Create Role
 
 ### Create New Role
+Create a new role with specific permissions.
 
 **Endpoint:** `POST /api/roles`
 
-**Description:** Creates a new role in the system (admin only).
-
 **Headers:**
 ```bash
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 Content-Type: application/json
-Authorization: Bearer your_jwt_token
 ```
 
 **Request Body:**
 ```json
 {
-  "name": "warehouse_manager",
+  "name": "warehouse_supervisor",
+  "displayName": "Warehouse Supervisor",
   "description": "Manages warehouse operations and staff",
-  "permissions": ["warehouse:view", "warehouse:manage", "staff:assign"]
+  "permissions": [
+    "warehouse:manage",
+    "picking:view",
+    "packing:execute",
+    "orders:view_all"
+  ]
 }
 ```
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
 curl -X POST "http://localhost:3000/api/roles" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "name": "warehouse_manager",
+    "name": "warehouse_supervisor",
+    "displayName": "Warehouse Supervisor",
     "description": "Manages warehouse operations and staff",
-    "permissions": ["warehouse:view", "warehouse:manage", "staff:assign"]
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X POST "http://localhost:3000/api/roles" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "name": "warehouse_manager",
-    "description": "Manages warehouse operations and staff",
-    "permissions": ["warehouse:view", "warehouse:manage", "staff:assign"]
+    "permissions": [
+      "warehouse:manage",
+      "picking:view",
+      "packing:execute",
+      "orders:view_all"
+    ]
   }'
 ```
 
@@ -65,105 +56,42 @@ curl -X POST "http://localhost:3000/api/roles" \
   "statusCode": 201,
   "success": true,
   "data": {
-    "id": 1,
-    "name": "warehouse_manager",
+    "id": 5,
+    "name": "warehouse_supervisor",
+    "displayName": "Warehouse Supervisor",
     "description": "Manages warehouse operations and staff",
-    "permissions": ["warehouse:view", "warehouse:manage", "staff:assign"],
-    "created_at": "2024-01-15T10:30:00.000Z",
-    "updated_at": "2024-01-15T10:30:00.000Z"
+    "permissions": [
+      "warehouse:manage",
+      "picking:view",
+      "packing:execute",
+      "orders:view_all"
+    ],
+    "createdAt": "2024-01-01T12:00:00.000Z",
+    "updatedAt": "2024-01-01T12:00:00.000Z"
   },
   "error": null
 }
 ```
 
-### Assign Permissions to Role
+## List Roles
 
-**Endpoint:** `POST /api/roles/assign-permissions`
-
-**Description:** Assigns permissions to an existing role (admin only).
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Request Body:**
-```json
-{
-  "roleId": 1,
-  "permissions": ["picking:view", "picking:execute", "packing:view"]
-}
-```
-
-**cURL Examples:**
-
-**Web Client:**
-```bash
-curl -X POST "http://localhost:3000/api/roles/assign-permissions" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -d '{
-    "roleId": 1,
-    "permissions": ["picking:view", "picking:execute", "packing:view"]
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X POST "http://localhost:3000/api/roles/assign-permissions" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "roleId": 1,
-    "permissions": ["picking:view", "picking:execute", "packing:view"]
-  }'
-```
-
-**Response:**
-```json
-{
-  "statusCode": 200,
-  "success": true,
-  "data": {
-    "message": "Permissions assigned successfully",
-    "roleId": 1,
-    "assignedPermissions": ["picking:view", "picking:execute", "packing:view"]
-  },
-  "error": null
-}
-```
-
-### List All Roles
+### Get All Roles
+Retrieve a list of all roles in the system.
 
 **Endpoint:** `GET /api/roles`
 
-**Description:** Retrieves all roles in the system (admin only).
-
 **Headers:**
 ```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 ```
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
 curl -X GET "http://localhost:3000/api/roles" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-**Mobile Client:**
-```bash
-curl -X GET "http://localhost:3000/api/roles" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0"
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
 ```
 
 **Response:**
@@ -175,135 +103,312 @@ curl -X GET "http://localhost:3000/api/roles" \
     {
       "id": 1,
       "name": "admin",
+      "displayName": "Administrator",
       "description": "Full system access",
-      "permissions": ["*"],
-      "created_at": "2024-01-15T10:30:00.000Z",
-      "updated_at": "2024-01-15T10:30:00.000Z"
+      "permissions": [
+        "users_roles:manage",
+        "orders:view_all",
+        "picking:assign_manage",
+        "packing:execute",
+        "warehouse:manage"
+      ],
+      "userCount": 1,
+      "createdAt": "2024-01-01T00:00:00.000Z"
     },
     {
       "id": 2,
-      "name": "warehouse_manager",
+      "name": "manager",
+      "displayName": "Manager",
+      "description": "Department management access",
+      "permissions": [
+        "orders:view_all",
+        "picking:view",
+        "packing:execute",
+        "warehouse:view"
+      ],
+      "userCount": 3,
+      "createdAt": "2024-01-01T01:00:00.000Z"
+    },
+    {
+      "id": 3,
+      "name": "picker",
+      "displayName": "Picker",
+      "description": "Picking operations access",
+      "permissions": [
+        "picking:execute"
+      ],
+      "userCount": 8,
+      "createdAt": "2024-01-01T02:00:00.000Z"
+    },
+    {
+      "id": 4,
+      "name": "packer",
+      "displayName": "Packer",
+      "description": "Packing operations access",
+      "permissions": [
+        "packing:execute"
+      ],
+      "userCount": 5,
+      "createdAt": "2024-01-01T03:00:00.000Z"
+    },
+    {
+      "id": 5,
+      "name": "warehouse_supervisor",
+      "displayName": "Warehouse Supervisor",
       "description": "Manages warehouse operations and staff",
-      "permissions": ["warehouse:view", "warehouse:manage", "staff:assign"],
-      "created_at": "2024-01-15T10:30:00.000Z",
-      "updated_at": "2024-01-15T10:30:00.000Z"
+      "permissions": [
+        "warehouse:manage",
+        "picking:view",
+        "packing:execute",
+        "orders:view_all"
+      ],
+      "userCount": 0,
+      "createdAt": "2024-01-01T12:00:00.000Z"
     }
   ],
   "error": null
 }
 ```
 
-## 📱 Mobile App Considerations
+## Assign Permissions to Role
 
-### Version Check Headers
-For mobile clients, the following headers are required:
-- `source: mobile` - Identifies the request as coming from a mobile app
-- `app-version: 1.2.0` - Current app version for compatibility checking
+### Assign Permissions
+Assign specific permissions to an existing role.
 
-### Version Compatibility
-- Minimum supported version: 1.0.0
-- If app version is below minimum, API returns 426 status code
-- Web clients don't require version checking
+**Endpoint:** `POST /api/roles/assign-permissions`
 
-## ⚠️ Error Responses
+**Headers:**
+```bash
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
+Content-Type: application/json
+```
 
-### Common Error Responses
-
-**Unauthorized Access:**
+**Request Body:**
 ```json
 {
-  "statusCode": 401,
-  "success": false,
-  "error": "User not authenticated"
+  "roleId": 3,
+  "permissions": [
+    "picking:execute",
+    "picking:view",
+    "orders:view_own"
+  ]
 }
 ```
 
-**Insufficient Permissions:**
+**cURL Example:**
+```bash
+curl -X POST "http://localhost:3000/api/roles/assign-permissions" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "roleId": 3,
+    "permissions": [
+      "picking:execute",
+      "picking:view",
+      "orders:view_own"
+    ]
+  }'
+```
+
+**Response:**
+```json
+{
+  "statusCode": 200,
+  "success": true,
+  "data": {
+    "roleId": 3,
+    "roleName": "picker",
+    "updatedPermissions": [
+      "picking:execute",
+      "picking:view",
+      "orders:view_own"
+    ],
+    "message": "Permissions assigned successfully",
+    "updatedAt": "2024-01-01T13:00:00.000Z"
+  },
+  "error": null
+}
+```
+
+## Available Permissions
+
+The system supports the following permission categories:
+
+### User & Role Management
+- `users_roles:manage` - Full user and role management
+- `users:view` - View user information
+- `users:create` - Create new users
+- `users:update` - Update user information
+- `users:delete` - Deactivate users
+
+### Order Management
+- `orders:view_all` - View all orders
+- `orders:view_own` - View own orders
+- `orders:create` - Create new orders
+- `orders:update` - Update orders
+- `orders:cancel` - Cancel orders
+
+### Picking Operations
+- `picking:view` - View picking information
+- `picking:execute` - Execute picking operations
+- `picking:assign_manage` - Manage picking assignments
+- `picking:reports` - Access picking reports
+
+### Packing Operations
+- `packing:execute` - Execute packing operations
+- `packing:view` - View packing information
+- `packing:manage` - Manage packing operations
+
+### Warehouse Management
+- `warehouse:view` - View warehouse information
+- `warehouse:manage` - Full warehouse management
+- `warehouse:zones` - Manage warehouse zones
+- `warehouse:staff` - Manage warehouse staff
+
+### POS Operations
+- `pos:execute` - Execute POS operations
+- `pos:view` - View POS information
+- `pos:reports` - Access POS reports
+
+### System Administration
+- `system:config` - System configuration
+- `system:logs` - Access system logs
+- `system:backup` - System backup operations
+
+## Role Creation Examples
+
+### 1. Senior Picker Role
+```bash
+curl -X POST "http://localhost:3000/api/roles" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "senior_picker",
+    "displayName": "Senior Picker",
+    "description": "Experienced picker with training responsibilities",
+    "permissions": [
+      "picking:execute",
+      "picking:view",
+      "picking:reports",
+      "orders:view_own"
+    ]
+  }'
+```
+
+### 2. Quality Control Role
+```bash
+curl -X POST "http://localhost:3000/api/roles" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "quality_control",
+    "displayName": "Quality Control",
+    "description": "Quality control and inspection operations",
+    "permissions": [
+      "packing:execute",
+      "packing:view",
+      "picking:view",
+      "orders:view_all"
+    ]
+  }'
+```
+
+### 3. Inventory Manager Role
+```bash
+curl -X POST "http://localhost:3000/api/roles" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "inventory_manager",
+    "displayName": "Inventory Manager",
+    "description": "Manages inventory and stock levels",
+    "permissions": [
+      "warehouse:view",
+      "warehouse:zones",
+      "orders:view_all",
+      "picking:view",
+      "packing:view"
+    ]
+  }'
+```
+
+## Error Responses
+
+### Insufficient Permissions
 ```json
 {
   "statusCode": 403,
   "success": false,
-  "error": "Insufficient permissions"
+  "data": null,
+  "error": "Insufficient permissions. Required: users_roles:manage"
 }
 ```
 
-**Role Not Found:**
+### Role Already Exists
+```json
+{
+  "statusCode": 400,
+  "success": false,
+  "data": null,
+  "error": "Role with name 'warehouse_supervisor' already exists"
+}
+```
+
+### Invalid Permissions
+```json
+{
+  "statusCode": 400,
+  "success": false,
+  "data": null,
+  "error": "Invalid permission: 'invalid:permission'"
+}
+```
+
+### Role Not Found
 ```json
 {
   "statusCode": 404,
   "success": false,
+  "data": null,
   "error": "Role not found"
 }
 ```
 
-**Role Name Already Exists:**
-```json
-{
-  "statusCode": 400,
-  "success": false,
-  "error": "Role name already exists"
-}
-```
+## Best Practices
 
-**Invalid Permission:**
-```json
-{
-  "statusCode": 400,
-  "success": false,
-  "error": "Invalid permission provided"
-}
-```
+### Role Design
+- Create roles based on job functions, not individuals
+- Use descriptive names and descriptions
+- Follow the principle of least privilege
+- Group related permissions together
 
-**App Version Too Old (Mobile Only):**
-```json
-{
-  "success": false,
-  "error": "Upgrade Required",
-  "message": "Please update your app to version 1.0.0 or higher",
-  "statusCode": 426
-}
-```
+### Permission Assignment
+- Start with minimal permissions and add as needed
+- Regularly review and audit role permissions
+- Remove unused permissions
+- Document permission changes
 
-**Missing App Version (Mobile Only):**
-```json
-{
-  "success": false,
-  "error": "Bad Request",
-  "message": "App version is required for mobile users",
-  "statusCode": 400
-}
-```
+### Security Considerations
+- Only admins should manage roles
+- Log all role and permission changes
+- Regular security audits
+- Monitor role usage patterns
 
-## 🔐 Security Features
+## Mobile App Integration
 
-1. **JWT Authentication**: All endpoints require valid JWT tokens
-2. **Permission-Based Access**: Only users with `users_roles:manage` permission can access these endpoints
-3. **Input Validation**: Comprehensive request validation
-4. **Version Control**: Mobile app compatibility checking
-5. **Audit Logging**: Track all role management operations
+### Role Display
+- Show user's role and permissions
+- Display available actions based on permissions
+- Hide unauthorized features
+- Provide clear feedback on permission errors
 
-## 📋 Operation Flow
-
-### Role Creation Flow
-1. User provides role details (name, description, permissions)
-2. System validates required fields
-3. System checks for existing role names
-4. System creates role record
-5. Success response with role details
-
-### Permission Assignment Flow
-1. User provides role ID and permissions list
-2. System validates role exists
-3. System validates permissions are valid
-4. System assigns permissions to role
-5. Success response with assignment details
-
-### Role Listing Flow
-1. User requests all roles
-2. System validates user permissions
-3. System retrieves all roles with their permissions
-4. Success response with roles list
-
----
-
-This document covers all role management endpoints with examples for both web and mobile clients. Mobile clients must include version headers for compatibility checking. All endpoints are verified against the actual controller code and will work correctly with localhost:3000.
+### Offline Handling
+- Cache role information
+- Validate permissions locally when possible
+- Sync role changes when online
+- Handle permission updates gracefully

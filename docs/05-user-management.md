@@ -1,433 +1,519 @@
-# User Management (Admin Only)
+# User Management
 
-This document covers all user management endpoints for the OZi Backend system. These endpoints are restricted to users with admin privileges.
+This module handles user creation, management, and role assignments. Most operations require `users_roles:manage` permission.
 
-**Base URL:** `http://localhost:3000`
+## Create User
 
-## 👥 User Operations
-
-### Create User
+### Create New User
+Create a new user in the system with a specific role.
 
 **Endpoint:** `POST /api/users`
 
-**Description:** Creates a new user (requires admin authentication and users_roles:manage permission).
-
 **Headers:**
 ```bash
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 Content-Type: application/json
-Authorization: Bearer your_jwt_token
 ```
 
 **Request Body:**
 ```json
 {
-  "email": "newuser@ozi.com",
-  "password": "SecurePassword123!",
-  "roleId": 2,
-  "roleName": "wh_staff_1"
+  "email": "picker@example.com",
+  "password": "SecurePassword123",
+  "firstName": "John",
+  "lastName": "Picker",
+  "phone": "+1234567890",
+  "roleId": 3,
+  "warehouseId": 1
 }
 ```
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
 curl -X POST "http://localhost:3000/api/users" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "email": "newuser@ozi.com",
-    "password": "SecurePassword123!",
-    "roleId": 2
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X POST "http://localhost:3000/api/users" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "email": "newuser@ozi.com",
-    "password": "SecurePassword123!",
-    "roleId": 2
+    "email": "picker@example.com",
+    "password": "SecurePassword123",
+    "firstName": "John",
+    "lastName": "Picker",
+    "phone": "+1234567890",
+    "roleId": 3,
+    "warehouseId": 1
   }'
 ```
 
 **Response:**
 ```json
 {
+  "statusCode": 201,
   "success": true,
   "data": {
-    "id": 3,
-    "email": "newuser@ozi.com",
-    "roleId": 2,
-    "role": "wh_staff_1",
-    "createdAt": "2024-01-15T10:30:00.000Z"
-  }
+    "id": 15,
+    "email": "picker@example.com",
+    "firstName": "John",
+    "lastName": "Picker",
+    "phone": "+1234567890",
+    "role": {
+      "id": 3,
+      "name": "picker",
+      "displayName": "Picker"
+    },
+    "warehouse": {
+      "id": 1,
+      "name": "Main Warehouse"
+    },
+    "status": "active",
+    "createdAt": "2024-01-01T15:00:00.000Z"
+  },
+  "error": null
 }
 ```
 
-### List All Users
+## List Users
+
+### Get All Users
+Retrieve a list of all users in the system.
 
 **Endpoint:** `GET /api/users`
 
-**Description:** Retrieves all users with pagination and filtering (requires admin authentication and users_roles:manage permission).
-
 **Headers:**
 ```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 ```
 
 **Query Parameters:**
-- `page` (optional): Page number (default: 1)
-- `limit` (optional): Items per page (default: 10)
 - `role` (optional): Filter by role name
+- `warehouse` (optional): Filter by warehouse ID
+- `status` (optional): Filter by user status (active, inactive)
+- `search` (optional): Search in names and emails
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
-curl -X GET "http://localhost:3000/api/users?page=1&limit=10&role=wh_staff_1" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
+# Get all users
+curl -X GET "http://localhost:3000/api/users" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
 
-**Mobile Client:**
-```bash
-curl -X GET "http://localhost:3000/api/users?page=1&limit=10&role=wh_staff_1" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0"
+# Filter by role
+curl -X GET "http://localhost:3000/api/users?role=picker" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
+
+# Filter by warehouse
+curl -X GET "http://localhost:3000/api/users?warehouse=1" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
+
+# Search users
+curl -X GET "http://localhost:3000/api/users?search=john" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
 ```
 
 **Response:**
 ```json
 {
+  "statusCode": 200,
   "success": true,
-  "data": {
-    "users": [
-      {
+  "data": [
+    {
+      "id": 1,
+      "email": "admin@example.com",
+      "firstName": "Admin",
+      "lastName": "User",
+      "phone": "+1234567890",
+      "role": {
         "id": 1,
-        "email": "admin@ozi.com",
-        "roleId": 1,
-        "isActive": true,
-        "availabilityStatus": "available",
-        "createdAt": "2024-01-15T10:30:00.000Z",
-        "Role": {
-          "id": 1,
-          "name": "admin",
-          "description": "Full system access"
-        }
-      }
-    ],
-    "pagination": {
-      "page": 1,
-      "limit": 10,
-      "total": 1,
-      "totalPages": 1
+        "name": "admin",
+        "displayName": "Administrator"
+      },
+      "warehouse": {
+        "id": 1,
+        "name": "Main Warehouse"
+      },
+      "status": "active",
+      "lastLogin": "2024-01-01T14:30:00.000Z",
+      "createdAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "email": "manager@example.com",
+      "firstName": "Sarah",
+      "lastName": "Manager",
+      "phone": "+1234567891",
+      "role": {
+        "id": 2,
+        "name": "manager",
+        "displayName": "Manager"
+      },
+      "warehouse": {
+        "id": 1,
+        "name": "Main Warehouse"
+      },
+      "status": "active",
+      "lastLogin": "2024-01-01T13:45:00.000Z",
+      "createdAt": "2024-01-01T01:00:00.000Z"
+    },
+    {
+      "id": 15,
+      "email": "picker@example.com",
+      "firstName": "John",
+      "lastName": "Picker",
+      "phone": "+1234567890",
+      "role": {
+        "id": 3,
+        "name": "picker",
+        "displayName": "Picker"
+      },
+      "warehouse": {
+        "id": 1,
+        "name": "Main Warehouse"
+      },
+      "status": "active",
+      "lastLogin": null,
+      "createdAt": "2024-01-01T15:00:00.000Z"
     }
-  }
+  ],
+  "error": null
 }
 ```
 
-### Update User Status
+## Update User Status
+
+### Change User Status
+Activate or deactivate a user account.
 
 **Endpoint:** `PUT /api/users/:userId/status`
 
-**Description:** Updates the availability status of a user (users can only update their own status).
-
 **Headers:**
 ```bash
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 Content-Type: application/json
-Authorization: Bearer your_jwt_token
 ```
 
 **Request Body:**
 ```json
 {
-  "availabilityStatus": "break"
+  "status": "inactive",
+  "reason": "User left the company"
 }
 ```
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
-curl -X PUT "http://localhost:3000/api/users/1/status" \
+curl -X PUT "http://localhost:3000/api/users/15/status" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "availabilityStatus": "break"
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X PUT "http://localhost:3000/api/users/1/status" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "availabilityStatus": "break"
+    "status": "inactive",
+    "reason": "User left the company"
   }'
 ```
 
 **Response:**
 ```json
 {
+  "statusCode": 200,
   "success": true,
   "data": {
-    "id": 1,
-    "availabilityStatus": "break"
-  }
+    "id": 15,
+    "email": "picker@example.com",
+    "firstName": "John",
+    "lastName": "Picker",
+    "status": "inactive",
+    "statusReason": "User left the company",
+    "statusChangedAt": "2024-01-01T16:00:00.000Z",
+    "statusChangedBy": 1
+  },
+  "error": null
 }
 ```
 
-### Change User Role
+## Change User Role
+
+### Update User Role
+Change a user's role and associated permissions.
 
 **Endpoint:** `PUT /api/users/:userId/role`
 
-**Description:** Changes the role of a user (requires admin authentication and users_roles:manage permission).
-
 **Headers:**
 ```bash
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 Content-Type: application/json
-Authorization: Bearer your_jwt_token
 ```
 
 **Request Body:**
 ```json
 {
-  "roleId": 3,
-  "roleName": "supervisor"
+  "roleId": 4,
+  "reason": "Promoted to packer position"
 }
 ```
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
-curl -X PUT "http://localhost:3000/api/users/2/role" \
+curl -X PUT "http://localhost:3000/api/users/15/role" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "roleId": 3
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X PUT "http://localhost:3000/api/users/2/role" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "roleId": 3
+    "roleId": 4,
+    "reason": "Promoted to packer position"
   }'
 ```
 
 **Response:**
 ```json
 {
+  "statusCode": 200,
   "success": true,
   "data": {
-    "id": 2,
-    "email": "user@ozi.com",
-    "roleId": 3,
-    "role": "supervisor",
-    "updatedAt": "2024-01-15T10:30:00.000Z"
-  }
+    "id": 15,
+    "email": "picker@example.com",
+    "firstName": "John",
+    "lastName": "Picker",
+    "previousRole": {
+      "id": 3,
+      "name": "picker",
+      "displayName": "Picker"
+    },
+    "newRole": {
+      "id": 4,
+      "name": "packer",
+      "displayName": "Packer"
+    },
+    "roleChangeReason": "Promoted to packer position",
+    "roleChangedAt": "2024-01-01T17:00:00.000Z",
+    "roleChangedBy": 1
+  },
+  "error": null
 }
 ```
 
-### Deactivate User
+## Deactivate User
+
+### Remove User
+Deactivate a user account (soft delete).
 
 **Endpoint:** `DELETE /api/users/:userId`
 
-**Description:** Deactivates a user account (requires admin authentication and users_roles:manage permission).
-
 **Headers:**
 ```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 ```
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
-curl -X DELETE "http://localhost:3000/api/users/3" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-**Mobile Client:**
-```bash
-curl -X DELETE "http://localhost:3000/api/users/3" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0"
+curl -X DELETE "http://localhost:3000/api/users/15" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
 ```
 
 **Response:**
 ```json
 {
+  "statusCode": 200,
   "success": true,
   "data": {
-    "id": 3,
-    "email": "user@ozi.com",
-    "isActive": false,
+    "id": 15,
+    "email": "picker@example.com",
+    "firstName": "John",
+    "lastName": "Picker",
+    "status": "deactivated",
+    "deactivatedAt": "2024-01-01T18:00:00.000Z",
+    "deactivatedBy": 1,
     "message": "User deactivated successfully"
-  }
+  },
+  "error": null
 }
 ```
 
-## 📱 Mobile App Considerations
+## User Creation Examples
 
-### Version Check Headers
-For mobile clients, the following headers are required:
-- `source: mobile` - Identifies the request as coming from a mobile app
-- `app-version: 1.2.0` - Current app version for compatibility checking
+### 1. Create Warehouse Manager
+```bash
+curl -X POST "http://localhost:3000/api/users" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "warehouse.manager@example.com",
+    "password": "SecurePassword123",
+    "firstName": "Michael",
+    "lastName": "Warehouse",
+    "phone": "+1234567892",
+    "roleId": 5,
+    "warehouseId": 1
+  }'
+```
 
-### Version Compatibility
-- Minimum supported version: 1.0.0
-- If app version is below minimum, API returns 426 status code
-- Web clients don't require version checking
+### 2. Create Senior Picker
+```bash
+curl -X POST "http://localhost:3000/api/users" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "senior.picker@example.com",
+    "password": "SecurePassword123",
+    "firstName": "Lisa",
+    "lastName": "Senior",
+    "phone": "+1234567893",
+    "roleId": 6,
+    "warehouseId": 1
+  }'
+```
 
-### Device Management
-- Mobile apps should provide unique device identifiers
-- Platform detection (ios/android) for analytics
-- Secure token storage using platform-specific methods
+### 3. Create Quality Control Specialist
+```bash
+curl -X POST "http://localhost:3000/api/users" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "quality@example.com",
+    "password": "SecurePassword123",
+    "firstName": "David",
+    "lastName": "Quality",
+    "phone": "+1234567894",
+    "roleId": 7,
+    "warehouseId": 1
+  }'
+```
 
-## ⚠️ Error Responses
+## User Status Management
 
-### Common Error Responses
+### Available Statuses
+- **active**: User can log in and use the system
+- **inactive**: User account is temporarily disabled
+- **deactivated**: User account is permanently disabled
+- **suspended**: User account is temporarily suspended
 
-**Unauthorized Access:**
+### Status Change Reasons
+Common reasons for status changes:
+- **Promotion**: User moved to a different role
+- **Performance**: Performance-related status changes
+- **Leave**: User on leave or vacation
+- **Termination**: User left the company
+- **Security**: Security-related account suspension
+
+## User Role Management
+
+### Role Assignment Rules
+- Users can only have one role at a time
+- Role changes are logged with reasons
+- Previous role information is preserved
+- Role changes require appropriate permissions
+
+### Role Change Workflow
+1. **Assessment**: Evaluate current performance and skills
+2. **Approval**: Get management approval for role change
+3. **Notification**: Inform user about role change
+4. **Training**: Provide necessary training for new role
+5. **Implementation**: Execute role change in system
+
+## Error Responses
+
+### Insufficient Permissions
 ```json
 {
+  "statusCode": 403,
   "success": false,
-  "error": "Unauthorized",
-  "message": "Invalid token",
-  "statusCode": 401
+  "data": null,
+  "error": "Insufficient permissions. Required: users_roles:manage"
 }
 ```
 
-**Insufficient Permissions:**
+### User Not Found
 ```json
 {
+  "statusCode": 404,
   "success": false,
-  "error": "Insufficient permissions",
-  "message": "Insufficient permissions",
-  "statusCode": 403
+  "data": null,
+  "error": "User not found"
 }
 ```
 
-**User Not Found:**
+### Email Already Exists
 ```json
 {
+  "statusCode": 400,
   "success": false,
-  "error": "User not found",
-  "message": "User not found",
-  "statusCode": 404
+  "data": null,
+  "error": "Email already exists"
 }
 ```
 
-**Invalid Role:**
+### Invalid Role
 ```json
 {
+  "statusCode": 400,
   "success": false,
-  "error": "Invalid role name",
-  "message": "Invalid role name",
-  "statusCode": 400
+  "data": null,
+  "error": "Invalid role ID"
 }
 ```
 
-**Cannot Deactivate Last Admin:**
+### Cannot Deactivate Admin
 ```json
 {
+  "statusCode": 400,
   "success": false,
-  "error": "Cannot deactivate the last admin user",
-  "message": "Cannot deactivate the last admin user",
-  "statusCode": 403
+  "data": null,
+  "error": "Cannot deactivate admin users"
 }
 ```
 
-**Cannot Deactivate Self:**
-```json
-{
-  "success": false,
-  "error": "Cannot deactivate your own account",
-  "message": "Cannot deactivate your own account",
-  "statusCode": 403
-}
-```
+## Best Practices
 
-**App Version Too Old (Mobile Only):**
-```json
-{
-  "success": false,
-  "error": "Upgrade Required",
-  "message": "Please update your app to version 1.0.0 or higher",
-  "statusCode": 426
-}
-```
+### User Creation
+- Use strong, unique passwords
+- Assign appropriate roles based on job functions
+- Include contact information for communication
+- Set proper warehouse assignments
 
-**Missing App Version (Mobile Only):**
-```json
-{
-  "success": false,
-  "error": "Bad Request",
-  "message": "App version is required for mobile users",
-  "statusCode": 400
-}
-```
+### User Management
+- Regularly review user status and roles
+- Document all status and role changes
+- Provide clear reasons for changes
+- Maintain audit trail of all modifications
 
-## 🔐 Security Features
+### Security Considerations
+- Never share user credentials
+- Implement password policies
+- Regular security audits
+- Monitor user access patterns
 
-1. **JWT Authentication**: All endpoints require valid JWT tokens
-2. **Role-Based Access Control**: Users must have specific permissions
-3. **Permission Validation**: `users_roles:manage` permission required for most operations
-4. **Self-Protection**: Users cannot deactivate their own accounts
-5. **Admin Protection**: Last admin user cannot be deactivated
-6. **Version Control**: Mobile app compatibility checking
-7. **Audit Logging**: Track all user management operations
+## Mobile App Integration
 
-## 📋 Operation Flow
+### User Display
+- Show user information based on permissions
+- Display role and warehouse information
+- Provide status indicators
+- Show last login information
 
-### User Creation Flow
-1. Admin provides user details (email, password, role)
-2. System validates input data
-3. System checks for existing users with same email
-4. System validates role exists
-5. Password is hashed and stored
-6. User account is created
-7. Success response with user details
+### User Management
+- Implement role-based feature access
+- Handle permission changes gracefully
+- Cache user information for offline use
+- Sync user updates when online
 
-### User Role Change Flow
-1. Admin provides new role information
-2. System validates role exists
-3. System prevents changing to admin role through this endpoint
-4. System prevents changing last admin user
-5. User role is updated
-6. Success response with updated user details
-
-### User Deactivation Flow
-1. Admin requests user deactivation
-2. System validates user exists
-3. System prevents self-deactivation
-4. System prevents deactivating last admin
-5. User account is deactivated
-6. Success response with confirmation
-
----
-
-This document covers all user management endpoints with examples for both web and mobile clients. Mobile clients must include version headers for compatibility checking. All endpoints are verified against the actual controller code and will work correctly with localhost:3000.
+### Offline Handling
+- Cache user data locally
+- Queue user management operations
+- Sync changes when connection restored
+- Handle permission conflicts

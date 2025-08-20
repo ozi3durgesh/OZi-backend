@@ -1,719 +1,861 @@
 # Picking Module
 
-This document covers all picking module endpoints for the OZi Backend system.
+This module handles picking wave generation, assignment, and execution. Users need appropriate picking permissions to access these endpoints.
 
-**Base URL:** `http://localhost:3000`
+## Generate Picking Waves
 
-## 📦 Picking Wave Operations
-
-### Generate Picking Waves
+### Create New Picking Waves
+Generate picking waves based on pending orders and warehouse capacity.
 
 **Endpoint:** `POST /api/picking/waves/generate`
 
-**Description:** Generates new picking waves from order IDs.
-
 **Headers:**
 ```bash
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 Content-Type: application/json
-Authorization: Bearer your_jwt_token
 ```
 
 **Request Body:**
 ```json
 {
-  "orderIds": [1, 2, 3, 4, 5],
-  "priority": "HIGH",
-  "routeOptimization": true,
-  "fefoRequired": false,
-  "tagsAndBags": false,
-  "maxOrdersPerWave": 20
+  "warehouseId": 1,
+  "priority": "high",
+  "maxItemsPerWave": 50,
+  "includeExpiringItems": true,
+  "waveType": "standard"
 }
 ```
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
 curl -X POST "http://localhost:3000/api/picking/waves/generate" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "orderIds": [1, 2, 3, 4, 5],
-    "priority": "HIGH",
-    "routeOptimization": true,
-    "maxOrdersPerWave": 20
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X POST "http://localhost:3000/api/picking/waves/generate" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "orderIds": [1, 2, 3, 4, 5],
-    "priority": "HIGH",
-    "routeOptimization": true,
-    "maxOrdersPerWave": 20
+    "warehouseId": 1,
+    "priority": "high",
+    "maxItemsPerWave": 50,
+    "includeExpiringItems": true,
+    "waveType": "standard"
   }'
 ```
 
 **Response:**
 ```json
 {
+  "statusCode": 201,
   "success": true,
-  "message": "Generated 1 picking waves",
   "data": {
+    "wavesGenerated": 3,
+    "totalItems": 125,
     "waves": [
       {
-        "id": 1,
-        "waveNumber": "W1642233600000-1",
-        "status": "GENERATED",
-        "totalOrders": 5,
-        "totalItems": 15,
-        "estimatedDuration": 10,
-        "slaDeadline": "2024-01-16T10:30:00.000Z"
+        "waveId": "WAVE-2024-001",
+        "status": "pending",
+        "priority": "high",
+        "itemCount": 45,
+        "estimatedDuration": 120,
+        "assignedPicker": null,
+        "createdAt": "2024-01-01T21:00:00.000Z"
+      },
+      {
+        "waveId": "WAVE-2024-002",
+        "status": "pending",
+        "priority": "high",
+        "itemCount": 38,
+        "estimatedDuration": 95,
+        "assignedPicker": null,
+        "createdAt": "2024-01-01T21:00:00.000Z"
+      },
+      {
+        "waveId": "WAVE-2024-003",
+        "status": "pending",
+        "priority": "high",
+        "itemCount": 42,
+        "estimatedDuration": 105,
+        "assignedPicker": null,
+        "createdAt": "2024-01-01T21:00:00.000Z"
       }
-    ]
-  }
+    ],
+    "message": "Picking waves generated successfully"
+  },
+  "error": null
 }
 ```
 
+## Assign Picking Waves
+
 ### Assign Waves to Pickers
+Assign picking waves to available pickers.
 
 **Endpoint:** `GET /api/picking/waves/assign`
 
-**Description:** Auto-assigns available waves to pickers.
-
 **Headers:**
 ```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 ```
 
 **Query Parameters:**
-- `maxWavesPerPicker` (optional): Maximum waves per picker (default: 3)
+- `warehouseId` (optional): Filter by warehouse
+- `priority` (optional): Filter by priority level
+- `pickerId` (optional): Assign to specific picker
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
-curl -X GET "http://localhost:3000/api/picking/waves/assign?maxWavesPerPicker=3" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
+# Get available waves for assignment
+curl -X GET "http://localhost:3000/api/picking/waves/assign" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
 
-**Mobile Client:**
-```bash
-curl -X GET "http://localhost:3000/api/picking/waves/assign?maxWavesPerPicker=3" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0"
+# Assign to specific picker
+curl -X GET "http://localhost:3000/api/picking/waves/assign?pickerId=5" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
 ```
 
 **Response:**
 ```json
 {
+  "statusCode": 200,
   "success": true,
-  "message": "Assigned 2 waves to pickers",
   "data": {
-    "assignments": [
+    "availableWaves": [
       {
-        "waveId": 1,
-        "waveNumber": "W1642233600000-1",
-        "pickerId": 2,
-        "pickerEmail": "picker@ozi.com",
-        "assignedAt": "2024-01-15T10:30:00.000Z"
+        "waveId": "WAVE-2024-001",
+        "status": "pending",
+        "priority": "high",
+        "itemCount": 45,
+        "estimatedDuration": 120,
+        "orders": [
+          {
+            "orderId": "ORD-2024-001",
+            "priority": "high",
+            "itemCount": 2
+          },
+          {
+            "orderId": "ORD-2024-002",
+            "priority": "normal",
+            "itemCount": 1
+          }
+        ],
+        "zones": ["A1", "B2", "C3"],
+        "assignedPicker": null
+      }
+    ],
+    "availablePickers": [
+      {
+        "pickerId": 5,
+        "name": "John Picker",
+        "currentStatus": "available",
+        "lastWaveCompleted": "2024-01-01T20:30:00.000Z",
+        "averagePickRate": 25
+      },
+      {
+        "pickerId": 8,
+        "name": "Sarah Picker",
+        "currentStatus": "available",
+        "lastWaveCompleted": "2024-01-01T20:45:00.000Z",
+        "averagePickRate": 30
+      }
+    ],
+    "assignmentSuggestions": [
+      {
+        "waveId": "WAVE-2024-001",
+        "suggestedPicker": 5,
+        "reason": "Best match for zones and experience",
+        "estimatedEfficiency": 0.95
       }
     ]
-  }
+  },
+  "error": null
 }
 ```
 
-### Get Available Waves
+## Get Available Waves
+
+### List Available Picking Waves
+Get a list of available picking waves for the authenticated user.
 
 **Endpoint:** `GET /api/picking/waves/available`
 
-**Description:** Lists available picking waves with filtering and pagination.
-
 **Headers:**
 ```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 ```
 
 **Query Parameters:**
-- `status` (optional): Filter by wave status
-- `priority` (optional): Filter by priority
-- `page` (optional): Page number (default: 1)
-- `limit` (optional): Items per page (default: 10)
+- `warehouseId` (optional): Filter by warehouse
+- `priority` (optional): Filter by priority level
+- `zone` (optional): Filter by warehouse zone
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
-curl -X GET "http://localhost:3000/api/picking/waves/available?status=ASSIGNED&priority=HIGH&page=1&limit=10" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
+# Get all available waves
+curl -X GET "http://localhost:3000/api/picking/waves/available" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
 
-**Mobile Client:**
-```bash
-curl -X GET "http://localhost:3000/api/picking/waves/available?status=ASSIGNED&priority=HIGH&page=1&limit=10" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0"
+# Filter by priority
+curl -X GET "http://localhost:3000/api/picking/waves/available?priority=high" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
+
+# Filter by zone
+curl -X GET "http://localhost:3000/api/picking/waves/available?zone=A1" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
 ```
 
 **Response:**
 ```json
 {
+  "statusCode": 200,
   "success": true,
-  "data": {
-    "waves": [
-      {
-        "id": 1,
-        "waveNumber": "W1642233600000-1",
-        "status": "ASSIGNED",
-        "priority": "HIGH",
-        "totalOrders": 5,
-        "totalItems": 15,
-        "estimatedDuration": 10,
-        "slaDeadline": "2024-01-16T10:30:00.000Z"
-      }
-    ],
-    "pagination": {
-      "page": 1,
-      "limit": 10,
-      "total": 1,
-      "totalPages": 1
+  "data": [
+    {
+      "waveId": "WAVE-2024-001",
+      "status": "available",
+      "priority": "high",
+      "itemCount": 45,
+      "estimatedDuration": 120,
+      "orders": [
+        {
+          "orderId": "ORD-2024-001",
+          "customerName": "John Doe",
+          "priority": "high",
+          "itemCount": 2,
+          "specialInstructions": "Handle with care"
+        }
+      ],
+      "zones": ["A1", "B2", "C3"],
+      "items": [
+        {
+          "sku": "PROD-001",
+          "description": "Product Description",
+          "quantity": 2,
+          "location": "A1-01-01",
+          "binNumber": "BIN001"
+        },
+        {
+          "sku": "PROD-002",
+          "description": "Another Product",
+          "quantity": 1,
+          "location": "B2-03-02",
+          "binNumber": "BIN045"
+        }
+      ],
+      "assignedPicker": null,
+      "createdAt": "2024-01-01T21:00:00.000Z"
     }
-  }
+  ],
+  "error": null
 }
 ```
 
-## 🚀 Picker Operations
+## Start Picking
 
-### Start Picking
+### Begin Picking Wave
+Start a picking wave and assign it to the current user.
 
 **Endpoint:** `POST /api/picking/waves/:waveId/start`
 
-**Description:** Starts picking operations for a specific wave.
-
 **Headers:**
 ```bash
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 Content-Type: application/json
-Authorization: Bearer your_jwt_token
 ```
 
-**cURL Examples:**
-
-**Web Client:**
-```bash
-curl -X POST "http://localhost:3000/api/picking/waves/1/start" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
+**Request Body:**
+```json
+{
+  "pickerId": 5,
+  "startTime": "2024-01-01T21:15:00.000Z",
+  "deviceId": "PICKER-001"
+}
 ```
 
-**Mobile Client:**
+**cURL Example:**
 ```bash
-curl -X POST "http://localhost:3000/api/picking/waves/1/start" \
+curl -X POST "http://localhost:3000/api/picking/waves/WAVE-2024-001/start" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0"
+  -d '{
+    "pickerId": 5,
+    "startTime": "2024-01-01T21:15:00.000Z",
+    "deviceId": "PICKER-001"
+  }'
 ```
 
 **Response:**
 ```json
 {
+  "statusCode": 200,
   "success": true,
-  "message": "Picking started successfully",
   "data": {
-    "wave": {
-      "id": 1,
-      "waveNumber": "W1642233600000-1",
-      "status": "PICKING",
-      "totalItems": 15,
-      "estimatedDuration": 10
-    },
-    "picklistItems": [
+    "waveId": "WAVE-2024-001",
+    "status": "in_progress",
+    "pickerId": 5,
+    "pickerName": "John Picker",
+    "startTime": "2024-01-01T21:15:00.000Z",
+    "estimatedCompletion": "2024-01-01T21:35:00.000Z",
+    "items": [
       {
-        "id": 1,
-        "sku": "SKU001",
-        "productName": "Product 1",
-        "binLocation": "A1-B2-C3",
+        "sku": "PROD-001",
+        "description": "Product Description",
         "quantity": 2,
-        "scanSequence": 1,
-        "fefoBatch": null,
-        "expiryDate": null
+        "location": "A1-01-01",
+        "binNumber": "BIN001",
+        "status": "pending"
+      },
+      {
+        "sku": "PROD-002",
+        "description": "Another Product",
+        "quantity": 1,
+        "location": "B2-03-02",
+        "binNumber": "BIN045",
+        "status": "pending"
       }
-    ]
-  }
+    ],
+    "progress": {
+      "totalItems": 45,
+      "pickedItems": 0,
+      "percentage": 0
+    },
+    "message": "Picking wave started successfully"
+  },
+  "error": null
 }
 ```
 
-### Scan Item
+## Scan Item
+
+### Record Item Pick
+Record when an item is picked during the picking process.
 
 **Endpoint:** `POST /api/picking/waves/:waveId/scan`
 
-**Description:** Scans an item during picking process.
-
 **Headers:**
 ```bash
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 Content-Type: application/json
-Authorization: Bearer your_jwt_token
 ```
 
 **Request Body:**
 ```json
 {
-  "sku": "SKU001",
-  "binLocation": "A1-B2-C3",
-  "quantity": 2
+  "sku": "PROD-001",
+  "quantity": 2,
+  "location": "A1-01-01",
+  "binNumber": "BIN001",
+  "scanTime": "2024-01-01T21:16:00.000Z",
+  "notes": "Items in good condition"
 }
 ```
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
-curl -X POST "http://localhost:3000/api/picking/waves/1/scan" \
+curl -X POST "http://localhost:3000/api/picking/waves/WAVE-2024-001/scan" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "sku": "SKU001",
-    "binLocation": "A1-B2-C3",
-    "quantity": 2
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X POST "http://localhost:3000/api/picking/waves/1/scan" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "sku": "SKU001",
-    "binLocation": "A1-B2-C3",
-    "quantity": 2
+    "sku": "PROD-001",
+    "quantity": 2,
+    "location": "A1-01-01",
+    "binNumber": "BIN001",
+    "scanTime": "2024-01-01T21:16:00.000Z",
+    "notes": "Items in good condition"
   }'
 ```
 
 **Response:**
 ```json
 {
+  "statusCode": 200,
   "success": true,
-  "message": "Item scanned successfully",
   "data": {
-    "item": {
-      "id": 1,
-      "sku": "SKU001",
-      "productName": "Product 1",
-      "status": "PICKED",
-      "pickedQuantity": 2,
-      "remainingQuantity": 0
+    "waveId": "WAVE-2024-001",
+    "itemScanned": {
+      "sku": "PROD-001",
+      "description": "Product Description",
+      "quantity": 2,
+      "location": "A1-01-01",
+      "binNumber": "BIN001",
+      "status": "picked",
+      "pickedAt": "2024-01-01T21:16:00.000Z"
     },
-    "waveStatus": "PICKING",
-    "remainingItems": 14
-  }
+    "progress": {
+      "totalItems": 45,
+      "pickedItems": 2,
+      "percentage": 4.44
+    },
+    "nextItem": {
+      "sku": "PROD-002",
+      "description": "Another Product",
+      "quantity": 1,
+      "location": "B2-03-02",
+      "binNumber": "BIN045"
+    },
+    "message": "Item picked successfully"
+  },
+  "error": null
 }
 ```
 
-### Report Partial Pick
+## Report Partial Pick
+
+### Report Incomplete Pick
+Report when an item cannot be fully picked due to insufficient stock.
 
 **Endpoint:** `POST /api/picking/waves/:waveId/partial`
 
-**Description:** Reports a partial pick with reason and notes.
-
 **Headers:**
 ```bash
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 Content-Type: application/json
-Authorization: Bearer your_jwt_token
 ```
 
 **Request Body:**
 ```json
 {
-  "sku": "SKU002",
-  "binLocation": "A1-B2-C4",
-  "reason": "OOS",
-  "photo": "photo_url_here",
-  "notes": "Item out of stock",
-  "pickedQuantity": 0
+  "sku": "PROD-003",
+  "requestedQuantity": 5,
+  "availableQuantity": 2,
+  "location": "C3-02-01",
+  "binNumber": "BIN078",
+  "reason": "insufficient_stock",
+  "notes": "Only 2 items available in bin"
 }
 ```
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
-curl -X POST "http://localhost:3000/api/picking/waves/1/partial" \
+curl -X POST "http://localhost:3000/api/picking/waves/WAVE-2024-001/partial" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "sku": "SKU002",
-    "binLocation": "A1-B2-C4",
-    "reason": "OOS",
-    "notes": "Item out of stock",
-    "pickedQuantity": 0
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X POST "http://localhost:3000/api/picking/waves/1/partial" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "sku": "SKU002",
-    "binLocation": "A1-B2-C4",
-    "reason": "OOS",
-    "notes": "Item out of stock",
-    "pickedQuantity": 0
+    "sku": "PROD-003",
+    "requestedQuantity": 5,
+    "availableQuantity": 2,
+    "location": "C3-02-01",
+    "binNumber": "BIN078",
+    "reason": "insufficient_stock",
+    "notes": "Only 2 items available in bin"
   }'
 ```
 
 **Response:**
 ```json
 {
+  "statusCode": 200,
   "success": true,
-  "message": "Partial pick reported successfully",
   "data": {
-    "item": {
-      "id": 2,
-      "sku": "SKU002",
-      "status": "PARTIAL",
-      "partialReason": "OOS",
-      "pickedQuantity": 0
-    }
-  }
+    "waveId": "WAVE-2024-001",
+    "partialPick": {
+      "sku": "PROD-003",
+      "requestedQuantity": 5,
+      "availableQuantity": 2,
+      "pickedQuantity": 2,
+      "shortage": 3,
+      "location": "C3-02-01",
+      "binNumber": "BIN078",
+      "reason": "insufficient_stock",
+      "notes": "Only 2 items available in bin",
+      "reportedAt": "2024-01-01T21:20:00.000Z"
+    },
+    "exceptions": [
+      {
+        "type": "partial_pick",
+        "sku": "PROD-003",
+        "shortage": 3,
+        "action": "notify_inventory",
+        "priority": "medium"
+      }
+    ],
+    "message": "Partial pick reported successfully"
+  },
+  "error": null
 }
 ```
 
-### Complete Picking
+## Complete Picking
+
+### Finish Picking Wave
+Complete a picking wave and mark it as finished.
 
 **Endpoint:** `POST /api/picking/waves/:waveId/complete`
 
-**Description:** Completes picking for a specific wave.
-
 **Headers:**
 ```bash
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 Content-Type: application/json
-Authorization: Bearer your_jwt_token
 ```
 
-**cURL Examples:**
-
-**Web Client:**
-```bash
-curl -X POST "http://localhost:3000/api/picking/waves/1/complete" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
+**Request Body:**
+```json
+{
+  "completionTime": "2024-01-01T21:35:00.000Z",
+  "totalPicked": 42,
+  "totalExceptions": 1,
+  "notes": "Wave completed successfully with one partial pick",
+  "qualityCheck": "passed"
+}
 ```
 
-**Mobile Client:**
+**cURL Example:**
 ```bash
-curl -X POST "http://localhost:3000/api/picking/waves/1/complete" \
+curl -X POST "http://localhost:3000/api/picking/waves/WAVE-2024-001/complete" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0"
+  -d '{
+    "completionTime": "2024-01-01T21:35:00.000Z",
+    "totalPicked": 42,
+    "totalExceptions": 1,
+    "notes": "Wave completed successfully with one partial pick",
+    "qualityCheck": "passed"
+  }'
 ```
 
 **Response:**
 ```json
 {
+  "statusCode": 200,
   "success": true,
-  "message": "Picking completed successfully",
   "data": {
-    "wave": {
-      "id": 1,
-      "waveNumber": "W1642233600000-1",
-      "status": "COMPLETED",
-      "completedAt": "2024-01-15T10:30:00.000Z"
+    "waveId": "WAVE-2024-001",
+    "status": "completed",
+    "pickerId": 5,
+    "pickerName": "John Picker",
+    "startTime": "2024-01-01T21:15:00.000Z",
+    "completionTime": "2024-01-01T21:35:00.000Z",
+    "duration": 1200,
+    "summary": {
+      "totalItems": 45,
+      "pickedItems": 42,
+      "partialPicks": 1,
+      "exceptions": 1,
+      "efficiency": 93.33
     },
-    "metrics": {
-      "totalItems": 15,
-      "pickedItems": 13,
-      "partialItems": 2,
-      "accuracy": 86.67
-    }
-  }
+    "exceptions": [
+      {
+        "sku": "PROD-003",
+        "type": "partial_pick",
+        "shortage": 3,
+        "action": "notify_inventory"
+      }
+    ],
+    "nextSteps": [
+      "Move picked items to packing area",
+      "Process exceptions for inventory update",
+      "Update wave status in system"
+    ],
+    "message": "Picking wave completed successfully"
+  },
+  "error": null
 }
 ```
 
-## 📊 Monitoring
+## Get SLA Status
 
-### Get SLA Status
+### Check Picking SLA Status
+Get the SLA status for all picking waves.
 
 **Endpoint:** `GET /api/picking/sla-status`
 
-**Description:** Checks SLA compliance for picking waves.
-
 **Headers:**
 ```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 ```
 
-**Query Parameters:**
-- `waveId` (optional): Filter by specific wave ID
-
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
-curl -X GET "http://localhost:3000/api/picking/sla-status?waveId=1" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-**Mobile Client:**
-```bash
-curl -X GET "http://localhost:3000/api/picking/sla-status?waveId=1" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0"
+curl -X GET "http://localhost:3000/api/picking/sla-status" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
 ```
 
 **Response:**
 ```json
 {
+  "statusCode": 200,
   "success": true,
   "data": {
-    "slaMetrics": {
-      "total": 1,
-      "onTime": 1,
-      "atRisk": 0,
-      "breached": 0,
-      "waves": [
-        {
-          "id": 1,
-          "waveNumber": "W1642233600000-1",
-          "status": "COMPLETED",
-          "priority": "HIGH",
-          "slaDeadline": "2024-01-16T10:30:00.000Z",
-          "slaStatus": "onTime",
-          "hoursToDeadline": 24
-        }
-      ]
+    "overview": {
+      "totalWaves": 15,
+      "onTrack": 12,
+      "atRisk": 2,
+      "breached": 1,
+      "averageCompletionTime": 95
     },
-    "summary": {
-      "onTimePercentage": 100,
-      "atRiskPercentage": 0,
-      "breachedPercentage": 0
-    }
-  }
+    "slaDetails": [
+      {
+        "waveId": "WAVE-2024-001",
+        "status": "on_track",
+        "priority": "high",
+        "startTime": "2024-01-01T21:15:00.000Z",
+        "estimatedCompletion": "2024-01-01T21:35:00.000Z",
+        "remainingTime": 1200,
+        "progress": 80
+      },
+      {
+        "waveId": "WAVE-2024-002",
+        "status": "at_risk",
+        "priority": "normal",
+        "startTime": "2024-01-01T21:00:00.000Z",
+        "estimatedCompletion": "2024-01-01T21:45:00.000Z",
+        "remainingTime": 300,
+        "progress": 60
+      }
+    ],
+    "recommendations": [
+      "Reassign WAVE-2024-002 to experienced picker",
+      "Prioritize high-priority waves",
+      "Monitor picker performance"
+    ]
+  },
+  "error": null
 }
 ```
 
-### Get Expiry Alerts
+## Get Expiry Alerts
+
+### Check Expiring Items
+Get alerts for items that are approaching expiration.
 
 **Endpoint:** `GET /api/picking/expiry-alerts`
 
-**Description:** Gets alerts for items approaching expiry.
-
 **Headers:**
 ```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 ```
 
 **Query Parameters:**
-- `daysThreshold` (optional): Days threshold for alerts (default: 7)
+- `daysThreshold` (optional): Days before expiry to alert (default: 30)
+- `warehouseId` (optional): Filter by warehouse
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
-curl -X GET "http://localhost:3000/api/picking/expiry-alerts?daysThreshold=7" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
+# Get default expiry alerts (30 days)
+curl -X GET "http://localhost:3000/api/picking/expiry-alerts" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
 
-**Mobile Client:**
-```bash
+# Get alerts for items expiring in 7 days
 curl -X GET "http://localhost:3000/api/picking/expiry-alerts?daysThreshold=7" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0"
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
 ```
 
 **Response:**
 ```json
 {
+  "statusCode": 200,
   "success": true,
   "data": {
-    "totalAlerts": 2,
     "alerts": [
       {
-        "id": 1,
-        "sku": "SKU003",
-        "productName": "Product 3",
-        "expiryDate": "2024-01-20T00:00:00.000Z",
-        "daysUntilExpiry": 5,
-        "urgency": "HIGH",
-        "orderId": 3
+        "sku": "PROD-EXP-001",
+        "description": "Expiring Product",
+        "location": "A1-05-03",
+        "binNumber": "BIN123",
+        "currentStock": 25,
+        "expiryDate": "2024-01-15T00:00:00.000Z",
+        "daysUntilExpiry": 14,
+        "priority": "high",
+        "recommendedAction": "Prioritize picking for immediate orders"
+      },
+      {
+        "sku": "PROD-EXP-002",
+        "description": "Another Expiring Product",
+        "location": "B2-01-07",
+        "binNumber": "BIN456",
+        "currentStock": 10,
+        "expiryDate": "2024-01-25T00:00:00.000Z",
+        "daysUntilExpiry": 24,
+        "priority": "medium",
+        "recommendedAction": "Include in next picking wave"
       }
-    ]
-  }
+    ],
+    "summary": {
+      "totalAlerts": 2,
+      "highPriority": 1,
+      "mediumPriority": 1,
+      "lowPriority": 0,
+      "totalStockAtRisk": 35
+    }
+  },
+  "error": null
 }
 ```
 
-## 📱 Mobile App Considerations
+## Picking Workflow Examples
 
-### Version Check Headers
-For mobile clients, the following headers are required:
-- `source: mobile` - Identifies the request as coming from a mobile app
-- `app-version: 1.2.0` - Current app version for compatibility checking
+### 1. Complete Picking Wave
+```bash
+# Start picking wave
+curl -X POST "http://localhost:3000/api/picking/waves/WAVE-2024-001/start" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "pickerId": 5,
+    "startTime": "2024-01-01T21:15:00.000Z",
+    "deviceId": "PICKER-001"
+  }'
 
-### Version Compatibility
-- Minimum supported version: 1.0.0
-- If app version is below minimum, API returns 426 status code
-- Web clients don't require version checking
+# Scan first item
+curl -X POST "http://localhost:3000/api/picking/waves/WAVE-2024-001/scan" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sku": "PROD-001",
+    "quantity": 2,
+    "location": "A1-01-01",
+    "binNumber": "BIN001",
+    "scanTime": "2024-01-01T21:16:00.000Z"
+  }'
 
-### Device Management
-- Mobile apps should provide unique device identifiers
-- Platform detection (ios/android) for analytics
-- Secure token storage using platform-specific methods
+# Complete wave
+curl -X POST "http://localhost:3000/api/picking/waves/WAVE-2024-001/complete" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "completionTime": "2024-01-01T21:35:00.000Z",
+    "totalPicked": 42,
+    "totalExceptions": 1,
+    "notes": "Wave completed successfully"
+  }'
+```
 
-## ⚠️ Error Responses
+### 2. Handle Partial Pick
+```bash
+# Report partial pick
+curl -X POST "http://localhost:3000/api/picking/waves/WAVE-2024-001/partial" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sku": "PROD-003",
+    "requestedQuantity": 5,
+    "availableQuantity": 2,
+    "location": "C3-02-01",
+    "binNumber": "BIN078",
+    "reason": "insufficient_stock",
+    "notes": "Only 2 items available"
+  }'
+```
 
-### Common Error Responses
+## Error Responses
 
-**Unauthorized Access:**
+### Insufficient Permissions
 ```json
 {
+  "statusCode": 403,
   "success": false,
-  "error": "Unauthorized",
-  "message": "Invalid token",
-  "statusCode": 401
+  "data": null,
+  "error": "Insufficient permissions. Required: picking:execute"
 }
 ```
 
-**Insufficient Permissions:**
+### Wave Not Found
 ```json
 {
+  "statusCode": 404,
   "success": false,
-  "error": "Forbidden",
-  "message": "Insufficient permissions to access this resource",
-  "statusCode": 403
+  "data": null,
+  "error": "Picking wave not found"
 }
 ```
 
-**User Not Available:**
+### Wave Already Started
 ```json
 {
+  "statusCode": 400,
   "success": false,
-  "error": "User not available",
-  "message": "User is currently off-shift or unavailable",
-  "statusCode": 403
+  "data": null,
+  "error": "Wave is already in progress"
 }
 ```
 
-**Wave Not Found:**
+### Invalid Item Scan
 ```json
 {
+  "statusCode": 400,
   "success": false,
-  "error": "Wave not found",
-  "message": "Wave not found",
-  "statusCode": 404
+  "data": null,
+  "error": "Invalid item scan: SKU not found in wave"
 }
 ```
 
-**Wave Not Assigned:**
+### Wave Not Started
 ```json
 {
+  "statusCode": 400,
   "success": false,
-  "error": "Wave not assigned",
-  "message": "Wave is not assigned to you",
-  "statusCode": 400
+  "data": null,
+  "error": "Cannot scan items for wave that hasn't started"
 }
 ```
 
-**Item Not Found:**
-```json
-{
-  "success": false,
-  "error": "Item not found",
-  "message": "Item not found in picklist",
-  "statusCode": 404
-}
-```
+## Best Practices
 
-**Cannot Complete:**
-```json
-{
-  "success": false,
-  "error": "Cannot complete",
-  "message": "Cannot complete: 2 items still pending",
-  "statusCode": 400
-}
-```
+### Wave Management
+- Generate waves based on order priority
+- Consider picker availability and skills
+- Optimize wave size for efficiency
+- Monitor wave progress in real-time
 
-**App Version Too Old (Mobile Only):**
-```json
-{
-  "success": false,
-  "error": "Upgrade Required",
-  "message": "Please update your app to version 1.0.0 or higher",
-  "statusCode": 426
-}
-```
+### Picking Operations
+- Follow optimal picking routes
+- Scan items immediately after picking
+- Report exceptions promptly
+- Maintain quality standards
 
-**Missing App Version (Mobile Only):**
-```json
-{
-  "success": false,
-  "error": "Bad Request",
-  "message": "App version is required for mobile users",
-  "statusCode": 400
-}
-```
+### Performance Monitoring
+- Track picker efficiency
+- Monitor SLA compliance
+- Analyze exception patterns
+- Optimize warehouse layout
 
-## 🔐 Security Features
+## Mobile App Integration
 
-1. **JWT Authentication**: All endpoints require valid JWT tokens
-2. **Permission Validation**: Specific picking permissions required
-3. **Availability Check**: Users must be available (not off-shift)
-4. **Wave Assignment**: Users can only access assigned waves
-5. **Input Validation**: Comprehensive request validation
-6. **Version Control**: Mobile app compatibility checking
-7. **Audit Logging**: Track all picking operations
+### Picking Interface
+- Show wave details clearly
+- Display item locations prominently
+- Provide scanning functionality
+- Show real-time progress
 
-## 📋 Operation Flow
+### Offline Handling
+- Cache wave information
+- Queue item scans
+- Sync when connection restored
+- Handle conflicts gracefully
 
-### Wave Generation Flow
-1. Admin provides order IDs and wave parameters
-2. System validates orders exist and are eligible
-3. System groups orders into waves
-4. System creates picklist items for each order
-5. Success response with generated waves
-
-### Wave Assignment Flow
-1. System finds available pickers with permissions
-2. System finds unassigned waves
-3. System assigns waves to pickers based on capacity
-4. Success response with assignments
-
-### Picking Execution Flow
-1. Picker starts picking for assigned wave
-2. Picker scans items during picking
-3. Picker reports partial picks if needed
-4. Picker completes picking when all items processed
-5. System calculates completion metrics
-
----
-
-This document covers all picking module endpoints with examples for both web and mobile clients. Mobile clients must include version headers for compatibility checking. All endpoints are verified against the actual controller code and will work correctly with localhost:3000.
+### User Experience
+- Intuitive navigation
+- Clear status indicators
+- Quick exception reporting
+- Progress tracking

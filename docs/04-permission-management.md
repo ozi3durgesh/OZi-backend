@@ -1,64 +1,44 @@
-# Permission Management Module
+# Permission Management (Admin Only)
 
-This document covers all permission management endpoints for the OZi Backend system.
+This module handles the creation and management of system permissions. Only users with `users_roles:manage` permission can access these endpoints.
 
-**Base URL:** `http://localhost:3000`
-
-## Overview
-
-The permission management module provides functionality for creating and managing system permissions. It supports granular access control and allows administrators to define specific permissions for different operations.
-
-## 🔐 Permission Operations
+## Create Permission
 
 ### Create New Permission
+Create a new permission in the system.
 
 **Endpoint:** `POST /api/permissions`
 
-**Description:** Creates a new permission in the system (admin only).
-
 **Headers:**
 ```bash
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 Content-Type: application/json
-Authorization: Bearer your_jwt_token
 ```
 
 **Request Body:**
 ```json
 {
-  "name": "orders:view_all",
-  "description": "View all orders in the system",
-  "module": "orders",
-  "action": "view_all"
+  "name": "inventory:adjust",
+  "displayName": "Adjust Inventory",
+  "description": "Ability to adjust inventory levels and quantities",
+  "category": "inventory",
+  "module": "warehouse"
 }
 ```
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
 curl -X POST "http://localhost:3000/api/permissions" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "name": "orders:view_all",
-    "description": "View all orders in the system",
-    "module": "orders",
-    "action": "view_all"
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X POST "http://localhost:3000/api/permissions" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "name": "orders:view_all",
-    "description": "View all orders in the system",
-    "module": "orders",
-    "action": "view_all"
+    "name": "inventory:adjust",
+    "displayName": "Adjust Inventory",
+    "description": "Ability to adjust inventory levels and quantities",
+    "category": "inventory",
+    "module": "warehouse"
   }'
 ```
 
@@ -68,46 +48,56 @@ curl -X POST "http://localhost:3000/api/permissions" \
   "statusCode": 201,
   "success": true,
   "data": {
-    "id": 1,
-    "name": "orders:view_all",
-    "description": "View all orders in the system",
-    "module": "orders",
-    "action": "view_all",
-    "created_at": "2024-01-15T10:30:00.000Z",
-    "updated_at": "2024-01-15T10:30:00.000Z"
+    "id": 25,
+    "name": "inventory:adjust",
+    "displayName": "Adjust Inventory",
+    "description": "Ability to adjust inventory levels and quantities",
+    "category": "inventory",
+    "module": "warehouse",
+    "createdAt": "2024-01-01T14:00:00.000Z",
+    "updatedAt": "2024-01-01T14:00:00.000Z"
   },
   "error": null
 }
 ```
 
-### List All Permissions
+## List Permissions
+
+### Get All Permissions
+Retrieve a list of all permissions in the system.
 
 **Endpoint:** `GET /api/permissions`
 
-**Description:** Retrieves all permissions in the system (admin only).
-
 **Headers:**
 ```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 ```
 
-**cURL Examples:**
+**Query Parameters:**
+- `category` (optional): Filter by permission category
+- `module` (optional): Filter by module
+- `search` (optional): Search in permission names and descriptions
 
-**Web Client:**
+**cURL Example:**
 ```bash
+# Get all permissions
 curl -X GET "http://localhost:3000/api/permissions" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
 
-**Mobile Client:**
-```bash
-curl -X GET "http://localhost:3000/api/permissions" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0"
+# Filter by category
+curl -X GET "http://localhost:3000/api/permissions?category=warehouse" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
+
+# Search permissions
+curl -X GET "http://localhost:3000/api/permissions?search=picking" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
 ```
 
 **Response:**
@@ -118,173 +108,319 @@ curl -X GET "http://localhost:3000/api/permissions" \
   "data": [
     {
       "id": 1,
-      "name": "orders:view_all",
-      "description": "View all orders in the system",
-      "module": "orders",
-      "action": "view_all",
-      "created_at": "2024-01-15T10:30:00.000Z",
-      "updated_at": "2024-01-15T10:30:00.000Z"
+      "name": "users_roles:manage",
+      "displayName": "Manage Users and Roles",
+      "description": "Full user and role management capabilities",
+      "category": "administration",
+      "module": "users",
+      "usageCount": 1,
+      "createdAt": "2024-01-01T00:00:00.000Z"
     },
     {
       "id": 2,
-      "name": "users_roles:manage",
-      "description": "Manage users and roles",
-      "module": "users_roles",
-      "action": "manage",
-      "created_at": "2024-01-15T10:30:00.000Z",
-      "updated_at": "2024-01-15T10:30:00.000Z"
+      "name": "orders:view_all",
+      "displayName": "View All Orders",
+      "description": "Access to view all orders in the system",
+      "category": "orders",
+      "module": "orders",
+      "usageCount": 3,
+      "createdAt": "2024-01-01T00:00:00.000Z"
     },
     {
       "id": 3,
-      "name": "picking:assign_manage",
-      "description": "Assign and manage picking operations",
+      "name": "orders:view_own",
+      "displayName": "View Own Orders",
+      "description": "Access to view only own orders",
+      "category": "orders",
+      "module": "orders",
+      "usageCount": 8,
+      "createdAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "id": 4,
+      "name": "picking:execute",
+      "displayName": "Execute Picking",
+      "description": "Perform picking operations",
+      "category": "operations",
       "module": "picking",
-      "action": "assign_manage",
-      "created_at": "2024-01-15T10:30:00.000Z",
-      "updated_at": "2024-01-15T10:30:00.000Z"
+      "usageCount": 12,
+      "createdAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "id": 5,
+      "name": "picking:view",
+      "displayName": "View Picking",
+      "description": "View picking information and reports",
+      "category": "operations",
+      "module": "picking",
+      "usageCount": 5,
+      "createdAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "id": 6,
+      "name": "picking:assign_manage",
+      "displayName": "Manage Picking Assignments",
+      "description": "Assign and manage picking waves",
+      "category": "management",
+      "module": "picking",
+      "usageCount": 2,
+      "createdAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "id": 7,
+      "name": "packing:execute",
+      "displayName": "Execute Packing",
+      "description": "Perform packing operations",
+      "category": "operations",
+      "module": "packing",
+      "usageCount": 7,
+      "createdAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "id": 8,
+      "name": "packing:view",
+      "displayName": "View Packing",
+      "description": "View packing information and reports",
+      "category": "operations",
+      "module": "packing",
+      "usageCount": 3,
+      "createdAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "id": 9,
+      "name": "warehouse:view",
+      "displayName": "View Warehouse",
+      "description": "View warehouse information and zones",
+      "category": "warehouse",
+      "module": "warehouse",
+      "usageCount": 4,
+      "createdAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "id": 10,
+      "name": "warehouse:manage",
+      "displayName": "Manage Warehouse",
+      "description": "Full warehouse management capabilities",
+      "category": "warehouse",
+      "module": "warehouse",
+      "usageCount": 1,
+      "createdAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "id": 11,
+      "name": "pos:execute",
+      "displayName": "Execute POS",
+      "description": "Perform point of sale operations",
+      "category": "sales",
+      "module": "pos",
+      "usageCount": 6,
+      "createdAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "id": 25,
+      "name": "inventory:adjust",
+      "displayName": "Adjust Inventory",
+      "description": "Ability to adjust inventory levels and quantities",
+      "category": "inventory",
+      "module": "warehouse",
+      "usageCount": 0,
+      "createdAt": "2024-01-01T14:00:00.000Z"
     }
   ],
   "error": null
 }
 ```
 
-## 📱 Mobile App Considerations
+## Permission Categories
 
-### Version Check Headers
-For mobile clients, the following headers are required:
-- `source: mobile` - Identifies the request as coming from a mobile app
-- `app-version: 1.2.0` - Current app version for compatibility checking
+The system organizes permissions into logical categories:
 
-### Version Compatibility
-- Minimum supported version: 1.0.0
-- If app version is below minimum, API returns 426 status code
-- Web clients don't require version checking
+### Administration
+- `users_roles:manage` - User and role management
+- `system:config` - System configuration
+- `system:logs` - Access system logs
+- `system:backup` - System backup operations
 
-## ⚠️ Error Responses
-
-### Common Error Responses
-
-**Unauthorized Access:**
-```json
-{
-  "statusCode": 401,
-  "success": false,
-  "error": "User not authenticated"
-}
-```
-
-**Insufficient Permissions:**
-```json
-{
-  "statusCode": 403,
-  "success": false,
-  "error": "Insufficient permissions"
-}
-```
-
-**Permission Not Found:**
-```json
-{
-  "statusCode": 404,
-  "success": false,
-  "error": "Permission not found"
-}
-```
-
-**Permission Name Already Exists:**
-```json
-{
-  "statusCode": 400,
-  "success": false,
-  "error": "Permission name already exists"
-}
-```
-
-**Invalid Permission Data:**
-```json
-{
-  "statusCode": 400,
-  "success": false,
-  "error": "Invalid permission data provided"
-}
-```
-
-**App Version Too Old (Mobile Only):**
-```json
-{
-  "success": false,
-  "error": "Upgrade Required",
-  "message": "Please update your app to version 1.0.0 or higher",
-  "statusCode": 426
-}
-```
-
-**Missing App Version (Mobile Only):**
-```json
-{
-  "success": false,
-  "error": "Bad Request",
-  "message": "App version is required for mobile users",
-  "statusCode": 400
-}
-```
-
-## 🔐 Security Features
-
-1. **JWT Authentication**: All endpoints require valid JWT tokens
-2. **Permission-Based Access**: Only users with `users_roles:manage` permission can access these endpoints
-3. **Input Validation**: Comprehensive request validation
-4. **Version Control**: Mobile app compatibility checking
-5. **Audit Logging**: Track all permission management operations
-
-## 📋 Operation Flow
-
-### Permission Creation Flow
-1. User provides permission details (name, description, module, action)
-2. System validates required fields
-3. System checks for existing permission names
-4. System creates permission record
-5. Success response with permission details
-
-### Permission Listing Flow
-1. User requests all permissions
-2. System validates user permissions
-3. System retrieves all permissions
-4. Success response with permissions list
-
-## 📚 Common Permission Examples
-
-### Order Management
+### Orders
 - `orders:view_all` - View all orders
 - `orders:view_own` - View own orders
 - `orders:create` - Create new orders
 - `orders:update` - Update orders
 - `orders:cancel` - Cancel orders
 
-### User Management
-- `users_roles:manage` - Manage users and roles
-- `users:view` - View user information
-- `users:create` - Create new users
-- `users:update` - Update user information
-- `users:delete` - Delete users
-
-### Picking Operations
-- `picking:view` - View picking operations
-- `picking:assign_manage` - Assign and manage picking
+### Operations
 - `picking:execute` - Execute picking operations
-
-### Packing Operations
-- `packing:view` - View packing operations
+- `picking:view` - View picking information
 - `packing:execute` - Execute packing operations
+- `packing:view` - View packing information
 
-### Warehouse Management
+### Management
+- `picking:assign_manage` - Manage picking assignments
+- `picking:reports` - Access picking reports
+- `packing:manage` - Manage packing operations
+- `warehouse:manage` - Full warehouse management
+
+### Warehouse
 - `warehouse:view` - View warehouse information
-- `warehouse:manage` - Manage warehouse operations
-- `staff:assign` - Assign staff to warehouses
+- `warehouse:zones` - Manage warehouse zones
+- `warehouse:staff` - Manage warehouse staff
+- `inventory:adjust` - Adjust inventory levels
 
-### POS Operations
+### Sales
 - `pos:execute` - Execute POS operations
+- `pos:view` - View POS information
+- `pos:reports` - Access POS reports
 
----
+## Permission Naming Convention
 
-This document covers all permission management endpoints with examples for both web and mobile clients. Mobile clients must include version headers for compatibility checking. All endpoints are verified against the actual controller code and will work correctly with localhost:3000.
+Permissions follow a consistent naming pattern:
+
+```
+<module>:<action>
+```
+
+### Examples:
+- `users:create` - Create users in the users module
+- `orders:view_all` - View all orders in the orders module
+- `picking:execute` - Execute operations in the picking module
+- `warehouse:manage` - Manage operations in the warehouse module
+
+### Action Types:
+- `view` - Read-only access
+- `create` - Create new resources
+- `update` - Modify existing resources
+- `delete` - Remove resources
+- `execute` - Perform operations
+- `manage` - Full management capabilities
+- `reports` - Access to reports and analytics
+
+## Creating Custom Permissions
+
+### 1. Inventory Management Permission
+```bash
+curl -X POST "http://localhost:3000/api/permissions" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "inventory:audit",
+    "displayName": "Audit Inventory",
+    "description": "Perform inventory audits and cycle counts",
+    "category": "inventory",
+    "module": "warehouse"
+  }'
+```
+
+### 2. Quality Control Permission
+```bash
+curl -X POST "http://localhost:3000/api/permissions" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "quality:inspect",
+    "displayName": "Quality Inspection",
+    "description": "Perform quality control inspections",
+    "category": "quality",
+    "module": "packing"
+  }'
+```
+
+### 3. Reporting Permission
+```bash
+curl -X POST "http://localhost:3000/api/permissions" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "reports:analytics",
+    "displayName": "Analytics Reports",
+    "description": "Access to advanced analytics and reporting",
+    "category": "reports",
+    "module": "system"
+  }'
+```
+
+## Permission Usage Tracking
+
+The system tracks how many roles use each permission:
+
+- **usageCount**: Number of roles that currently have this permission
+- **createdAt**: When the permission was created
+- **updatedAt**: When the permission was last modified
+
+## Error Responses
+
+### Insufficient Permissions
+```json
+{
+  "statusCode": 403,
+  "success": false,
+  "data": null,
+  "error": "Insufficient permissions. Required: users_roles:manage"
+}
+```
+
+### Permission Already Exists
+```json
+{
+  "statusCode": 400,
+  "success": false,
+  "data": null,
+  "error": "Permission with name 'inventory:adjust' already exists"
+}
+```
+
+### Invalid Permission Name
+```json
+{
+  "statusCode": 400,
+  "success": false,
+  "data": null,
+  "error": "Invalid permission name format. Use 'module:action' format"
+}
+```
+
+### Missing Required Fields
+```json
+{
+  "statusCode": 400,
+  "success": false,
+  "data": null,
+  "error": "Missing required fields: name, displayName, description"
+}
+```
+
+## Best Practices
+
+### Permission Design
+- Use descriptive names that clearly indicate the capability
+- Follow the established naming convention
+- Group related permissions by module and category
+- Keep permissions granular for better access control
+
+### Security Considerations
+- Only create permissions that are actually needed
+- Regularly audit permission usage
+- Remove unused permissions
+- Document the purpose of each permission
+
+### Integration with Roles
+- Assign permissions to roles, not directly to users
+- Use role-based access control (RBAC)
+- Regularly review role-permission assignments
+- Test permission combinations for conflicts
+
+## Mobile App Integration
+
+### Permission Display
+- Show available permissions based on user's role
+- Display permission descriptions for clarity
+- Group permissions by category for better organization
+- Provide feedback when permissions are insufficient
+
+### Permission Validation
+- Validate permissions before showing features
+- Handle permission errors gracefully
+- Cache permission information for offline use
+- Sync permission changes when online

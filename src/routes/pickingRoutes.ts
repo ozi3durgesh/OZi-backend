@@ -36,6 +36,12 @@ router.post('/waves/:waveId/start',
   PickingController.startPicking
 );
 
+router.get('/waves/:waveId/items', 
+  authenticate, 
+  hasPermission('picking:view'), 
+  PickingController.getPicklistItems
+);
+
 router.post('/waves/:waveId/scan', 
   authenticate, 
   hasPermission('picking:execute'), 

@@ -1,103 +1,90 @@
-# Warehouse Management Module
+# Warehouse Management
 
-This document covers all warehouse management endpoints for the OZi Backend system.
+This module handles warehouse creation, zone management, and staff assignments. Users need appropriate warehouse permissions to access these endpoints.
 
-**Base URL:** `http://localhost:3000`
+## Create Warehouse
 
-## Overview
-
-The warehouse management module provides comprehensive functionality for managing warehouses, zones, and staff assignments. It includes operations for creating, updating, and monitoring warehouse infrastructure and personnel.
-
-## 🏗️ Warehouse Management
-
-### Create Warehouse
+### Create New Warehouse
+Create a new warehouse in the system.
 
 **Endpoint:** `POST /api/warehouses`
 
-**Description:** Creates a new warehouse.
-
 **Headers:**
 ```bash
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 Content-Type: application/json
-Authorization: Bearer your_jwt_token
 ```
 
 **Request Body:**
 ```json
 {
-  "warehouse_code": "WH001",
   "name": "Main Distribution Center",
-  "type": "MAIN",
-  "address": "123 Warehouse St",
-  "city": "New York",
-  "state": "NY",
-  "country": "USA",
-  "pincode": "10001",
-  "latitude": 40.7128,
-  "longitude": -74.0060,
-  "contact_person": "John Doe",
-  "contact_email": "warehouse@ozi.com",
-  "contact_phone": "+1234567890",
-  "emergency_contact": "+1234567891",
-  "operational_hours": {
-    "monday": "08:00-18:00",
-    "tuesday": "08:00-18:00",
-    "wednesday": "08:00-18:00",
-    "thursday": "08:00-18:00",
-    "friday": "08:00-18:00"
+  "code": "MDC-001",
+  "address": {
+    "street": "123 Warehouse Blvd",
+    "city": "Industrial City",
+    "state": "CA",
+    "zipCode": "90210",
+    "country": "USA"
   },
-  "capacity_sqft": 50000,
-  "storage_capacity_units": 100000,
-  "services_offered": ["picking", "packing", "shipping"],
-  "supported_fulfillment_types": ["ecommerce", "retail", "wholesale"],
-  "is_auto_assignment_enabled": true,
-  "max_orders_per_day": 1000,
-  "sla_hours": 24,
-  "lms_warehouse_id": "LMS_WH_001"
+  "contactInfo": {
+    "phone": "+1234567890",
+    "email": "warehouse@company.com",
+    "manager": "John Warehouse"
+  },
+  "capacity": {
+    "totalArea": 50000,
+    "unit": "sqft",
+    "maxInventory": 100000
+  },
+  "operatingHours": {
+    "monday": "06:00-22:00",
+    "tuesday": "06:00-22:00",
+    "wednesday": "06:00-22:00",
+    "thursday": "06:00-22:00",
+    "friday": "06:00-22:00",
+    "saturday": "08:00-18:00",
+    "sunday": "closed"
+  }
 }
 ```
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
 curl -X POST "http://localhost:3000/api/warehouses" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "warehouse_code": "WH001",
     "name": "Main Distribution Center",
-    "type": "MAIN",
-    "address": "123 Warehouse St",
-    "city": "New York",
-    "state": "NY",
-    "country": "USA",
-    "pincode": "10001",
-    "contact_person": "John Doe",
-    "contact_email": "warehouse@ozi.com",
-    "contact_phone": "+1234567890"
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X POST "http://localhost:3000/api/warehouses" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "warehouse_code": "WH001",
-    "name": "Main Distribution Center",
-    "type": "MAIN",
-    "address": "123 Warehouse St",
-    "city": "New York",
-    "state": "NY",
-    "country": "USA",
-    "pincode": "10001",
-    "contact_person": "John Doe",
-    "contact_email": "warehouse@ozi.com",
-    "contact_phone": "+1234567890"
+    "code": "MDC-001",
+    "address": {
+      "street": "123 Warehouse Blvd",
+      "city": "Industrial City",
+      "state": "CA",
+      "zipCode": "90210",
+      "country": "USA"
+    },
+    "contactInfo": {
+      "phone": "+1234567890",
+      "email": "warehouse@company.com",
+      "manager": "John Warehouse"
+    },
+    "capacity": {
+      "totalArea": 50000,
+      "unit": "sqft",
+      "maxInventory": 100000
+    },
+    "operatingHours": {
+      "monday": "06:00-22:00",
+      "tuesday": "06:00-22:00",
+      "wednesday": "06:00-22:00",
+      "thursday": "06:00-22:00",
+      "friday": "06:00-22:00",
+      "saturday": "08:00-18:00",
+      "sunday": "closed"
+    }
   }'
 ```
 
@@ -108,86 +95,78 @@ curl -X POST "http://localhost:3000/api/warehouses" \
   "success": true,
   "data": {
     "id": 1,
-    "warehouse_code": "WH001",
     "name": "Main Distribution Center",
-    "type": "MAIN",
-    "status": "ACTIVE",
-    "address": "123 Warehouse St",
-    "city": "New York",
-    "state": "NY",
-    "country": "USA",
-    "pincode": "10001",
-    "latitude": 40.7128,
-    "longitude": -74.0060,
-    "contact_person": "John Doe",
-    "contact_email": "warehouse@ozi.com",
-    "contact_phone": "+1234567890",
-    "emergency_contact": "+1234567891",
-    "operational_hours": {
-      "monday": "08:00-18:00",
-      "tuesday": "08:00-18:00",
-      "wednesday": "08:00-18:00",
-      "thursday": "08:00-18:00",
-      "friday": "08:00-18:00"
+    "code": "MDC-001",
+    "address": {
+      "street": "123 Warehouse Blvd",
+      "city": "Industrial City",
+      "state": "CA",
+      "zipCode": "90210",
+      "country": "USA"
     },
-    "capacity_sqft": 50000,
-    "storage_capacity_units": 100000,
-    "current_utilization_percentage": 0,
-    "services_offered": ["picking", "packing", "shipping"],
-    "supported_fulfillment_types": ["ecommerce", "retail", "wholesale"],
-    "is_auto_assignment_enabled": true,
-    "max_orders_per_day": 1000,
-    "sla_hours": 24,
-    "lms_warehouse_id": "LMS_WH_001",
-    "integration_status": "PENDING",
-    "created_by": 1,
-    "updated_by": 1,
-    "created_at": "2024-01-15T10:30:00.000Z",
-    "updated_at": "2024-01-15T10:30:00.000Z"
+    "contactInfo": {
+      "phone": "+1234567890",
+      "email": "warehouse@company.com",
+      "manager": "John Warehouse"
+    },
+    "capacity": {
+      "totalArea": 50000,
+      "unit": "sqft",
+      "maxInventory": 100000
+    },
+    "operatingHours": {
+      "monday": "06:00-22:00",
+      "tuesday": "06:00-22:00",
+      "wednesday": "06:00-22:00",
+      "thursday": "06:00-22:00",
+      "friday": "06:00-22:00",
+      "saturday": "08:00-18:00",
+      "sunday": "closed"
+    },
+    "status": "active",
+    "createdAt": "2024-01-01T23:00:00.000Z",
+    "createdBy": 1
   },
   "error": null
 }
 ```
 
+## List Warehouses
+
 ### Get All Warehouses
+Retrieve a list of all warehouses in the system.
 
 **Endpoint:** `GET /api/warehouses`
 
-**Description:** Retrieves all warehouses with filtering and pagination.
-
 **Headers:**
 ```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 ```
 
 **Query Parameters:**
-- `status` (optional): Filter by status (ACTIVE, INACTIVE, UNDER_MAINTENANCE)
-- `type` (optional): Filter by type (MAIN, SATELLITE, STOREFRONT, DISTRIBUTION)
-- `city` (optional): Filter by city
-- `state` (optional): Filter by state
-- `country` (optional): Filter by country
-- `has_capacity` (optional): Filter by capacity availability (true/false)
-- `page` (optional): Page number (default: 1)
-- `limit` (optional): Items per page (default: 10)
-- `search` (optional): Search term for name, code, city, or state
+- `status` (optional): Filter by warehouse status
+- `search` (optional): Search in warehouse names and codes
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
-curl -X GET "http://localhost:3000/api/warehouses?status=ACTIVE&type=MAIN&page=1&limit=10" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
+# Get all warehouses
+curl -X GET "http://localhost:3000/api/warehouses" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
 
-**Mobile Client:**
-```bash
-curl -X GET "http://localhost:3000/api/warehouses?status=ACTIVE&type=MAIN&page=1&limit=10" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0"
+# Filter by status
+curl -X GET "http://localhost:3000/api/warehouses?status=active" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
+
+# Search warehouses
+curl -X GET "http://localhost:3000/api/warehouses?search=main" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
 ```
 
 **Response:**
@@ -195,87 +174,77 @@ curl -X GET "http://localhost:3000/api/warehouses?status=ACTIVE&type=MAIN&page=1
 {
   "statusCode": 200,
   "success": true,
-  "data": {
-    "warehouses": [
-      {
-        "id": 1,
-        "warehouse_code": "WH001",
-        "name": "Main Distribution Center",
-        "type": "MAIN",
-        "status": "ACTIVE",
-        "address": "123 Warehouse St",
-        "city": "New York",
-        "state": "NY",
-        "country": "USA",
-        "pincode": "10001",
-        "latitude": 40.7128,
-        "longitude": -74.0060,
-        "contact_person": "John Doe",
-        "contact_email": "warehouse@ozi.com",
-        "contact_phone": "+1234567890",
-        "emergency_contact": "+1234567891",
-        "operational_hours": {
-          "monday": "08:00-18:00",
-          "tuesday": "08:00-18:00",
-          "wednesday": "08:00-18:00",
-          "thursday": "08:00-18:00",
-          "friday": "08:00-18:00"
-        },
-        "capacity_sqft": 50000,
-        "storage_capacity_units": 100000,
-        "current_utilization_percentage": 0,
-        "services_offered": ["picking", "packing", "shipping"],
-        "supported_fulfillment_types": ["ecommerce", "retail", "wholesale"],
-        "is_auto_assignment_enabled": true,
-        "max_orders_per_day": 1000,
-        "sla_hours": 24,
-        "lms_warehouse_id": "LMS_WH_001",
-        "integration_status": "PENDING",
-        "created_by": 1,
-        "updated_by": 1,
-        "created_at": "2024-01-15T10:30:00.000Z",
-        "updated_at": "2024-01-15T10:30:00.000Z"
-      }
-    ],
-    "pagination": {
-      "page": 1,
-      "limit": 10,
-      "total": 1,
-      "totalPages": 1
+  "data": [
+    {
+      "id": 1,
+      "name": "Main Distribution Center",
+      "code": "MDC-001",
+      "address": {
+        "city": "Industrial City",
+        "state": "CA"
+      },
+      "contactInfo": {
+        "phone": "+1234567890",
+        "email": "warehouse@company.com",
+        "manager": "John Warehouse"
+      },
+      "capacity": {
+        "totalArea": 50000,
+        "unit": "sqft",
+        "maxInventory": 100000
+      },
+      "status": "active",
+      "currentInventory": 75000,
+      "utilization": 75.0,
+      "createdAt": "2024-01-01T23:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "name": "Secondary Warehouse",
+      "code": "SW-002",
+      "address": {
+        "city": "Secondary City",
+        "state": "NY"
+      },
+      "contactInfo": {
+        "phone": "+1234567891",
+        "email": "secondary@company.com",
+        "manager": "Jane Secondary"
+      },
+      "capacity": {
+        "totalArea": 25000,
+        "unit": "sqft",
+        "maxInventory": 50000
+      },
+      "status": "active",
+      "currentInventory": 30000,
+      "utilization": 60.0,
+      "createdAt": "2024-01-01T23:30:00.000Z"
     }
-  },
+  ],
   "error": null
 }
 ```
 
-### Get Warehouse by ID
+## Get Warehouse by ID
+
+### Retrieve Warehouse Details
+Get detailed information about a specific warehouse.
 
 **Endpoint:** `GET /api/warehouses/:id`
 
-**Description:** Retrieves a specific warehouse by ID with zones and staff.
-
 **Headers:**
 ```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 ```
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
 curl -X GET "http://localhost:3000/api/warehouses/1" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-**Mobile Client:**
-```bash
-curl -X GET "http://localhost:3000/api/warehouses/1" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0"
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
 ```
 
 **Response:**
@@ -285,98 +254,111 @@ curl -X GET "http://localhost:3000/api/warehouses/1" \
   "success": true,
   "data": {
     "id": 1,
-    "warehouse_code": "WH001",
     "name": "Main Distribution Center",
-    "type": "MAIN",
-    "status": "ACTIVE",
-    "address": "123 Warehouse St",
-    "city": "New York",
-    "state": "NY",
-    "country": "USA",
-    "pincode": "10001",
-    "latitude": 40.7128,
-    "longitude": -74.0060,
-    "contact_person": "John Doe",
-    "contact_email": "warehouse@ozi.com",
-    "contact_phone": "+1234567890",
-    "emergency_contact": "+1234567891",
-    "operational_hours": {
-      "monday": "08:00-18:00",
-      "tuesday": "08:00-18:00",
-      "wednesday": "08:00-18:00",
-      "thursday": "08:00-18:00",
-      "friday": "08:00-18:00"
+    "code": "MDC-001",
+    "address": {
+      "street": "123 Warehouse Blvd",
+      "city": "Industrial City",
+      "state": "CA",
+      "zipCode": "90210",
+      "country": "USA"
     },
-    "capacity_sqft": 50000,
-    "storage_capacity_units": 100000,
-    "current_utilization_percentage": 0,
-    "services_offered": ["picking", "packing", "shipping"],
-    "supported_fulfillment_types": ["ecommerce", "retail", "wholesale"],
-    "is_auto_assignment_enabled": true,
-    "max_orders_per_day": 1000,
-    "sla_hours": 24,
-    "lms_warehouse_id": "LMS_WH_001",
-    "integration_status": "PENDING",
-    "created_by": 1,
-    "updated_by": 1,
-    "created_at": "2024-01-15T10:30:00.000Z",
-    "updated_at": "2024-01-15T10:30:00.000Z",
-    "Zones": [],
-    "StaffAssignments": []
+    "contactInfo": {
+      "phone": "+1234567890",
+      "email": "warehouse@company.com",
+      "manager": "John Warehouse"
+    },
+    "capacity": {
+      "totalArea": 50000,
+      "unit": "sqft",
+      "maxInventory": 100000
+    },
+    "operatingHours": {
+      "monday": "06:00-22:00",
+      "tuesday": "06:00-22:00",
+      "wednesday": "06:00-22:00",
+      "thursday": "06:00-22:00",
+      "friday": "06:00-22:00",
+      "saturday": "08:00-18:00",
+      "sunday": "closed"
+    },
+    "status": "active",
+    "currentInventory": 75000,
+    "utilization": 75.0,
+    "zones": [
+      {
+        "id": 1,
+        "name": "Zone A",
+        "code": "A",
+        "area": 10000,
+        "capacity": 20000,
+        "currentInventory": 15000
+      }
+    ],
+    "staff": [
+      {
+        "id": 5,
+        "name": "John Picker",
+        "role": "picker",
+        "assignedAt": "2024-01-01T23:00:00.000Z"
+      }
+    ],
+    "createdAt": "2024-01-01T23:00:00.000Z",
+    "updatedAt": "2024-01-01T23:00:00.000Z"
   },
   "error": null
 }
 ```
 
-### Update Warehouse
+## Update Warehouse
+
+### Modify Warehouse Information
+Update warehouse details and configuration.
 
 **Endpoint:** `PUT /api/warehouses/:id`
 
-**Description:** Updates an existing warehouse.
-
 **Headers:**
 ```bash
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 Content-Type: application/json
-Authorization: Bearer your_jwt_token
 ```
 
 **Request Body:**
 ```json
 {
-  "name": "Updated Distribution Center",
-  "contact_person": "Jane Smith",
-  "contact_email": "jane.warehouse@ozi.com",
-  "max_orders_per_day": 1500
+  "name": "Main Distribution Center - Updated",
+  "contactInfo": {
+    "phone": "+1234567899",
+    "manager": "John Warehouse Manager"
+  },
+  "capacity": {
+    "maxInventory": 120000
+  },
+  "operatingHours": {
+    "saturday": "06:00-20:00"
+  }
 }
 ```
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
 curl -X PUT "http://localhost:3000/api/warehouses/1" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "name": "Updated Distribution Center",
-    "contact_person": "Jane Smith",
-    "contact_email": "jane.warehouse@ozi.com",
-    "max_orders_per_day": 1500
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X PUT "http://localhost:3000/api/warehouses/1" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "name": "Updated Distribution Center",
-    "contact_person": "Jane Smith",
-    "contact_email": "jane.warehouse@ozi.com",
-    "max_orders_per_day": 1500
+    "name": "Main Distribution Center - Updated",
+    "contactInfo": {
+      "phone": "+1234567899",
+      "manager": "John Warehouse Manager"
+    },
+    "capacity": {
+      "maxInventory": 120000
+    },
+    "operatingHours": {
+      "saturday": "06:00-20:00"
+    }
   }'
 ```
 
@@ -387,87 +369,56 @@ curl -X PUT "http://localhost:3000/api/warehouses/1" \
   "success": true,
   "data": {
     "id": 1,
-    "warehouse_code": "WH001",
-    "name": "Updated Distribution Center",
-    "type": "MAIN",
-    "status": "ACTIVE",
-    "address": "123 Warehouse St",
-    "city": "New York",
-    "state": "NY",
-    "country": "USA",
-    "pincode": "10001",
-    "latitude": 40.7128,
-    "longitude": -74.0060,
-    "contact_person": "Jane Smith",
-    "contact_email": "jane.warehouse@ozi.com",
-    "contact_phone": "+1234567890",
-    "emergency_contact": "+1234567891",
-    "operational_hours": {
-      "monday": "08:00-18:00",
-      "tuesday": "08:00-18:00",
-      "wednesday": "08:00-18:00",
-      "thursday": "08:00-18:00",
-      "friday": "08:00-18:00"
-    },
-    "capacity_sqft": 50000,
-    "storage_capacity_units": 100000,
-    "current_utilization_percentage": 0,
-    "services_offered": ["picking", "packing", "shipping"],
-    "supported_fulfillment_types": ["ecommerce", "retail", "wholesale"],
-    "is_auto_assignment_enabled": true,
-    "max_orders_per_day": 1500,
-    "sla_hours": 24,
-    "lms_warehouse_id": "LMS_WH_001",
-    "integration_status": "PENDING",
-    "created_by": 1,
-    "updated_by": 2,
-    "created_at": "2024-01-15T10:30:00.000Z",
-    "updated_at": "2024-01-15T10:30:00.000Z"
+    "name": "Main Distribution Center - Updated",
+    "code": "MDC-001",
+    "updatedFields": [
+      "name",
+      "contactInfo.phone",
+      "contactInfo.manager",
+      "capacity.maxInventory",
+      "operatingHours.saturday"
+    ],
+    "updatedAt": "2024-01-01T23:45:00.000Z",
+    "updatedBy": 1,
+    "message": "Warehouse updated successfully"
   },
   "error": null
 }
 ```
 
-### Update Warehouse Status
+## Update Warehouse Status
+
+### Change Warehouse Status
+Activate, deactivate, or suspend a warehouse.
 
 **Endpoint:** `PATCH /api/warehouses/:id/status`
 
-**Description:** Updates the status of a warehouse.
-
 **Headers:**
 ```bash
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 Content-Type: application/json
-Authorization: Bearer your_jwt_token
 ```
 
 **Request Body:**
 ```json
 {
-  "status": "UNDER_MAINTENANCE"
+  "status": "maintenance",
+  "reason": "Scheduled maintenance and upgrades",
+  "estimatedDuration": "48h"
 }
 ```
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
 curl -X PATCH "http://localhost:3000/api/warehouses/1/status" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "status": "UNDER_MAINTENANCE"
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X PATCH "http://localhost:3000/api/warehouses/1/status" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "status": "UNDER_MAINTENANCE"
+    "status": "maintenance",
+    "reason": "Scheduled maintenance and upgrades",
+    "estimatedDuration": "48h"
   }'
 ```
 
@@ -477,40 +428,40 @@ curl -X PATCH "http://localhost:3000/api/warehouses/1/status" \
   "statusCode": 200,
   "success": true,
   "data": {
+    "id": 1,
+    "name": "Main Distribution Center - Updated",
+    "code": "MDC-001",
+    "previousStatus": "active",
+    "newStatus": "maintenance",
+    "statusReason": "Scheduled maintenance and upgrades",
+    "estimatedDuration": "48h",
+    "statusChangedAt": "2024-01-01T23:50:00.000Z",
+    "statusChangedBy": 1,
     "message": "Warehouse status updated successfully"
   },
   "error": null
 }
 ```
 
-### Delete Warehouse
+## Delete Warehouse
+
+### Remove Warehouse
+Delete a warehouse from the system.
 
 **Endpoint:** `DELETE /api/warehouses/:id`
 
-**Description:** Deactivates a warehouse (soft delete).
-
 **Headers:**
 ```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 ```
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
-curl -X DELETE "http://localhost:3000/api/warehouses/1" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-**Mobile Client:**
-```bash
-curl -X DELETE "http://localhost:3000/api/warehouses/1" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0"
+curl -X DELETE "http://localhost:3000/api/warehouses/2" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
 ```
 
 **Response:**
@@ -519,66 +470,58 @@ curl -X DELETE "http://localhost:3000/api/warehouses/1" \
   "statusCode": 200,
   "success": true,
   "data": {
-    "message": "Warehouse deactivated successfully"
+    "id": 2,
+    "name": "Secondary Warehouse",
+    "code": "SW-002",
+    "deletedAt": "2024-01-01T23:55:00.000Z",
+    "deletedBy": 1,
+    "message": "Warehouse deleted successfully"
   },
   "error": null
 }
 ```
 
-## 🗂️ Zone Management
+## Create Zone
 
-### Create Zone
+### Add New Zone to Warehouse
+Create a new zone within a warehouse.
 
 **Endpoint:** `POST /api/warehouses/:warehouseId/zones`
 
-**Description:** Creates a new zone within a warehouse.
-
 **Headers:**
 ```bash
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 Content-Type: application/json
-Authorization: Bearer your_jwt_token
 ```
 
 **Request Body:**
 ```json
 {
-  "zone_code": "ZONE-A",
-  "zone_name": "Picking Zone A",
-  "zone_type": "PICKING",
-  "temperature_zone": "AMBIENT",
-  "capacity_units": 1000
+  "name": "Zone B - Electronics",
+  "code": "B",
+  "description": "Electronics and fragile items storage",
+  "area": 8000,
+  "capacity": 15000,
+  "temperature": "controlled",
+  "specialRequirements": ["climate_control", "security_access"]
 }
 ```
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
 curl -X POST "http://localhost:3000/api/warehouses/1/zones" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "zone_code": "ZONE-A",
-    "zone_name": "Picking Zone A",
-    "zone_type": "PICKING",
-    "temperature_zone": "AMBIENT",
-    "capacity_units": 1000
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X POST "http://localhost:3000/api/warehouses/1/zones" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "zone_code": "ZONE-A",
-    "zone_name": "Picking Zone A",
-    "zone_type": "PICKING",
-    "temperature_zone": "AMBIENT",
-    "capacity_units": 1000
+    "name": "Zone B - Electronics",
+    "code": "B",
+    "description": "Electronics and fragile items storage",
+    "area": 8000,
+    "capacity": 15000,
+    "temperature": "controlled",
+    "specialRequirements": ["climate_control", "security_access"]
   }'
 ```
 
@@ -588,55 +531,44 @@ curl -X POST "http://localhost:3000/api/warehouses/1/zones" \
   "statusCode": 201,
   "success": true,
   "data": {
-    "id": 1,
-    "warehouse_id": 1,
-    "zone_code": "ZONE-A",
-    "zone_name": "Picking Zone A",
-    "zone_type": "PICKING",
-    "temperature_zone": "AMBIENT",
-    "capacity_units": 1000,
-    "current_utilization": 0,
-    "is_active": true,
-    "created_at": "2024-01-15T10:30:00.000Z",
-    "updated_at": "2024-01-15T10:30:00.000Z",
-    "Warehouse": {
-      "id": 1,
-      "name": "Main Distribution Center",
-      "warehouse_code": "WH001"
-    }
+    "id": 2,
+    "warehouseId": 1,
+    "name": "Zone B - Electronics",
+    "code": "B",
+    "description": "Electronics and fragile items storage",
+    "area": 8000,
+    "capacity": 15000,
+    "temperature": "controlled",
+    "specialRequirements": ["climate_control", "security_access"],
+    "status": "active",
+    "currentInventory": 0,
+    "utilization": 0.0,
+    "createdAt": "2024-01-02T00:00:00.000Z",
+    "createdBy": 1
   },
   "error": null
 }
 ```
 
-### Get Warehouse Zones
+## List Warehouse Zones
+
+### Get All Zones in Warehouse
+Retrieve a list of all zones within a specific warehouse.
 
 **Endpoint:** `GET /api/warehouses/:warehouseId/zones`
 
-**Description:** Retrieves all zones for a specific warehouse.
-
 **Headers:**
 ```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 ```
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
 curl -X GET "http://localhost:3000/api/warehouses/1/zones" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-**Mobile Client:**
-```bash
-curl -X GET "http://localhost:3000/api/warehouses/1/zones" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0"
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
 ```
 
 **Response:**
@@ -647,70 +579,72 @@ curl -X GET "http://localhost:3000/api/warehouses/1/zones" \
   "data": [
     {
       "id": 1,
-      "warehouse_id": 1,
-      "zone_code": "ZONE-A",
-      "zone_name": "Picking Zone A",
-      "zone_type": "PICKING",
-      "temperature_zone": "AMBIENT",
-      "capacity_units": 1000,
-      "current_utilization": 0,
-      "is_active": true,
-      "created_at": "2024-01-15T10:30:00.000Z",
-      "updated_at": "2024-01-15T10:30:00.000Z",
-      "Warehouse": {
-        "id": 1,
-        "name": "Main Distribution Center",
-        "warehouse_code": "WH001"
-      }
+      "name": "Zone A",
+      "code": "A",
+      "description": "General storage area",
+      "area": 10000,
+      "capacity": 20000,
+      "temperature": "ambient",
+      "specialRequirements": [],
+      "status": "active",
+      "currentInventory": 15000,
+      "utilization": 75.0,
+      "createdAt": "2024-01-01T23:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "name": "Zone B - Electronics",
+      "code": "B",
+      "description": "Electronics and fragile items storage",
+      "area": 8000,
+      "capacity": 15000,
+      "temperature": "controlled",
+      "specialRequirements": ["climate_control", "security_access"],
+      "status": "active",
+      "currentInventory": 0,
+      "utilization": 0.0,
+      "createdAt": "2024-01-02T00:00:00.000Z"
     }
   ],
   "error": null
 }
 ```
 
-### Update Zone
+## Update Zone
+
+### Modify Zone Information
+Update zone details and configuration.
 
 **Endpoint:** `PUT /api/warehouses/zones/:zoneId`
 
-**Description:** Updates an existing zone.
-
 **Headers:**
 ```bash
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 Content-Type: application/json
-Authorization: Bearer your_jwt_token
 ```
 
 **Request Body:**
 ```json
 {
-  "zone_name": "Updated Picking Zone A",
-  "capacity_units": 1500
+  "name": "Zone B - Electronics & Fragile",
+  "description": "Electronics, fragile items, and high-value storage",
+  "capacity": 18000,
+  "specialRequirements": ["climate_control", "security_access", "fire_suppression"]
 }
 ```
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
-curl -X PUT "http://localhost:3000/api/warehouses/zones/1" \
+curl -X PUT "http://localhost:3000/api/warehouses/zones/2" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "zone_name": "Updated Picking Zone A",
-    "capacity_units": 1500
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X PUT "http://localhost:3000/api/warehouses/zones/1" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "zone_name": "Updated Picking Zone A",
-    "capacity_units": 1500
+    "name": "Zone B - Electronics & Fragile",
+    "description": "Electronics, fragile items, and high-value storage",
+    "capacity": 18000,
+    "specialRequirements": ["climate_control", "security_access", "fire_suppression"]
   }'
 ```
 
@@ -720,55 +654,42 @@ curl -X PUT "http://localhost:3000/api/warehouses/zones/1" \
   "statusCode": 200,
   "success": true,
   "data": {
-    "id": 1,
-    "warehouse_id": 1,
-    "zone_code": "ZONE-A",
-    "zone_name": "Updated Picking Zone A",
-    "zone_type": "PICKING",
-    "temperature_zone": "AMBIENT",
-    "capacity_units": 1500,
-    "current_utilization": 0,
-    "is_active": true,
-    "created_at": "2024-01-15T10:30:00.000Z",
-    "updated_at": "2024-01-15T10:30:00.000Z",
-    "Warehouse": {
-      "id": 1,
-      "name": "Main Distribution Center",
-      "warehouse_code": "WH001"
-    }
+    "id": 2,
+    "name": "Zone B - Electronics & Fragile",
+    "code": "B",
+    "updatedFields": [
+      "name",
+      "description",
+      "capacity",
+      "specialRequirements"
+    ],
+    "updatedAt": "2024-01-02T00:15:00.000Z",
+    "updatedBy": 1,
+    "message": "Zone updated successfully"
   },
   "error": null
 }
 ```
 
-### Delete Zone
+## Delete Zone
+
+### Remove Zone from Warehouse
+Delete a zone from a warehouse.
 
 **Endpoint:** `DELETE /api/warehouses/zones/:zoneId`
 
-**Description:** Deletes a zone (only if no utilization).
-
 **Headers:**
 ```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 ```
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
-curl -X DELETE "http://localhost:3000/api/warehouses/zones/1" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-**Mobile Client:**
-```bash
-curl -X DELETE "http://localhost:3000/api/warehouses/zones/1" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0"
+curl -X DELETE "http://localhost:3000/api/warehouses/zones/2" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
 ```
 
 **Response:**
@@ -777,61 +698,56 @@ curl -X DELETE "http://localhost:3000/api/warehouses/zones/1" \
   "statusCode": 200,
   "success": true,
   "data": {
+    "id": 2,
+    "name": "Zone B - Electronics & Fragile",
+    "code": "B",
+    "deletedAt": "2024-01-02T00:20:00.000Z",
+    "deletedBy": 1,
     "message": "Zone deleted successfully"
   },
   "error": null
 }
 ```
 
-## 👥 Staff Assignment Management
+## Assign Staff
 
 ### Assign Staff to Warehouse
+Assign staff members to work in a specific warehouse.
 
 **Endpoint:** `POST /api/warehouses/:warehouseId/staff`
 
-**Description:** Assigns staff members to a warehouse.
-
 **Headers:**
 ```bash
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 Content-Type: application/json
-Authorization: Bearer your_jwt_token
 ```
 
 **Request Body:**
 ```json
 {
-  "user_id": 2,
-  "role": "MANAGER",
-  "assigned_date": "2024-01-15T10:30:00.000Z",
-  "end_date": "2024-12-31T23:59:59.000Z"
+  "staffId": 8,
+  "role": "picker",
+  "zones": ["A", "B"],
+  "startDate": "2024-01-02T00:00:00.000Z",
+  "shift": "day",
+  "specializations": ["electronics", "fragile_items"]
 }
 ```
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
 curl -X POST "http://localhost:3000/api/warehouses/1/staff" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "user_id": 2,
-    "role": "MANAGER",
-    "assigned_date": "2024-01-15T10:30:00.000Z"
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X POST "http://localhost:3000/api/warehouses/1/staff" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0" \
-  -d '{
-    "user_id": 2,
-    "role": "MANAGER",
-    "assigned_date": "2024-01-15T10:30:00.000Z"
+    "staffId": 8,
+    "role": "picker",
+    "zones": ["A", "B"],
+    "startDate": "2024-01-02T00:00:00.000Z",
+    "shift": "day",
+    "specializations": ["electronics", "fragile_items"]
   }'
 ```
 
@@ -841,57 +757,60 @@ curl -X POST "http://localhost:3000/api/warehouses/1/staff" \
   "statusCode": 201,
   "success": true,
   "data": {
-    "id": 1,
-    "warehouse_id": 1,
-    "user_id": 2,
-    "role": "MANAGER",
-    "assigned_date": "2024-01-15T10:30:00.000Z",
-    "end_date": null,
-    "is_active": true,
-    "created_at": "2024-01-15T10:30:00.000Z",
-    "updated_at": "2024-01-15T10:30:00.000Z",
-    "Warehouse": {
-      "id": 1,
-      "name": "Main Distribution Center",
-      "warehouse_code": "WH001"
-    },
-    "User": {
-      "id": 2,
-      "email": "manager@ozi.com"
-    }
+    "assignmentId": 1,
+    "warehouseId": 1,
+    "warehouseName": "Main Distribution Center",
+    "staffId": 8,
+    "staffName": "Sarah Picker",
+    "role": "picker",
+    "zones": ["A", "B"],
+    "startDate": "2024-01-02T00:00:00.000Z",
+    "shift": "day",
+    "specializations": ["electronics", "fragile_items"],
+    "status": "active",
+    "assignedAt": "2024-01-02T00:25:00.000Z",
+    "assignedBy": 1
   },
   "error": null
 }
 ```
 
-### Get Warehouse Staff
+## List Warehouse Staff
+
+### Get All Staff in Warehouse
+Retrieve a list of all staff assigned to a specific warehouse.
 
 **Endpoint:** `GET /api/warehouses/:warehouseId/staff`
 
-**Description:** Retrieves all staff assigned to a warehouse.
-
 **Headers:**
 ```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 ```
 
-**cURL Examples:**
+**Query Parameters:**
+- `role` (optional): Filter by staff role
+- `zone` (optional): Filter by zone assignment
 
-**Web Client:**
+**cURL Example:**
 ```bash
+# Get all staff
 curl -X GET "http://localhost:3000/api/warehouses/1/staff" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
 
-**Mobile Client:**
-```bash
-curl -X GET "http://localhost:3000/api/warehouses/1/staff" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0"
+# Filter by role
+curl -X GET "http://localhost:3000/api/warehouses/1/staff?role=picker" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
+
+# Filter by zone
+curl -X GET "http://localhost:3000/api/warehouses/1/staff?zone=A" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
 ```
 
 **Response:**
@@ -901,23 +820,35 @@ curl -X GET "http://localhost:3000/api/warehouses/1/staff" \
   "success": true,
   "data": [
     {
-      "id": 1,
-      "warehouse_id": 1,
-      "user_id": 2,
-      "role": "MANAGER",
-      "assigned_date": "2024-01-15T10:30:00.000Z",
-      "end_date": null,
-      "is_active": true,
-      "created_at": "2024-01-15T10:30:00.000Z",
-      "updated_at": "2024-01-15T10:30:00.000Z",
-      "Warehouse": {
-        "id": 1,
-        "name": "Main Distribution Center",
-        "warehouse_code": "WH001"
-      },
-      "User": {
-        "id": 2,
-        "email": "manager@ozi.com"
+      "assignmentId": 1,
+      "staffId": 5,
+      "staffName": "John Picker",
+      "role": "picker",
+      "zones": ["A"],
+      "shift": "day",
+      "specializations": ["general"],
+      "status": "active",
+      "assignedAt": "2024-01-01T23:00:00.000Z",
+      "performance": {
+        "pickRate": 25,
+        "accuracy": 98.5,
+        "lastActivity": "2024-01-01T22:30:00.000Z"
+      }
+    },
+    {
+      "assignmentId": 2,
+      "staffId": 8,
+      "staffName": "Sarah Picker",
+      "role": "picker",
+      "zones": ["A", "B"],
+      "shift": "day",
+      "specializations": ["electronics", "fragile_items"],
+      "status": "active",
+      "assignedAt": "2024-01-02T00:25:00.000Z",
+      "performance": {
+        "pickRate": 30,
+        "accuracy": 99.2,
+        "lastActivity": "2024-01-02T00:20:00.000Z"
       }
     }
   ],
@@ -925,34 +856,25 @@ curl -X GET "http://localhost:3000/api/warehouses/1/staff" \
 }
 ```
 
-### Remove Staff Assignment
+## Remove Staff Assignment
+
+### Remove Staff from Warehouse
+Remove a staff member's assignment from a warehouse.
 
 **Endpoint:** `DELETE /api/warehouses/staff-assignments/:assignmentId`
 
-**Description:** Removes a staff assignment from a warehouse.
-
 **Headers:**
 ```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 ```
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
 curl -X DELETE "http://localhost:3000/api/warehouses/staff-assignments/1" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-**Mobile Client:**
-```bash
-curl -X DELETE "http://localhost:3000/api/warehouses/staff-assignments/1" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.2.0"
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
 ```
 
 **Response:**
@@ -961,156 +883,222 @@ curl -X DELETE "http://localhost:3000/api/warehouses/staff-assignments/1" \
   "statusCode": 200,
   "success": true,
   "data": {
+    "assignmentId": 1,
+    "staffId": 5,
+    "staffName": "John Picker",
+    "warehouseId": 1,
+    "warehouseName": "Main Distribution Center",
+    "removedAt": "2024-01-02T00:30:00.000Z",
+    "removedBy": 1,
     "message": "Staff assignment removed successfully"
   },
   "error": null
 }
 ```
 
-## 📱 Mobile App Considerations
+## Warehouse Creation Examples
 
-### Version Check Headers
-For mobile clients, the following headers are required:
-- `source: mobile` - Identifies the request as coming from a mobile app
-- `app-version: 1.2.0` - Current app version for compatibility checking
+### 1. Create Regional Warehouse
+```bash
+curl -X POST "http://localhost:3000/api/warehouses" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Regional Distribution Center",
+    "code": "RDC-001",
+    "address": {
+      "street": "456 Regional Ave",
+      "city": "Regional City",
+      "state": "TX",
+      "zipCode": "75001",
+      "country": "USA"
+    },
+    "contactInfo": {
+      "phone": "+1234567892",
+      "email": "regional@company.com",
+      "manager": "Mike Regional"
+    },
+    "capacity": {
+      "totalArea": 30000,
+      "unit": "sqft",
+      "maxInventory": 60000
+    },
+    "operatingHours": {
+      "monday": "07:00-21:00",
+      "tuesday": "07:00-21:00",
+      "wednesday": "07:00-21:00",
+      "thursday": "07:00-21:00",
+      "friday": "07:00-21:00",
+      "saturday": "09:00-17:00",
+      "sunday": "closed"
+    }
+  }'
+```
 
-### Version Compatibility
-- Minimum supported version: 1.0.0
-- If app version is below minimum, API returns 426 status code
-- Web clients don't require version checking
+### 2. Create Cold Storage Warehouse
+```bash
+curl -X POST "http://localhost:3000/api/warehouses" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Cold Storage Facility",
+    "code": "CSF-001",
+    "address": {
+      "street": "789 Cold St",
+      "city": "Cold City",
+      "state": "FL",
+      "zipCode": "33101",
+      "country": "USA"
+    },
+    "contactInfo": {
+      "phone": "+1234567893",
+      "email": "cold@company.com",
+      "manager": "Lisa Cold"
+    },
+    "capacity": {
+      "totalArea": 15000,
+      "unit": "sqft",
+      "maxInventory": 25000
+    },
+    "operatingHours": {
+      "monday": "24/7",
+      "tuesday": "24/7",
+      "wednesday": "24/7",
+      "thursday": "24/7",
+      "friday": "24/7",
+      "saturday": "24/7",
+      "sunday": "24/7"
+    },
+    "specialFeatures": ["refrigeration", "freezer_sections", "temperature_monitoring"]
+  }'
+```
 
-### Device Management
-- Mobile apps should provide unique device identifiers
-- Platform detection (ios/android) for analytics
-- Secure token storage using platform-specific methods
+## Zone Management Examples
 
-## ⚠️ Error Responses
+### 1. Create High-Security Zone
+```bash
+curl -X POST "http://localhost:3000/api/warehouses/1/zones" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "High-Security Zone",
+    "code": "HS",
+    "description": "High-value and sensitive items storage",
+    "area": 2000,
+    "capacity": 5000,
+    "temperature": "controlled",
+    "specialRequirements": ["security_access", "cctv_monitoring", "alarm_system", "fire_suppression"]
+  }'
+```
 
-### Common Error Responses
+### 2. Create Bulk Storage Zone
+```bash
+curl -X POST "http://localhost:3000/api/warehouses/1/zones" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Bulk Storage Zone",
+    "code": "BS",
+    "description": "Large quantity and pallet storage",
+    "area": 12000,
+    "capacity": 30000,
+    "temperature": "ambient",
+    "specialRequirements": ["forklift_access", "pallet_racking", "loading_docks"]
+  }'
+```
 
-**Unauthorized Access:**
+## Error Responses
+
+### Insufficient Permissions
 ```json
 {
-  "statusCode": 401,
+  "statusCode": 403,
   "success": false,
-  "error": "User not authenticated"
+  "data": null,
+  "error": "Insufficient permissions. Required: warehouse:manage"
 }
 ```
 
-**Warehouse Not Found:**
+### Warehouse Not Found
 ```json
 {
   "statusCode": 404,
   "success": false,
+  "data": null,
   "error": "Warehouse not found"
 }
 ```
 
-**Zone Not Found:**
+### Zone Not Found
 ```json
 {
   "statusCode": 404,
   "success": false,
+  "data": null,
   "error": "Zone not found"
 }
 ```
 
-**User Not Found:**
-```json
-{
-  "statusCode": 404,
-  "success": false,
-  "error": "User not found"
-}
-```
-
-**Warehouse Code Already Exists:**
+### Invalid Warehouse Data
 ```json
 {
   "statusCode": 400,
   "success": false,
-  "error": "Warehouse code already exists"
+  "data": null,
+  "error": "Invalid warehouse data: missing required fields"
 }
 ```
 
-**Zone Code Already Exists:**
+### Cannot Delete Active Warehouse
 ```json
 {
   "statusCode": 400,
   "success": false,
-  "error": "Zone code already exists for this warehouse"
+  "data": null,
+  "error": "Cannot delete warehouse with active inventory or staff"
 }
 ```
 
-**Staff Assignment Already Exists:**
-```json
-{
-  "statusCode": 400,
-  "success": false,
-  "error": "Staff assignment already exists"
-}
-```
+## Best Practices
 
-**Cannot Delete Zone with Utilization:**
-```json
-{
-  "statusCode": 400,
-  "success": false,
-  "error": "Cannot delete zone with active utilization"
-}
-```
+### Warehouse Design
+- Plan zones based on product types
+- Consider workflow efficiency
+- Implement proper security measures
+- Optimize space utilization
 
-**App Version Too Old (Mobile Only):**
-```json
-{
-  "success": false,
-  "error": "Upgrade Required",
-  "message": "Please update your app to version 1.0.0 or higher",
-  "statusCode": 426
-}
-```
+### Zone Management
+- Group similar products together
+- Consider temperature and security requirements
+- Plan for future expansion
+- Maintain clear zone boundaries
 
-**Missing App Version (Mobile Only):**
-```json
-{
-  "success": false,
-  "error": "Bad Request",
-  "message": "App version is required for mobile users",
-  "statusCode": 400
-}
-```
+### Staff Assignment
+- Match skills to zone requirements
+- Consider shift patterns and availability
+- Provide proper training
+- Monitor performance regularly
 
-## 🔐 Security Features
+## Mobile App Integration
 
-1. **JWT Authentication**: All endpoints require valid JWT tokens
-2. **Input Validation**: Comprehensive request validation
-3. **Error Handling**: Proper error responses with status codes
-4. **Version Control**: Mobile app compatibility checking
-5. **Audit Logging**: Track all warehouse operations
+### Warehouse Display
+- Show warehouse information clearly
+- Display zone layouts
+- Provide staff assignment details
+- Show real-time utilization
 
-## 📋 Operation Flow
+### Zone Management
+- Easy zone creation and editing
+- Visual zone representation
+- Quick staff assignment
+- Inventory tracking
 
-### Warehouse Creation Flow
-1. User provides warehouse details
-2. System validates required fields
-3. System checks for existing warehouse codes
-4. System creates warehouse record
-5. Success response with warehouse details
-
-### Zone Management Flow
-1. User provides zone details
-2. System validates warehouse exists
-3. System checks for existing zone codes
-4. System creates/updates zone record
-5. Success response with zone details
-
-### Staff Assignment Flow
-1. User provides staff assignment details
-2. System validates warehouse and user exist
-3. System checks for existing assignments
-4. System creates assignment record
-5. Success response with assignment details
-
----
-
-This document covers all warehouse management endpoints with examples for both web and mobile clients. Mobile clients must include version headers for compatibility checking. All endpoints are verified against the actual controller code and will work correctly with localhost:3000.
+### Offline Handling
+- Cache warehouse information
+- Queue zone updates
+- Sync when connection restored
+- Handle conflicts gracefully

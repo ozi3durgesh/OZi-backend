@@ -1,627 +1,368 @@
 # Authentication & Authorization
 
-This document covers all authentication and authorization endpoints for the OZi Backend system.
+This module handles user authentication, JWT token management, and profile access.
 
-**Base URL:** `http://localhost:3000`
+## User Login
 
-## 🔐 User Authentication
-
-### User Registration
-
-**Endpoint:** `POST /api/auth/register`
-
-**Description:** Registers a new user. First user automatically becomes admin. Subsequent admin registrations require admin secret.
-
-**Headers:**
-```bash
-Content-Type: application/json
-```
-
-**Request Body:**
-```json
-{
-  "email": "user@company.com",
-  "password": "SecurePassword123",
-  "roleName": "admin",
-  "adminSecret": "your_admin_secret_here"
-}
-```
-
-**Field Descriptions:**
-- `email` (required): User's email address
-- `password` (required): User's password (must meet validation requirements)
-- `roleName` (optional): Role name for the user (e.g., "admin", "wh_staff_1")
-- `adminSecret` (optional): Required only for admin registration after first user
-
-**cURL Examples:**
-
-**Web Client:**
-```bash
-curl -X POST "http://localhost:3000/api/auth/register" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "admin@company.com",
-    "password": "SecurePassword123",
-    "roleName": "admin"
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X POST "http://localhost:3000/api/auth/register" \
-  -H "Content-Type: application/json" \
-  -H "source: mobile" \
-  -H "app-version: 1.0.0" \
-  -d '{
-    "email": "admin@company.com",
-    "password": "SecurePassword123",
-    "roleName": "admin"
-  }'
-```
-
-**Admin Registration (after first user):**
-```bash
-curl -X POST "http://localhost:3000/api/auth/register" \
-  -H "Content-Type: application/json" \
-  -H "source: mobile" \
-  -H "app-version: 1.0.0" \
-  -d '{
-    "email": "newadmin@company.com",
-    "password": "SecurePassword123",
-    "roleName": "admin",
-    "adminSecret": "your_actual_admin_secret_from_env"
-  }'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "user": {
-      "id": 1,
-      "email": "admin@company.com",
-      "roleId": 1,
-      "role": "admin",
-      "permissions": ["module:action"],
-      "availabilityStatus": "available",
-      "createdAt": "2024-01-15T10:30:00.000Z"
-    },
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "isFirstUser": true
-  }
-}
-```
-
-### User Login
+### Login User
+Authenticate a user and receive JWT tokens.
 
 **Endpoint:** `POST /api/auth/login`
 
-**Description:** Authenticates a user and returns JWT tokens.
-
 **Headers:**
 ```bash
+X-App-Version: 1.0.0
 Content-Type: application/json
 ```
 
 **Request Body:**
 ```json
 {
-  "email": "user@company.com",
-  "password": "SecurePassword123"
+  "email": "user@example.com",
+  "password": "userpassword123"
 }
 ```
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
 curl -X POST "http://localhost:3000/api/auth/login" \
+  -H "X-App-Version: 1.0.0" \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "user@company.com",
-    "password": "SecurePassword123"
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X POST "http://localhost:3000/api/auth/login" \
-  -H "Content-Type: application/json" \
-  -H "source: mobile" \
-  -H "app-version: 1.0.0" \
-  -d '{
-    "email": "user@company.com",
-    "password": "SecurePassword123"
+    "email": "user@example.com",
+    "password": "userpassword123"
   }'
 ```
 
 **Response:**
 ```json
 {
+  "statusCode": 200,
   "success": true,
   "data": {
     "user": {
       "id": 1,
-      "email": "user@company.com",
-      "roleId": 1,
+      "email": "user@example.com",
+      "firstName": "John",
+      "lastName": "Doe",
       "role": "admin",
-      "permissions": ["module:action"],
-      "availabilityStatus": "available",
-      "createdAt": "2024-01-15T10:30:00.000Z"
+      "status": "active"
     },
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-  }
+    "tokens": {
+      "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9...",
+      "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9...",
+      "expiresIn": 900
+    }
+  },
+  "error": null
 }
 ```
 
+## Token Refresh
+
 ### Refresh Access Token
+Get a new access token using a valid refresh token.
 
 **Endpoint:** `POST /api/auth/refresh-token`
 
-**Description:** Refreshes an expired access token using a valid refresh token.
-
 **Headers:**
 ```bash
+X-App-Version: 1.0.0
 Content-Type: application/json
 ```
 
 **Request Body:**
 ```json
 {
-  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..."
 }
 ```
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
 curl -X POST "http://localhost:3000/api/auth/refresh-token" \
+  -H "X-App-Version: 1.0.0" \
   -H "Content-Type: application/json" \
   -d '{
-    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-  }'
-```
-
-**Mobile Client:**
-```bash
-curl -X POST "http://localhost:3000/api/auth/refresh-token" \
-  -H "Content-Type: application/json" \
-  -H "source: mobile" \
-  -H "app-version: 1.0.0" \
-  -d '{
-    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..."
   }'
 ```
 
 **Response:**
 ```json
 {
+  "statusCode": 200,
   "success": true,
   "data": {
-    "user": {
-      "id": 1,
-      "email": "user@company.com",
-      "roleId": 1,
-      "role": "admin",
-      "permissions": ["module:action"],
-      "availabilityStatus": "available",
-      "createdAt": "2024-01-15T10:30:00.000Z"
-    },
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-  }
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9...",
+    "expiresIn": 900
+  },
+  "error": null
 }
 ```
 
+## User Profile
+
 ### Get User Profile
+Retrieve the authenticated user's profile information.
 
 **Endpoint:** `GET /api/auth/profile`
 
-**Description:** Retrieves the current user's profile information. Requires authentication.
-
 **Headers:**
 ```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
+X-App-Version: 1.0.0
+Authorization: Bearer <your-access-token>
 ```
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
 curl -X GET "http://localhost:3000/api/auth/profile" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-**Mobile Client:**
-```bash
-curl -X GET "http://localhost:3000/api/auth/profile" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -H "source: mobile" \
-  -H "app-version: 1.0.0"
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..." \
+  -H "Content-Type: application/json"
 ```
 
 **Response:**
 ```json
 {
+  "statusCode": 200,
   "success": true,
   "data": {
-    "user": {
-      "id": 1,
-      "email": "user@company.com",
-      "role": "admin",
-      "permissions": ["module:action"],
-      "availabilityStatus": "available",
-      "createdAt": "2024-01-15T10:30:00.000Z"
-    }
-  }
+    "id": 1,
+    "email": "user@example.com",
+    "firstName": "John",
+    "lastName": "Doe",
+    "phone": "+1234567890",
+    "role": "admin",
+    "status": "active",
+    "permissions": [
+      "users_roles:manage",
+      "orders:view_all",
+      "picking:assign_manage",
+      "packing:execute",
+      "warehouse:manage"
+    ],
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "lastLogin": "2024-01-01T12:00:00.000Z"
+  },
+  "error": null
 }
 ```
 
+## User Roles
+
 ### Get Available Roles
+Get a list of all available roles in the system.
 
 **Endpoint:** `GET /api/auth/roles`
 
-**Description:** Retrieves available roles for user registration.
-
 **Headers:**
 ```bash
-Content-Type: application/json
+X-App-Version: 1.0.0
 ```
 
-**cURL Examples:**
-
-**Web Client:**
+**cURL Example:**
 ```bash
 curl -X GET "http://localhost:3000/api/auth/roles" \
+  -H "X-App-Version: 1.0.0" \
   -H "Content-Type: application/json"
-```
-
-**Mobile Client:**
-```bash
-curl -X GET "http://localhost:3000/api/auth/roles" \
-  -H "Content-Type: application/json" \
-  -H "source: mobile" \
-  -H "app-version: 1.0.0"
 ```
 
 **Response:**
 ```json
 {
+  "statusCode": 200,
   "success": true,
-  "data": {
-    "roles": [
-      {
-        "id": 1,
-        "name": "admin",
-        "description": "Full system access"
-      },
-      {
-        "id": 2,
-        "name": "wh_staff_1",
-        "description": "Warehouse staff level 1"
-      }
-    ]
-  }
+  "data": [
+    {
+      "id": 1,
+      "name": "admin",
+      "displayName": "Administrator",
+      "description": "Full system access",
+      "permissions": [
+        "users_roles:manage",
+        "orders:view_all",
+        "picking:assign_manage",
+        "packing:execute",
+        "warehouse:manage"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "manager",
+      "displayName": "Manager",
+      "description": "Department management access",
+      "permissions": [
+        "orders:view_all",
+        "picking:view",
+        "packing:execute",
+        "warehouse:view"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "picker",
+      "displayName": "Picker",
+      "description": "Picking operations access",
+      "permissions": [
+        "picking:execute"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "packer",
+      "displayName": "Packer",
+      "description": "Packing operations access",
+      "permissions": [
+        "packing:execute"
+      ]
+    }
+  ],
+  "error": null
 }
 ```
 
-### Check System Status
+## Authentication Flow
 
-**Endpoint:** `GET /api/auth/system-status`
-
-**Description:** Checks system status without authentication. Useful for checking if system needs initial admin setup.
-
-**Headers:**
+### 1. Initial Login
 ```bash
+# Step 1: Login with credentials
+curl -X POST "http://localhost:3000/api/auth/login" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "userpassword123"
+  }'
+```
+
+### 2. Store Tokens
+```bash
+# Extract and store tokens from response
+ACCESS_TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..."
+REFRESH_TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCiJ9..."
+```
+
+### 3. Use Access Token
+```bash
+# Include in subsequent requests
+curl -X GET "http://localhost:3000/api/auth/profile" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
+```
+
+### 4. Refresh When Expired
+```bash
+# When access token expires, use refresh token
+curl -X POST "http://localhost:3000/api/auth/refresh-token" \
+  -H "X-App-Version: 1.0.0" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"refreshToken\": \"$REFRESH_TOKEN\"
+  }"
+```
+
+## JWT Token Details
+
+### Access Token
+- **Expiration**: 15 minutes (configurable)
+- **Purpose**: API authentication
+- **Storage**: Memory (not persistent)
+- **Refresh**: Use refresh token when expired
+
+### Refresh Token
+- **Expiration**: 7 days (configurable)
+- **Purpose**: Get new access tokens
+- **Storage**: Secure HTTP-only cookie or secure storage
+- **Refresh**: Login again when expired
+
+## Security Headers
+
+All authenticated requests should include:
+
+```bash
+X-App-Version: 1.0.0
+Authorization: Bearer <access-token>
 Content-Type: application/json
 ```
 
-**cURL Examples:**
+## Error Responses
 
-**Web Client:**
-```bash
-curl -X GET "http://localhost:3000/api/auth/system-status" \
-  -H "Content-Type: application/json"
-```
-
-**Mobile Client:**
-```bash
-curl -X GET "http://localhost:3000/api/auth/system-status" \
-  -H "Content-Type: application/json" \
-  -H "source: mobile" \
-  -H "app-version: 1.0.0"
-```
-
-**Response:**
+### Invalid Credentials
 ```json
 {
-  "success": true,
-  "data": {
-    "hasUsers": true,
-    "totalUsers": 5,
-    "message": "System is initialized"
-  }
-}
-```
-
-### Test Auth Route
-
-**Endpoint:** `GET /api/auth/test`
-
-**Description:** Test endpoint to verify auth routes are working.
-
-**Headers:**
-```bash
-Content-Type: application/json
-```
-
-**cURL Examples:**
-
-**Web Client:**
-```bash
-curl -X GET "http://localhost:3000/api/auth/test" \
-  -H "Content-Type: application/json"
-```
-
-**Mobile Client:**
-```bash
-curl -X GET "http://localhost:3000/api/auth/test" \
-  -H "Content-Type: application/json" \
-  -H "source: mobile" \
-  -H "app-version: 1.0.0"
-```
-
-**Response:**
-```json
-{
-  "message": "Auth route test endpoint working"
-}
-```
-
-## 📱 Mobile App Considerations
-
-### Version Check Headers
-For mobile clients, the following headers are required:
-- `source: mobile` - Identifies the request as coming from a mobile app
-- `app-version: 1.0.0` - Current app version for compatibility checking
-
-### Version Compatibility
-- Minimum supported version: 1.0.0 (configurable via MIN_APP_VERSION env var)
-- If app version is below minimum, API returns 426 status code
-- Web clients don't require version checking
-
-### Version Check Behavior
-- Mobile requests without `source: mobile` header work normally
-- Mobile requests with `source: mobile` but missing `app-version` return 400 error
-- Mobile requests with outdated app version return 426 error
-
-## ⚠️ Error Responses
-
-### Common Error Responses
-
-**Invalid Credentials:**
-```json
-{
+  "statusCode": 401,
   "success": false,
-  "error": "Invalid credentials",
-  "message": "Invalid credentials",
-  "statusCode": 401
+  "data": null,
+  "error": "Invalid email or password"
 }
 ```
 
-**User Already Exists:**
+### Token Expired
 ```json
 {
+  "statusCode": 401,
   "success": false,
-  "error": "User already exists",
-  "message": "User already exists",
-  "statusCode": 409
+  "data": null,
+  "error": "Access token expired"
 }
 ```
 
-**Invalid Role:**
+### Invalid Token
 ```json
 {
+  "statusCode": 401,
   "success": false,
-  "error": "Invalid role name",
-  "message": "Invalid role name",
-  "statusCode": 400
+  "data": null,
+  "error": "Invalid token"
 }
 ```
 
-**Admin Registration Failed:**
+### Insufficient Permissions
 ```json
 {
+  "statusCode": 403,
   "success": false,
-  "error": "Invalid admin registration secret",
-  "message": "Invalid admin registration secret",
-  "statusCode": 403
+  "data": null,
+  "error": "Insufficient permissions"
 }
 ```
 
-**Missing App Version (Mobile Only):**
+### Version Mismatch
 ```json
 {
+  "statusCode": 400,
   "success": false,
-  "error": "App version is required for mobile users",
-  "message": "App version is required for mobile users",
-  "statusCode": 400
+  "data": null,
+  "error": "App version not supported. Please update your app."
 }
 ```
 
-**App Version Too Old (Mobile Only):**
-```json
-{
-  "success": false,
-  "error": "Please update your app to version 1.0.0 or higher",
-  "message": "Please update your app to version 1.0.0 or higher",
-  "statusCode": 426
-}
-```
+## Mobile App Considerations
 
-## 🔐 Security Features
+### Token Storage
+- Store access token in memory
+- Store refresh token in secure storage (Keychain/iOS, Keystore/Android)
+- Never store tokens in plain text
 
-1. **JWT Tokens**: Secure token-based authentication
-2. **Refresh Tokens**: Automatic token renewal
-3. **Version Control**: Mobile app compatibility checking
-4. **Rate Limiting**: Protection against brute force attacks
-5. **Password Policies**: Enforced strong password requirements
-6. **Admin Secret Protection**: Admin registration requires secret after first user
-7. **Role-Based Access Control**: Users are assigned specific roles with permissions
+### Auto-refresh
+- Implement automatic token refresh before expiration
+- Handle refresh failures gracefully
+- Redirect to login on refresh failure
 
-## 📋 Authentication Flow
+### Offline Handling
+- Cache user profile data
+- Queue API requests when offline
+- Sync when connection restored
 
-### First User Registration (Admin)
-1. System checks if no users exist
-2. First user automatically becomes admin
-3. No admin secret required
-4. JWT tokens issued immediately
+## Web App Considerations
 
-### Subsequent Admin Registration
-1. System checks if users already exist
-2. Admin secret required from environment variable
-3. Secret must match ADMIN_REGISTRATION_SECRET
-4. JWT tokens issued upon successful validation
+### Token Storage
+- Store access token in memory (not localStorage)
+- Store refresh token in HTTP-only cookie
+- Implement automatic logout on inactivity
 
-### Regular User Registration
-1. User provides email and password
-2. Role can be specified or defaults to wh_staff_1
-3. JWT tokens issued immediately
-
-### Web Client Flow
-1. User provides credentials
-2. System validates credentials
-3. JWT access token is issued
-4. Token is used for subsequent API calls
-5. No version checking required
-
-### Mobile Client Flow
-1. App sends request with version headers
-2. System validates app version compatibility
-3. User provides credentials
-4. System validates credentials
-5. JWT access token is issued
-6. Token is used for subsequent API calls
-7. Version checking on every request
-
-## 🔧 Environment Variables
-
-Make sure these environment variables are set in your `.env` file:
-
-```bash
-# JWT Configuration
-JWT_ACCESS_SECRET=your_jwt_access_secret_here
-JWT_REFRESH_SECRET=your_jwt_refresh_secret_here
-JWT_ACCESS_EXPIRES_IN=15m
-JWT_REFRESH_EXPIRES_IN=7d
-
-# Admin Registration
-ADMIN_REGISTRATION_SECRET=your_admin_registration_secret_here
-
-# App Version Check
-MIN_APP_VERSION=1.0.0
-```
-
-## 📋 Complete Authentication Workflow
-
-### Step 1: Check System Status
-```bash
-# Web Client
-curl -X GET "http://localhost:3000/api/auth/system-status" \
-  -H "Content-Type: application/json"
-
-# Mobile Client
-curl -X GET "http://localhost:3000/api/auth/system-status" \
-  -H "Content-Type: application/json" \
-  -H "source: mobile" \
-  -H "app-version: 1.0.0"
-```
-
-### Step 2: Register First Admin User
-```bash
-# Web Client
-curl -X POST "http://localhost:3000/api/auth/register" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "admin@ozi.com",
-    "password": "AdminPassword123!",
-    "roleName": "admin"
-  }'
-
-# Mobile Client
-curl -X POST "http://localhost:3000/api/auth/register" \
-  -H "Content-Type: application/json" \
-  -H "source: mobile" \
-  -H "app-version: 1.0.0" \
-  -d '{
-    "email": "admin@ozi.com",
-    "password": "AdminPassword123!",
-    "roleName": "admin"
-  }'
-```
-
-### Step 3: Login as Admin
-```bash
-# Web Client
-curl -X POST "http://localhost:3000/api/auth/login" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "admin@ozi.com",
-    "password": "AdminPassword123!"
-  }'
-
-# Mobile Client
-curl -X POST "http://localhost:3000/api/auth/login" \
-  -H "Content-Type: application/json" \
-  -H "source: mobile" \
-  -H "app-version: 1.0.0" \
-  -d '{
-    "email": "admin@ozi.com",
-    "password": "AdminPassword123!"
-  }'
-```
-
-### Step 4: Get User Profile (with token)
-```bash
-# Web Client
-curl -X GET "http://localhost:3000/api/auth/profile" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE"
-
-# Mobile Client
-curl -X GET "http://localhost:3000/api/auth/profile" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE" \
-  -H "source: mobile" \
-  -H "app-version: 1.0.0"
-```
-
-### Step 5: Refresh Token (if needed)
-```bash
-# Web Client
-curl -X POST "http://localhost:3000/api/auth/refresh-token" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "refreshToken": "YOUR_REFRESH_TOKEN_HERE"
-  }'
-
-# Mobile Client
-curl -X POST "http://localhost:3000/api/auth/refresh-token" \
-  -H "Content-Type: application/json" \
-  -H "source: mobile" \
-  -H "app-version: 1.0.0" \
-  -d '{
-    "refreshToken": "YOUR_REFRESH_TOKEN_HERE"
-  }'
-```
-
----
-
-This document covers all **actually implemented** authentication endpoints with correct examples for both web and mobile clients. Mobile clients must include version headers for compatibility checking. All endpoints are verified against the actual route files and will work correctly with localhost:3000.
+### Security
+- Use HTTPS in production
+- Implement CSRF protection
+- Validate app version on each request
