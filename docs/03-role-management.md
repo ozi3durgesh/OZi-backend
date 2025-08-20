@@ -1,127 +1,20 @@
-# Role Management (Admin Only)
+# Role Management Module
 
-This document covers all role management endpoints for the OZi Backend system. These endpoints are restricted to users with admin privileges.
+This document covers all role management endpoints for the OZi Backend system.
 
-**Base URL:** `http://13.232.150.239`
+**Base URL:** `http://localhost:3000`
 
-## 👑 Role Operations
+## Overview
 
-### Get All Roles
+The role management module provides functionality for creating and managing user roles in the system. It supports role-based access control (RBAC) and allows administrators to assign permissions to roles.
 
-**Endpoint:** `GET /api/v1/roles`
-
-**Description:** Retrieves all available roles in the system.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Query Parameters:**
-- `page` (optional): Page number for pagination (default: 1)
-- `limit` (optional): Number of items per page (default: 10)
-- `search` (optional): Search term for role names
-- `status` (optional): Filter by status (active, inactive)
-
-**cURL Example:**
-```bash
-curl -X GET "http://13.232.150.239/api/v1/roles?page=1&limit=10&search=admin&status=active" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "roles": [
-      {
-        "id": 1,
-        "name": "Super Admin",
-        "description": "Full system access with all permissions",
-        "permissions": ["*"],
-        "status": "active",
-        "userCount": 1,
-        "createdAt": "2024-01-01T00:00:00.000Z",
-        "updatedAt": "2024-01-01T00:00:00.000Z"
-      },
-      {
-        "id": 2,
-        "name": "Admin",
-        "description": "Administrative access with most permissions",
-        "permissions": ["read:*", "write:users", "write:orders", "read:reports"],
-        "status": "active",
-        "userCount": 3,
-        "createdAt": "2024-01-01T00:00:00.000Z",
-        "updatedAt": "2024-01-01T00:00:00.000Z"
-      }
-    ],
-    "pagination": {
-      "page": 1,
-      "limit": 10,
-      "total": 4,
-      "totalPages": 1
-    }
-  }
-}
-```
-
-### Get Role by ID
-
-**Endpoint:** `GET /api/v1/roles/:id`
-
-**Description:** Retrieves a specific role by its ID.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**cURL Example:**
-```bash
-curl -X GET "http://13.232.150.239/api/v1/roles/2" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "role": {
-      "id": 2,
-      "name": "Admin",
-      "description": "Administrative access with most permissions",
-      "permissions": [
-        {
-          "id": 1,
-          "name": "read:users",
-          "description": "Read user information"
-        },
-        {
-          "id": 2,
-          "name": "write:users",
-          "description": "Create and modify users"
-        }
-      ],
-      "status": "active",
-      "userCount": 3,
-      "createdAt": "2024-01-01T00:00:00.000Z",
-      "updatedAt": "2024-01-01T00:00:00.000Z"
-    }
-  }
-}
-```
+## 👥 Role Operations
 
 ### Create New Role
 
-**Endpoint:** `POST /api/v1/roles`
+**Endpoint:** `POST /api/roles`
 
-**Description:** Creates a new role in the system.
+**Description:** Creates a new role in the system (admin only).
 
 **Headers:**
 ```bash
@@ -132,550 +25,285 @@ Authorization: Bearer your_jwt_token
 **Request Body:**
 ```json
 {
-  "name": "Warehouse Manager",
+  "name": "warehouse_manager",
   "description": "Manages warehouse operations and staff",
-  "permissions": ["read:orders", "write:orders", "read:users", "read:reports"],
-  "status": "active"
+  "permissions": ["warehouse:view", "warehouse:manage", "staff:assign"]
 }
 ```
 
-**cURL Example:**
+**cURL Examples:**
+
+**Web Client:**
 ```bash
-curl -X POST "http://13.232.150.239/api/v1/roles" \
+curl -X POST "http://localhost:3000/api/roles" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "name": "Warehouse Manager",
+    "name": "warehouse_manager",
     "description": "Manages warehouse operations and staff",
-    "permissions": ["read:orders", "write:orders", "read:users", "read:reports"],
-    "status": "active"
+    "permissions": ["warehouse:view", "warehouse:manage", "staff:assign"]
+  }'
+```
+
+**Mobile Client:**
+```bash
+curl -X POST "http://localhost:3000/api/roles" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "source: mobile" \
+  -H "app-version: 1.2.0" \
+  -d '{
+    "name": "warehouse_manager",
+    "description": "Manages warehouse operations and staff",
+    "permissions": ["warehouse:view", "warehouse:manage", "staff:assign"]
   }'
 ```
 
 **Response:**
 ```json
 {
+  "statusCode": 201,
   "success": true,
-  "message": "Role created successfully",
   "data": {
-    "role": {
-      "id": 5,
-      "name": "Warehouse Manager",
+    "id": 1,
+    "name": "warehouse_manager",
+    "description": "Manages warehouse operations and staff",
+    "permissions": ["warehouse:view", "warehouse:manage", "staff:assign"],
+    "created_at": "2024-01-15T10:30:00.000Z",
+    "updated_at": "2024-01-15T10:30:00.000Z"
+  },
+  "error": null
+}
+```
+
+### Assign Permissions to Role
+
+**Endpoint:** `POST /api/roles/assign-permissions`
+
+**Description:** Assigns permissions to an existing role (admin only).
+
+**Headers:**
+```bash
+Content-Type: application/json
+Authorization: Bearer your_jwt_token
+```
+
+**Request Body:**
+```json
+{
+  "roleId": 1,
+  "permissions": ["picking:view", "picking:execute", "packing:view"]
+}
+```
+
+**cURL Examples:**
+
+**Web Client:**
+```bash
+curl -X POST "http://localhost:3000/api/roles/assign-permissions" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -d '{
+    "roleId": 1,
+    "permissions": ["picking:view", "picking:execute", "packing:view"]
+  }'
+```
+
+**Mobile Client:**
+```bash
+curl -X POST "http://localhost:3000/api/roles/assign-permissions" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "source: mobile" \
+  -H "app-version: 1.2.0" \
+  -d '{
+    "roleId": 1,
+    "permissions": ["picking:view", "picking:execute", "packing:view"]
+  }'
+```
+
+**Response:**
+```json
+{
+  "statusCode": 200,
+  "success": true,
+  "data": {
+    "message": "Permissions assigned successfully",
+    "roleId": 1,
+    "assignedPermissions": ["picking:view", "picking:execute", "packing:view"]
+  },
+  "error": null
+}
+```
+
+### List All Roles
+
+**Endpoint:** `GET /api/roles`
+
+**Description:** Retrieves all roles in the system (admin only).
+
+**Headers:**
+```bash
+Content-Type: application/json
+Authorization: Bearer your_jwt_token
+```
+
+**cURL Examples:**
+
+**Web Client:**
+```bash
+curl -X GET "http://localhost:3000/api/roles" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token"
+```
+
+**Mobile Client:**
+```bash
+curl -X GET "http://localhost:3000/api/roles" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "source: mobile" \
+  -H "app-version: 1.2.0"
+```
+
+**Response:**
+```json
+{
+  "statusCode": 200,
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "name": "admin",
+      "description": "Full system access",
+      "permissions": ["*"],
+      "created_at": "2024-01-15T10:30:00.000Z",
+      "updated_at": "2024-01-15T10:30:00.000Z"
+    },
+    {
+      "id": 2,
+      "name": "warehouse_manager",
       "description": "Manages warehouse operations and staff",
-      "permissions": ["read:orders", "write:orders", "read:users", "read:reports"],
-      "status": "active",
-      "userCount": 0,
-      "createdAt": "2024-01-15T10:30:00.000Z",
-      "updatedAt": "2024-01-15T10:30:00.000Z"
+      "permissions": ["warehouse:view", "warehouse:manage", "staff:assign"],
+      "created_at": "2024-01-15T10:30:00.000Z",
+      "updated_at": "2024-01-15T10:30:00.000Z"
     }
-  }
+  ],
+  "error": null
 }
 ```
 
-### Update Role
-
-**Endpoint:** `PUT /api/v1/roles/:id`
-
-**Description:** Updates an existing role.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Request Body:**
-```json
-{
-  "name": "Senior Warehouse Manager",
-  "description": "Senior manager with extended warehouse permissions",
-  "permissions": ["read:orders", "write:orders", "read:users", "write:users", "read:reports", "write:reports"],
-  "status": "active"
-}
-```
-
-**cURL Example:**
-```bash
-curl -X PUT "http://13.232.150.239/api/v1/roles/5" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -d '{
-    "name": "Senior Warehouse Manager",
-    "description": "Senior manager with extended warehouse permissions",
-    "permissions": ["read:orders", "write:orders", "read:users", "write:users", "read:reports", "write:reports"],
-    "status": "active"
-  }'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Role updated successfully",
-  "data": {
-    "role": {
-      "id": 5,
-      "name": "Senior Warehouse Manager",
-      "description": "Senior manager with extended warehouse permissions",
-      "permissions": ["read:orders", "write:orders", "read:users", "write:users", "read:reports", "write:reports"],
-      "status": "active",
-      "updatedAt": "2024-01-15T11:00:00.000Z"
-    }
-  }
-}
-```
-
-### Delete Role
-
-**Endpoint:** `DELETE /api/v1/roles/:id`
-
-**Description:** Deletes a role (only if no users are assigned to it).
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**cURL Example:**
-```bash
-curl -X DELETE "http://13.232.150.239/api/v1/roles/5" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Role deleted successfully"
-}
-```
-
-### Activate/Deactivate Role
-
-**Endpoint:** `PATCH /api/v1/roles/:id/status`
-
-**Description:** Changes the status of a role (active/inactive).
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Request Body:**
-```json
-{
-  "status": "inactive"
-}
-```
-
-**cURL Example:**
-```bash
-curl -X PATCH "http://13.232.150.239/api/v1/roles/5/status" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -d '{
-    "status": "inactive"
-  }'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Role status updated successfully",
-  "data": {
-    "role": {
-      "id": 5,
-      "status": "inactive",
-      "updatedAt": "2024-01-15T11:30:00.000Z"
-    }
-  }
-}
-```
-
-## 🔐 Role Permission Management
-
-### Get Role Permissions
-
-**Endpoint:** `GET /api/v1/roles/:id/permissions`
-
-**Description:** Retrieves all permissions assigned to a specific role.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**cURL Example:**
-```bash
-curl -X GET "http://13.232.150.239/api/v1/roles/2/permissions" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "role": {
-      "id": 2,
-      "name": "Admin"
-    },
-    "permissions": [
-      {
-        "id": 1,
-        "name": "read:users",
-        "description": "Read user information",
-        "module": "users",
-        "action": "read"
-      },
-      {
-        "id": 2,
-        "name": "write:users",
-        "description": "Create and modify users",
-        "module": "users",
-        "action": "write"
-      }
-    ]
-  }
-}
-```
-
-### Update Role Permissions
-
-**Endpoint:** `PUT /api/v1/roles/:id/permissions`
-
-**Description:** Updates the permissions assigned to a role.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Request Body:**
-```json
-{
-  "permissions": ["read:users", "write:users", "read:orders", "write:orders", "read:reports"]
-}
-```
-
-**cURL Example:**
-```bash
-curl -X PUT "http://13.232.150.239/api/v1/roles/2/permissions" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -d '{
-    "permissions": ["read:users", "write:users", "read:orders", "write:orders", "read:reports"]
-  }'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Role permissions updated successfully",
-  "data": {
-    "role": {
-      "id": 2,
-      "permissions": ["read:users", "write:users", "read:orders", "write:orders", "read:reports"]
-    }
-  }
-}
-```
-
-### Add Permission to Role
-
-**Endpoint:** `POST /api/v1/roles/:id/permissions`
-
-**Description:** Adds a specific permission to a role.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Request Body:**
-```json
-{
-  "permission": "write:reports"
-}
-```
-
-**cURL Example:**
-```bash
-curl -X POST "http://13.232.150.239/api/v1/roles/2/permissions" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -d '{
-    "permission": "write:reports"
-  }'
-```
-
-### Remove Permission from Role
-
-**Endpoint:** `DELETE /api/v1/roles/:id/permissions/:permissionId`
-
-**Description:** Removes a specific permission from a role.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**cURL Example:**
-```bash
-curl -X DELETE "http://13.232.150.239/api/v1/roles/2/permissions/5" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-## 👥 Role User Management
-
-### Get Users by Role
-
-**Endpoint:** `GET /api/v1/roles/:id/users`
-
-**Description:** Retrieves all users assigned to a specific role.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Query Parameters:**
-- `page` (optional): Page number for pagination
-- `limit` (optional): Number of items per page
-- `status` (optional): Filter by user status
-
-**cURL Example:**
-```bash
-curl -X GET "http://13.232.150.239/api/v1/roles/2/users?page=1&limit=10&status=active" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "role": {
-      "id": 2,
-      "name": "Admin"
-    },
-    "users": [
-      {
-        "id": 3,
-        "email": "admin1@ozi.com",
-        "firstName": "John",
-        "lastName": "Admin",
-        "status": "active",
-        "lastLogin": "2024-01-15T09:00:00.000Z"
-      }
-    ],
-    "pagination": {
-      "page": 1,
-      "limit": 10,
-      "total": 1,
-      "totalPages": 1
-    }
-  }
-}
-```
-
-### Assign Role to User
-
-**Endpoint:** `POST /api/v1/roles/:id/assign`
-
-**Description:** Assigns a role to a specific user.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Request Body:**
-```json
-{
-  "userId": 5
-}
-```
-
-**cURL Example:**
-```bash
-curl -X POST "http://13.232.150.239/api/v1/roles/2/assign" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
-  -d '{
-    "userId": 5
-  }'
-```
-
-### Remove Role from User
-
-**Endpoint:** `DELETE /api/v1/roles/:id/assign/:userId`
-
-**Description:** Removes a role assignment from a user.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**cURL Example:**
-```bash
-curl -X DELETE "http://13.232.150.239/api/v1/roles/2/assign/5" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-## 📊 Role Analytics
-
-### Get Role Statistics
-
-**Endpoint:** `GET /api/v1/roles/statistics`
-
-**Description:** Retrieves statistics about roles and their usage.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**cURL Example:**
-```bash
-curl -X GET "http://13.232.150.239/api/v1/roles/statistics" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "totalRoles": 4,
-    "activeRoles": 3,
-    "inactiveRoles": 1,
-    "totalUsers": 15,
-    "roleDistribution": [
-      {
-        "roleName": "Super Admin",
-        "userCount": 1,
-        "percentage": 6.67
-      },
-      {
-        "roleName": "Admin",
-        "userCount": 3,
-        "percentage": 20.0
-      }
-    ],
-    "mostUsedPermissions": [
-      "read:users",
-      "read:orders",
-      "read:reports"
-    ]
-  }
-}
-```
-
-## 🔍 Role Search and Filtering
-
-### Search Roles
-
-**Endpoint:** `GET /api/v1/roles/search`
-
-**Description:** Advanced search for roles with multiple criteria.
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**Query Parameters:**
-- `q` (required): Search query
-- `permissions` (optional): Filter by permissions
-- `status` (optional): Filter by status
-- `createdAfter` (optional): Filter by creation date
-- `createdBefore` (optional): Filter by creation date
-
-**cURL Example:**
-```bash
-curl -X GET "http://13.232.150.239/api/v1/roles/search?q=warehouse&permissions=read:orders&status=active" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
+## 📱 Mobile App Considerations
+
+### Version Check Headers
+For mobile clients, the following headers are required:
+- `source: mobile` - Identifies the request as coming from a mobile app
+- `app-version: 1.2.0` - Current app version for compatibility checking
+
+### Version Compatibility
+- Minimum supported version: 1.0.0
+- If app version is below minimum, API returns 426 status code
+- Web clients don't require version checking
 
 ## ⚠️ Error Responses
 
 ### Common Error Responses
 
+**Unauthorized Access:**
+```json
+{
+  "statusCode": 401,
+  "success": false,
+  "error": "User not authenticated"
+}
+```
+
 **Insufficient Permissions:**
 ```json
 {
+  "statusCode": 403,
   "success": false,
-  "error": "Forbidden",
-  "message": "Insufficient permissions to manage roles",
-  "statusCode": 403
+  "error": "Insufficient permissions"
 }
 ```
 
 **Role Not Found:**
 ```json
 {
+  "statusCode": 404,
   "success": false,
-  "error": "Not Found",
-  "message": "Role not found",
-  "statusCode": 404
+  "error": "Role not found"
 }
 ```
 
-**Role in Use:**
+**Role Name Already Exists:**
+```json
+{
+  "statusCode": 400,
+  "success": false,
+  "error": "Role name already exists"
+}
+```
+
+**Invalid Permission:**
+```json
+{
+  "statusCode": 400,
+  "success": false,
+  "error": "Invalid permission provided"
+}
+```
+
+**App Version Too Old (Mobile Only):**
 ```json
 {
   "success": false,
-  "error": "Conflict",
-  "message": "Cannot delete role. Users are currently assigned to it",
-  "statusCode": 409
+  "error": "Upgrade Required",
+  "message": "Please update your app to version 1.0.0 or higher",
+  "statusCode": 426
 }
 ```
 
-**Duplicate Role Name:**
+**Missing App Version (Mobile Only):**
 ```json
 {
   "success": false,
-  "error": "Conflict",
-  "message": "Role name already exists",
-  "statusCode": 409
+  "error": "Bad Request",
+  "message": "App version is required for mobile users",
+  "statusCode": 400
 }
 ```
 
-## 🔐 Security Considerations
+## 🔐 Security Features
 
-1. **Admin Only**: All role management endpoints require admin privileges
-2. **Permission Validation**: Changes to roles are logged and audited
-3. **Cascade Protection**: Cannot delete roles that are currently assigned to users
-4. **Default Role Protection**: System default roles cannot be deleted
-5. **Permission Inheritance**: Role permissions are inherited by assigned users
+1. **JWT Authentication**: All endpoints require valid JWT tokens
+2. **Permission-Based Access**: Only users with `users_roles:manage` permission can access these endpoints
+3. **Input Validation**: Comprehensive request validation
+4. **Version Control**: Mobile app compatibility checking
+5. **Audit Logging**: Track all role management operations
 
-## 📋 Best Practices
+## 📋 Operation Flow
 
-1. **Role Naming**: Use descriptive names that clearly indicate purpose
-2. **Permission Granularity**: Assign specific permissions rather than broad access
-3. **Regular Review**: Periodically review and update role permissions
-4. **Documentation**: Maintain clear documentation of role purposes
-5. **Testing**: Test role changes in development before production
-6. **Backup**: Keep backups of role configurations before major changes
+### Role Creation Flow
+1. User provides role details (name, description, permissions)
+2. System validates required fields
+3. System checks for existing role names
+4. System creates role record
+5. Success response with role details
+
+### Permission Assignment Flow
+1. User provides role ID and permissions list
+2. System validates role exists
+3. System validates permissions are valid
+4. System assigns permissions to role
+5. Success response with assignment details
+
+### Role Listing Flow
+1. User requests all roles
+2. System validates user permissions
+3. System retrieves all roles with their permissions
+4. Success response with roles list
+
+---
+
+This document covers all role management endpoints with examples for both web and mobile clients. Mobile clients must include version headers for compatibility checking. All endpoints are verified against the actual controller code and will work correctly with localhost:3000.

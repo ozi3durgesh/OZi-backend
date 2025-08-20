@@ -77,7 +77,6 @@ curl -X POST "http://localhost:3000/api/auth/register" \
 ```json
 {
   "success": true,
-  "message": "User registered successfully",
   "data": {
     "user": {
       "id": 1,
@@ -142,7 +141,6 @@ curl -X POST "http://localhost:3000/api/auth/login" \
 ```json
 {
   "success": true,
-  "message": "Login successful",
   "data": {
     "user": {
       "id": 1,
@@ -203,7 +201,6 @@ curl -X POST "http://localhost:3000/api/auth/refresh-token" \
 ```json
 {
   "success": true,
-  "message": "Token refreshed successfully",
   "data": {
     "user": {
       "id": 1,
@@ -530,6 +527,99 @@ ADMIN_REGISTRATION_SECRET=your_admin_registration_secret_here
 
 # App Version Check
 MIN_APP_VERSION=1.0.0
+```
+
+## 📋 Complete Authentication Workflow
+
+### Step 1: Check System Status
+```bash
+# Web Client
+curl -X GET "http://localhost:3000/api/auth/system-status" \
+  -H "Content-Type: application/json"
+
+# Mobile Client
+curl -X GET "http://localhost:3000/api/auth/system-status" \
+  -H "Content-Type: application/json" \
+  -H "source: mobile" \
+  -H "app-version: 1.0.0"
+```
+
+### Step 2: Register First Admin User
+```bash
+# Web Client
+curl -X POST "http://localhost:3000/api/auth/register" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "admin@ozi.com",
+    "password": "AdminPassword123!",
+    "roleName": "admin"
+  }'
+
+# Mobile Client
+curl -X POST "http://localhost:3000/api/auth/register" \
+  -H "Content-Type: application/json" \
+  -H "source: mobile" \
+  -H "app-version: 1.0.0" \
+  -d '{
+    "email": "admin@ozi.com",
+    "password": "AdminPassword123!",
+    "roleName": "admin"
+  }'
+```
+
+### Step 3: Login as Admin
+```bash
+# Web Client
+curl -X POST "http://localhost:3000/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "admin@ozi.com",
+    "password": "AdminPassword123!"
+  }'
+
+# Mobile Client
+curl -X POST "http://localhost:3000/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -H "source: mobile" \
+  -H "app-version: 1.0.0" \
+  -d '{
+    "email": "admin@ozi.com",
+    "password": "AdminPassword123!"
+  }'
+```
+
+### Step 4: Get User Profile (with token)
+```bash
+# Web Client
+curl -X GET "http://localhost:3000/api/auth/profile" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE"
+
+# Mobile Client
+curl -X GET "http://localhost:3000/api/auth/profile" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE" \
+  -H "source: mobile" \
+  -H "app-version: 1.0.0"
+```
+
+### Step 5: Refresh Token (if needed)
+```bash
+# Web Client
+curl -X POST "http://localhost:3000/api/auth/refresh-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "refreshToken": "YOUR_REFRESH_TOKEN_HERE"
+  }'
+
+# Mobile Client
+curl -X POST "http://localhost:3000/api/auth/refresh-token" \
+  -H "Content-Type: application/json" \
+  -H "source: mobile" \
+  -H "app-version: 1.0.0" \
+  -d '{
+    "refreshToken": "YOUR_REFRESH_TOKEN_HERE"
+  }'
 ```
 
 ---

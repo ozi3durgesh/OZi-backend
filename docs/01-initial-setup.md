@@ -46,10 +46,20 @@ curl -X GET "http://localhost:3000/health" \
 Content-Type: application/json
 ```
 
-**cURL Example:**
+**cURL Examples:**
+
+**Web Client:**
 ```bash
 curl -X GET "http://localhost:3000/api/auth/system-status" \
   -H "Content-Type: application/json"
+```
+
+**Mobile Client:**
+```bash
+curl -X GET "http://localhost:3000/api/auth/system-status" \
+  -H "Content-Type: application/json" \
+  -H "source: mobile" \
+  -H "app-version: 1.0.0"
 ```
 
 **Response:**
@@ -57,10 +67,9 @@ curl -X GET "http://localhost:3000/api/auth/system-status" \
 {
   "success": true,
   "data": {
-    "status": "initialized",
-    "message": "System is initialized",
-    "hasUsers": true,
-    "timestamp": "2024-01-15T10:30:00.000Z"
+    "hasUsers": false,
+    "totalUsers": 0,
+    "message": "System needs initial admin setup"
   }
 }
 ```
@@ -76,10 +85,20 @@ curl -X GET "http://localhost:3000/api/auth/system-status" \
 Content-Type: application/json
 ```
 
-**cURL Example:**
+**cURL Examples:**
+
+**Web Client:**
 ```bash
 curl -X GET "http://localhost:3000/api/auth/roles" \
   -H "Content-Type: application/json"
+```
+
+**Mobile Client:**
+```bash
+curl -X GET "http://localhost:3000/api/auth/roles" \
+  -H "Content-Type: application/json" \
+  -H "source: mobile" \
+  -H "app-version: 1.0.0"
 ```
 
 **Response:**
@@ -90,13 +109,13 @@ curl -X GET "http://localhost:3000/api/auth/roles" \
     "roles": [
       {
         "id": 1,
-        "name": "Admin",
+        "name": "admin",
         "description": "Full system access"
       },
       {
         "id": 2,
-        "name": "Manager",
-        "description": "Department management access"
+        "name": "wh_staff_1",
+        "description": "Warehouse staff level 1"
       }
     ]
   }
@@ -105,72 +124,11 @@ curl -X GET "http://localhost:3000/api/auth/roles" \
 
 ## 👤 User Registration
 
-### Register New User
+### Register First Admin User
 
 **Endpoint:** `POST /api/auth/register`
 
-**Description:** Register a new user in the system.
-
-**Headers:**
-```bash
-Content-Type: application/json
-```
-
-**Request Body:**
-```json
-{
-  "email": "newuser@ozi.com",
-  "password": "SecurePassword123!",
-  "firstName": "John",
-  "lastName": "Doe",
-  "phone": "+1234567890",
-  "invitationCode": "INV123456",
-  "department": "Operations",
-  "employeeId": "EMP001"
-}
-```
-
-**cURL Example:**
-```bash
-curl -X POST "http://localhost:3000/api/auth/register" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "newuser@ozi.com",
-    "password": "SecurePassword123!",
-    "firstName": "John",
-    "lastName": "Doe",
-    "phone": "+1234567890",
-    "invitationCode": "INV123456",
-    "department": "Operations",
-    "employeeId": "EMP001"
-  }'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "User registered successfully. Awaiting admin approval.",
-  "data": {
-    "user": {
-      "id": 1,
-      "email": "newuser@ozi.com",
-      "firstName": "John",
-      "lastName": "Doe",
-      "status": "pending_approval",
-      "createdAt": "2024-01-15T10:30:00.000Z"
-    }
-  }
-}
-```
-
-## 🔐 Admin Authentication
-
-### Admin Login
-
-**Endpoint:** `POST /api/auth/login`
-
-**Description:** Authenticate admin user.
+**Description:** Register the first user in the system. First user automatically becomes admin.
 
 **Headers:**
 ```bash
@@ -181,21 +139,34 @@ Content-Type: application/json
 ```json
 {
   "email": "admin@ozi.com",
-  "password": "AdminPassword123!",
-  "deviceId": "admin_device_001",
-  "platform": "web"
+  "password": "SecurePassword123!",
+  "roleName": "admin"
 }
 ```
 
-**cURL Example:**
+**cURL Examples:**
+
+**Web Client:**
 ```bash
-curl -X POST "http://localhost:3000/api/auth/login" \
+curl -X POST "http://localhost:3000/api/auth/register" \
   -H "Content-Type: application/json" \
   -d '{
     "email": "admin@ozi.com",
-    "password": "AdminPassword123!",
-    "deviceId": "admin_device_001",
-    "platform": "web"
+    "password": "SecurePassword123!",
+    "roleName": "admin"
+  }'
+```
+
+**Mobile Client:**
+```bash
+curl -X POST "http://localhost:3000/api/auth/register" \
+  -H "Content-Type: application/json" \
+  -H "source: mobile" \
+  -H "app-version: 1.0.0" \
+  -d '{
+    "email": "admin@ozi.com",
+    "password": "SecurePassword123!",
+    "roleName": "admin"
   }'
 ```
 
@@ -203,39 +174,32 @@ curl -X POST "http://localhost:3000/api/auth/login" \
 ```json
 {
   "success": true,
-  "message": "Login successful",
   "data": {
     "user": {
       "id": 1,
       "email": "admin@ozi.com",
-      "firstName": "Admin",
-      "lastName": "User",
-      "role": "Admin",
-      "permissions": ["read:users", "write:users", "read:orders"],
-      "status": "active"
+      "roleId": 1,
+      "role": "admin",
+      "permissions": ["module:action"],
+      "availabilityStatus": "available",
+      "createdAt": "2024-01-15T10:30:00.000Z"
     },
-    "tokens": {
-      "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-      "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-      "accessTokenExpiresIn": "15m",
-      "refreshTokenExpiresIn": "7d"
-    }
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "isFirstUser": true
   }
 }
 ```
 
-## 👥 Admin User Management
+### Register Additional Admin User
 
-### Create Admin User
+**Endpoint:** `POST /api/auth/register`
 
-**Endpoint:** `POST /api/users`
-
-**Description:** Create a new admin user (requires admin authentication).
+**Description:** Register additional admin users (requires admin secret after first user).
 
 **Headers:**
 ```bash
 Content-Type: application/json
-Authorization: Bearer your_jwt_token
 ```
 
 **Request Body:**
@@ -243,29 +207,36 @@ Authorization: Bearer your_jwt_token
 {
   "email": "newadmin@ozi.com",
   "password": "SecurePassword123!",
-  "firstName": "Jane",
-  "lastName": "Admin",
-  "phone": "+1234567890",
-  "roleId": 1,
-  "department": "Management",
-  "employeeId": "EMP002"
+  "roleName": "admin",
+  "adminSecret": "your_admin_secret_from_env"
 }
 ```
 
-**cURL Example:**
+**cURL Examples:**
+
+**Web Client:**
 ```bash
-curl -X POST "http://localhost:3000/api/users" \
+curl -X POST "http://localhost:3000/api/auth/register" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
   -d '{
     "email": "newadmin@ozi.com",
     "password": "SecurePassword123!",
-    "firstName": "Jane",
-    "lastName": "Admin",
-    "phone": "+1234567890",
-    "roleId": 1,
-    "department": "Management",
-    "employeeId": "EMP002"
+    "roleName": "admin",
+    "adminSecret": "your_admin_secret_from_env"
+  }'
+```
+
+**Mobile Client:**
+```bash
+curl -X POST "http://localhost:3000/api/auth/register" \
+  -H "Content-Type: application/json" \
+  -H "source: mobile" \
+  -H "app-version: 1.0.0" \
+  -d '{
+    "email": "newadmin@ozi.com",
+    "password": "SecurePassword123!",
+    "roleName": "admin",
+    "adminSecret": "your_admin_secret_from_env"
   }'
 ```
 
@@ -273,99 +244,63 @@ curl -X POST "http://localhost:3000/api/users" \
 ```json
 {
   "success": true,
-  "message": "User created successfully",
   "data": {
     "user": {
       "id": 2,
       "email": "newadmin@ozi.com",
-      "firstName": "Jane",
-      "lastName": "Admin",
-      "role": "Admin",
-      "status": "active",
+      "roleId": 1,
+      "role": "admin",
+      "permissions": ["module:action"],
+      "availabilityStatus": "available",
       "createdAt": "2024-01-15T10:30:00.000Z"
-    }
+    },
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "isFirstUser": false
   }
 }
 ```
 
-### List All Users
+### Register Regular User
 
-**Endpoint:** `GET /api/users`
+**Endpoint:** `POST /api/auth/register`
 
-**Description:** Get all users in the system (requires admin authentication).
-
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**cURL Example:**
-```bash
-curl -X GET "http://localhost:3000/api/users" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "users": [
-      {
-        "id": 1,
-        "email": "admin@ozi.com",
-        "firstName": "Admin",
-        "lastName": "User",
-        "role": "Admin",
-        "department": "Management",
-        "status": "active",
-        "createdAt": "2024-01-15T10:30:00.000Z"
-      }
-    ],
-    "pagination": {
-      "page": 1,
-      "limit": 10,
-      "total": 1,
-      "totalPages": 1
-    }
-  }
-}
-```
-
-## 🏗️ Role Management
-
-### Create Role
-
-**Endpoint:** `POST /api/roles`
-
-**Description:** Create a new role (requires admin authentication).
+**Description:** Register a regular user with default role (wh_staff_1).
 
 **Headers:**
 ```bash
 Content-Type: application/json
-Authorization: Bearer your_jwt_token
 ```
 
 **Request Body:**
 ```json
 {
-  "name": "Supervisor",
-  "description": "Department supervisor with limited admin access",
-  "permissions": ["read:users", "read:orders", "write:orders"]
+  "email": "user@ozi.com",
+  "password": "SecurePassword123!"
 }
 ```
 
-**cURL Example:**
+**cURL Examples:**
+
+**Web Client:**
 ```bash
-curl -X POST "http://localhost:3000/api/roles" \
+curl -X POST "http://localhost:3000/api/auth/register" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "name": "Supervisor",
-    "description": "Department supervisor with limited admin access",
-    "permissions": ["read:users", "read:orders", "write:orders"]
+    "email": "user@ozi.com",
+    "password": "SecurePassword123!"
+  }'
+```
+
+**Mobile Client:**
+```bash
+curl -X POST "http://localhost:3000/api/auth/register" \
+  -H "Content-Type: application/json" \
+  -H "source: mobile" \
+  -H "app-version: 1.0.0" \
+  -d '{
+    "email": "user@ozi.com",
+    "password": "SecurePassword123!"
   }'
 ```
 
@@ -373,95 +308,65 @@ curl -X POST "http://localhost:3000/api/roles" \
 ```json
 {
   "success": true,
-  "message": "Role created successfully",
   "data": {
-    "role": {
+    "user": {
       "id": 3,
-      "name": "Supervisor",
-      "description": "Department supervisor with limited admin access",
+      "email": "user@ozi.com",
+      "roleId": 2,
+      "role": "wh_staff_1",
+      "permissions": ["module:action"],
+      "availabilityStatus": "available",
       "createdAt": "2024-01-15T10:30:00.000Z"
-    }
+    },
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "isFirstUser": false
   }
 }
 ```
 
-### List All Roles
+## 🔐 User Authentication
 
-**Endpoint:** `GET /api/roles`
+### User Login
 
-**Description:** Get all roles in the system (requires admin authentication).
+**Endpoint:** `POST /api/auth/login`
 
-**Headers:**
-```bash
-Content-Type: application/json
-Authorization: Bearer your_jwt_token
-```
-
-**cURL Example:**
-```bash
-curl -X GET "http://localhost:3000/api/roles" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "roles": [
-      {
-        "id": 1,
-        "name": "Admin",
-        "description": "Full system access"
-      },
-      {
-        "id": 2,
-        "name": "Manager",
-        "description": "Department management access"
-      },
-      {
-        "id": 3,
-        "name": "Supervisor",
-        "description": "Department supervisor with limited admin access"
-      }
-    ]
-  }
-}
-```
-
-## 🔐 Permission Management
-
-### Create Permission
-
-**Endpoint:** `POST /api/permissions`
-
-**Description:** Create a new permission (requires admin authentication).
+**Description:** Authenticate user and get JWT tokens.
 
 **Headers:**
 ```bash
 Content-Type: application/json
-Authorization: Bearer your_jwt_token
 ```
 
 **Request Body:**
 ```json
 {
-  "module": "warehouse",
-  "action": "manage",
-  "description": "Full warehouse management access"
+  "email": "admin@ozi.com",
+  "password": "SecurePassword123!"
 }
 ```
 
-**cURL Example:**
+**cURL Examples:**
+
+**Web Client:**
 ```bash
-curl -X POST "http://localhost:3000/api/permissions" \
+curl -X POST "http://localhost:3000/api/auth/login" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
   -d '{
-    "module": "warehouse",
-    "action": "manage",
-    "description": "Full warehouse management access"
+    "email": "admin@ozi.com",
+    "password": "SecurePassword123!"
+  }'
+```
+
+**Mobile Client:**
+```bash
+curl -X POST "http://localhost:3000/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -H "source: mobile" \
+  -H "app-version: 1.0.0" \
+  -d '{
+    "email": "admin@ozi.com",
+    "password": "SecurePassword123!"
   }'
 ```
 
@@ -469,36 +374,60 @@ curl -X POST "http://localhost:3000/api/permissions" \
 ```json
 {
   "success": true,
-  "message": "Permission created successfully",
   "data": {
-    "permission": {
+    "user": {
       "id": 1,
-      "module": "warehouse",
-      "action": "manage",
-      "description": "Full warehouse management access",
+      "email": "admin@ozi.com",
+      "roleId": 1,
+      "role": "admin",
+      "permissions": ["module:action"],
+      "availabilityStatus": "available",
       "createdAt": "2024-01-15T10:30:00.000Z"
-    }
+    },
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
   }
 }
 ```
 
-### List All Permissions
+### Refresh Access Token
 
-**Endpoint:** `GET /api/permissions`
+**Endpoint:** `POST /api/auth/refresh-token`
 
-**Description:** Get all permissions in the system (requires admin authentication).
+**Description:** Refresh expired access token using refresh token.
 
 **Headers:**
 ```bash
 Content-Type: application/json
-Authorization: Bearer your_jwt_token
 ```
 
-**cURL Example:**
+**Request Body:**
+```json
+{
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+**cURL Examples:**
+
+**Web Client:**
 ```bash
-curl -X GET "http://localhost:3000/api/permissions" \
+curl -X POST "http://localhost:3000/api/auth/refresh-token" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token"
+  -d '{
+    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  }'
+```
+
+**Mobile Client:**
+```bash
+curl -X POST "http://localhost:3000/api/auth/refresh-token" \
+  -H "Content-Type: application/json" \
+  -H "source: mobile" \
+  -H "app-version: 1.0.0" \
+  -d '{
+    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  }'
 ```
 
 **Response:**
@@ -506,31 +435,144 @@ curl -X GET "http://localhost:3000/api/permissions" \
 {
   "success": true,
   "data": {
-    "permissions": [
-      {
-        "id": 1,
-        "module": "warehouse",
-        "action": "manage",
-        "description": "Full warehouse management access"
-      },
-      {
-        "id": 2,
-        "module": "users",
-        "action": "read",
-        "description": "Read user information"
-      }
-    ]
+    "user": {
+      "id": 1,
+      "email": "admin@ozi.com",
+      "roleId": 1,
+      "role": "admin",
+      "permissions": ["module:action"],
+      "availabilityStatus": "available",
+      "createdAt": "2024-01-15T10:30:00.000Z"
+    },
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
   }
 }
+```
+
+### Get User Profile
+
+**Endpoint:** `GET /api/auth/profile`
+
+**Description:** Get current user's profile (requires authentication).
+
+**Headers:**
+```bash
+Content-Type: application/json
+Authorization: Bearer your_jwt_token
+```
+
+**cURL Examples:**
+
+**Web Client:**
+```bash
+curl -X GET "http://localhost:3000/api/auth/profile" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token"
+```
+
+**Mobile Client:**
+```bash
+curl -X GET "http://localhost:3000/api/auth/profile" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "source: mobile" \
+  -H "app-version: 1.0.0"
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "user": {
+      "id": 1,
+      "email": "admin@ozi.com",
+      "role": "admin",
+      "permissions": ["module:action"],
+      "availabilityStatus": "available",
+      "createdAt": "2024-01-15T10:30:00.000Z"
+    }
+  }
+}
+```
+
+## 📱 Mobile App Support
+
+### Mobile Client Registration
+
+**Endpoint:** `POST /api/auth/register`
+
+**Description:** Register user from mobile app with version checking.
+
+**Headers:**
+```bash
+Content-Type: application/json
+source: mobile
+app-version: 1.0.0
+```
+
+**Request Body:**
+```json
+{
+  "email": "mobileuser@ozi.com",
+  "password": "SecurePassword123!"
+}
+```
+
+**cURL Example:**
+```bash
+curl -X POST "http://localhost:3000/api/auth/register" \
+  -H "Content-Type: application/json" \
+  -H "source: mobile" \
+  -H "app-version: 1.0.0" \
+  -d '{
+    "email": "mobileuser@ozi.com",
+    "password": "SecurePassword123!"
+  }'
+```
+
+### Mobile Client Login
+
+**Endpoint:** `POST /api/auth/login`
+
+**Description:** Login from mobile app with version checking.
+
+**Headers:**
+```bash
+Content-Type: application/json
+source: mobile
+app-version: 1.0.0
+```
+
+**Request Body:**
+```json
+{
+  "email": "mobileuser@ozi.com",
+  "password": "SecurePassword123!"
+}
+```
+
+**cURL Example:**
+```bash
+curl -X POST "http://localhost:3000/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -H "source: mobile" \
+  -H "app-version: 1.0.0" \
+  -d '{
+    "email": "mobileuser@ozi.com",
+    "password": "SecurePassword123!"
+  }'
 ```
 
 ## 📋 Setup Process
 
 ### Step 1: Start the Server
 ```bash
-npm start
-# or
 npm run dev
+# or for production
+npm run build
+npm start
 ```
 
 ### Step 2: Check System Health
@@ -540,47 +582,100 @@ curl -X GET "http://localhost:3000/health"
 
 ### Step 3: Check System Status
 ```bash
-curl -X GET "http://localhost:3000/api/auth/system-status"
+# Web Client
+curl -X GET "http://localhost:3000/api/auth/system-status" \
+  -H "Content-Type: application/json"
+
+# Mobile Client
+curl -X GET "http://localhost:3000/api/auth/system-status" \
+  -H "Content-Type: application/json" \
+  -H "source: mobile" \
+  -H "app-version: 1.0.0"
 ```
 
 ### Step 4: Register First Admin User
 ```bash
+# Web Client
 curl -X POST "http://localhost:3000/api/auth/register" \
   -H "Content-Type: application/json" \
   -d '{
     "email": "admin@ozi.com",
     "password": "AdminPassword123!",
-    "firstName": "Admin",
-    "lastName": "User",
-    "phone": "+1234567890",
-    "invitationCode": "INIT123",
-    "department": "Management",
-    "employeeId": "EMP001"
+    "roleName": "admin"
+  }'
+
+# Mobile Client
+curl -X POST "http://localhost:3000/api/auth/register" \
+  -H "Content-Type: application/json" \
+  -H "source: mobile" \
+  -H "app-version: 1.0.0" \
+  -d '{
+    "email": "admin@ozi.com",
+    "password": "AdminPassword123!",
+    "roleName": "admin"
   }'
 ```
 
 ### Step 5: Login as Admin
 ```bash
+# Web Client
 curl -X POST "http://localhost:3000/api/auth/login" \
   -H "Content-Type: application/json" \
   -d '{
     "email": "admin@ozi.com",
-    "password": "AdminPassword123!",
-    "deviceId": "admin_device_001",
-    "platform": "web"
+    "password": "AdminPassword123!"
+  }'
+
+# Mobile Client
+curl -X POST "http://localhost:3000/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -H "source: mobile" \
+  -H "app-version: 1.0.0" \
+  -d '{
+    "email": "admin@ozi.com",
+    "password": "AdminPassword123!"
   }'
 ```
 
-### Step 6: Create Additional Roles and Permissions
-Use the JWT token from login to create roles and permissions as needed.
+### Step 6: Check Available Roles
+```bash
+# Web Client
+curl -X GET "http://localhost:3000/api/auth/roles" \
+  -H "Content-Type: application/json"
+
+# Mobile Client
+curl -X GET "http://localhost:3000/api/auth/roles" \
+  -H "Content-Type: application/json" \
+  -H "source: mobile" \
+  -H "app-version: 1.0.0"
+```
 
 ## ⚠️ Important Notes
 
-1. **Version Check**: All API endpoints require version checking via headers
-2. **Authentication**: Most endpoints require valid JWT tokens
-3. **Permissions**: Admin operations require specific permissions
+1. **Version Check**: All auth endpoints require version checking via middleware
+2. **Authentication**: Profile endpoint requires valid JWT token
+3. **Admin Registration**: First user becomes admin automatically, subsequent admin registrations require admin secret
 4. **Base URL**: Use `http://localhost:3000` for local development
 5. **Database**: Ensure database is properly configured and running
+6. **Mobile Support**: Mobile clients must include `source: mobile` and `app-version` headers
+
+## 🔧 Environment Variables
+
+Make sure these environment variables are set in your `.env` file:
+
+```bash
+# JWT Configuration
+JWT_ACCESS_SECRET=your_jwt_access_secret_here
+JWT_REFRESH_SECRET=your_jwt_refresh_secret_here
+JWT_ACCESS_EXPIRES_IN=15m
+JWT_REFRESH_EXPIRES_IN=7d
+
+# Admin Registration
+ADMIN_REGISTRATION_SECRET=your_admin_registration_secret_here
+
+# App Version Check
+MIN_APP_VERSION=1.0.0
+```
 
 ## 🔧 Troubleshooting
 
@@ -589,7 +684,8 @@ Use the JWT token from login to create roles and permissions as needed.
 - **Database connection failed**: Check database configuration
 - **Permission denied**: Ensure user has required permissions
 - **Version check failed**: Include proper version headers for mobile clients
+- **Admin registration failed**: Check ADMIN_REGISTRATION_SECRET environment variable
 
 ---
 
-This document covers the complete initial setup process. All endpoints are verified against the actual route files and will work correctly with localhost:3000.
+This document covers the complete initial setup process. All endpoints are verified against the actual implementation and will work correctly with localhost:3000.
