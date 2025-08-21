@@ -48,23 +48,29 @@ export class PickingController {
         // Calculate SLA deadline (24 hours from now for demo)
         const slaDeadline = new Date(Date.now() + 24 * 60 * 60 * 1000);
         
+        // Calculate total items correctly
+        let totalItems = 0;
+        for (const order of waveOrders) {
+          const orderData = order.get({ plain: true });
+          console.log(`Order ${orderData.id} cart data:`, JSON.stringify(orderData.cart));
+          if (orderData.cart && Array.isArray(orderData.cart)) {
+            totalItems += orderData.cart.reduce((sum: number, item: any) => {
+              console.log(`Cart item:`, item);
+              return sum + (item.amount || 0);
+            }, 0);
+          } else {
+            console.warn(`Order ${orderData.id} has invalid cart data:`, orderData.cart);
+          }
+        }
+        
+        console.log(`Wave ${waveNumber}: ${waveOrders.length} orders, ${totalItems} total items`);
+        
         const wave = await PickingWave.create({
           waveNumber,
           status: 'GENERATED',
           priority,
           totalOrders: waveOrders.length,
-          totalItems: waveOrders.reduce((sum, order) => {
-            let cart: any[] = [];
-            const orderData = order.get({ plain: true });
-            if (orderData.cart) {
-              try {
-                cart = typeof orderData.cart === 'string' ? JSON.parse(orderData.cart) : orderData.cart;
-              } catch (e) {
-                cart = [];
-              }
-            }
-            return sum + (Array.isArray(cart) ? cart.length : 0);
-          }, 0),
+          totalItems: totalItems,
           estimatedDuration: Math.ceil(waveOrders.length * 2), // 2 minutes per order
           slaDeadline,
           routeOptimization,
@@ -74,27 +80,24 @@ export class PickingController {
 
         // Create picklist items for each order
         for (const order of waveOrders) {
-          let cart: any[] = [];
           const orderData = order.get({ plain: true });
-          if (orderData.cart) {
-            try {
-              cart = typeof orderData.cart === 'string' ? JSON.parse(orderData.cart) : orderData.cart;
-            } catch (e) {
-              cart = [];
+          if (orderData.cart && Array.isArray(orderData.cart)) {
+            for (const item of orderData.cart) {
+              // Validate cart item structure
+              if (item.sku && item.amount) {
+                await PicklistItem.create({
+                  waveId: wave.id,
+                  orderId: orderData.id,
+                  sku: item.sku.toString(), // Convert number to string for storage
+                  productName: `Product-${item.sku}`, // Generate product name from SKU
+                  binLocation: `A${Math.floor(Math.random() * 10) + 1}-B${Math.floor(Math.random() * 10) + 1}-C${Math.floor(Math.random() * 10) + 1}`, // Generate random bin location
+                  quantity: item.amount,
+                  scanSequence: Math.floor(Math.random() * 100) + 1, // Random sequence for demo
+                  fefoBatch: fefoRequired ? `BATCH-${Date.now()}` : undefined,
+                  expiryDate: fefoRequired ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : undefined
+                } as any);
+              }
             }
-          }
-          for (const item of cart) {
-            await PicklistItem.create({
-              waveId: wave.id,
-              orderId: orderData.id,
-              sku: item.sku || 'SKU001',
-              productName: item.productName || 'Product',
-              binLocation: item.binLocation || 'A1-B2-C3',
-              quantity: item.amount || 1,
-              scanSequence: Math.floor(Math.random() * 100) + 1, // Random sequence for demo
-              fefoBatch: fefoRequired ? `BATCH-${Date.now()}` : undefined,
-              expiryDate: fefoRequired ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : undefined
-            } as any);
           }
         }
 
