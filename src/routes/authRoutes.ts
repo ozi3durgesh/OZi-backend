@@ -7,7 +7,7 @@ import { versionCheck } from '../middleware/versionCheck';
 const router = Router();
 
 // All auth routes require version check
-router.use(versionCheck);
+// router.use(versionCheck);
 
 // Test endpoint
 router.get('/test', (req, res) => {
