@@ -2,6 +2,7 @@
 import { Request, Response } from 'express';
 import { PickingWave, PicklistItem, PickingException, User, Order } from '../models';
 import { ResponseHandler } from '../middleware/responseHandler';
+import { OrderAttributes } from '../types';
 
 interface AuthRequest extends Request {
   user?: any;
@@ -54,9 +55,10 @@ export class PickingController {
           totalOrders: waveOrders.length,
           totalItems: waveOrders.reduce((sum, order) => {
             let cart: any[] = [];
-            if (order.cart) {
+            const orderData = order.get({ plain: true });
+            if (orderData.cart) {
               try {
-                cart = typeof order.cart === 'string' ? JSON.parse(order.cart) : order.cart;
+                cart = typeof orderData.cart === 'string' ? JSON.parse(orderData.cart) : orderData.cart;
               } catch (e) {
                 cart = [];
               }
@@ -73,9 +75,10 @@ export class PickingController {
         // Create picklist items for each order
         for (const order of waveOrders) {
           let cart: any[] = [];
-          if (order.cart) {
+          const orderData = order.get({ plain: true });
+          if (orderData.cart) {
             try {
-              cart = typeof order.cart === 'string' ? JSON.parse(order.cart) : order.cart;
+              cart = typeof orderData.cart === 'string' ? JSON.parse(orderData.cart) : orderData.cart;
             } catch (e) {
               cart = [];
             }
@@ -83,7 +86,7 @@ export class PickingController {
           for (const item of cart) {
             await PicklistItem.create({
               waveId: wave.id,
-              orderId: order.id,
+              orderId: orderData.id,
               sku: item.sku || 'SKU001',
               productName: item.productName || 'Product',
               binLocation: item.binLocation || 'A1-B2-C3',

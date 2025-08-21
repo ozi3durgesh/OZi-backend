@@ -7,28 +7,6 @@ const sequelize_1 = require("sequelize");
 const database_1 = __importDefault(require("../config/database"));
 const User_1 = __importDefault(require("./User"));
 class Order extends sequelize_1.Model {
-    id;
-    user_id;
-    cart;
-    coupon_discount_amount;
-    order_amount;
-    order_type;
-    payment_method;
-    store_id;
-    distance;
-    discount_amount;
-    tax_amount;
-    address;
-    latitude;
-    longitude;
-    contact_person_name;
-    contact_person_number;
-    address_type;
-    is_scheduled;
-    scheduled_timestamp;
-    promised_delv_tat;
-    created_at;
-    updated_at;
 }
 Order.init({
     id: {
@@ -144,6 +122,255 @@ Order.init({
     updated_at: {
         type: sequelize_1.DataTypes.BIGINT,
         allowNull: false,
+    },
+    order_note: {
+        type: sequelize_1.DataTypes.TEXT,
+        allowNull: true,
+    },
+    delivery_instruction: {
+        type: sequelize_1.DataTypes.TEXT,
+        allowNull: true,
+    },
+    unavailable_item_note: {
+        type: sequelize_1.DataTypes.TEXT,
+        allowNull: true,
+    },
+    dm_tips: {
+        type: sequelize_1.DataTypes.DECIMAL(10, 2),
+        defaultValue: 0.00,
+        allowNull: true,
+    },
+    cutlery: {
+        type: sequelize_1.DataTypes.TINYINT,
+        defaultValue: 0,
+        allowNull: true,
+    },
+    partial_payment: {
+        type: sequelize_1.DataTypes.TINYINT,
+        defaultValue: 0,
+        allowNull: true,
+    },
+    is_buy_now: {
+        type: sequelize_1.DataTypes.TINYINT,
+        defaultValue: 0,
+        allowNull: true,
+    },
+    extra_packaging_amount: {
+        type: sequelize_1.DataTypes.DECIMAL(10, 2),
+        defaultValue: 0.00,
+        allowNull: true,
+    },
+    create_new_user: {
+        type: sequelize_1.DataTypes.TINYINT,
+        defaultValue: 0,
+        allowNull: true,
+    },
+    is_guest: {
+        type: sequelize_1.DataTypes.TINYINT,
+        defaultValue: 0,
+        allowNull: true,
+    },
+    otp: {
+        type: sequelize_1.DataTypes.INTEGER,
+        allowNull: true,
+    },
+    zone_id: {
+        type: sequelize_1.DataTypes.INTEGER,
+        defaultValue: 1,
+        allowNull: true,
+    },
+    module_id: {
+        type: sequelize_1.DataTypes.INTEGER,
+        defaultValue: 1,
+        allowNull: true,
+    },
+    parcel_category_id: {
+        type: sequelize_1.DataTypes.INTEGER,
+        allowNull: true,
+    },
+    receiver_details: {
+        type: sequelize_1.DataTypes.JSON,
+        allowNull: true,
+    },
+    charge_payer: {
+        type: sequelize_1.DataTypes.STRING(50),
+        allowNull: true,
+    },
+    order_attachment: {
+        type: sequelize_1.DataTypes.JSON,
+        allowNull: true,
+    },
+    payment_status: {
+        type: sequelize_1.DataTypes.STRING(50),
+        defaultValue: 'unpaid',
+        allowNull: true,
+    },
+    order_status: {
+        type: sequelize_1.DataTypes.STRING(50),
+        defaultValue: 'pending',
+        allowNull: true,
+    },
+    transaction_reference: {
+        type: sequelize_1.DataTypes.STRING(255),
+        allowNull: true,
+    },
+    confirmed: {
+        type: sequelize_1.DataTypes.BIGINT,
+        allowNull: true,
+    },
+    pending: {
+        type: sequelize_1.DataTypes.BIGINT,
+        allowNull: true,
+    },
+    canceled: {
+        type: sequelize_1.DataTypes.BIGINT,
+        allowNull: true,
+    },
+    canceled_by: {
+        type: sequelize_1.DataTypes.STRING(255),
+        allowNull: true,
+    },
+    cancellation_reason: {
+        type: sequelize_1.DataTypes.TEXT,
+        allowNull: true,
+    },
+    refund_requested: {
+        type: sequelize_1.DataTypes.TINYINT,
+        defaultValue: 0,
+        allowNull: true,
+    },
+    refunded: {
+        type: sequelize_1.DataTypes.TINYINT,
+        defaultValue: 0,
+        allowNull: true,
+    },
+    failed: {
+        type: sequelize_1.DataTypes.TINYINT,
+        defaultValue: 0,
+        allowNull: true,
+    },
+    delivered: {
+        type: sequelize_1.DataTypes.TINYINT,
+        defaultValue: 0,
+        allowNull: true,
+    },
+    processing: {
+        type: sequelize_1.DataTypes.TINYINT,
+        defaultValue: 0,
+        allowNull: true,
+    },
+    picked_up: {
+        type: sequelize_1.DataTypes.TINYINT,
+        defaultValue: 0,
+        allowNull: true,
+    },
+    handover: {
+        type: sequelize_1.DataTypes.TINYINT,
+        defaultValue: 0,
+        allowNull: true,
+    },
+    reached_pickup: {
+        type: sequelize_1.DataTypes.TINYINT,
+        defaultValue: 0,
+        allowNull: true,
+    },
+    out_for_delivery: {
+        type: sequelize_1.DataTypes.TINYINT,
+        defaultValue: 0,
+        allowNull: true,
+    },
+    out_for_pickup: {
+        type: sequelize_1.DataTypes.TINYINT,
+        defaultValue: 0,
+        allowNull: true,
+    },
+    dm_vehicle_id: {
+        type: sequelize_1.DataTypes.INTEGER,
+        allowNull: true,
+    },
+    awb_number: {
+        type: sequelize_1.DataTypes.STRING(255),
+        allowNull: true,
+    },
+    delivery_man_id: {
+        type: sequelize_1.DataTypes.INTEGER,
+        allowNull: true,
+    },
+    partially_paid_amount: {
+        type: sequelize_1.DataTypes.DECIMAL(10, 2),
+        defaultValue: 0.00,
+        allowNull: true,
+    },
+    ref_bonus_amount: {
+        type: sequelize_1.DataTypes.DECIMAL(10, 2),
+        defaultValue: 0.00,
+        allowNull: true,
+    },
+    flash_admin_discount_amount: {
+        type: sequelize_1.DataTypes.DECIMAL(10, 2),
+        defaultValue: 0.00,
+        allowNull: true,
+    },
+    flash_store_discount_amount: {
+        type: sequelize_1.DataTypes.DECIMAL(10, 2),
+        defaultValue: 0.00,
+        allowNull: true,
+    },
+    additional_charge: {
+        type: sequelize_1.DataTypes.DECIMAL(10, 2),
+        defaultValue: 0.00,
+        allowNull: true,
+    },
+    coupon_created_by: {
+        type: sequelize_1.DataTypes.STRING(255),
+        allowNull: true,
+    },
+    coupon_discount_title: {
+        type: sequelize_1.DataTypes.STRING(255),
+        allowNull: true,
+    },
+    store_discount_amount: {
+        type: sequelize_1.DataTypes.DECIMAL(10, 2),
+        defaultValue: 0.00,
+        allowNull: true,
+    },
+    tax_percentage: {
+        type: sequelize_1.DataTypes.DECIMAL(5, 2),
+        defaultValue: 10.00,
+        allowNull: true,
+    },
+    total_tax_amount: {
+        type: sequelize_1.DataTypes.DECIMAL(10, 2),
+        defaultValue: 0.00,
+        allowNull: true,
+    },
+    original_delivery_charge: {
+        type: sequelize_1.DataTypes.DECIMAL(10, 2),
+        defaultValue: 0.00,
+        allowNull: true,
+    },
+    free_delivery_by: {
+        type: sequelize_1.DataTypes.STRING(255),
+        allowNull: true,
+    },
+    tax_status: {
+        type: sequelize_1.DataTypes.STRING(50),
+        defaultValue: 'excluded',
+        allowNull: true,
+    },
+    prescription_order: {
+        type: sequelize_1.DataTypes.TINYINT,
+        defaultValue: 0,
+        allowNull: true,
+    },
+    scheduled: {
+        type: sequelize_1.DataTypes.TINYINT,
+        defaultValue: 0,
+        allowNull: true,
+    },
+    schedule_at: {
+        type: sequelize_1.DataTypes.BIGINT,
+        allowNull: true,
     },
 }, {
     sequelize: database_1.default,

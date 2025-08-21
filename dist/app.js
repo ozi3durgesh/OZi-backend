@@ -38,6 +38,7 @@ app.use('/api/picking', pickingRoutes_1.default);
 app.use('/api/packing', packingRoutes_1.default);
 app.use('/api/handover', handoverRoutes_1.default);
 app.use('/api/warehouses', warehouseRoutes_1.default);
+app.use('/api/v1/customer/order', orderRoutes_1.default);
 app.get('/health', (req, res) => {
     res.json({
         statusCode: 200,
