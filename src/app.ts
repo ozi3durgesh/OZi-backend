@@ -44,6 +44,9 @@ app.use('/api/packing', packingRoutes);
 app.use('/api/handover', handoverRoutes);
 app.use('/api/warehouses', warehouseRoutes);
 
+// PHP Production Compatible Routes
+app.use('/api/v1/customer/order', orderRoutes);
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({

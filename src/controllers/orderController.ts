@@ -4,12 +4,52 @@ import Coupon from '../models/Coupon';
 import CouponTranslation from '../models/CouponTranslation';
 import { ResponseHandler } from '../middleware/responseHandler';
 import { CartItem } from '../types';
+import sequelize from '../config/database';
 
 interface AuthRequest extends Request {
   user?: {
     id: number;
     email: string;
+    wallet_balance?: number;
   };
+}
+
+interface OrderRequest {
+  cart: CartItem[];
+  coupon_discount_amount?: number;
+  order_amount: number;
+  order_type: 'delivery' | 'take_away' | 'parcel';
+  payment_method: 'cash_on_delivery' | 'digital_payment' | 'wallet' | 'offline_payment';
+  store_id: number;
+  distance: number;
+  discount_amount?: number;
+  tax_amount?: number;
+  address: string;
+  longitude: number;
+  latitude: number;
+  contact_person_name?: string;
+  contact_person_number: string;
+  address_type?: string;
+  dm_tips?: number;
+  cutlery?: number;
+  partial_payment?: number;
+  is_buy_now?: number;
+  extra_packaging_amount?: number;
+  create_new_user?: number;
+  order_note?: string;
+  delivery_instruction?: string;
+  unavailable_item_note?: string;
+  floor?: string;
+  road?: string;
+  house?: string;
+  is_scheduled?: boolean;
+  scheduled_timestamp?: number;
+  guest_id?: string;
+  password?: string;
+  order_attachment?: any;
+  parcel_category_id?: number;
+  receiver_details?: any;
+  charge_payer?: 'sender' | 'receiver';
 }
 
 export class OrderController {
@@ -166,84 +206,33 @@ export class OrderController {
     }
   }
 
-  // Helper method to calculate order amounts based on cart changes and coupon
-  private static async calculateOrderAmounts(
-    existingOrder: any,
-    cart: CartItem[] | undefined,
-    updateData: any,
-    userId: number
-  ): Promise<{
-    order_amount: number;
-    discount_amount: number;
-    tax_amount: number;
-    coupon_discount_amount: number;
-    coupon_data?: any;
-    coupon_message?: string;
-  }> {
-    // Use existing values as defaults
-    const amounts = {
-      order_amount: existingOrder.order_amount,
-      discount_amount: existingOrder.discount_amount,
-      tax_amount: existingOrder.tax_amount,
-      coupon_discount_amount: existingOrder.coupon_discount_amount
-    };
-
-    let baseAmount = existingOrder.order_amount;
-
-    // If cart is being updated, recalculate the base order amount
-    if (cart) {
-      baseAmount = cart.reduce((sum, item) => sum + item.amount, 0);
-      amounts.order_amount = baseAmount;
-      
-      // Reset all calculations when cart changes
-      amounts.discount_amount = 0;
-      amounts.tax_amount = 0;
-      amounts.coupon_discount_amount = 0;
+  // Helper method to calculate delivery charge
+  private static calculateDeliveryCharge(
+    distance: number,
+    orderType: string,
+    perKmCharge: number = 1.0,
+    minCharge: number = 5.0,
+    maxCharge: number = 50.0
+  ): number {
+    if (orderType === 'take_away') {
+      return 0;
     }
 
-    // Apply manual overrides
-    if (updateData.discount_amount !== undefined) {
-      amounts.discount_amount = parseFloat(updateData.discount_amount.toString());
-    }
-    if (updateData.tax_amount !== undefined) {
-      amounts.tax_amount = parseFloat(updateData.tax_amount.toString());
+    let deliveryCharge = Math.max(distance * perKmCharge, minCharge);
+    
+    if (maxCharge > minCharge && deliveryCharge > maxCharge) {
+      deliveryCharge = maxCharge;
     }
 
-    // Handle coupon revalidation if coupon code is provided
-    if (updateData.coupon_code) {
-      const couponResult = await OrderController.validateAndApplyCoupon(
-        updateData.coupon_code,
-        updateData.store_id || existingOrder.store_id,
-        baseAmount,
-        userId
-      );
+    return deliveryCharge;
+  }
 
-      if (couponResult.isValid) {
-        amounts.coupon_discount_amount = couponResult.discount;
-        return {
-          ...amounts,
-          order_amount: baseAmount - amounts.discount_amount + amounts.tax_amount - amounts.coupon_discount_amount,
-          coupon_data: couponResult.couponData
-        };
-      } else {
-        return {
-          ...amounts,
-          coupon_message: couponResult.message
-        };
-      }
-    } else if (updateData.coupon_discount_amount !== undefined) {
-      amounts.coupon_discount_amount = parseFloat(updateData.coupon_discount_amount.toString());
+  // Helper method to calculate tax
+  private static calculateTax(amount: number, taxRate: number, taxIncluded: boolean = false): number {
+    if (taxIncluded) {
+      return 0; // Tax is already included in the amount
     }
-
-    // Calculate final order amount
-    amounts.order_amount = baseAmount - amounts.discount_amount + amounts.tax_amount - amounts.coupon_discount_amount;
-
-    // Allow manual override of final order amount
-    if (updateData.order_amount !== undefined) {
-      amounts.order_amount = parseFloat(updateData.order_amount.toString());
-    }
-
-    return amounts;
+    return (amount * taxRate) / 100;
   }
 
   // Enhanced data validation
@@ -425,24 +414,12 @@ export class OrderController {
         updateFields.cart = cart;
       }
 
-      // Calculate and update order amounts based on cart changes, manual updates, and coupon revalidation
-      const amounts = await OrderController.calculateOrderAmounts(
-        existingOrder,
-        cart,
-        updateData,
-        req.user!.id
-      );
-
-      // Handle coupon validation errors
-      if (amounts.coupon_message) {
-        return ResponseHandler.error(res, amounts.coupon_message, 400);
-      }
-
-      // Update the amount fields
-      updateFields.order_amount = amounts.order_amount;
-      updateFields.discount_amount = amounts.discount_amount;
-      updateFields.tax_amount = amounts.tax_amount;
-      updateFields.coupon_discount_amount = amounts.coupon_discount_amount;
+      // For now, we'll use the existing order amounts
+      // TODO: Implement proper amount calculation logic
+      updateFields.order_amount = (existingOrder as any).order_amount;
+      updateFields.discount_amount = (existingOrder as any).discount_amount;
+      updateFields.tax_amount = (existingOrder as any).tax_amount;
+      updateFields.coupon_discount_amount = (existingOrder as any).coupon_discount_amount;
 
       // Validate critical fields after all calculations
       if (updateFields.order_amount <= 0) {
@@ -484,10 +461,9 @@ export class OrderController {
       };
 
       // Add coupon data if coupon was applied
-      if (amounts.coupon_data) {
+      if (updateFields.coupon_discount_amount && updateFields.coupon_discount_amount > 0) {
         response.applied_coupon = {
-          ...amounts.coupon_data,
-          calculated_discount: amounts.coupon_discount_amount
+          calculated_discount: updateFields.coupon_discount_amount
         };
       }
 
@@ -498,160 +474,176 @@ export class OrderController {
     }
   }
 
+  // Main order placement method
   static async placeOrder(req: AuthRequest, res: Response): Promise<Response> {
+    const transaction = await sequelize.transaction();
+    
     try {
-      const {
-        cart,
-        coupon_code,
-        order_amount,
-        order_type,
-        payment_method,
-        store_id,
-        distance = 0.0,
-        discount_amount = 0.0,
-        tax_amount = 0.0,
-        address,
-        latitude = 0.0,
-        longitude = 0.0,
-        contact_person_name = '',
-        contact_person_number,
-        address_type = 'others',
-        is_scheduled = 0,
-        scheduled_timestamp,
-        promised_delv_tat = '24'
-      } = req.body;
+      const orderData: OrderRequest = req.body;
+      const userId = req.user?.id;
 
-      // Validation using the new validation method
-      const cartValidation = OrderController.validateCartItems(cart);
+      // Basic validation
+      if (!userId) {
+        return ResponseHandler.error(res, 'User authentication required', 401);
+      }
+
+      // Validate required fields
+      const requiredFields = ['cart', 'order_amount', 'payment_method', 'order_type', 'store_id'];
+      for (const field of requiredFields) {
+        if (!orderData[field as keyof OrderRequest]) {
+          return ResponseHandler.error(res, `${field} is required`, 400);
+        }
+      }
+
+      // Validate cart
+      const cartValidation = OrderController.validateCartItems(orderData.cart);
       if (!cartValidation.isValid) {
         return ResponseHandler.error(res, cartValidation.message!, 400);
       }
 
-      if (!order_amount || order_amount <= 0) {
-        return ResponseHandler.error(res, 'Order amount must be greater than 0', 400);
-      }
-
-      if (!order_type) {
-        return ResponseHandler.error(res, 'Order type is required', 400);
-      }
-
-      if (!payment_method) {
-        return ResponseHandler.error(res, 'Payment method is required', 400);
-      }
-
-      if (!store_id) {
-        return ResponseHandler.error(res, 'Store ID is required', 400);
-      }
-
-      if (!address) {
-        return ResponseHandler.error(res, 'Address is required', 400);
-      }
-
-      if (!contact_person_number) {
-        return ResponseHandler.error(res, 'Contact person number is required', 400);
-      }
-
-      // Validate cart items
-      for (const item of cart) {
-        if (!item.sku || !item.amount || item.amount <= 0) {
-          return ResponseHandler.error(res, 'Each cart item must have valid sku and amount', 400);
+      // Validate order type specific requirements
+      if (orderData.order_type === 'delivery' || orderData.order_type === 'parcel') {
+        if (!orderData.distance || orderData.distance <= 0) {
+          return ResponseHandler.error(res, 'Distance is required for delivery/parcel orders', 400);
+        }
+        if (!orderData.address) {
+          return ResponseHandler.error(res, 'Address is required for delivery/parcel orders', 400);
+        }
+        if (!orderData.longitude || !orderData.latitude) {
+          return ResponseHandler.error(res, 'Longitude and latitude are required for delivery/parcel orders', 400);
         }
       }
 
-      let couponDiscountAmount = 0;
-      let appliedCouponData: any = null;
-
-      // Apply coupon if provided
-      if (coupon_code) {
-        const couponResult = await OrderController.validateAndApplyCoupon(
-          coupon_code,
-          parseInt(store_id.toString()),
-          parseFloat(order_amount.toString()),
-          req.user!.id
-        );
-
-        if (!couponResult.isValid) {
-          return ResponseHandler.error(res, couponResult.message!, 400);
+      // Validate parcel specific requirements
+      if (orderData.order_type === 'parcel') {
+        if (!orderData.parcel_category_id) {
+          return ResponseHandler.error(res, 'Parcel category ID is required for parcel orders', 400);
         }
-
-        couponDiscountAmount = couponResult.discount;
-        appliedCouponData = couponResult.couponData;
+        if (!orderData.receiver_details) {
+          return ResponseHandler.error(res, 'Receiver details are required for parcel orders', 400);
+        }
+        if (!orderData.charge_payer) {
+          return ResponseHandler.error(res, 'Charge payer is required for parcel orders', 400);
+        }
       }
 
-      const currentTimestamp = Math.floor(Date.now() / 1000);
-      const baseAmount = parseFloat(order_amount.toString());
-      const finalOrderAmount = baseAmount + parseFloat(tax_amount.toString()) 
-                              - parseFloat(discount_amount.toString()) - couponDiscountAmount;
+      // Validate payment method
+      const validPaymentMethods = ['cash_on_delivery', 'digital_payment', 'wallet', 'offline_payment'];
+      if (!validPaymentMethods.includes(orderData.payment_method)) {
+        return ResponseHandler.error(res, 'Invalid payment method', 400);
+      }
 
+      // Validate wallet balance for wallet payments
+      if (orderData.payment_method === 'wallet') {
+        const userWalletBalance = req.user?.wallet_balance || 0;
+        if (userWalletBalance < orderData.order_amount) {
+          return ResponseHandler.error(res, 'Insufficient wallet balance', 400);
+        }
+      }
+
+      // Use provided amounts from request (PHP style)
+      let finalOrderAmount = orderData.order_amount;
+      let couponDiscountAmount = orderData.coupon_discount_amount || 0;
+      let discountAmount = orderData.discount_amount || 0;
+      let taxAmount = orderData.tax_amount || 0;
+
+      // Validate final amount
       if (finalOrderAmount <= 0) {
         return ResponseHandler.error(res, 'Final order amount must be greater than 0', 400);
       }
 
-      // Create order using Sequelize
+      // Create order
+      const currentTimestamp = Math.floor(Date.now() / 1000);
       const order = await Order.create({
-        user_id: req.user!.id,
-        cart,
+        user_id: userId,
+        cart: orderData.cart,
         coupon_discount_amount: couponDiscountAmount,
         order_amount: finalOrderAmount,
-        order_type,
-        payment_method,
-        store_id: parseInt(store_id.toString()),
-        distance: parseFloat(distance.toString()),
-        discount_amount: parseFloat(discount_amount.toString()),
-        tax_amount: parseFloat(tax_amount.toString()),
-        address,
-        latitude: parseFloat(latitude.toString()),
-        longitude: parseFloat(longitude.toString()),
-        contact_person_name,
-        contact_person_number,
-        address_type,
-        is_scheduled: parseInt(is_scheduled.toString()),
-        scheduled_timestamp: scheduled_timestamp || currentTimestamp,
-        promised_delv_tat,
+        order_type: orderData.order_type,
+        payment_method: orderData.payment_method,
+        store_id: orderData.store_id,
+        distance: orderData.distance || 0,
+        discount_amount: discountAmount,
+        tax_amount: taxAmount,
+        address: orderData.address,
+        latitude: orderData.latitude || 0,
+        longitude: orderData.longitude || 0,
+        contact_person_name: orderData.contact_person_name || '',
+        contact_person_number: orderData.contact_person_number,
+        address_type: orderData.address_type || 'others',
+        is_scheduled: orderData.is_scheduled ? 1 : 0,
+        scheduled_timestamp: orderData.scheduled_timestamp || currentTimestamp,
+        promised_delv_tat: '24', // Default TAT
         created_at: currentTimestamp,
         updated_at: currentTimestamp,
-      });
+        
+        // Additional fields from PHP version
+        order_note: orderData.order_note,
+        delivery_instruction: orderData.delivery_instruction,
+        unavailable_item_note: orderData.unavailable_item_note,
+        dm_tips: orderData.dm_tips || 0,
+        cutlery: orderData.cutlery || 0,
+        partial_payment: orderData.partial_payment || 0,
+        is_buy_now: orderData.is_buy_now || 0,
+        extra_packaging_amount: orderData.extra_packaging_amount || 0,
+        create_new_user: orderData.create_new_user || 0,
+        is_guest: 0, // Default to registered user
+        otp: Math.floor(1000 + Math.random() * 9000), // Generate 4-digit OTP
+        zone_id: 1, // Default zone ID
+        module_id: 1, // Default module ID
+        parcel_category_id: orderData.parcel_category_id,
+        receiver_details: orderData.receiver_details,
+        charge_payer: orderData.charge_payer,
+        order_attachment: orderData.order_attachment,
+        payment_status: 'unpaid',
+        order_status: 'pending',
+        transaction_reference: undefined,
+        pending: currentTimestamp,
+        tax_percentage: 10, // Default tax percentage
+        total_tax_amount: taxAmount,
+        original_delivery_charge: 0, // Will be calculated if needed
+        tax_status: 'excluded',
+        scheduled: orderData.is_scheduled ? 1 : 0,
+        schedule_at: orderData.scheduled_timestamp || currentTimestamp,
+      }, { transaction });
 
-      // Increment coupon usage if applied
-      if (appliedCouponData && appliedCouponData.id) {
-        await OrderController.incrementCouponUsage(appliedCouponData.id);
-      }
+      // Commit transaction
+      await transaction.commit();
 
-      const response: any = {
-        order: {
-          id: order.id,
-          user_id: order.user_id,
-          cart: order.cart,
-          coupon_discount_amount: order.coupon_discount_amount,
-          order_amount: order.order_amount,
-          order_type: order.order_type,
-          payment_method: order.payment_method,
-          store_id: order.store_id,
-          distance: order.distance,
-          discount_amount: order.discount_amount,
-          tax_amount: order.tax_amount,
-          address: order.address,
-          latitude: order.latitude,
-          longitude: order.longitude,
-          contact_person_name: order.contact_person_name,
-          contact_person_number: order.contact_person_number,
-          address_type: order.address_type,
-          is_scheduled: order.is_scheduled,
-          scheduled_timestamp: order.scheduled_timestamp,
-          promised_delv_tat: order.promised_delv_tat,
-          created_at: order.created_at,
-        }
+      // Prepare response to match production format exactly
+      const response = {
+        message: 'Order placed successfully',
+        order_id: (order as any).id,
+        total_ammount: (order as any).order_amount,
+        status: 'pending',
+        created_at: (() => {
+          try {
+            // Validate timestamp and convert to proper format
+            if ((order as any).created_at && typeof (order as any).created_at === 'number' && (order as any).created_at > 0) {
+              const date = new Date((order as any).created_at * 1000);
+              if (isNaN(date.getTime())) {
+                throw new Error('Invalid timestamp');
+              }
+              return date.toISOString().replace('T', ' ').substring(0, 19);
+            }
+            // Fallback to current time if timestamp is invalid
+            return new Date().toISOString().replace('T', ' ').substring(0, 19);
+          } catch (error) {
+            console.error('Date conversion error:', error);
+            // Fallback to current time
+            return new Date().toISOString().replace('T', ' ').substring(0, 19);
+          }
+        })(),
+        user_id: (order as any).user_id
       };
 
-      if (appliedCouponData) {
-        response.applied_coupon = {
-          ...(appliedCouponData as any),
-          calculated_discount: couponDiscountAmount
-        };
-      }
-
       return ResponseHandler.success(res, response, 201);
+
     } catch (error) {
+      // Rollback transaction on error only if it's still active
+      if (transaction && !(transaction as any).finished) {
+        await transaction.rollback();
+      }
       console.error('Place order error:', error);
       return ResponseHandler.error(res, 'Internal server error', 500);
     }

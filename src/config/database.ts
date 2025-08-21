@@ -24,8 +24,6 @@ const getDatabaseConfig = () => {
       },
       dialectOptions: {
         connectTimeout: 60000,
-        acquireTimeout: 60000,
-        timeout: 60000,
         ssl: {
           rejectUnauthorized: false
         }
@@ -50,8 +48,6 @@ const getDatabaseConfig = () => {
     },
     dialectOptions: {
       connectTimeout: 60000,
-      acquireTimeout: 60000,
-      timeout: 60000,
     },
   };
 };

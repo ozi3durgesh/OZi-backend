@@ -3,30 +3,8 @@ import sequelize from '../config/database';
 import { OrderAttributes, OrderCreationAttributes } from '../types';
 import User from './User';
 
-class Order extends Model<OrderAttributes, OrderCreationAttributes> 
-  implements OrderAttributes {
-  public id!: number;
-  public user_id!: number;
-  public cart!: any[];
-  public coupon_discount_amount!: number;
-  public order_amount!: number;
-  public order_type!: string;
-  public payment_method!: string;
-  public store_id!: number;
-  public distance!: number;
-  public discount_amount!: number;
-  public tax_amount!: number;
-  public address!: string;
-  public latitude!: number;
-  public longitude!: number;
-  public contact_person_name!: string;
-  public contact_person_number!: string;
-  public address_type!: string;
-  public is_scheduled!: number;
-  public scheduled_timestamp!: number;
-  public promised_delv_tat!: string;
-  public created_at!: number;
-  public updated_at!: number;
+class Order extends Model<OrderAttributes, OrderCreationAttributes> {
+  // Remove all public class field declarations to avoid Sequelize warnings
 }
 
 Order.init({
@@ -143,6 +121,257 @@ Order.init({
   updated_at: {
     type: DataTypes.BIGINT,
     allowNull: false,
+  },
+  
+  // Additional fields to match PHP functionality
+  order_note: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
+  delivery_instruction: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
+  unavailable_item_note: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
+  dm_tips: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    allowNull: true,
+  },
+  cutlery: {
+    type: DataTypes.TINYINT,
+    defaultValue: 0,
+    allowNull: true,
+  },
+  partial_payment: {
+    type: DataTypes.TINYINT,
+    defaultValue: 0,
+    allowNull: true,
+  },
+  is_buy_now: {
+    type: DataTypes.TINYINT,
+    defaultValue: 0,
+    allowNull: true,
+  },
+  extra_packaging_amount: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    allowNull: true,
+  },
+  create_new_user: {
+    type: DataTypes.TINYINT,
+    defaultValue: 0,
+    allowNull: true,
+  },
+  is_guest: {
+    type: DataTypes.TINYINT,
+    defaultValue: 0,
+    allowNull: true,
+  },
+  otp: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+  },
+  zone_id: {
+    type: DataTypes.INTEGER,
+    defaultValue: 1,
+    allowNull: true,
+  },
+  module_id: {
+    type: DataTypes.INTEGER,
+    defaultValue: 1,
+    allowNull: true,
+  },
+  parcel_category_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+  },
+  receiver_details: {
+    type: DataTypes.JSON,
+    allowNull: true,
+  },
+  charge_payer: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+  },
+  order_attachment: {
+    type: DataTypes.JSON,
+    allowNull: true,
+  },
+  payment_status: {
+    type: DataTypes.STRING(50),
+    defaultValue: 'unpaid',
+    allowNull: true,
+  },
+  order_status: {
+    type: DataTypes.STRING(50),
+    defaultValue: 'pending',
+    allowNull: true,
+  },
+  transaction_reference: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+  },
+  confirmed: {
+    type: DataTypes.BIGINT,
+    allowNull: true,
+  },
+  pending: {
+    type: DataTypes.BIGINT,
+    allowNull: true,
+  },
+  canceled: {
+    type: DataTypes.BIGINT,
+    allowNull: true,
+  },
+  canceled_by: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+  },
+  cancellation_reason: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
+  refund_requested: {
+    type: DataTypes.TINYINT,
+    defaultValue: 0,
+    allowNull: true,
+  },
+  refunded: {
+    type: DataTypes.TINYINT,
+    defaultValue: 0,
+    allowNull: true,
+  },
+  failed: {
+    type: DataTypes.TINYINT,
+    defaultValue: 0,
+    allowNull: true,
+  },
+  delivered: {
+    type: DataTypes.TINYINT,
+    defaultValue: 0,
+    allowNull: true,
+  },
+  processing: {
+    type: DataTypes.TINYINT,
+    defaultValue: 0,
+    allowNull: true,
+  },
+  picked_up: {
+    type: DataTypes.TINYINT,
+    defaultValue: 0,
+    allowNull: true,
+  },
+  handover: {
+    type: DataTypes.TINYINT,
+    defaultValue: 0,
+    allowNull: true,
+  },
+  reached_pickup: {
+    type: DataTypes.TINYINT,
+    defaultValue: 0,
+    allowNull: true,
+  },
+  out_for_delivery: {
+    type: DataTypes.TINYINT,
+    defaultValue: 0,
+    allowNull: true,
+  },
+  out_for_pickup: {
+    type: DataTypes.TINYINT,
+    defaultValue: 0,
+    allowNull: true,
+  },
+  dm_vehicle_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+  },
+  awb_number: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+  },
+  delivery_man_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+  },
+  partially_paid_amount: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    allowNull: true,
+  },
+  ref_bonus_amount: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    allowNull: true,
+  },
+  flash_admin_discount_amount: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    allowNull: true,
+  },
+  flash_store_discount_amount: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    allowNull: true,
+  },
+  additional_charge: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    allowNull: true,
+  },
+  coupon_created_by: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+  },
+  coupon_discount_title: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+  },
+  store_discount_amount: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    allowNull: true,
+  },
+  tax_percentage: {
+    type: DataTypes.DECIMAL(5, 2),
+    defaultValue: 10.00,
+    allowNull: true,
+  },
+  total_tax_amount: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    allowNull: true,
+  },
+  original_delivery_charge: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    allowNull: true,
+  },
+  free_delivery_by: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+  },
+  tax_status: {
+    type: DataTypes.STRING(50),
+    defaultValue: 'excluded',
+    allowNull: true,
+  },
+  prescription_order: {
+    type: DataTypes.TINYINT,
+    defaultValue: 0,
+    allowNull: true,
+  },
+  scheduled: {
+    type: DataTypes.TINYINT,
+    defaultValue: 0,
+    allowNull: true,
+  },
+  schedule_at: {
+    type: DataTypes.BIGINT,
+    allowNull: true,
   },
 }, {
   sequelize,

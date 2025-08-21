@@ -156,6 +156,62 @@ export interface OrderAttributes {
   promised_delv_tat: string;
   created_at: number;
   updated_at: number;
+  
+  // Additional fields to match PHP functionality
+  order_note?: string;
+  delivery_instruction?: string;
+  unavailable_item_note?: string;
+  dm_tips?: number;
+  cutlery?: number;
+  partial_payment?: number;
+  is_buy_now?: number;
+  extra_packaging_amount?: number;
+  create_new_user?: number;
+  is_guest?: number;
+  otp?: number;
+  zone_id?: number;
+  module_id?: number;
+  parcel_category_id?: number;
+  receiver_details?: any;
+  charge_payer?: string;
+  order_attachment?: any;
+  payment_status?: string;
+  order_status?: string;
+  transaction_reference?: string;
+  confirmed?: number;
+  pending?: number;
+  canceled?: number;
+  canceled_by?: string;
+  cancellation_reason?: string;
+  refund_requested?: number;
+  refunded?: number;
+  failed?: number;
+  delivered?: number;
+  processing?: number;
+  picked_up?: number;
+  handover?: number;
+  reached_pickup?: number;
+  out_for_delivery?: number;
+  out_for_pickup?: number;
+  dm_vehicle_id?: number;
+  awb_number?: string;
+  delivery_man_id?: number;
+  partially_paid_amount?: number;
+  ref_bonus_amount?: number;
+  flash_admin_discount_amount?: number;
+  flash_store_discount_amount?: number;
+  additional_charge?: number;
+  coupon_created_by?: string;
+  coupon_discount_title?: string;
+  store_discount_amount?: number;
+  tax_percentage?: number;
+  total_tax_amount?: number;
+  original_delivery_charge?: number;
+  free_delivery_by?: string;
+  tax_status?: string;
+  prescription_order?: number;
+  scheduled?: number;
+  schedule_at?: number;
 }
 
 export interface OrderCreationAttributes {
@@ -180,6 +236,62 @@ export interface OrderCreationAttributes {
   promised_delv_tat?: string;
   created_at?: number;  // Add this
   updated_at?: number;  // Add this
+  
+  // Additional fields
+  order_note?: string;
+  delivery_instruction?: string;
+  unavailable_item_note?: string;
+  dm_tips?: number;
+  cutlery?: number;
+  partial_payment?: number;
+  is_buy_now?: number;
+  extra_packaging_amount?: number;
+  create_new_user?: number;
+  is_guest?: number;
+  otp?: number;
+  zone_id?: number;
+  module_id?: number;
+  parcel_category_id?: number;
+  receiver_details?: any;
+  charge_payer?: string;
+  order_attachment?: any;
+  payment_status?: string;
+  order_status?: string;
+  transaction_reference?: string;
+  confirmed?: number;
+  pending?: number;
+  canceled?: number;
+  canceled_by?: string;
+  cancellation_reason?: string;
+  refund_requested?: number;
+  refunded?: number;
+  failed?: number;
+  delivered?: number;
+  processing?: number;
+  picked_up?: number;
+  handover?: number;
+  reached_pickup?: number;
+  out_for_delivery?: number;
+  out_for_pickup?: number;
+  dm_vehicle_id?: number;
+  awb_number?: string;
+  delivery_man_id?: number;
+  partially_paid_amount?: number;
+  ref_bonus_amount?: number;
+  flash_admin_discount_amount?: number;
+  flash_store_discount_amount?: number;
+  additional_charge?: number;
+  coupon_created_by?: string;
+  coupon_discount_title?: string;
+  store_discount_amount?: number;
+  tax_percentage?: number;
+  total_tax_amount?: number;
+  original_delivery_charge?: number;
+  free_delivery_by?: string;
+  tax_status?: string;
+  prescription_order?: number;
+  scheduled?: number;
+  schedule_at?: number;
 }
 
 // Packing and Handover Module Types
