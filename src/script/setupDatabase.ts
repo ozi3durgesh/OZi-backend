@@ -21,7 +21,8 @@ import {
   PackingEvent,
   Warehouse,
   WarehouseZone,
-  WarehouseStaffAssignment
+  WarehouseStaffAssignment,
+  UniversalLog
 } from '../models';
 
 async function setupDatabase() {
@@ -52,6 +53,9 @@ async function setupDatabase() {
     
     await Order.sync({ force: true });
     console.log('✅ Order table created');
+    
+    await UniversalLog.sync({ force: true });
+    console.log('✅ UniversalLog table created');
     
     await Coupon.sync({ force: true });
     console.log('✅ Coupon table created');

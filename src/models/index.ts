@@ -20,6 +20,7 @@ import PackingEvent from './PackingEvent';
 import Warehouse from './Warehouse';
 import WarehouseZone from './WarehouseZone';
 import WarehouseStaffAssignment from './WarehouseStaffAssignment';
+import UniversalLog from './UniversalLog';
 
 // Set up associations
 Coupon.hasMany(CouponTranslation, {
@@ -156,5 +157,6 @@ export {
   PackingEvent,
   Warehouse,
   WarehouseZone,
-  WarehouseStaffAssignment
+  WarehouseStaffAssignment,
+  UniversalLog
 };

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import Order from '../models/Order';
 import Coupon from '../models/Coupon';
 import CouponTranslation from '../models/CouponTranslation';
+
 import { ResponseHandler } from '../middleware/responseHandler';
 import { CartItem } from '../types';
 import sequelize from '../config/database';
@@ -643,6 +644,8 @@ export class OrderController {
         scheduled: orderData.is_scheduled ? 1 : 0,
         schedule_at: orderData.scheduled_timestamp || currentTimestamp,
       }, { transaction });
+
+
 
       // Commit transaction
       await transaction.commit();
