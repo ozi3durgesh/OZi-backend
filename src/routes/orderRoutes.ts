@@ -10,12 +10,24 @@ router.post('/place',
   OrderController.placeOrder
 );
 
+router.post('/validate-coupon', 
+  OrderController.validateCoupon
+);
+
+router.get('/coupon/:coupon_code', 
+  OrderController.getCouponDetails
+);
+
 router.get('/:id', 
   OrderController.getOrderById
 );
 
 router.get('/:id/items', 
   OrderController.getOrderItems
+);
+
+router.get('/custom/:orderId', 
+  OrderController.getOrderByCustomId
 );
 
 router.get('/', 

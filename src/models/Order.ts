@@ -13,6 +13,11 @@ Order.init({
     autoIncrement: true,
     primaryKey: true,
   },
+  order_id: {
+    type: DataTypes.STRING(50),
+    allowNull: false,
+    unique: true,
+  },
   user_id: {
     type: DataTypes.INTEGER,
     allowNull: false,
@@ -21,22 +26,6 @@ Order.init({
       key: 'id',
     },
   },
-  cart: {
-    type: DataTypes.JSON,
-    allowNull: false,
-    validate: {
-      isNotEmpty(value: any[]) {
-        if (!value || value.length === 0) {
-          throw new Error('Cart must contain at least one item');
-        }
-      }
-    }
-  },
-  coupon_discount_amount: {
-    type: DataTypes.DECIMAL(10, 2),
-    defaultValue: 0.00,
-    allowNull: false,
-  },
   order_amount: {
     type: DataTypes.DECIMAL(10, 2),
     allowNull: false,
@@ -44,74 +33,65 @@ Order.init({
       min: 0.01,
     },
   },
-  order_type: {
+  coupon_discount_amount: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    allowNull: false,
+  },
+  coupon_discount_title: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+  },
+  payment_status: {
     type: DataTypes.STRING(50),
+    defaultValue: 'unpaid',
+    allowNull: false,
+  },
+  order_status: {
+    type: DataTypes.STRING(50),
+    defaultValue: 'pending',
+    allowNull: false,
+  },
+  total_tax_amount: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
     allowNull: false,
   },
   payment_method: {
     type: DataTypes.STRING(50),
     allowNull: false,
   },
-  store_id: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-  },
-  distance: {
-    type: DataTypes.DECIMAL(10, 6),
-    defaultValue: 0.000000,
-    allowNull: false,
-  },
-  discount_amount: {
-    type: DataTypes.DECIMAL(10, 2),
-    defaultValue: 0.00,
-    allowNull: false,
-  },
-  tax_amount: {
-    type: DataTypes.DECIMAL(10, 2),
-    defaultValue: 0.00,
-    allowNull: false,
-  },
-  address: {
-    type: DataTypes.TEXT,
-    allowNull: false,
-  },
-  latitude: {
-    type: DataTypes.DECIMAL(15, 12),
-    defaultValue: 0.000000000000,
-    allowNull: false,
-  },
-  longitude: {
-    type: DataTypes.DECIMAL(15, 12),
-    defaultValue: 0.000000000000,
-    allowNull: false,
-  },
-  contact_person_name: {
+  transaction_reference: {
     type: DataTypes.STRING(255),
-    defaultValue: '',
-    allowNull: false,
+    allowNull: true,
   },
-  contact_person_number: {
-    type: DataTypes.STRING(20),
-    allowNull: false,
+  delivery_address_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
   },
-  address_type: {
+  delivery_man_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+  },
+  coupon_code: {
     type: DataTypes.STRING(50),
-    defaultValue: 'others',
+    allowNull: true,
+  },
+  order_note: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
+  order_type: {
+    type: DataTypes.STRING(50),
     allowNull: false,
   },
-  is_scheduled: {
+  checked: {
     type: DataTypes.TINYINT,
     defaultValue: 0,
     allowNull: false,
   },
-  scheduled_timestamp: {
-    type: DataTypes.BIGINT,
-    defaultValue: 0,
-    allowNull: false,
-  },
-  promised_delv_tat: {
-    type: DataTypes.STRING(10),
-    defaultValue: '24',
+  store_id: {
+    type: DataTypes.INTEGER,
     allowNull: false,
   },
   created_at: {
@@ -122,45 +102,105 @@ Order.init({
     type: DataTypes.BIGINT,
     allowNull: false,
   },
-  
-  // Additional fields for enhanced functionality
-  dm_tips: {
+  delivery_charge: {
     type: DataTypes.DECIMAL(10, 2),
     defaultValue: 0.00,
+    allowNull: false,
+  },
+  schedule_at: {
+    type: DataTypes.BIGINT,
     allowNull: true,
   },
-  cutlery: {
-    type: DataTypes.TINYINT,
-    defaultValue: 0,
-    allowNull: true,
-  },
-  partial_payment: {
-    type: DataTypes.TINYINT,
-    defaultValue: 0,
-    allowNull: true,
-  },
-  is_buy_now: {
-    type: DataTypes.TINYINT,
-    defaultValue: 0,
-    allowNull: true,
-  },
-  extra_packaging_amount: {
-    type: DataTypes.DECIMAL(10, 2),
-    defaultValue: 0.00,
-    allowNull: true,
-  },
-  create_new_user: {
-    type: DataTypes.TINYINT,
-    defaultValue: 0,
-    allowNull: true,
-  },
-  is_guest: {
-    type: DataTypes.TINYINT,
-    defaultValue: 0,
+  callback: {
+    type: DataTypes.STRING(255),
     allowNull: true,
   },
   otp: {
     type: DataTypes.INTEGER,
+    allowNull: true,
+  },
+  pending: {
+    type: DataTypes.BIGINT,
+    allowNull: true,
+  },
+  accepted: {
+    type: DataTypes.BIGINT,
+    allowNull: true,
+  },
+  confirmed: {
+    type: DataTypes.BIGINT,
+    allowNull: true,
+  },
+  processing: {
+    type: DataTypes.BIGINT,
+    allowNull: true,
+  },
+  handover: {
+    type: DataTypes.BIGINT,
+    allowNull: true,
+  },
+  picked_up: {
+    type: DataTypes.BIGINT,
+    allowNull: true,
+  },
+  delivered: {
+    type: DataTypes.BIGINT,
+    allowNull: true,
+  },
+  reached_delivery_timestamp: {
+    type: DataTypes.BIGINT,
+    allowNull: true,
+  },
+  canceled: {
+    type: DataTypes.BIGINT,
+    allowNull: true,
+  },
+  refund_requested: {
+    type: DataTypes.TINYINT,
+    defaultValue: 0,
+    allowNull: false,
+  },
+  refunded: {
+    type: DataTypes.TINYINT,
+    defaultValue: 0,
+    allowNull: false,
+  },
+  delivery_address: {
+    type: DataTypes.TEXT,
+    allowNull: false,
+  },
+  scheduled: {
+    type: DataTypes.TINYINT,
+    defaultValue: 0,
+    allowNull: false,
+  },
+  store_discount_amount: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    allowNull: false,
+  },
+  original_delivery_charge: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    allowNull: false,
+  },
+  failed: {
+    type: DataTypes.TINYINT,
+    defaultValue: 0,
+    allowNull: false,
+  },
+  adjusment: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    allowNull: false,
+  },
+  edited: {
+    type: DataTypes.TINYINT,
+    defaultValue: 0,
+    allowNull: false,
+  },
+  delivery_time: {
+    type: DataTypes.STRING(50),
     allowNull: true,
   },
   zone_id: {
@@ -173,132 +213,229 @@ Order.init({
     defaultValue: 1,
     allowNull: true,
   },
-  payment_status: {
+  order_attachment: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
+  parcel_category_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+  },
+  receiver_details: {
+    type: DataTypes.JSON,
+    allowNull: true,
+  },
+  charge_payer: {
     type: DataTypes.STRING(50),
-    defaultValue: 'unpaid',
-    allowNull: true,
+    defaultValue: 'sender',
+    allowNull: false,
   },
-  order_status: {
+  distance: {
+    type: DataTypes.DECIMAL(10, 6),
+    defaultValue: 0.000000,
+    allowNull: false,
+  },
+  dm_tips: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    allowNull: false,
+  },
+  free_delivery_by: {
     type: DataTypes.STRING(50),
-    defaultValue: 'pending',
     allowNull: true,
   },
-  pending: {
-    type: DataTypes.BIGINT,
-    allowNull: true,
-  },
-  refund_requested: {
+  refund_request_canceled: {
     type: DataTypes.TINYINT,
     defaultValue: 0,
-    allowNull: true,
+    allowNull: false,
   },
-  refunded: {
+  prescription_order: {
     type: DataTypes.TINYINT,
     defaultValue: 0,
+    allowNull: false,
+  },
+  tax_status: {
+    type: DataTypes.STRING(50),
+    defaultValue: 'excluded',
+    allowNull: false,
+  },
+  dm_vehicle_id: {
+    type: DataTypes.INTEGER,
     allowNull: true,
   },
-  failed: {
+  cancellation_reason: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
+  canceled_by: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+  },
+  coupon_created_by: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+  },
+  discount_on_product_by: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+  },
+  processing_time: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+  },
+  unavailable_item_note: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
+  cutlery: {
     type: DataTypes.TINYINT,
     defaultValue: 0,
-    allowNull: true,
+    allowNull: false,
   },
-  delivered: {
-    type: DataTypes.TINYINT,
-    defaultValue: 0,
-    allowNull: true,
-  },
-  processing: {
-    type: DataTypes.TINYINT,
-    defaultValue: 0,
-    allowNull: true,
-  },
-  picked_up: {
-    type: DataTypes.TINYINT,
-    defaultValue: 0,
-    allowNull: true,
-  },
-  handover: {
-    type: DataTypes.TINYINT,
-    defaultValue: 0,
-    allowNull: true,
-  },
-  reached_pickup: {
-    type: DataTypes.TINYINT,
-    defaultValue: 0,
-    allowNull: true,
-  },
-  out_for_delivery: {
-    type: DataTypes.TINYINT,
-    defaultValue: 0,
-    allowNull: true,
-  },
-  out_for_pickup: {
-    type: DataTypes.TINYINT,
-    defaultValue: 0,
-    allowNull: true,
-  },
-  partially_paid_amount: {
-    type: DataTypes.DECIMAL(10, 2),
-    defaultValue: 0.00,
-    allowNull: true,
-  },
-  ref_bonus_amount: {
-    type: DataTypes.DECIMAL(10, 2),
-    defaultValue: 0.00,
-    allowNull: true,
-  },
-  flash_admin_discount_amount: {
-    type: DataTypes.DECIMAL(10, 2),
-    defaultValue: 0.00,
-    allowNull: true,
-  },
-  flash_store_discount_amount: {
-    type: DataTypes.DECIMAL(10, 2),
-    defaultValue: 0.00,
-    allowNull: true,
-  },
-  additional_charge: {
-    type: DataTypes.DECIMAL(10, 2),
-    defaultValue: 0.00,
-    allowNull: true,
-  },
-  store_discount_amount: {
-    type: DataTypes.DECIMAL(10, 2),
-    defaultValue: 0.00,
+  delivery_instruction: {
+    type: DataTypes.TEXT,
     allowNull: true,
   },
   tax_percentage: {
     type: DataTypes.DECIMAL(5, 2),
     defaultValue: 10.00,
-    allowNull: true,
+    allowNull: false,
   },
-  total_tax_amount: {
+  additional_charge: {
     type: DataTypes.DECIMAL(10, 2),
     defaultValue: 0.00,
+    allowNull: false,
+  },
+  order_proof: {
+    type: DataTypes.TEXT,
     allowNull: true,
   },
-  original_delivery_charge: {
+  partially_paid_amount: {
     type: DataTypes.DECIMAL(10, 2),
     defaultValue: 0.00,
+    allowNull: false,
+  },
+  is_guest: {
+    type: DataTypes.TINYINT,
+    defaultValue: 0,
+    allowNull: false,
+  },
+  flash_admin_discount_amount: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    allowNull: false,
+  },
+  flash_store_discount_amount: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    allowNull: false,
+  },
+  cash_back_id: {
+    type: DataTypes.INTEGER,
     allowNull: true,
   },
-  tax_status: {
+  extra_packaging_amount: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    allowNull: false,
+  },
+  ref_bonus_amount: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    allowNull: false,
+  },
+  EcommInvoiceID: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+  },
+  EcommOrderID: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+  },
+  awb_number: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+  },
+  promised_duration: {
     type: DataTypes.STRING(50),
-    defaultValue: 'excluded',
     allowNull: true,
   },
-  prescription_order: {
+  
+  // Legacy fields for backward compatibility
+  cart: {
+    type: DataTypes.JSON,
+    allowNull: true,
+  },
+  discount_amount: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    allowNull: true,
+  },
+  tax_amount: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    allowNull: true,
+  },
+  latitude: {
+    type: DataTypes.DECIMAL(15, 12),
+    defaultValue: 0.000000000000,
+    allowNull: true,
+  },
+  longitude: {
+    type: DataTypes.DECIMAL(15, 12),
+    defaultValue: 0.000000000000,
+    allowNull: true,
+  },
+  contact_person_name: {
+    type: DataTypes.STRING(255),
+    defaultValue: '',
+    allowNull: true,
+  },
+  contact_person_number: {
+    type: DataTypes.STRING(20),
+    allowNull: true,
+  },
+  address_type: {
+    type: DataTypes.STRING(50),
+    defaultValue: 'others',
+    allowNull: true,
+  },
+  is_scheduled: {
     type: DataTypes.TINYINT,
     defaultValue: 0,
     allowNull: true,
   },
-  scheduled: {
-    type: DataTypes.TINYINT,
-    defaultValue: 0,
-    allowNull: true,
-  },
-  schedule_at: {
+  scheduled_timestamp: {
     type: DataTypes.BIGINT,
+    defaultValue: 0,
+    allowNull: true,
+  },
+  promised_delv_tat: {
+    type: DataTypes.STRING(10),
+    defaultValue: '24',
+    allowNull: true,
+  },
+  partial_payment: {
+    type: DataTypes.TINYINT,
+    defaultValue: 0,
+    allowNull: true,
+  },
+  is_buy_now: {
+    type: DataTypes.TINYINT,
+    defaultValue: 0,
+    allowNull: true,
+  },
+  create_new_user: {
+    type: DataTypes.TINYINT,
+    defaultValue: 0,
+    allowNull: true,
+  },
+  guest_id: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+  },
+  password: {
+    type: DataTypes.STRING(255),
     allowNull: true,
   },
 }, {
@@ -309,6 +446,8 @@ Order.init({
     { fields: ['user_id'] },
     { fields: ['store_id'] },
     { fields: ['created_at'] },
+    { fields: ['order_status'] },
+    { fields: ['payment_status'] },
   ],
 });
 

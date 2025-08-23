@@ -6,6 +6,7 @@ import CouponTranslation from '../models/CouponTranslation';
 import { ResponseHandler } from '../middleware/responseHandler';
 import { CartItem } from '../types';
 import sequelize from '../config/database';
+import { generateSimpleOrderId } from '../utils/orderIdGenerator';
 
 interface AuthRequest extends Request {
   user?: {
@@ -18,6 +19,7 @@ interface AuthRequest extends Request {
 interface OrderRequest {
   cart: CartItem[];
   coupon_discount_amount?: number;
+  coupon_discount_title?: string;
   order_amount: number;
   order_type: 'delivery' | 'take_away' | 'parcel';
   payment_method: 'cash_on_delivery' | 'digital_payment' | 'wallet' | 'offline_payment';
@@ -51,6 +53,41 @@ interface OrderRequest {
   parcel_category_id?: number;
   receiver_details?: any;
   charge_payer?: 'sender' | 'receiver';
+  
+  // New fields for enhanced order structure
+  transaction_reference?: string;
+  delivery_address_id?: number;
+  delivery_man_id?: number;
+  coupon_code?: string;
+  delivery_charge?: number;
+  callback?: string;
+  store_discount_amount?: number;
+  original_delivery_charge?: number;
+  delivery_time?: string;
+  zone_id?: number;
+  module_id?: number;
+  free_delivery_by?: string;
+  prescription_order?: number;
+  tax_status?: string;
+  dm_vehicle_id?: number;
+  cancellation_reason?: string;
+  canceled_by?: string;
+  coupon_created_by?: string;
+  discount_on_product_by?: string;
+  processing_time?: number;
+  tax_percentage?: number;
+  additional_charge?: number;
+  order_proof?: string;
+  partially_paid_amount?: number;
+  is_guest?: number;
+  flash_admin_discount_amount?: number;
+  flash_store_discount_amount?: number;
+  cash_back_id?: number;
+  ref_bonus_amount?: number;
+  EcommInvoiceID?: string;
+  EcommOrderID?: string;
+  awb_number?: string;
+  promised_duration?: string;
 }
 
 export class OrderController {
@@ -88,7 +125,8 @@ export class OrderController {
     couponCode: string,
     storeId: number,
     orderAmount: number,
-    userId: number
+    userId: number,
+    contactPhoneNumber?: string
   ): Promise<{ 
     isValid: boolean; 
     discount: number; 
@@ -157,17 +195,34 @@ export class OrderController {
         return { isValid: false, discount: 0, message: 'Coupon usage limit exceeded' };
       }
 
-      // Check customer eligibility
+      // Check customer eligibility by phone number
       if (coupon.customer_id !== '["all"]') {
-        let eligibleCustomers: number[] = [];
+        let eligibleCustomers: string[] = [];
         try {
           eligibleCustomers = JSON.parse(coupon.customer_id || '[]');
         } catch (e) {
           eligibleCustomers = [];
         }
 
-        if (eligibleCustomers.length > 0 && !eligibleCustomers.includes(userId)) {
-          return { isValid: false, discount: 0, message: 'Coupon not applicable for this customer' };
+        // If contact phone number is provided, check if it's in the eligible customers list
+        if (contactPhoneNumber && eligibleCustomers.length > 0) {
+          // Clean the phone number for comparison (remove spaces, dashes, etc.)
+          const cleanContactPhone = contactPhoneNumber.replace(/\s+/g, '').replace(/[-()]/g, '');
+          
+          // Check if the phone number is in the eligible customers list
+          const isPhoneEligible = eligibleCustomers.some(phone => {
+            const cleanEligiblePhone = phone.replace(/\s+/g, '').replace(/[-()]/g, '');
+            return cleanEligiblePhone === cleanContactPhone;
+          });
+
+          if (!isPhoneEligible) {
+            return { isValid: false, discount: 0, message: 'Coupon not applicable for this phone number' };
+          }
+        } else if (eligibleCustomers.length > 0) {
+          // If no phone number provided but there are eligible customers, check by user ID
+          if (!eligibleCustomers.includes(userId.toString())) {
+            return { isValid: false, discount: 0, message: 'Coupon not applicable for this customer' };
+          }
         }
       }
 
@@ -204,6 +259,123 @@ export class OrderController {
       });
     } catch (error) {
       console.error('Increment coupon usage error:', error);
+    }
+  }
+
+  // Public method to validate coupon code
+  static async validateCoupon(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { coupon_code, store_id, order_amount, contact_phone_number } = req.body;
+      const userId = req.user?.id || 0;
+
+      if (!coupon_code) {
+        return ResponseHandler.error(res, 'Coupon code is required', 400);
+      }
+
+      if (!store_id) {
+        return ResponseHandler.error(res, 'Store ID is required', 400);
+      }
+
+      if (!order_amount || order_amount <= 0) {
+        return ResponseHandler.error(res, 'Valid order amount is required', 400);
+      }
+
+      const couponValidation = await OrderController.validateAndApplyCoupon(
+        coupon_code,
+        store_id,
+        order_amount,
+        userId,
+        contact_phone_number
+      );
+
+      if (!couponValidation.isValid) {
+        return ResponseHandler.error(res, couponValidation.message!, 400);
+      }
+
+      return ResponseHandler.success(res, {
+        message: 'Coupon code is valid',
+        coupon: {
+          code: coupon_code,
+          title: couponValidation.coupon?.title,
+          discount: couponValidation.discount,
+          discount_type: couponValidation.coupon?.discount_type,
+          min_purchase: couponValidation.coupon?.min_purchase,
+          max_discount: couponValidation.coupon?.max_discount,
+          limit: couponValidation.coupon?.limit,
+          total_uses: couponValidation.coupon?.total_uses,
+          remaining_uses: Math.max(0, (couponValidation.coupon?.limit || 0) - (couponValidation.coupon?.total_uses || 0))
+        }
+      });
+
+    } catch (error) {
+      console.error('Validate coupon error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+  // Public method to get coupon details
+  static async getCouponDetails(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { coupon_code } = req.params;
+
+      if (!coupon_code) {
+        return ResponseHandler.error(res, 'Coupon code is required', 400);
+      }
+
+      const coupon = await Coupon.findOne({
+        where: {
+          code: coupon_code.trim(),
+          status: 1, // Active coupons only
+        },
+        include: [{
+          model: CouponTranslation,
+          as: 'translations',
+          required: false,
+        }],
+      });
+
+      if (!coupon) {
+        return ResponseHandler.error(res, 'Coupon not found', 404);
+      }
+
+      // Check if coupon is expired
+      const currentDate = new Date().toISOString().split('T')[0];
+      if (coupon.expire_date < currentDate) {
+        return ResponseHandler.error(res, 'Coupon has expired', 404);
+      }
+
+      // Check if coupon is not yet active
+      if (coupon.start_date > currentDate) {
+        return ResponseHandler.error(res, 'Coupon is not yet active', 404);
+      }
+
+      return ResponseHandler.success(res, {
+        message: 'Coupon details retrieved successfully',
+        coupon: {
+          id: coupon.id,
+          code: coupon.code,
+          title: coupon.title,
+          start_date: coupon.start_date,
+          expire_date: coupon.expire_date,
+          min_purchase: coupon.min_purchase,
+          max_discount: coupon.max_discount,
+          discount: coupon.discount,
+          discount_type: coupon.discount_type,
+          coupon_type: coupon.coupon_type,
+          limit: coupon.limit,
+          total_uses: coupon.total_uses,
+          remaining_uses: Math.max(0, coupon.limit - coupon.total_uses),
+          status: coupon.status,
+          data: coupon.data,
+          customer_id: coupon.customer_id,
+          store_id: coupon.store_id,
+          translations: (coupon as any).translations
+        }
+      });
+
+    } catch (error) {
+      console.error('Get coupon details error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
     }
   }
 
@@ -378,16 +550,28 @@ export class OrderController {
       const { id } = req.params;
       const updateData = req.body;
 
-      if (!id || isNaN(parseInt(id))) {
+      if (!id) {
         return ResponseHandler.error(res, 'Valid order ID is required', 400);
       }
 
+      // Check if it's a custom order ID (starts with 'ozi') or internal ID
+      let whereClause: any = {};
+      
+      if (id.startsWith('ozi')) {
+        // Custom order ID format
+        whereClause.order_id = id;
+      } else if (!isNaN(parseInt(id))) {
+        // Internal ID format
+        whereClause.id = parseInt(id);
+      } else {
+        return ResponseHandler.error(res, 'Invalid order ID format', 400);
+      }
+      
+      whereClause.user_id = req.user!.id;
+
       // Find the existing order using Sequelize
       const existingOrder = await Order.findOne({
-        where: {
-          id: parseInt(id),
-          user_id: req.user!.id,
-        },
+        where: whereClause,
         raw: true
       });
 
@@ -437,10 +621,7 @@ export class OrderController {
 
       // Perform the update using Sequelize's update method
       const [affectedRows] = await Order.update(updateFields, {
-        where: {
-          id: parseInt(id),
-          user_id: req.user!.id,
-        },
+        where: whereClause,
       });
 
       if (affectedRows === 0) {
@@ -449,10 +630,7 @@ export class OrderController {
 
       // Fetch and return updated order
       const updatedOrder = await Order.findOne({
-        where: {
-          id: parseInt(id),
-          user_id: req.user!.id,
-        },
+        where: whereClause,
         raw: true
       });
 
@@ -581,20 +759,118 @@ export class OrderController {
         return ResponseHandler.error(res, 'Final order amount must be greater than 0', 400);
       }
 
+      // Validate and apply coupon if provided
+      if (orderData.coupon_code) {
+        const couponValidation = await OrderController.validateAndApplyCoupon(
+          orderData.coupon_code,
+          orderData.store_id,
+          finalOrderAmount,
+          finalUserId,
+          orderData.contact_person_number
+        );
+
+        if (!couponValidation.isValid) {
+          return ResponseHandler.error(res, couponValidation.message!, 400);
+        }
+
+        // Update coupon discount amount and title
+        couponDiscountAmount = couponValidation.discount;
+        if (couponValidation.coupon) {
+          orderData.coupon_discount_title = couponValidation.coupon.title;
+          
+          // Increment coupon usage
+          await OrderController.incrementCouponUsage(couponValidation.coupon.id);
+        }
+      }
+
+      // Generate custom order ID
+      const customOrderId = await generateSimpleOrderId();
+      
       // Create order
       const currentTimestamp = Math.floor(Date.now() / 1000);
       const order = await Order.create({
+        order_id: customOrderId,
         user_id: finalUserId,
-        cart: orderData.cart,
-        coupon_discount_amount: couponDiscountAmount,
         order_amount: finalOrderAmount,
-        order_type: orderData.order_type,
+        coupon_discount_amount: couponDiscountAmount,
+        coupon_discount_title: orderData.coupon_discount_title,
+        payment_status: 'unpaid',
+        order_status: 'pending',
+        total_tax_amount: taxAmount,
         payment_method: orderData.payment_method,
+        transaction_reference: orderData.transaction_reference,
+        delivery_address_id: orderData.delivery_address_id,
+        delivery_man_id: orderData.delivery_man_id,
+        coupon_code: orderData.coupon_code,
+        order_note: orderData.order_note,
+        order_type: orderData.order_type,
+        checked: 0,
         store_id: orderData.store_id,
+        created_at: currentTimestamp,
+        updated_at: currentTimestamp,
+        delivery_charge: orderData.delivery_charge || 0,
+        schedule_at: orderData.scheduled_timestamp || currentTimestamp,
+        callback: orderData.callback,
+        otp: Math.floor(1000 + Math.random() * 9000), // Generate 4-digit OTP
+        pending: currentTimestamp,
+        accepted: undefined,
+        confirmed: undefined,
+        processing: undefined,
+        handover: undefined,
+        picked_up: undefined,
+        delivered: undefined,
+        reached_delivery_timestamp: undefined,
+        canceled: undefined,
+        refund_requested: 0,
+        refunded: 0,
+        delivery_address: orderData.address,
+        scheduled: orderData.is_scheduled ? 1 : 0,
+        store_discount_amount: orderData.store_discount_amount || 0,
+        original_delivery_charge: orderData.original_delivery_charge || 0,
+        failed: 0,
+        adjusment: 0,
+        edited: 0,
+        delivery_time: orderData.delivery_time,
+        zone_id: orderData.zone_id || 1,
+        module_id: orderData.module_id || 1,
+        order_attachment: orderData.order_attachment,
+        parcel_category_id: orderData.parcel_category_id,
+        receiver_details: orderData.receiver_details,
+        charge_payer: orderData.charge_payer || 'sender',
         distance: orderData.distance || 0,
+        dm_tips: orderData.dm_tips || 0,
+        free_delivery_by: orderData.free_delivery_by,
+        refund_request_canceled: 0,
+        prescription_order: orderData.prescription_order || 0,
+        tax_status: orderData.tax_status || 'excluded',
+        dm_vehicle_id: orderData.dm_vehicle_id,
+        cancellation_reason: orderData.cancellation_reason,
+        canceled_by: orderData.canceled_by,
+        coupon_created_by: orderData.coupon_created_by,
+        discount_on_product_by: orderData.discount_on_product_by,
+        processing_time: orderData.processing_time,
+        unavailable_item_note: orderData.unavailable_item_note,
+        cutlery: orderData.cutlery || 0,
+        delivery_instruction: orderData.delivery_instruction,
+        tax_percentage: orderData.tax_percentage || 10,
+        additional_charge: orderData.additional_charge || 0,
+        order_proof: orderData.order_proof,
+        partially_paid_amount: orderData.partially_paid_amount || 0,
+        is_guest: orderData.is_guest || 0,
+        flash_admin_discount_amount: orderData.flash_admin_discount_amount || 0,
+        flash_store_discount_amount: orderData.flash_store_discount_amount || 0,
+        cash_back_id: orderData.cash_back_id,
+        extra_packaging_amount: orderData.extra_packaging_amount || 0,
+        ref_bonus_amount: orderData.ref_bonus_amount || 0,
+        EcommInvoiceID: orderData.EcommInvoiceID,
+        EcommOrderID: orderData.EcommOrderID,
+        awb_number: orderData.awb_number,
+        promised_duration: orderData.promised_duration,
+        
+        // Legacy fields for backward compatibility
+        cart: orderData.cart,
         discount_amount: discountAmount,
         tax_amount: taxAmount,
-        address: orderData.address,
         latitude: orderData.latitude || 0,
         longitude: orderData.longitude || 0,
         contact_person_name: orderData.contact_person_name || '',
@@ -603,46 +879,11 @@ export class OrderController {
         is_scheduled: orderData.is_scheduled ? 1 : 0,
         scheduled_timestamp: orderData.scheduled_timestamp || currentTimestamp,
         promised_delv_tat: '24', // Default TAT
-        created_at: currentTimestamp,
-        updated_at: currentTimestamp,
-        
-        // Additional fields from request
-        dm_tips: orderData.dm_tips || 0,
-        cutlery: orderData.cutlery || 0,
         partial_payment: orderData.partial_payment || 0,
         is_buy_now: orderData.is_buy_now || 0,
-        extra_packaging_amount: orderData.extra_packaging_amount || 0,
         create_new_user: orderData.create_new_user || 0,
-        is_guest: 0, // Default to registered user
-        otp: Math.floor(1000 + Math.random() * 9000), // Generate 4-digit OTP
-        zone_id: 1, // Default zone ID
-        module_id: 1, // Default module ID
-        payment_status: 'unpaid',
-        order_status: 'pending',
-        pending: currentTimestamp,
-        refund_requested: 0,
-        refunded: 0,
-        failed: 0,
-        delivered: 0,
-        processing: 0,
-        picked_up: 0,
-        handover: 0,
-        reached_pickup: 0,
-        out_for_delivery: 0,
-        out_for_pickup: 0,
-        partially_paid_amount: 0,
-        ref_bonus_amount: 0,
-        flash_admin_discount_amount: 0,
-        flash_store_discount_amount: 0,
-        additional_charge: 0,
-        store_discount_amount: 0,
-        tax_percentage: 10, // Default tax percentage
-        total_tax_amount: taxAmount,
-        original_delivery_charge: 0,
-        tax_status: 'excluded',
-        prescription_order: 0,
-        scheduled: orderData.is_scheduled ? 1 : 0,
-        schedule_at: orderData.scheduled_timestamp || currentTimestamp,
+        guest_id: orderData.guest_id,
+        password: orderData.password,
       }, { transaction });
 
 
@@ -650,10 +891,11 @@ export class OrderController {
       // Commit transaction
       await transaction.commit();
 
-      // Prepare response to match production format exactly
+            // Prepare response to match production format exactly
       const response = {
         message: 'Order placed successfully',
-        order_id: (order as any).id,
+        order_id: (order as any).order_id, // Use custom order ID
+        internal_id: (order as any).id, // Keep internal ID for reference
         total_ammount: (order as any).order_amount,
         status: 'pending',
         created_at: (() => {
@@ -665,7 +907,7 @@ export class OrderController {
                 throw new Error('Invalid timestamp');
               }
               return date.toISOString().replace('T', ' ').substring(0, 19);
-            }
+              }
             // Fallback to current time if timestamp is invalid
             return new Date().toISOString().replace('T', ' ').substring(0, 19);
           } catch (error) {
@@ -693,14 +935,24 @@ export class OrderController {
     try {
       const { id } = req.params;
 
-      if (!id || isNaN(parseInt(id))) {
+      if (!id) {
         return ResponseHandler.error(res, 'Valid order ID is required', 400);
       }
 
-      // For unauthenticated requests, get any order by ID
-      // For authenticated requests, filter by user_id
-      const whereClause: any = { id: parseInt(id) };
+      // Check if it's a custom order ID (starts with 'ozi') or internal ID
+      let whereClause: any = {};
       
+      if (id.startsWith('ozi')) {
+        // Custom order ID format
+        whereClause.order_id = id;
+      } else if (!isNaN(parseInt(id))) {
+        // Internal ID format
+        whereClause.id = parseInt(id);
+      } else {
+        return ResponseHandler.error(res, 'Invalid order ID format', 400);
+      }
+      
+      // For authenticated requests, filter by user_id
       if (req.user && req.user.id) {
         whereClause.user_id = req.user.id;
       }
@@ -770,14 +1022,24 @@ export class OrderController {
       const { page = 1, limit = 10 } = req.query;
       const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
 
-      if (!id || isNaN(parseInt(id))) {
+      if (!id) {
         return ResponseHandler.error(res, 'Valid order ID is required', 400);
       }
 
-      // For unauthenticated requests, get any order by ID
-      // For authenticated requests, filter by user_id
-      const whereClause: any = { id: parseInt(id) };
+      // Check if it's a custom order ID (starts with 'ozi') or internal ID
+      let whereClause: any = {};
       
+      if (id.startsWith('ozi')) {
+        // Custom order ID format
+        whereClause.order_id = id;
+      } else if (!isNaN(parseInt(id))) {
+        // Internal ID format
+        whereClause.id = parseInt(id);
+      } else {
+        return ResponseHandler.error(res, 'Invalid order ID format', 400);
+      }
+      
+      // For authenticated requests, filter by user_id
       if (req.user && req.user.id) {
         whereClause.user_id = req.user.id;
       }
@@ -799,7 +1061,8 @@ export class OrderController {
       const paginatedItems = cartItems.slice(offset, offset + parseInt(limit.toString()));
 
       return ResponseHandler.success(res, {
-        order_id: (order as any).id,
+        order_id: (order as any).order_id || (order as any).id,
+        internal_id: (order as any).id,
         order_status: (order as any).order_status,
         order_amount: (order as any).order_amount,
         items: paginatedItems,
@@ -814,6 +1077,45 @@ export class OrderController {
       });
     } catch (error) {
       console.error('Get order items error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+  /**
+   * Get order by custom order ID (starts with 'ozi')
+   */
+  static async getOrderByCustomId(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { orderId } = req.params;
+
+      if (!orderId || !orderId.startsWith('ozi')) {
+        return ResponseHandler.error(res, 'Valid custom order ID is required (must start with "ozi")', 400);
+      }
+
+      // For authenticated requests, filter by user_id
+      const whereClause: any = { order_id: orderId };
+      if (req.user && req.user.id) {
+        whereClause.user_id = req.user.id;
+      }
+
+      const order = await Order.findOne({
+        where: whereClause,
+        raw: true
+      });
+
+      if (!order) {
+        return ResponseHandler.error(res, 'Order not found', 404);
+      }
+
+      return ResponseHandler.success(res, {
+        order: {
+          ...order,
+          order_id: (order as any).order_id,
+          internal_id: (order as any).id
+        }
+      });
+    } catch (error) {
+      console.error('Get order by custom ID error:', error);
       return ResponseHandler.error(res, 'Internal server error', 500);
     }
   }
