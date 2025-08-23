@@ -7,6 +7,8 @@ import { ResponseHandler } from '../middleware/responseHandler';
 import { CartItem } from '../types';
 import sequelize from '../config/database';
 import { generateSimpleOrderId } from '../utils/orderIdGenerator';
+import { CartProcessor } from '../utils/cartProcessor';
+import { OrderTransactionService, OrderTransactionData } from '../services/OrderTransactionService';
 
 interface AuthRequest extends Request {
   user?: {
@@ -655,8 +657,6 @@ export class OrderController {
 
   // Main order placement method
   static async placeOrder(req: AuthRequest, res: Response): Promise<Response> {
-    const transaction = await sequelize.transaction();
-    
     try {
       const orderData: OrderRequest = req.body;
       const userId = req.user?.id;
@@ -708,11 +708,41 @@ export class OrderController {
         return ResponseHandler.error(res, 'Cart must contain at least one item', 400);
       }
 
+      // CART RETRIEVAL AND PRODUCT PROCESSING
+      // Process cart items with product lookup, variant processing, and stock validation
+      console.log('Processing cart items with product lookup and validation...');
+      const cartProcessingResult = await CartProcessor.processCart(
+        orderData.cart,
+        orderData.store_id,
+        orderData.coupon_code
+      );
+
+      if (!cartProcessingResult.success) {
+        const errorMessage = cartProcessingResult.errors.length > 0 
+          ? cartProcessingResult.errors.join('. ')
+          : 'Cart processing failed';
+        return ResponseHandler.error(res, errorMessage, 400);
+      }
+
+      // Log successful cart processing
+      console.log('Cart processing completed successfully');
+      console.log('Processed items:', cartProcessingResult.processedItems.length);
+      console.log('Subtotal:', cartProcessingResult.subtotal);
+      console.log('Stock validation passed:', cartProcessingResult.stockValidationPassed);
+      console.log('Price validation passed:', cartProcessingResult.priceValidationPassed);
+
+      // Validate that calculated amounts match provided amounts
+      const calculatedTotal = cartProcessingResult.finalAmount;
+      if (Math.abs(calculatedTotal - orderData.order_amount) > 0.01) {
+        return ResponseHandler.error(
+          res, 
+          `Order amount mismatch. Calculated: ${calculatedTotal}, Provided: ${orderData.order_amount}`, 
+          400
+        );
+      }
+
       // Validate order type specific requirements
       if (orderData.order_type === 'delivery' || orderData.order_type === 'parcel') {
-        // if (!orderData.distance || orderData.distance <= 0) {
-        //   return ResponseHandler.error(res, 'Distance is required for delivery/parcel orders', 400);
-        // }
         if (!orderData.address) {
           return ResponseHandler.error(res, 'Address is required for delivery/parcel orders', 400);
         }
@@ -759,8 +789,12 @@ export class OrderController {
         return ResponseHandler.error(res, 'Final order amount must be greater than 0', 400);
       }
 
-      // Validate and apply coupon if provided
-      if (orderData.coupon_code) {
+      // Use coupon processing results from CartProcessor
+      if (cartProcessingResult.couponDiscountAmount > 0) {
+        couponDiscountAmount = cartProcessingResult.couponDiscountAmount;
+        // Note: Coupon validation and usage increment already handled by CartProcessor
+      } else if (orderData.coupon_code) {
+        // Fallback to existing coupon validation if not processed by CartProcessor
         const couponValidation = await OrderController.validateAndApplyCoupon(
           orderData.coupon_code,
           orderData.store_id,
@@ -783,54 +817,27 @@ export class OrderController {
         }
       }
 
-      // Generate custom order ID
-      const customOrderId = await generateSimpleOrderId();
-      
-      // Create order
-      const currentTimestamp = Math.floor(Date.now() / 1000);
-      const order = await Order.create({
-        order_id: customOrderId,
+      // Prepare data for transaction service
+      const transactionData: OrderTransactionData = {
         user_id: finalUserId,
         order_amount: finalOrderAmount,
         coupon_discount_amount: couponDiscountAmount,
         coupon_discount_title: orderData.coupon_discount_title,
-        payment_status: 'unpaid',
-        order_status: 'pending',
-        total_tax_amount: taxAmount,
         payment_method: orderData.payment_method,
-        transaction_reference: orderData.transaction_reference,
-        delivery_address_id: orderData.delivery_address_id,
-        delivery_man_id: orderData.delivery_man_id,
-        coupon_code: orderData.coupon_code,
-        order_note: orderData.order_note,
         order_type: orderData.order_type,
-        checked: 0,
         store_id: orderData.store_id,
-        created_at: currentTimestamp,
-        updated_at: currentTimestamp,
         delivery_charge: orderData.delivery_charge || 0,
-        schedule_at: orderData.scheduled_timestamp || currentTimestamp,
-        callback: orderData.callback,
-        otp: Math.floor(1000 + Math.random() * 9000), // Generate 4-digit OTP
-        pending: currentTimestamp,
-        accepted: undefined,
-        confirmed: undefined,
-        processing: undefined,
-        handover: undefined,
-        picked_up: undefined,
-        delivered: undefined,
-        reached_delivery_timestamp: undefined,
-        canceled: undefined,
-        refund_requested: 0,
-        refunded: 0,
         delivery_address: orderData.address,
-        scheduled: orderData.is_scheduled ? 1 : 0,
-        store_discount_amount: orderData.store_discount_amount || 0,
-        original_delivery_charge: orderData.original_delivery_charge || 0,
-        failed: 0,
-        adjusment: 0,
-        edited: 0,
-        delivery_time: orderData.delivery_time,
+        latitude: orderData.latitude || 0,
+        longitude: orderData.longitude || 0,
+        contact_person_name: orderData.contact_person_name || 'Unknown',
+        contact_person_number: orderData.contact_person_number,
+        is_guest: Boolean(orderData.is_guest) || false,
+        guest_id: orderData.guest_id,
+        dm_tips: orderData.dm_tips || 0,
+        cutlery: orderData.cutlery || 0,
+        order_note: orderData.order_note,
+        schedule_at: orderData.scheduled_timestamp,
         zone_id: orderData.zone_id || 1,
         module_id: orderData.module_id || 1,
         order_attachment: orderData.order_attachment,
@@ -838,25 +845,28 @@ export class OrderController {
         receiver_details: orderData.receiver_details,
         charge_payer: orderData.charge_payer || 'sender',
         distance: orderData.distance || 0,
-        dm_tips: orderData.dm_tips || 0,
-        free_delivery_by: orderData.free_delivery_by,
-        refund_request_canceled: 0,
-        prescription_order: orderData.prescription_order || 0,
+        cart: orderData.cart,
+        coupon_code: orderData.coupon_code,
+        transaction_reference: orderData.transaction_reference,
+        delivery_address_id: orderData.delivery_address_id,
+        delivery_man_id: orderData.delivery_man_id,
+        delivery_time: orderData.delivery_time,
+        tax_amount: taxAmount,
+        store_discount_amount: orderData.store_discount_amount || 0,
+        original_delivery_charge: orderData.original_delivery_charge || 0,
+        is_scheduled: orderData.is_scheduled || false,
+        scheduled_timestamp: orderData.scheduled_timestamp,
+        callback: orderData.callback,
+        prescription_order: Boolean(orderData.prescription_order) || false,
         tax_status: orderData.tax_status || 'excluded',
         dm_vehicle_id: orderData.dm_vehicle_id,
-        cancellation_reason: orderData.cancellation_reason,
-        canceled_by: orderData.canceled_by,
-        coupon_created_by: orderData.coupon_created_by,
-        discount_on_product_by: orderData.discount_on_product_by,
         processing_time: orderData.processing_time,
         unavailable_item_note: orderData.unavailable_item_note,
-        cutlery: orderData.cutlery || 0,
         delivery_instruction: orderData.delivery_instruction,
         tax_percentage: orderData.tax_percentage || 10,
         additional_charge: orderData.additional_charge || 0,
         order_proof: orderData.order_proof,
         partially_paid_amount: orderData.partially_paid_amount || 0,
-        is_guest: orderData.is_guest || 0,
         flash_admin_discount_amount: orderData.flash_admin_discount_amount || 0,
         flash_store_discount_amount: orderData.flash_store_discount_amount || 0,
         cash_back_id: orderData.cash_back_id,
@@ -866,48 +876,38 @@ export class OrderController {
         EcommOrderID: orderData.EcommOrderID,
         awb_number: orderData.awb_number,
         promised_duration: orderData.promised_duration,
-        
-        // Legacy fields for backward compatibility
-        cart: orderData.cart,
-        discount_amount: discountAmount,
-        tax_amount: taxAmount,
-        latitude: orderData.latitude || 0,
-        longitude: orderData.longitude || 0,
-        contact_person_name: orderData.contact_person_name || '',
-        contact_person_number: orderData.contact_person_number,
         address_type: orderData.address_type || 'others',
-        is_scheduled: orderData.is_scheduled ? 1 : 0,
-        scheduled_timestamp: orderData.scheduled_timestamp || currentTimestamp,
-        promised_delv_tat: '24', // Default TAT
-        partial_payment: orderData.partial_payment || 0,
-        is_buy_now: orderData.is_buy_now || 0,
-        create_new_user: orderData.create_new_user || 0,
-        guest_id: orderData.guest_id,
+        partial_payment: Boolean(orderData.partial_payment) || false,
+        is_buy_now: Boolean(orderData.is_buy_now) || false,
+        create_new_user: Boolean(orderData.create_new_user) || false,
         password: orderData.password,
-      }, { transaction });
+      };
 
+      // Execute comprehensive transaction
+      console.log('Executing order placement transaction...');
+      const transactionResult = await OrderTransactionService.executeOrderTransaction(transactionData);
 
+      if (!transactionResult.success) {
+        return ResponseHandler.error(res, transactionResult.error || 'Order placement failed', 400);
+      }
 
-      // Commit transaction
-      await transaction.commit();
-
-            // Prepare response to match production format exactly
+      // Prepare response to match production format exactly
       const response = {
         message: 'Order placed successfully',
-        order_id: (order as any).order_id, // Use custom order ID
-        internal_id: (order as any).id, // Keep internal ID for reference
-        total_ammount: (order as any).order_amount,
+        order_id: transactionResult.orderId,
+        internal_id: transactionResult.internalId,
+        total_ammount: (transactionResult.order as any)?.order_amount,
         status: 'pending',
         created_at: (() => {
           try {
             // Validate timestamp and convert to proper format
-            if ((order as any).created_at && typeof (order as any).created_at === 'number' && (order as any).created_at > 0) {
-              const date = new Date((order as any).created_at * 1000);
+            if ((transactionResult.order as any)?.created_at && typeof (transactionResult.order as any).created_at === 'number' && (transactionResult.order as any).created_at > 0) {
+              const date = new Date((transactionResult.order as any).created_at * 1000);
               if (isNaN(date.getTime())) {
                 throw new Error('Invalid timestamp');
               }
               return date.toISOString().replace('T', ' ').substring(0, 19);
-              }
+            }
             // Fallback to current time if timestamp is invalid
             return new Date().toISOString().replace('T', ' ').substring(0, 19);
           } catch (error) {
@@ -916,16 +916,12 @@ export class OrderController {
             return new Date().toISOString().replace('T', ' ').substring(0, 19);
           }
         })(),
-        user_id: (order as any).user_id
+        user_id: (transactionResult.order as any)?.user_id
       };
 
       return ResponseHandler.success(res, response, 201);
 
     } catch (error) {
-      // Rollback transaction on error only if it's still active
-      if (transaction && !(transaction as any).finished) {
-        await transaction.rollback();
-      }
       console.error('Place order error:', error);
       return ResponseHandler.error(res, 'Internal server error', 500);
     }

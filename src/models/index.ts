@@ -1,6 +1,7 @@
 // models/index.ts
 import User from './User';
 import Order from './Order';
+import OrderDetail from './OrderDetail';
 import Coupon from './Coupon';
 import CouponTranslation from './CouponTranslation';
 import Role from './Role';
@@ -21,6 +22,8 @@ import Warehouse from './Warehouse';
 import WarehouseZone from './WarehouseZone';
 import WarehouseStaffAssignment from './WarehouseStaffAssignment';
 import UniversalLog from './UniversalLog';
+import Product from './Product';
+import ProductVariant from './ProductVariant';
 
 // Set up associations
 Coupon.hasMany(CouponTranslation, {
@@ -136,6 +139,18 @@ WarehouseStaffAssignment.belongsTo(Warehouse, { foreignKey: 'warehouse_id', as: 
 WarehouseStaffAssignment.belongsTo(User, { foreignKey: 'user_id', as: 'User' });
 User.hasMany(WarehouseStaffAssignment, { foreignKey: 'user_id', as: 'StaffAssignments' });
 
+// Product associations
+Product.hasMany(ProductVariant, { foreignKey: 'product_id', as: 'Variants' });
+ProductVariant.belongsTo(Product, { foreignKey: 'product_id', as: 'Product' });
+
+// Order-OrderDetail associations
+Order.hasMany(OrderDetail, { foreignKey: 'order_id', as: 'OrderDetails' });
+OrderDetail.belongsTo(Order, { foreignKey: 'order_id', as: 'Order' });
+
+// OrderDetail-Product associations
+OrderDetail.belongsTo(Product, { foreignKey: 'product_id', as: 'Product' });
+Product.hasMany(OrderDetail, { foreignKey: 'product_id', as: 'OrderDetails' });
+
 export { 
   User, 
   Order, 
@@ -158,5 +173,8 @@ export {
   Warehouse,
   WarehouseZone,
   WarehouseStaffAssignment,
-  UniversalLog
+  UniversalLog,
+  Product,
+  ProductVariant,
+  OrderDetail
 };
