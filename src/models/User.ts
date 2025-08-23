@@ -59,7 +59,7 @@ const User = sequelize.define<UserInstance>('User', {
     defaultValue: DataTypes.NOW,
   },
 }, {
-  tableName: 'users',
+  tableName: 'Users',
   indexes: [
     {
       unique: true,

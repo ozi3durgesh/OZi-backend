@@ -123,19 +123,7 @@ Order.init({
     allowNull: false,
   },
   
-  // Additional fields to match PHP functionality
-  order_note: {
-    type: DataTypes.TEXT,
-    allowNull: true,
-  },
-  delivery_instruction: {
-    type: DataTypes.TEXT,
-    allowNull: true,
-  },
-  unavailable_item_note: {
-    type: DataTypes.TEXT,
-    allowNull: true,
-  },
+  // Additional fields for enhanced functionality
   dm_tips: {
     type: DataTypes.DECIMAL(10, 2),
     defaultValue: 0.00,
@@ -185,22 +173,6 @@ Order.init({
     defaultValue: 1,
     allowNull: true,
   },
-  parcel_category_id: {
-    type: DataTypes.INTEGER,
-    allowNull: true,
-  },
-  receiver_details: {
-    type: DataTypes.JSON,
-    allowNull: true,
-  },
-  charge_payer: {
-    type: DataTypes.STRING(50),
-    allowNull: true,
-  },
-  order_attachment: {
-    type: DataTypes.JSON,
-    allowNull: true,
-  },
   payment_status: {
     type: DataTypes.STRING(50),
     defaultValue: 'unpaid',
@@ -211,28 +183,8 @@ Order.init({
     defaultValue: 'pending',
     allowNull: true,
   },
-  transaction_reference: {
-    type: DataTypes.STRING(255),
-    allowNull: true,
-  },
-  confirmed: {
-    type: DataTypes.BIGINT,
-    allowNull: true,
-  },
   pending: {
     type: DataTypes.BIGINT,
-    allowNull: true,
-  },
-  canceled: {
-    type: DataTypes.BIGINT,
-    allowNull: true,
-  },
-  canceled_by: {
-    type: DataTypes.STRING(255),
-    allowNull: true,
-  },
-  cancellation_reason: {
-    type: DataTypes.TEXT,
     allowNull: true,
   },
   refund_requested: {
@@ -285,18 +237,6 @@ Order.init({
     defaultValue: 0,
     allowNull: true,
   },
-  dm_vehicle_id: {
-    type: DataTypes.INTEGER,
-    allowNull: true,
-  },
-  awb_number: {
-    type: DataTypes.STRING(255),
-    allowNull: true,
-  },
-  delivery_man_id: {
-    type: DataTypes.INTEGER,
-    allowNull: true,
-  },
   partially_paid_amount: {
     type: DataTypes.DECIMAL(10, 2),
     defaultValue: 0.00,
@@ -322,14 +262,6 @@ Order.init({
     defaultValue: 0.00,
     allowNull: true,
   },
-  coupon_created_by: {
-    type: DataTypes.STRING(255),
-    allowNull: true,
-  },
-  coupon_discount_title: {
-    type: DataTypes.STRING(255),
-    allowNull: true,
-  },
   store_discount_amount: {
     type: DataTypes.DECIMAL(10, 2),
     defaultValue: 0.00,
@@ -348,10 +280,6 @@ Order.init({
   original_delivery_charge: {
     type: DataTypes.DECIMAL(10, 2),
     defaultValue: 0.00,
-    allowNull: true,
-  },
-  free_delivery_by: {
-    type: DataTypes.STRING(255),
     allowNull: true,
   },
   tax_status: {

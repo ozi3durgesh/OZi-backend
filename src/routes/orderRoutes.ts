@@ -2,8 +2,6 @@
 import { Router } from 'express';
 import { OrderController } from '../controllers/orderController';
 
-
-
 const router = Router();
 
 // All order routes - no authentication required for testing
@@ -14,6 +12,10 @@ router.post('/place',
 
 router.get('/:id', 
   OrderController.getOrderById
+);
+
+router.get('/:id/items', 
+  OrderController.getOrderItems
 );
 
 router.get('/', 

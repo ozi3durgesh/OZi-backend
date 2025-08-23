@@ -130,7 +130,8 @@ export interface CouponTranslationCreationAttributes {
 // New Order Types
 export interface CartItem {
   sku: number;
-  amount: number;
+  amount: number; // This represents the price/amount
+  quantity?: number; // Optional quantity field for future use
 }
 
 export interface OrderAttributes {

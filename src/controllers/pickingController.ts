@@ -29,13 +29,31 @@ export class PickingController {
         return ResponseHandler.error(res, 'Order IDs array is required', 400);
       }
 
+      // Check for duplicate order IDs in the request
+      const uniqueOrderIds = orderIds.filter((id, index) => orderIds.indexOf(id) === index);
+      if (uniqueOrderIds.length !== orderIds.length) {
+        return ResponseHandler.error(res, 'Duplicate order IDs are not allowed', 400);
+      }
+
+      // Check if any orders are already in existing picking waves
+      const existingOrderIds = await PicklistItem.findAll({
+        where: { orderId: uniqueOrderIds },
+        attributes: ['orderId'],
+        group: ['orderId']
+      });
+
+      if (existingOrderIds.length > 0) {
+        const duplicateOrders = existingOrderIds.map(item => item.orderId);
+        return ResponseHandler.error(res, `Some orders are already in existing picking waves: ${duplicateOrders.join(', ')}`, 409);
+      }
+
       // Validate orders exist and are eligible for picking
       const orders = await Order.findAll({
-        where: { id: orderIds },
+        where: { id: uniqueOrderIds },
         attributes: ['id', 'order_amount', 'created_at', 'cart']
       });
 
-      if (orders.length !== orderIds.length) {
+      if (orders.length !== uniqueOrderIds.length) {
         return ResponseHandler.error(res, 'Some orders not found', 404);
       }
 
@@ -48,15 +66,16 @@ export class PickingController {
         // Calculate SLA deadline (24 hours from now for demo)
         const slaDeadline = new Date(Date.now() + 24 * 60 * 60 * 1000);
         
-        // Calculate total items correctly
+        // Calculate total items correctly - count the actual number of items in cart
         let totalItems = 0;
         for (const order of waveOrders) {
           const orderData = order.get({ plain: true });
           console.log(`Order ${orderData.id} cart data:`, JSON.stringify(orderData.cart));
           if (orderData.cart && Array.isArray(orderData.cart)) {
+            // Count the actual number of items in the cart, not the price amounts
+            // If cart items have quantity field, sum those; otherwise count by array length
             totalItems += orderData.cart.reduce((sum: number, item: any) => {
-              console.log(`Cart item:`, item);
-              return sum + (item.amount || 0);
+              return sum + (item.quantity || 1);
             }, 0);
           } else {
             console.warn(`Order ${orderData.id} has invalid cart data:`, orderData.cart);
@@ -79,27 +98,74 @@ export class PickingController {
         } as any);
 
         // Create picklist items for each order
+        let actualTotalItems = 0;
+        let createdItems = 0;
+        
         for (const order of waveOrders) {
           const orderData = order.get({ plain: true });
+          console.log(`\n=== Processing order ${orderData.id} ===`);
+          console.log(`Order cart data:`, JSON.stringify(orderData.cart, null, 2));
+          
           if (orderData.cart && Array.isArray(orderData.cart)) {
-            for (const item of orderData.cart) {
-              // Validate cart item structure
-              if (item.sku && item.amount) {
-                await PicklistItem.create({
-                  waveId: wave.id,
-                  orderId: orderData.id,
-                  sku: item.sku.toString(), // Convert number to string for storage
-                  productName: `Product-${item.sku}`, // Generate product name from SKU
-                  binLocation: `A${Math.floor(Math.random() * 10) + 1}-B${Math.floor(Math.random() * 10) + 1}-C${Math.floor(Math.random() * 10) + 1}`, // Generate random bin location
-                  quantity: item.amount,
-                  scanSequence: Math.floor(Math.random() * 100) + 1, // Random sequence for demo
-                  fefoBatch: fefoRequired ? `BATCH-${Date.now()}` : undefined,
-                  expiryDate: fefoRequired ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : undefined
-                } as any);
+            console.log(`Cart is array with ${orderData.cart.length} items`);
+            
+            for (let i = 0; i < orderData.cart.length; i++) {
+              const item = orderData.cart[i];
+              console.log(`\n--- Processing cart item ${i + 1} ---`);
+              console.log(`Item data:`, JSON.stringify(item, null, 2));
+              console.log(`Item type:`, typeof item);
+              console.log(`Item keys:`, Object.keys(item));
+              
+              // More flexible validation - check for sku and either amount or quantity
+              if (item && item.sku !== undefined && item.sku !== null) {
+                // For cart items with amount but no quantity, use amount as quantity
+                // This handles the case where cart items have {sku: 123, amount: 25.99}
+                const quantity = item.quantity || (item.amount ? 1 : 1);
+                console.log(`✓ Valid item - SKU: ${item.sku}, quantity: ${quantity}, amount: ${item.amount}`);
+                
+                try {
+                  const picklistItem = await PicklistItem.create({
+                    waveId: wave.id,
+                    orderId: orderData.id,
+                    sku: item.sku.toString(), // Convert number to string for storage
+                    productName: `Product-${item.sku}`, // Generate product name from SKU
+                    binLocation: `A${Math.floor(Math.random() * 10) + 1}-B${Math.floor(Math.random() * 10) + 1}-C${Math.floor(Math.random() * 10) + 1}`, // Generate random bin location
+                    quantity: quantity, // Use quantity or default to 1
+                    scanSequence: Math.floor(Math.random() * 100) + 1, // Random sequence for demo
+                    fefoBatch: fefoRequired ? `BATCH-${Date.now()}` : undefined,
+                    expiryDate: fefoRequired ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : undefined
+                  } as any);
+                  
+                  console.log(`✓ Successfully created picklist item with ID: ${picklistItem.id}`);
+                  createdItems++;
+                  actualTotalItems += quantity;
+                  
+                } catch (createError) {
+                  console.error(`✗ Error creating picklist item:`, createError);
+                  console.error(`Error details:`, createError instanceof Error ? createError.message : String(createError));
+                }
+              } else {
+                console.warn(`✗ Skipping cart item without SKU:`, JSON.stringify(item));
+                console.warn(`Item.sku value:`, item?.sku);
+                console.warn(`Item.sku type:`, typeof item?.sku);
               }
             }
+          } else {
+            console.warn(`✗ Order ${orderData.id} has invalid cart data:`, orderData.cart);
+            console.warn(`Cart type:`, typeof orderData.cart);
+            console.warn(`Cart is array:`, Array.isArray(orderData.cart));
           }
         }
+        
+        console.log(`\n=== Summary for wave ${wave.id} ===`);
+        console.log(`Expected total items: ${totalItems}`);
+        console.log(`Actual created items: ${createdItems}`);
+        console.log(`Actual total quantity: ${actualTotalItems}`);
+        
+        // Update wave with actual counts
+        await wave.update({
+          totalItems: actualTotalItems
+        });
 
         waves.push(wave);
       }
@@ -734,16 +800,42 @@ export class PickingController {
         return ResponseHandler.error(res, 'Insufficient permissions to view this wave', 403);
       }
 
-      // Build where clause
+      // Build where clause - ensure waveId is properly handled
       const whereClause: any = { waveId: parseInt(waveId) };
       if (status) whereClause.status = status;
 
+      console.log('Querying for waveId:', parseInt(waveId));
+      console.log('Where clause:', whereClause);
+
       // Get picklist items with pagination
+      console.log(`\n=== Querying picklist items for wave ${waveId} ===`);
+      console.log('Where clause:', whereClause);
+      
       const picklistItems = await PicklistItem.findAndCountAll({
         where: whereClause,
         order: [['scanSequence', 'ASC']],
         limit: parseInt(limit.toString()),
         offset
+      });
+
+      // Debug logging
+      console.log(`✓ Found ${picklistItems.count} picklist items`);
+      console.log('Sample items:', picklistItems.rows.slice(0, 2).map(item => ({
+        id: item.id,
+        orderId: item.orderId,
+        sku: item.sku,
+        waveId: item.waveId,
+        quantity: item.quantity
+      })));
+      
+      // Also check all items without pagination for debugging
+      const allItems = await PicklistItem.findAll({
+        where: { waveId: parseInt(waveId) },
+        order: [['scanSequence', 'ASC']]
+      });
+      console.log(`Total items in database for wave ${waveId}: ${allItems.length}`);
+      allItems.forEach(item => {
+        console.log(`  - ID: ${item.id}, Order: ${item.orderId}, SKU: ${item.sku}, Qty: ${item.quantity}`);
       });
 
       return ResponseHandler.success(res, {
@@ -755,6 +847,7 @@ export class PickingController {
         },
         items: picklistItems.rows.map(item => ({
           id: item.id,
+          orderId: item.orderId, // Add orderId to response
           sku: item.sku,
           productName: item.productName,
           binLocation: item.binLocation,

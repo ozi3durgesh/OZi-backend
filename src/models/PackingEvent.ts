@@ -39,7 +39,7 @@ PackingEvent.init({
     type: DataTypes.INTEGER,
     allowNull: true,
     references: {
-      model: 'users',
+      model: 'Users',
       key: 'id',
     },
   },

@@ -488,18 +488,33 @@ export class OrderController {
         // In production, this should be removed and proper authentication enforced
         console.log('No user ID provided, using default user ID for testing');
         // You can set this to any existing user ID in your database
-        // For now, let's use 16 as default (the test user that exists)
-        req.user = { id: 16, email: 'test@ozi.com' };
+        // For now, let's use 1 as default (the admin user that exists)
+        req.user = { id: 1, email: 'admin@company.com' };
       }
       
       // Ensure userId is defined after the above logic
-      const finalUserId = req.user?.id || 16;
+      const finalUserId = req.user?.id || 1;
 
       // Validate required fields
-      const requiredFields = ['cart', 'order_amount', 'payment_method', 'order_type', 'store_id'];
+      const requiredFields = [
+        'cart', 
+        'order_amount', 
+        'payment_method', 
+        'order_type', 
+        'store_id',
+        'distance',
+        'address',
+        'latitude',
+        'longitude',
+        'contact_person_name',
+        'contact_person_number'
+      ];
+      
       for (const field of requiredFields) {
-        if (!orderData[field as keyof OrderRequest]) {
-          return ResponseHandler.error(res, `${field} is required`, 400);
+        if (orderData[field as keyof OrderRequest] === undefined || 
+            orderData[field as keyof OrderRequest] === null || 
+            orderData[field as keyof OrderRequest] === '') {
+          return ResponseHandler.error(res, `${field} is required and cannot be empty`, 400);
         }
       }
 
@@ -508,12 +523,17 @@ export class OrderController {
       if (!cartValidation.isValid) {
         return ResponseHandler.error(res, cartValidation.message!, 400);
       }
+      
+      // Additional cart validation - ensure cart is not empty
+      if (!Array.isArray(orderData.cart) || orderData.cart.length === 0) {
+        return ResponseHandler.error(res, 'Cart must contain at least one item', 400);
+      }
 
       // Validate order type specific requirements
       if (orderData.order_type === 'delivery' || orderData.order_type === 'parcel') {
-        if (!orderData.distance || orderData.distance <= 0) {
-          return ResponseHandler.error(res, 'Distance is required for delivery/parcel orders', 400);
-        }
+        // if (!orderData.distance || orderData.distance <= 0) {
+        //   return ResponseHandler.error(res, 'Distance is required for delivery/parcel orders', 400);
+        // }
         if (!orderData.address) {
           return ResponseHandler.error(res, 'Address is required for delivery/parcel orders', 400);
         }
@@ -585,10 +605,7 @@ export class OrderController {
         created_at: currentTimestamp,
         updated_at: currentTimestamp,
         
-        // Additional fields from PHP version
-        order_note: orderData.order_note,
-        delivery_instruction: orderData.delivery_instruction,
-        unavailable_item_note: orderData.unavailable_item_note,
+        // Additional fields from request
         dm_tips: orderData.dm_tips || 0,
         cutlery: orderData.cutlery || 0,
         partial_payment: orderData.partial_payment || 0,
@@ -599,18 +616,30 @@ export class OrderController {
         otp: Math.floor(1000 + Math.random() * 9000), // Generate 4-digit OTP
         zone_id: 1, // Default zone ID
         module_id: 1, // Default module ID
-        parcel_category_id: orderData.parcel_category_id,
-        receiver_details: orderData.receiver_details,
-        charge_payer: orderData.charge_payer,
-        order_attachment: orderData.order_attachment,
         payment_status: 'unpaid',
         order_status: 'pending',
-        transaction_reference: undefined,
         pending: currentTimestamp,
+        refund_requested: 0,
+        refunded: 0,
+        failed: 0,
+        delivered: 0,
+        processing: 0,
+        picked_up: 0,
+        handover: 0,
+        reached_pickup: 0,
+        out_for_delivery: 0,
+        out_for_pickup: 0,
+        partially_paid_amount: 0,
+        ref_bonus_amount: 0,
+        flash_admin_discount_amount: 0,
+        flash_store_discount_amount: 0,
+        additional_charge: 0,
+        store_discount_amount: 0,
         tax_percentage: 10, // Default tax percentage
         total_tax_amount: taxAmount,
-        original_delivery_charge: 0, // Will be calculated if needed
+        original_delivery_charge: 0,
         tax_status: 'excluded',
+        prescription_order: 0,
         scheduled: orderData.is_scheduled ? 1 : 0,
         schedule_at: orderData.scheduled_timestamp || currentTimestamp,
       }, { transaction });
@@ -665,11 +694,16 @@ export class OrderController {
         return ResponseHandler.error(res, 'Valid order ID is required', 400);
       }
 
+      // For unauthenticated requests, get any order by ID
+      // For authenticated requests, filter by user_id
+      const whereClause: any = { id: parseInt(id) };
+      
+      if (req.user && req.user.id) {
+        whereClause.user_id = req.user.id;
+      }
+
       const order = await Order.findOne({
-        where: {
-          id: parseInt(id),
-          user_id: req.user!.id,
-        },
+        where: whereClause,
         raw: true
       });
 
@@ -691,26 +725,92 @@ export class OrderController {
       const { page = 1, limit = 10 } = req.query;
       const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
 
+      // For unauthenticated requests, get all orders
+      // For authenticated requests, filter by user_id
+      const whereClause: any = {};
+      
+      if (req.user && req.user.id) {
+        whereClause.user_id = req.user.id;
+      }
+
       const orders = await Order.findAll({
-        where: {
-          user_id: req.user!.id,
-        },
+        where: whereClause,
         order: [['created_at', 'DESC']],
         limit: parseInt(limit.toString()),
         offset,
         raw: true
       });
 
+      // Get total count for pagination
+      const totalOrders = await Order.count({ where: whereClause });
+
       return ResponseHandler.success(res, {
         orders,
         pagination: {
           page: parseInt(page.toString()),
           limit: parseInt(limit.toString()),
-          total_orders: orders.length
+          total_orders: totalOrders,
+          total_pages: Math.ceil(totalOrders / parseInt(limit.toString())),
+          has_next: offset + parseInt(limit.toString()) < totalOrders,
+          has_prev: parseInt(page.toString()) > 1
         }
       });
     } catch (error) {
       console.error('Get user orders error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+  static async getOrderItems(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { id } = req.params;
+      const { page = 1, limit = 10 } = req.query;
+      const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
+
+      if (!id || isNaN(parseInt(id))) {
+        return ResponseHandler.error(res, 'Valid order ID is required', 400);
+      }
+
+      // For unauthenticated requests, get any order by ID
+      // For authenticated requests, filter by user_id
+      const whereClause: any = { id: parseInt(id) };
+      
+      if (req.user && req.user.id) {
+        whereClause.user_id = req.user.id;
+      }
+
+      const order = await Order.findOne({
+        where: whereClause,
+        raw: true
+      });
+
+      if (!order) {
+        return ResponseHandler.error(res, 'Order not found', 404);
+      }
+
+      // Extract cart items from the order
+      const cartItems = (order as any).cart || [];
+      
+      // Apply pagination to cart items
+      const totalItems = cartItems.length;
+      const paginatedItems = cartItems.slice(offset, offset + parseInt(limit.toString()));
+
+      return ResponseHandler.success(res, {
+        order_id: (order as any).id,
+        order_status: (order as any).order_status,
+        order_amount: (order as any).order_amount,
+        items: paginatedItems,
+        pagination: {
+          page: parseInt(page.toString()),
+          limit: parseInt(limit.toString()),
+          total_items: totalItems,
+          total_pages: Math.ceil(totalItems / parseInt(limit.toString())),
+          has_next: offset + parseInt(limit.toString()) < totalItems,
+          has_prev: parseInt(page.toString()) > 1
+        }
+      });
+    } catch (error) {
+      console.error('Get order items error:', error);
       return ResponseHandler.error(res, 'Internal server error', 500);
     }
   }

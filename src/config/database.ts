@@ -52,7 +52,12 @@ const getDatabaseConfig = () => {
   };
 };
 
-const sequelize = new Sequelize(getDatabaseConfig());
+const sequelize = new Sequelize({
+  ...getDatabaseConfig(),
+  define: {
+    freezeTableName: true, // Preserve table names exactly as specified
+  }
+});
 
 export default sequelize;
 
@@ -80,8 +85,15 @@ export const connectDatabase = async (): Promise<void> => {
     await import('../models/index.js');
     console.log('Models imported successfully.');
     
+    // Disable foreign key checks temporarily
+    await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
+    
     // Use simple sync without force or alter to avoid conflicts
     await sequelize.sync({ force: false, alter: false });
+    
+    // Re-enable foreign key checks
+    await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
+    
     console.log('Database synchronized successfully.');
     
     // Import and use auto-initialization functions
