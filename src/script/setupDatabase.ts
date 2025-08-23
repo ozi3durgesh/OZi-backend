@@ -34,7 +34,7 @@ async function setupDatabase() {
 
     // Drop all tables if they exist (for clean setup)
     console.log('🗑️  Dropping existing tables...');
-    await sequelize.drop({ force: true });
+    await sequelize.drop();
     console.log('✅ Tables dropped');
 
     // Create tables in the correct order (no foreign key constraints first)
