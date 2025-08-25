@@ -1,6 +1,7 @@
 // routes/packingRoutes.ts
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
+import { PackingController } from '../controllers/packingController';
 
 const router = Router();
 
@@ -127,6 +128,20 @@ router.post('/complete', (req, res) => {
     });
   }
 });
+
+/**
+ * @route POST /api/packing/pack-and-seal
+ * @desc Pack and seal a product with SKU, quantity, and picture
+ * @access Packer, Manager
+ */
+router.post('/pack-and-seal', PackingController.packAndSeal);
+
+/**
+ * @route GET /api/packing/status/:jobId
+ * @desc Get packing job status
+ * @access Packer, Manager
+ */
+router.get('/status/:jobId', PackingController.getPackingStatus);
 
 /**
  * @route GET /api/packing/status/:jobId

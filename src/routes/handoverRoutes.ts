@@ -1,6 +1,7 @@
 // routes/handoverRoutes.ts
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
+import { HandoverController } from '../controllers/handoverController';
 
 const router = Router();
 
@@ -127,6 +128,13 @@ router.put('/:handoverId/status', (req, res) => {
     });
   }
 });
+
+/**
+ * @route POST /api/handover/dispatch
+ * @desc Handover packed products to dispatch and generate AWB/Manifest ID
+ * @access Manager, Dispatcher
+ */
+router.post('/dispatch', HandoverController.handoverToDispatch);
 
 /**
  * @route GET /api/handover/riders/available

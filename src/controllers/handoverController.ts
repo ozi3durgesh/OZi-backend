@@ -1,6 +1,6 @@
 // controllers/handoverController.ts
 import { Request, Response } from 'express';
-import { Handover, PackingJob, Rider, User, PackingEvent, LMSShipment } from '../models';
+import { Handover, PackingJob, Rider, User, PackingEvent, LMSShipment, PickingWave } from '../models';
 import { LMSIntegration } from '../utils/lmsIntegration';
 import { 
   AssignRiderRequest, 
@@ -8,6 +8,12 @@ import {
   ApiResponse,
   LMSIntegrationConfig 
 } from '../types';
+import sequelize from '../config/database';
+import { ResponseHandler } from '../middleware/responseHandler';
+
+interface AuthRequest extends Request {
+  user?: any;
+}
 
 export class HandoverController {
   private lmsIntegration: LMSIntegration;
@@ -594,5 +600,108 @@ export class HandoverController {
     };
 
     return validTransitions[currentStatus]?.includes(newStatus) || false;
+  }
+
+  /**
+   * Handover packed products to dispatch with validation
+   */
+  static async handoverToDispatch(req: AuthRequest, res: Response): Promise<Response> {
+    const transaction = await sequelize.transaction();
+    
+    try {
+      const { jobNumber, sku, quantity, destination, warehouseId, specialInstructions } = req.body;
+      const dispatcherId = req.user!.id;
+
+      // Basic validation
+      if (!jobNumber || !sku || !quantity || !destination || !warehouseId) {
+        return ResponseHandler.error(res, 'jobNumber, sku, quantity, destination, and warehouseId are required', 400);
+      }
+
+      if (quantity <= 0) {
+        return ResponseHandler.error(res, 'quantity must be greater than 0', 400);
+      }
+
+      // Find the packing job
+      const packingJob = await PackingJob.findOne({
+        where: { jobNumber },
+        include: [
+          { model: PickingWave, as: 'Wave' },
+          { model: User, as: 'Packer' }
+        ]
+      });
+
+      if (!packingJob) {
+        return ResponseHandler.error(res, 'Packing job not found', 404);
+      }
+
+      // Check if packing job is completed
+      if (packingJob.status !== 'COMPLETED') {
+        return ResponseHandler.error(res, 'Cannot handover - packing job is not completed', 400);
+      }
+
+      // Note: SKU validation would need to be added to PackingJob model
+      // For now, we'll validate quantity match
+      if (packingJob.packedItems !== quantity) {
+        return ResponseHandler.error(res, 'Quantity mismatch with packing job', 400);
+      }
+
+      // Check if already handed over
+      const existingHandover = await Handover.findOne({
+        where: { jobId: packingJob.id }
+      });
+
+      if (existingHandover) {
+        return ResponseHandler.error(res, 'Product already handed over to dispatch', 409);
+      }
+
+      // Generate AWB/Manifest ID
+      const { generateAWBNumber, generateTrackingNumber } = require('../../utils/awbGenerator');
+      const awbNumber = generateAWBNumber();
+      const trackingNumber = generateTrackingNumber();
+
+      // Create handover record
+      const handover = await Handover.create({
+        jobId: packingJob.id,
+        riderId: 0, // Will be assigned later (0 indicates unassigned)
+        status: 'ASSIGNED',
+        assignedAt: new Date(),
+        trackingNumber,
+        manifestNumber: awbNumber,
+        specialInstructions,
+        lmsSyncStatus: 'PENDING'
+      }, { transaction });
+
+      // Update packing job status
+      await packingJob.update({
+        status: 'AWAITING_HANDOVER',
+        handoverAt: new Date()
+      }, { transaction });
+
+      // Commit transaction
+      await transaction.commit();
+
+      return ResponseHandler.success(res, {
+        message: 'Product handed over to dispatch successfully',
+        handoverId: handover.id,
+        jobNumber,
+        sku,
+        quantity,
+        destination,
+        warehouseId,
+        awbNumber,
+        trackingNumber,
+        specialInstructions,
+        status: 'DISPATCHED',
+        dispatchedAt: new Date(),
+        estimatedDelivery: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours from now
+        readyForDelivery: true
+      }, 201);
+
+    } catch (error) {
+      // Rollback transaction on error
+      await transaction.rollback();
+      console.error('Handover to dispatch error:', error);
+      return ResponseHandler.error(res, 'Failed to handover product to dispatch', 500);
+    }
   }
 }

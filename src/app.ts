@@ -43,7 +43,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/coupon', couponRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/api/permissions', permissionRoutes);
-app.use('/api/picking', pickingRoutes);
+app.use('/api/picklist', pickingRoutes);
 app.use('/api/packing', packingRoutes);
 app.use('/api/handover', handoverRoutes);
 app.use('/api/warehouses', warehouseRoutes);

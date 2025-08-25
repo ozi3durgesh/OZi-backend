@@ -374,12 +374,19 @@ export interface PackingJobCreationAttributes {
   jobNumber?: string;
   waveId: number;
   packerId?: number;
+  status?: 'PENDING' | 'PACKING' | 'VERIFYING' | 'COMPLETED' | 'CANCELLED' | 'AWAITING_HANDOVER' | 'HANDOVER_ASSIGNED';
   priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   workflowType?: 'PICKER_PACKS' | 'DEDICATED_PACKER';
   specialInstructions?: string;
   slaDeadline?: Date;
   totalItems?: number;
+  packedItems?: number;
+  verifiedItems?: number;
   estimatedDuration?: number;
+  assignedAt?: Date;
+  startedAt?: Date;
+  completedAt?: Date;
+  handoverAt?: Date;
 }
 
 export interface PackingItemAttributes {
@@ -525,6 +532,12 @@ export interface HandoverCreationAttributes {
   status?: 'ASSIGNED' | 'CONFIRMED' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
   assignedAt?: Date;
   specialInstructions?: string;
+  trackingNumber?: string;
+  manifestNumber?: string;
+  lmsSyncStatus?: 'PENDING' | 'SYNCED' | 'FAILED' | 'RETRY';
+  lmsSyncAttempts?: number;
+  lmsLastSyncAt?: Date;
+  lmsErrorMessage?: string;
 }
 
 export interface LMSShipmentAttributes {

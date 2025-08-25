@@ -21,12 +21,16 @@ export class PickingController {
         priority = 'MEDIUM', 
         routeOptimization = true, 
         fefoRequired = false,
-        tagsAndBags = false,
-        maxOrdersPerWave = 20 
+        tagsAndBags = false
       } = req.body;
 
       if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
-        return ResponseHandler.error(res, 'Order IDs array is required', 400);
+        return ResponseHandler.error(res, 'Order IDs array is required. Please provide the order_id values (e.g., ["ozi17559724672480002"])', 400);
+      }
+
+      // Enforce one-order-per-wave restriction
+      if (orderIds.length > 1) {
+        return ResponseHandler.error(res, 'Only one order can be picked per wave. Multiple orders are not allowed.', 400);
       }
 
       // Check for duplicate order IDs in the request
@@ -49,112 +53,103 @@ export class PickingController {
 
       // Validate orders exist and are eligible for picking
       const orders = await Order.findAll({
-        where: { id: uniqueOrderIds },
-        attributes: ['id', 'order_amount', 'created_at', 'cart']
+        where: { order_id: uniqueOrderIds },
+        attributes: ['id', 'order_id', 'order_amount', 'created_at', 'cart']
       });
 
       if (orders.length !== uniqueOrderIds.length) {
-        return ResponseHandler.error(res, 'Some orders not found', 404);
+        return ResponseHandler.error(res, `Some order IDs not found: ${uniqueOrderIds.filter(id => !orders.find(order => order.get({ plain: true }).order_id === id)).join(', ')}`, 404);
       }
 
-      // Group orders into waves
+      // Create one wave per order (one-order-per-wave restriction)
       const waves: any[] = [];
-      for (let i = 0; i < orders.length; i += maxOrdersPerWave) {
-        const waveOrders = orders.slice(i, i + maxOrdersPerWave);
-        const waveNumber = `W${Date.now()}-${Math.floor(i / maxOrdersPerWave) + 1}`;
+      for (const order of orders) {
+        const orderData = order.get({ plain: true });
+        const waveNumber = `W${Date.now()}-${orderData.order_id}`;
         
         // Calculate SLA deadline (24 hours from now for demo)
         const slaDeadline = new Date(Date.now() + 24 * 60 * 60 * 1000);
         
-        // Calculate total items correctly - count the actual number of items in cart
+        // Calculate total items for this single order
         let totalItems = 0;
-        for (const order of waveOrders) {
-          const orderData = order.get({ plain: true });
-          console.log(`Order ${orderData.id} cart data:`, JSON.stringify(orderData.cart));
-          if (orderData.cart && Array.isArray(orderData.cart)) {
-            // Count the actual number of items in the cart, not the price amounts
-            // If cart items have quantity field, sum those; otherwise count by array length
-            totalItems += orderData.cart.reduce((sum: number, item: any) => {
-              return sum + (item.quantity || 1);
-            }, 0);
-          } else {
-            console.warn(`Order ${orderData.id} has invalid cart data:`, orderData.cart);
-          }
+        console.log(`Order ${orderData.order_id} cart data:`, JSON.stringify(orderData.cart));
+        if (orderData.cart && Array.isArray(orderData.cart)) {
+          // Count the actual number of items in the cart, not the price amounts
+          // If cart items have quantity field, sum those; otherwise count by array length
+          totalItems = orderData.cart.reduce((sum: number, item: any) => {
+            return sum + (item.quantity || 1);
+          }, 0);
+        } else {
+          console.warn(`Order ${orderData.id} has invalid cart data:`, orderData.cart);
         }
         
-        console.log(`Wave ${waveNumber}: ${waveOrders.length} orders, ${totalItems} total items`);
+        console.log(`Wave ${waveNumber}: 1 order (${orderData.order_id}), ${totalItems} total items`);
         
         const wave = await PickingWave.create({
           waveNumber,
           status: 'GENERATED',
           priority,
-          totalOrders: waveOrders.length,
+          totalOrders: 1, // Always 1 order per wave
           totalItems: totalItems,
-          estimatedDuration: Math.ceil(waveOrders.length * 2), // 2 minutes per order
+          estimatedDuration: 2, // 2 minutes per order (fixed for single order)
           slaDeadline,
           routeOptimization,
           fefoRequired,
           tagsAndBags
         } as any);
 
-        // Create picklist items for each order
+        // Create picklist items for this single order
         let actualTotalItems = 0;
         let createdItems = 0;
         
-        for (const order of waveOrders) {
-          const orderData = order.get({ plain: true });
-          console.log(`\n=== Processing order ${orderData.id} ===`);
-          console.log(`Order cart data:`, JSON.stringify(orderData.cart, null, 2));
+        if (orderData.cart && Array.isArray(orderData.cart)) {
+          console.log(`Cart is array with ${orderData.cart.length} items`);
           
-          if (orderData.cart && Array.isArray(orderData.cart)) {
-            console.log(`Cart is array with ${orderData.cart.length} items`);
+          for (let i = 0; i < orderData.cart.length; i++) {
+            const item = orderData.cart[i];
+            console.log(`\n--- Processing cart item ${i + 1} ---`);
+            console.log(`Item data:`, JSON.stringify(item, null, 2));
+            console.log(`Item type:`, typeof item);
+            console.log(`Item keys:`, Object.keys(item));
             
-            for (let i = 0; i < orderData.cart.length; i++) {
-              const item = orderData.cart[i];
-              console.log(`\n--- Processing cart item ${i + 1} ---`);
-              console.log(`Item data:`, JSON.stringify(item, null, 2));
-              console.log(`Item type:`, typeof item);
-              console.log(`Item keys:`, Object.keys(item));
+            // More flexible validation - check for sku and either amount or quantity
+            if (item && item.sku !== undefined && item.sku !== null) {
+              // For cart items with amount but no quantity, use amount as quantity
+              // This handles the case where cart items have {sku: 123, amount: 25.99}
+              const quantity = item.quantity || (item.amount ? 1 : 1);
+              console.log(`✓ Valid item - SKU: ${item.sku}, quantity: ${quantity}, amount: ${item.amount}`);
               
-              // More flexible validation - check for sku and either amount or quantity
-              if (item && item.sku !== undefined && item.sku !== null) {
-                // For cart items with amount but no quantity, use amount as quantity
-                // This handles the case where cart items have {sku: 123, amount: 25.99}
-                const quantity = item.quantity || (item.amount ? 1 : 1);
-                console.log(`✓ Valid item - SKU: ${item.sku}, quantity: ${quantity}, amount: ${item.amount}`);
+              try {
+                const picklistItem = await PicklistItem.create({
+                  waveId: wave.id,
+                  orderId: orderData.id, // Keep using internal ID for database relationships
+                  sku: item.sku.toString(), // Convert number to string for storage
+                  productName: `Product-${item.sku}`, // Generate product name from SKU
+                  binLocation: `A${Math.floor(Math.random() * 10) + 1}-B${Math.floor(Math.random() * 10) + 1}-C${Math.floor(Math.random() * 10) + 1}`, // Generate random bin location
+                  quantity: quantity, // Use quantity or default to 1
+                  scanSequence: Math.floor(Math.random() * 100) + 1, // Random sequence for demo
+                  fefoBatch: fefoRequired ? `BATCH-${Date.now()}` : undefined,
+                  expiryDate: fefoRequired ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : undefined
+                } as any);
                 
-                try {
-                  const picklistItem = await PicklistItem.create({
-                    waveId: wave.id,
-                    orderId: orderData.id,
-                    sku: item.sku.toString(), // Convert number to string for storage
-                    productName: `Product-${item.sku}`, // Generate product name from SKU
-                    binLocation: `A${Math.floor(Math.random() * 10) + 1}-B${Math.floor(Math.random() * 10) + 1}-C${Math.floor(Math.random() * 10) + 1}`, // Generate random bin location
-                    quantity: quantity, // Use quantity or default to 1
-                    scanSequence: Math.floor(Math.random() * 100) + 1, // Random sequence for demo
-                    fefoBatch: fefoRequired ? `BATCH-${Date.now()}` : undefined,
-                    expiryDate: fefoRequired ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : undefined
-                  } as any);
-                  
-                  console.log(`✓ Successfully created picklist item with ID: ${picklistItem.id}`);
-                  createdItems++;
-                  actualTotalItems += quantity;
-                  
-                } catch (createError) {
-                  console.error(`✗ Error creating picklist item:`, createError);
-                  console.error(`Error details:`, createError instanceof Error ? createError.message : String(createError));
-                }
-              } else {
-                console.warn(`✗ Skipping cart item without SKU:`, JSON.stringify(item));
-                console.warn(`Item.sku value:`, item?.sku);
-                console.warn(`Item.sku type:`, typeof item?.sku);
+                console.log(`✓ Successfully created picklist item with ID: ${picklistItem.id}`);
+                createdItems++;
+                actualTotalItems += quantity;
+                
+              } catch (createError) {
+                console.error(`✗ Error creating picklist item:`, createError);
+                console.error(`Error details:`, createError instanceof Error ? createError.message : String(createError));
               }
+            } else {
+              console.warn(`✗ Skipping cart item without SKU:`, JSON.stringify(item));
+              console.warn(`Item.sku value:`, item?.sku);
+              console.warn(`Item.sku type:`, typeof item?.sku);
             }
-          } else {
-            console.warn(`✗ Order ${orderData.id} has invalid cart data:`, orderData.cart);
-            console.warn(`Cart type:`, typeof orderData.cart);
-            console.warn(`Cart is array:`, Array.isArray(orderData.cart));
           }
+        } else {
+          console.warn(`✗ Order ${orderData.order_id} has invalid cart data:`, orderData.cart);
+          console.warn(`Cart type:`, typeof orderData.cart);
+          console.warn(`Cart is array:`, Array.isArray(orderData.cart));
         }
         
         console.log(`\n=== Summary for wave ${wave.id} ===`);
@@ -171,15 +166,16 @@ export class PickingController {
       }
 
       return ResponseHandler.success(res, {
-        message: `Generated ${waves.length} picking waves`,
-        waves: waves.map(wave => ({
+        message: `Generated ${waves.length} picking wave(s) - one order per wave`,
+        waves: waves.map((wave, index) => ({
           id: wave.id,
           waveNumber: wave.waveNumber,
           status: wave.status,
           totalOrders: wave.totalOrders,
           totalItems: wave.totalItems,
           estimatedDuration: wave.estimatedDuration,
-          slaDeadline: wave.slaDeadline
+          slaDeadline: wave.slaDeadline,
+          orderId: orders[index].get({ plain: true }).order_id // Include the order_id for each wave
         }))
       }, 201);
 
