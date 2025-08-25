@@ -24,6 +24,7 @@ import WarehouseStaffAssignment from './WarehouseStaffAssignment';
 import UniversalLog from './UniversalLog';
 import Product from './Product';
 import ProductVariant from './ProductVariant';
+import BarcodeMapping, { BarcodeItem } from './BarcodeMapping';
 
 // Set up associations
 Coupon.hasMany(CouponTranslation, {
@@ -176,5 +177,7 @@ export {
   UniversalLog,
   Product,
   ProductVariant,
-  OrderDetail
+  OrderDetail,
+  BarcodeMapping,
+  BarcodeItem
 };

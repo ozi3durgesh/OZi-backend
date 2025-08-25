@@ -1,6 +1,6 @@
 // controllers/pickingController.ts
 import { Request, Response } from 'express';
-import { PickingWave, PicklistItem, PickingException, User, Order } from '../models';
+import { PickingWave, PicklistItem, PickingException, User, Order, BarcodeMapping, BarcodeItem } from '../models';
 import { ResponseHandler } from '../middleware/responseHandler';
 import { OrderAttributes } from '../types';
 
@@ -286,6 +286,93 @@ export class PickingController {
   }
 
   /**
+   * Manually assign a specific wave to a specific picker
+   */
+  static async assignWaveToPicker(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { waveId, pickerId, priority } = req.body;
+
+      if (!waveId || !pickerId) {
+        return ResponseHandler.error(res, 'Wave ID and picker ID are required', 400);
+      }
+
+      // Validate wave exists and is available for assignment
+      const wave = await PickingWave.findByPk(waveId);
+      if (!wave) {
+        return ResponseHandler.error(res, 'Wave not found', 404);
+      }
+
+      if (wave.status !== 'GENERATED') {
+        return ResponseHandler.error(res, `Wave is not available for assignment. Current status: ${wave.status}`, 400);
+      }
+
+      // Validate picker exists and has picking permissions
+      const picker = await User.findByPk(pickerId, {
+        include: [{
+          association: 'Role',
+          include: ['Permissions']
+        }],
+        attributes: ['id', 'email', 'availabilityStatus', 'isActive']
+      });
+
+      if (!picker) {
+        return ResponseHandler.error(res, 'Picker not found', 404);
+      }
+
+      if (!picker.isActive) {
+        return ResponseHandler.error(res, 'Picker is not active', 400);
+      }
+
+      if (picker.availabilityStatus !== 'available') {
+        return ResponseHandler.error(res, `Picker is not available. Current status: ${picker.availabilityStatus}`, 400);
+      }
+
+      // Check if picker has picking permissions
+      const permissions = (picker as any).Role?.Permissions || [];
+      const hasPickingPermission = permissions.some((p: any) => 
+        p.module === 'picking' && ['view', 'assign_manage', 'execute'].includes(p.action)
+      );
+
+      if (!hasPickingPermission) {
+        return ResponseHandler.error(res, 'Picker does not have picking permissions', 403);
+      }
+
+      // Check if picker can handle more waves (max 3)
+      const pickerWaves = await PickingWave.count({
+        where: { pickerId: picker.id, status: ['ASSIGNED', 'PICKING'] }
+      });
+
+      if (pickerWaves >= 3) {
+        return ResponseHandler.error(res, 'Picker has reached maximum wave limit (3)', 400);
+      }
+
+      // Update wave with assignment
+      await wave.update({
+        status: 'ASSIGNED',
+        pickerId: picker.id,
+        assignedAt: new Date(),
+        priority: priority || wave.priority // Use provided priority or keep existing
+      });
+
+      return ResponseHandler.success(res, {
+        message: 'Wave assigned successfully',
+        assignment: {
+          waveId: wave.id,
+          waveNumber: wave.waveNumber,
+          pickerId: picker.id,
+          pickerEmail: picker.email,
+          assignedAt: wave.assignedAt,
+          priority: wave.priority
+        }
+      });
+
+    } catch (error) {
+      console.error('Assign wave to picker error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+  /**
    * List available waves
    */
   static async getAvailableWaves(req: AuthRequest, res: Response): Promise<Response> {
@@ -476,6 +563,270 @@ export class PickingController {
 
     } catch (error) {
       console.error('Scan item error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+  /**
+   * Scan bin location for validation using barcode mapping
+   */
+  static async scanBinLocation(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { waveId } = req.params;
+      const { scannedId } = req.body;
+      const pickerId = req.user!.id;
+
+      if (!scannedId) {
+        return ResponseHandler.error(res, 'Scanned ID is required', 400);
+      }
+
+      // Get wave to validate status and picker
+      const wave = await PickingWave.findByPk(waveId);
+      if (!wave) {
+        return ResponseHandler.error(res, 'Wave not found', 404);
+      }
+
+      if (wave.status !== 'PICKING') {
+        return ResponseHandler.error(res, 'Wave is not in picking status', 400);
+      }
+
+      if (wave.pickerId !== pickerId) {
+        return ResponseHandler.error(res, 'You are not assigned to this wave', 403);
+      }
+
+      // Find barcode mapping for the scanned ID
+      const barcodeMapping = await BarcodeMapping.findOne({
+        where: { 
+          barcode: scannedId,
+          isActive: true
+        },
+        include: [{
+          model: BarcodeItem,
+          as: 'Items',
+          where: { isActive: true },
+          required: false
+        }]
+      });
+
+      if (!barcodeMapping) {
+        return ResponseHandler.success(res, {
+          message: 'Barcode not found in system',
+          binLocationFound: false,
+          scannedId,
+          waveId: parseInt(waveId),
+          error: 'INVALID_BARCODE'
+        });
+      }
+
+      // Check if barcode contains bin location information
+      if (!barcodeMapping.binLocation) {
+        return ResponseHandler.success(res, {
+          message: 'Barcode does not contain bin location information',
+          binLocationFound: false,
+          scannedId,
+          waveId: parseInt(waveId),
+          error: 'NO_BIN_LOCATION'
+        });
+      }
+
+      // Get all SKUs at this bin location from barcode mapping
+      const barcodeItems = barcodeMapping.Items || [];
+      const availableSkus = barcodeItems.map(item => ({
+        sku: item.sku,
+        productName: item.productName,
+        quantity: item.quantity
+      }));
+
+      // Find picklist items with matching bin location
+      const picklistItems = await PicklistItem.findAll({
+        where: { 
+          waveId: parseInt(waveId),
+          binLocation: barcodeMapping.binLocation,
+          status: ['PENDING', 'PICKING']
+        }
+      });
+
+      const binLocationFound = picklistItems.length > 0;
+
+      return ResponseHandler.success(res, {
+        message: binLocationFound ? 'Bin location found' : 'Bin location not found',
+        binLocationFound,
+        scannedId,
+        barcodeType: barcodeMapping.barcodeType,
+        binLocation: barcodeMapping.binLocation,
+        availableSkus,
+        totalSkusAtLocation: availableSkus.length,
+        picklistItems: picklistItems.map(item => ({
+          id: item.id,
+          sku: item.sku,
+          productName: item.productName,
+          quantity: item.quantity,
+          status: item.status,
+          scanSequence: item.scanSequence
+        })),
+        waveId: parseInt(waveId)
+      });
+
+    } catch (error) {
+      console.error('Scan bin location error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+  /**
+   * Scan SKU for validation at bin location
+   */
+  static async scanSku(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { waveId } = req.params;
+      const { scannedId } = req.body;
+      const pickerId = req.user!.id;
+
+      if (!scannedId) {
+        return ResponseHandler.error(res, 'Scanned ID is required', 400);
+      }
+
+      // Get wave to validate status and picker
+      const wave = await PickingWave.findByPk(waveId);
+      if (!wave) {
+        return ResponseHandler.error(res, 'Wave not found', 404);
+      }
+
+      if (wave.status !== 'PICKING') {
+        return ResponseHandler.error(res, 'Wave is not in picking status', 400);
+      }
+
+      if (wave.pickerId !== pickerId) {
+        return ResponseHandler.error(res, 'You are not assigned to this wave', 403);
+      }
+
+      // Find barcode mapping for the scanned ID with all associated items
+      const barcodeMapping = await BarcodeMapping.findOne({
+        where: { 
+          barcode: scannedId,
+          isActive: true
+        },
+        include: [{
+          model: BarcodeItem,
+          as: 'Items',
+          where: { isActive: true },
+          required: false
+        }]
+      });
+
+      if (!barcodeMapping) {
+        return ResponseHandler.success(res, {
+          message: 'Barcode not found in system',
+          skuFound: false,
+          scannedId,
+          waveId: parseInt(waveId),
+          error: 'INVALID_BARCODE'
+        });
+      }
+
+      // Get all SKUs from this barcode
+      const barcodeItems = barcodeMapping.Items || [];
+      if (barcodeItems.length === 0) {
+        return ResponseHandler.success(res, {
+          message: 'Barcode does not contain any SKU information',
+          skuFound: false,
+          scannedId,
+          waveId: parseInt(waveId),
+          error: 'NO_SKUS'
+        });
+      }
+
+      // Check if barcode contains bin location information
+      if (!barcodeMapping.binLocation) {
+        return ResponseHandler.success(res, {
+          message: 'Barcode does not contain bin location information',
+          skuFound: false,
+          scannedId,
+          waveId: parseInt(waveId),
+          error: 'NO_BIN_LOCATION'
+        });
+      }
+
+      // Find picklist item with matching SKU at the current bin location
+      // First, get the current item being picked (assuming sequential picking)
+      const currentItem = await PicklistItem.findOne({
+        where: { 
+          waveId: parseInt(waveId),
+          status: ['PENDING', 'PICKING']
+        },
+        order: [['scanSequence', 'ASC']]
+      });
+
+      if (!currentItem) {
+        return ResponseHandler.success(res, {
+          message: 'No pending items found in this wave',
+          skuFound: false,
+          scannedId,
+          waveId: parseInt(waveId),
+          error: 'NO_PENDING_ITEMS'
+        });
+      }
+
+      // Check if scanned SKU matches the expected SKU at the current bin location
+      const skuFound = currentItem.sku === barcodeMapping.sku && 
+                      currentItem.binLocation === barcodeMapping.binLocation;
+
+      if (skuFound) {
+        // Update item status to PICKED
+        await currentItem.update({
+          status: 'PICKED',
+          pickedQuantity: currentItem.quantity,
+          pickedAt: new Date(),
+          pickedBy: pickerId
+        });
+
+        // Check if all items in wave are picked
+        const remainingItems = await PicklistItem.count({
+          where: { 
+            waveId: parseInt(waveId),
+            status: ['PENDING', 'PICKING']
+          }
+        });
+
+        if (remainingItems === 0) {
+          await wave.update({
+            status: 'COMPLETED',
+            completedAt: new Date()
+          });
+        }
+
+        return ResponseHandler.success(res, {
+          message: 'SKU validated and item picked successfully',
+          skuFound: true,
+          scannedBarcode: scannedId,
+          scannedSku: barcodeMapping.sku,
+          scannedBinLocation: barcodeMapping.binLocation,
+          item: {
+            id: currentItem.id,
+            sku: currentItem.sku,
+            productName: currentItem.productName,
+            status: 'PICKED',
+            pickedQuantity: currentItem.quantity,
+            remainingQuantity: 0
+          },
+          waveStatus: wave.status,
+          remainingItems
+        });
+      } else {
+        return ResponseHandler.success(res, {
+          message: 'SKU or bin location mismatch',
+          skuFound: false,
+          scannedId,
+          scannedSku: barcodeMapping.sku,
+          scannedBinLocation: barcodeMapping.binLocation,
+          expectedSku: currentItem.sku,
+          expectedBinLocation: currentItem.binLocation,
+          error: 'SKU_BIN_MISMATCH'
+        });
+      }
+
+    } catch (error) {
+      console.error('Scan SKU error:', error);
       return ResponseHandler.error(res, 'Internal server error', 500);
     }
   }

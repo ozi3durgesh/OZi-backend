@@ -24,7 +24,7 @@ export interface OrderDetailAttributes {
   updated_at: number;
 }
 
-export interface OrderDetailCreationAttributes extends Omit<OrderDetailAttributes, 'id' | 'created_at' | 'updated_at'> {}
+export interface OrderDetailCreationAttributes extends Omit<OrderDetailAttributes, 'id'> {}
 
 class OrderDetail extends Model<OrderDetailAttributes, OrderDetailCreationAttributes> {
   // Remove all public class field declarations to avoid Sequelize warnings

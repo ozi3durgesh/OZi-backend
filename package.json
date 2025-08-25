@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "nodemon",
     "build": "tsc && npm run copy-public",
-    "netlify:build": "tsc && npm run copy-public",
+    "netlify:build": "npm install typescript && tsc && npm run copy-public",
     "netlify-build": "npm install typescript && tsc && npm run copy-public",
     "copy-public": "cp -r public/* dist/",
     "start": "node dist/server.js",
@@ -24,6 +24,7 @@
     "test-full-registration": "tsx src/script/testFullRegistration.ts",
     "db:setup": "tsx src/script/setupDatabase.ts",
     "db:fix": "tsx src/script/fixDatabaseSchema.ts",
+    "db:validate": "tsx src/script/validateDatabaseSchema.ts",
     "db:seed": "tsx src/script/seedData.ts",
     "setup-log-table": "tsx src/script/setupLogTable.ts",
     "fix-log-table": "tsx src/script/fixUniversalLogTable.ts",
@@ -33,7 +34,8 @@
     "setup-warehouse": "tsx src/script/setupWarehouseTables.ts",
     "test-warehouse": "tsx src/script/testWarehouseModule.ts",
     "generate-mock-data": "tsx src/script/generateMockData.ts",
-    "test-packing": "tsx src/script/testPackingModule.ts"
+    "test-packing": "tsx src/script/testPackingModule.ts",
+    "add-product-1191": "tsx src/script/addProduct1191.ts"
   },
   "dependencies": {
     "aws-sdk": "^2.1691.0",

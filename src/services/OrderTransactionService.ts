@@ -396,30 +396,66 @@ export class OrderTransactionService {
           throw new Error(`Product with SKU ${item.sku} not found`);
         }
 
-        const orderDetail = await OrderDetail.create({
-          order_id: orderId,
-          product_id: product.id,
-          product_name: product.name,
-          sku: item.sku.toString(),
-          price: item.amount,
-          quantity: item.quantity || 1,
-          total_price: item.amount,
-          variant: null,
-          variation: null,
-          add_ons: null,
-          discount_on_item: 0,
-          discount_type: 'amount',
-          tax_amount: 0,
-          total_add_on_price: 0,
-          food_details: JSON.stringify({ sku: item.sku, amount: item.amount, quantity: item.quantity || 1 }),
-        }, { transaction });
+        try {
+          const orderDetail = await OrderDetail.create({
+            order_id: orderId,
+            product_id: product.id,
+            product_name: product.name,
+            sku: item.sku.toString(),
+            price: item.amount,
+            quantity: item.quantity || 1,
+            total_price: item.amount,
+            variant: null,
+            variation: null,
+            add_ons: null,
+            discount_on_item: 0,
+            discount_type: 'amount',
+            tax_amount: 0,
+            total_add_on_price: 0,
+            food_details: JSON.stringify({ sku: item.sku, amount: item.amount, quantity: item.quantity || 1 }),
+            created_at: currentTimestamp,
+            updated_at: currentTimestamp,
+          }, { transaction });
 
-        orderDetails.push(orderDetail);
+          orderDetails.push(orderDetail);
+        } catch (createError: any) {
+          // Enhanced error handling for OrderDetail creation
+          if (createError.name === 'SequelizeDatabaseError') {
+            if (createError.message && createError.message.includes('notNull Violation')) {
+              const matches = createError.message.match(/OrderDetail\.(\w+) cannot be null/g);
+              if (matches) {
+                const fields = matches.map((match: string) => 
+                  match.replace('OrderDetail.', '').replace(' cannot be null', '')
+                );
+                throw new Error(`Database schema error: Missing required fields (${fields.join(', ')}) in order_details table. Please contact support.`);
+              }
+              throw new Error('Database schema error: Required fields are missing in order_details table. Please contact support.');
+            }
+            
+            if (createError.message && createError.message.includes('foreign key constraint fails')) {
+              throw new Error('Database integrity error: Referenced order or product not found. Please contact support.');
+            }
+          }
+          
+          // Re-throw the original error if it's not a database constraint issue
+          throw createError;
+        }
       }
 
       return orderDetails;
     } catch (error) {
       console.error('Error creating order details:', error);
+      
+      // Provide more context for debugging
+      if (error instanceof Error) {
+        if (error.message.includes('Database schema error')) {
+          console.error('This appears to be a database schema issue. Please check:');
+          console.error('1. order_details table structure');
+          console.error('2. Required columns: created_at, updated_at');
+          console.error('3. Foreign key constraints');
+        }
+      }
+      
       throw error;
     }
   }

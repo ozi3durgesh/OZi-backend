@@ -61,6 +61,17 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Debug endpoint to check JWT configuration
+app.get('/debug/jwt', (req, res) => {
+  res.json({
+    jwtAccessSecret: process.env.JWT_ACCESS_SECRET ? 'Set' : 'Not set',
+    jwtRefreshSecret: process.env.JWT_REFRESH_SECRET ? 'Set' : 'Not set',
+    jwtAccessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN,
+    jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN,
+    nodeEnv: process.env.NODE_ENV
+  });
+});
+
 // Error handling middleware
 app.use(errorHandler);
 

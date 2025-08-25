@@ -22,6 +22,12 @@ router.get('/assign',
   PickingController.assignWaves
 );
 
+router.post('/assign', 
+  authenticate, 
+  hasPermission('picking:assign_manage'), 
+  PickingController.assignWaveToPicker
+);
+
 router.get('/available', 
   authenticate, 
   hasPermission('picking:view'), 
@@ -47,6 +53,21 @@ router.post('/:waveId/scan',
   hasPermission('picking:execute'), 
   checkAvailability, 
   PickingController.scanItem
+);
+
+// New scanning routes for bin location and SKU validation
+router.post('/:waveId/scan/binLocation', 
+  authenticate, 
+  hasPermission('picking:execute'), 
+  checkAvailability, 
+  PickingController.scanBinLocation
+);
+
+router.post('/:waveId/scan/sku', 
+  authenticate, 
+  hasPermission('picking:execute'), 
+  checkAvailability, 
+  PickingController.scanSku
 );
 
 router.post('/:waveId/partial', 
