@@ -1,6 +1,6 @@
 // controllers/pickingController.ts
 import { Request, Response } from 'express';
-import { PickingWave, PicklistItem, PickingException, User, Order, BarcodeMapping, BarcodeItem } from '../models';
+import { PickingWave, PicklistItem, PickingException, User, Order, ScannerBin, ScannerSku } from '../models';
 import { ResponseHandler } from '../middleware/responseHandler';
 import { OrderAttributes } from '../types';
 
@@ -568,16 +568,16 @@ export class PickingController {
   }
 
   /**
-   * Scan bin location for validation using barcode mapping
+   * Scan bin location for validation using new scanner tables
    */
   static async scanBinLocation(req: AuthRequest, res: Response): Promise<Response> {
     try {
       const { waveId } = req.params;
-      const { scannedId } = req.body;
+      const { scannedId, skuID, binlocation } = req.body;
       const pickerId = req.user!.id;
 
-      if (!scannedId) {
-        return ResponseHandler.error(res, 'Scanned ID is required', 400);
+      if (!scannedId || !skuID || !binlocation) {
+        return ResponseHandler.error(res, 'scannedId, skuID, and binlocation are required', 400);
       }
 
       // Get wave to validate status and picker
@@ -594,54 +594,47 @@ export class PickingController {
         return ResponseHandler.error(res, 'You are not assigned to this wave', 403);
       }
 
-      // Find barcode mapping for the scanned ID
-      const barcodeMapping = await BarcodeMapping.findOne({
-        where: { 
-          barcode: scannedId,
-          isActive: true
-        },
-        include: [{
-          model: BarcodeItem,
-          as: 'Items',
-          where: { isActive: true },
-          required: false
-        }]
+      // Check if scannedId and binlocation match
+      if (scannedId !== binlocation) {
+        return ResponseHandler.error(res, 'Scanned ID and bin location do not match', 400);
+      }
+
+      // Find bin location in scanner_bin table
+      const scannerBin = await ScannerBin.findOne({
+        where: { binLocationScanId: binlocation }
       });
 
-      if (!barcodeMapping) {
+      if (!scannerBin) {
         return ResponseHandler.success(res, {
-          message: 'Barcode not found in system',
+          message: 'Bin location not found in system',
           binLocationFound: false,
           scannedId,
+          binlocation,
           waveId: parseInt(waveId),
-          error: 'INVALID_BARCODE'
+          error: 'INVALID_BIN_LOCATION'
         });
       }
 
-      // Check if barcode contains bin location information
-      if (!barcodeMapping.binLocation) {
+      // Check if SKU exists in the bin location's SKU array
+      const skuExists = scannerBin.sku.includes(skuID);
+      
+      if (!skuExists) {
         return ResponseHandler.success(res, {
-          message: 'Barcode does not contain bin location information',
+          message: 'SKU not found at this bin location',
           binLocationFound: false,
           scannedId,
+          skuID,
+          binlocation,
           waveId: parseInt(waveId),
-          error: 'NO_BIN_LOCATION'
+          error: 'SKU_NOT_FOUND_AT_LOCATION'
         });
       }
-
-      // Get all SKUs at this bin location from barcode mapping
-      const barcodeItems = barcodeMapping.Items || [];
-      const availableSkus = barcodeItems.map(item => ({
-        sku: item.sku,
-        productName: item.productName,
-        quantity: item.quantity
-      }));
 
       // Find picklist items with matching bin location
       const picklistItems = await PicklistItem.findAll({
         where: { 
           waveId: parseInt(waveId),
-          binLocation: barcodeMapping.binLocation,
+          binLocation: binlocation,
           status: ['PENDING', 'PICKING']
         }
       });
@@ -649,13 +642,13 @@ export class PickingController {
       const binLocationFound = picklistItems.length > 0;
 
       return ResponseHandler.success(res, {
-        message: binLocationFound ? 'Bin location found' : 'Bin location not found',
+        message: binLocationFound ? 'Bin location and SKU validated successfully' : 'Bin location validated but no picklist items found',
         binLocationFound,
         scannedId,
-        barcodeType: barcodeMapping.barcodeType,
-        binLocation: barcodeMapping.binLocation,
-        availableSkus,
-        totalSkusAtLocation: availableSkus.length,
+        skuID,
+        binlocation,
+        availableSkus: scannerBin.sku,
+        totalSkusAtLocation: scannerBin.sku.length,
         picklistItems: picklistItems.map(item => ({
           id: item.id,
           sku: item.sku,
@@ -674,16 +667,16 @@ export class PickingController {
   }
 
   /**
-   * Scan SKU for validation at bin location
+   * Scan SKU for validation using new scanner tables
    */
   static async scanSku(req: AuthRequest, res: Response): Promise<Response> {
     try {
       const { waveId } = req.params;
-      const { scannedId } = req.body;
+      const { scannedId, skuID, binlocation } = req.body;
       const pickerId = req.user!.id;
 
-      if (!scannedId) {
-        return ResponseHandler.error(res, 'Scanned ID is required', 400);
+      if (!scannedId || !skuID || !binlocation) {
+        return ResponseHandler.error(res, 'scannedId, skuID, and binlocation are required', 400);
       }
 
       // Get wave to validate status and picker
@@ -700,130 +693,104 @@ export class PickingController {
         return ResponseHandler.error(res, 'You are not assigned to this wave', 403);
       }
 
-      // Find barcode mapping for the scanned ID with all associated items
-      const barcodeMapping = await BarcodeMapping.findOne({
-        where: { 
-          barcode: scannedId,
-          isActive: true
-        },
-        include: [{
-          model: BarcodeItem,
-          as: 'Items',
-          where: { isActive: true },
-          required: false
-        }]
+      // Check if scannedId and skuID match
+      if (scannedId !== skuID) {
+        return ResponseHandler.error(res, 'Scanned ID and SKU ID do not match', 400);
+      }
+
+      // Find SKU scan in scanner_sku table
+      const scannerSku = await ScannerSku.findOne({
+        where: { skuScanId: skuID }
       });
 
-      if (!barcodeMapping) {
+      if (!scannerSku) {
         return ResponseHandler.success(res, {
-          message: 'Barcode not found in system',
+          message: 'SKU scan not found in system',
           skuFound: false,
           scannedId,
+          skuID,
           waveId: parseInt(waveId),
-          error: 'INVALID_BARCODE'
+          error: 'INVALID_SKU_SCAN'
         });
       }
 
-      // Get all SKUs from this barcode
-      const barcodeItems = barcodeMapping.Items || [];
-      if (barcodeItems.length === 0) {
+      // Check if binlocation matches the binLocationScanId in scanner_sku table
+      if (scannerSku.binLocationScanId !== binlocation) {
         return ResponseHandler.success(res, {
-          message: 'Barcode does not contain any SKU information',
+          message: 'Bin location does not match SKU scan location',
           skuFound: false,
           scannedId,
+          skuID,
+          binlocation,
+          expectedBinLocation: scannerSku.binLocationScanId,
           waveId: parseInt(waveId),
-          error: 'NO_SKUS'
+          error: 'BIN_LOCATION_MISMATCH'
         });
       }
 
-      // Check if barcode contains bin location information
-      if (!barcodeMapping.binLocation) {
-        return ResponseHandler.success(res, {
-          message: 'Barcode does not contain bin location information',
-          skuFound: false,
-          scannedId,
-          waveId: parseInt(waveId),
-          error: 'NO_BIN_LOCATION'
-        });
-      }
-
-      // Find picklist item with matching SKU at the current bin location
-      // First, get the current item being picked (assuming sequential picking)
+      // Find picklist item with matching SKU and bin location
       const currentItem = await PicklistItem.findOne({
         where: { 
           waveId: parseInt(waveId),
+          sku: skuID,
+          binLocation: binlocation,
           status: ['PENDING', 'PICKING']
-        },
-        order: [['scanSequence', 'ASC']]
+        }
       });
 
       if (!currentItem) {
         return ResponseHandler.success(res, {
-          message: 'No pending items found in this wave',
+          message: 'No matching picklist item found',
           skuFound: false,
           scannedId,
+          skuID,
+          binlocation,
           waveId: parseInt(waveId),
-          error: 'NO_PENDING_ITEMS'
+          error: 'NO_MATCHING_PICKLIST_ITEM'
         });
       }
 
-      // Check if scanned SKU matches the expected SKU at the current bin location
-      const skuFound = currentItem.sku === barcodeMapping.sku && 
-                      currentItem.binLocation === barcodeMapping.binLocation;
+      // Update item status to PICKED
+      await currentItem.update({
+        status: 'PICKED',
+        pickedQuantity: currentItem.quantity,
+        pickedAt: new Date(),
+        pickedBy: pickerId
+      });
 
-      if (skuFound) {
-        // Update item status to PICKED
-        await currentItem.update({
+      // Check if all items in wave are picked
+      const remainingItems = await PicklistItem.count({
+        where: { 
+          waveId: parseInt(waveId),
+          status: ['PENDING', 'PICKING']
+        }
+      });
+
+      if (remainingItems === 0) {
+        await wave.update({
+          status: 'COMPLETED',
+          completedAt: new Date()
+        });
+      }
+
+      return ResponseHandler.success(res, {
+        message: 'SKU validated and item picked successfully',
+        skuFound: true,
+        scannedId,
+        skuID,
+        binlocation,
+        skuData: scannerSku.sku,
+        item: {
+          id: currentItem.id,
+          sku: currentItem.sku,
+          productName: currentItem.productName,
           status: 'PICKED',
           pickedQuantity: currentItem.quantity,
-          pickedAt: new Date(),
-          pickedBy: pickerId
-        });
-
-        // Check if all items in wave are picked
-        const remainingItems = await PicklistItem.count({
-          where: { 
-            waveId: parseInt(waveId),
-            status: ['PENDING', 'PICKING']
-          }
-        });
-
-        if (remainingItems === 0) {
-          await wave.update({
-            status: 'COMPLETED',
-            completedAt: new Date()
-          });
-        }
-
-        return ResponseHandler.success(res, {
-          message: 'SKU validated and item picked successfully',
-          skuFound: true,
-          scannedBarcode: scannedId,
-          scannedSku: barcodeMapping.sku,
-          scannedBinLocation: barcodeMapping.binLocation,
-          item: {
-            id: currentItem.id,
-            sku: currentItem.sku,
-            productName: currentItem.productName,
-            status: 'PICKED',
-            pickedQuantity: currentItem.quantity,
-            remainingQuantity: 0
-          },
-          waveStatus: wave.status,
-          remainingItems
-        });
-      } else {
-        return ResponseHandler.success(res, {
-          message: 'SKU or bin location mismatch',
-          skuFound: false,
-          scannedId,
-          scannedSku: barcodeMapping.sku,
-          scannedBinLocation: barcodeMapping.binLocation,
-          expectedSku: currentItem.sku,
-          expectedBinLocation: currentItem.binLocation,
-          error: 'SKU_BIN_MISMATCH'
-        });
-      }
+          remainingQuantity: 0
+        },
+        waveStatus: wave.status,
+        remainingItems
+      });
 
     } catch (error) {
       console.error('Scan SKU error:', error);

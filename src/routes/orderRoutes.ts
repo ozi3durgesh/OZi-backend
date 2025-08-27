@@ -18,6 +18,12 @@ router.get('/coupon/:coupon_code',
   OrderController.getCouponDetails
 );
 
+// New order management endpoints - must come before parameterized routes
+router.post('/cancel', OrderController.cancelOrder);
+router.get('/track', OrderController.trackOrder);
+router.post('/refund-request', OrderController.refundRequest);
+
+// Parameterized routes - must come after specific routes
 router.get('/:id', 
   OrderController.getOrderById
 );

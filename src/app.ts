@@ -13,8 +13,9 @@ import pickingRoutes from './routes/pickingRoutes';
 import packingRoutes from './routes/packingRoutes';
 import handoverRoutes from './routes/handoverRoutes';
 import warehouseRoutes from './routes/warehouseRoutes';
+import paymentRoutes from './routes/paymentRoutes';
 import { errorHandler } from './middleware/errorHandler';
-import UniversalLogger from './middleware/universalLogger';
+
 
 const app = express();
 
@@ -33,8 +34,7 @@ app.use(limiter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Universal logging middleware - must be after body parsing but before routes
-app.use(UniversalLogger.logRequest);
+
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -50,6 +50,9 @@ app.use('/api/warehouses', warehouseRoutes);
 
 // PHP Production Compatible Routes
 app.use('/api/v1/customer/order', orderRoutes);
+
+// Payment routes
+app.use('/payment', paymentRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

@@ -1,7 +1,6 @@
-// models/index.ts
+// models/index.ts - Only includes models actually used in the application
 import User from './User';
 import Order from './Order';
-import OrderDetail from './OrderDetail';
 import Coupon from './Coupon';
 import CouponTranslation from './CouponTranslation';
 import Role from './Role';
@@ -12,19 +11,18 @@ import PicklistItem from './PicklistItem';
 import PickingException from './PickingException';
 import PackingJob from './PackingJob';
 import PackingItem from './PackingItem';
-import PhotoEvidence from './PhotoEvidence';
-import Seal from './Seal';
-import Rider from './Rider';
 import Handover from './Handover';
 import LMSShipment from './LMSShipment';
 import PackingEvent from './PackingEvent';
 import Warehouse from './Warehouse';
 import WarehouseZone from './WarehouseZone';
 import WarehouseStaffAssignment from './WarehouseStaffAssignment';
-import UniversalLog from './UniversalLog';
-import Product from './Product';
-import ProductVariant from './ProductVariant';
-import BarcodeMapping, { BarcodeItem } from './BarcodeMapping';
+import Rider from './Rider';
+import ScannerBin from './ScannerBin';
+import ScannerSku from './ScannerSku';
+import PaymentRequest from './PaymentRequest';
+import OrderPayment from './OrderPayment';
+import OrderTransaction from './OrderTransaction';
 
 // Set up associations
 Coupon.hasMany(CouponTranslation, {
@@ -86,27 +84,6 @@ PackingItem.belongsTo(PackingJob, { foreignKey: 'jobId', as: 'Job' });
 PackingItem.belongsTo(Order, { foreignKey: 'orderId', as: 'Order' });
 Order.hasMany(PackingItem, { foreignKey: 'orderId', as: 'PackingItems' });
 
-PackingJob.hasMany(PhotoEvidence, { foreignKey: 'jobId', as: 'PhotoEvidence' });
-PhotoEvidence.belongsTo(PackingJob, { foreignKey: 'jobId', as: 'Job' });
-
-PhotoEvidence.belongsTo(Order, { foreignKey: 'orderId', as: 'Order' });
-Order.hasMany(PhotoEvidence, { foreignKey: 'orderId', as: 'PhotoEvidence' });
-
-PhotoEvidence.belongsTo(User, { foreignKey: 'verifiedBy', as: 'VerifiedBy' });
-User.hasMany(PhotoEvidence, { foreignKey: 'verifiedBy', as: 'VerifiedPhotos' });
-
-PackingJob.hasMany(Seal, { foreignKey: 'jobId', as: 'Seals' });
-Seal.belongsTo(PackingJob, { foreignKey: 'jobId', as: 'Job' });
-
-Seal.belongsTo(Order, { foreignKey: 'orderId', as: 'Order' });
-Order.hasMany(Seal, { foreignKey: 'orderId', as: 'Seals' });
-
-Seal.belongsTo(User, { foreignKey: 'appliedBy', as: 'AppliedBy' });
-User.hasMany(Seal, { foreignKey: 'appliedBy', as: 'AppliedSeals' });
-
-Seal.belongsTo(User, { foreignKey: 'verifiedBy', as: 'VerifiedBy' });
-User.hasMany(Seal, { foreignKey: 'verifiedBy', as: 'VerifiedSeals' });
-
 PackingJob.hasOne(Handover, { foreignKey: 'jobId', as: 'Handover' });
 Handover.belongsTo(PackingJob, { foreignKey: 'jobId', as: 'Job' });
 
@@ -116,7 +93,7 @@ Rider.hasMany(Handover, { foreignKey: 'riderId', as: 'Handovers' });
 Handover.belongsTo(User, { foreignKey: 'cancellationBy', as: 'CancelledBy' });
 User.hasMany(Handover, { foreignKey: 'cancellationBy', as: 'CancelledHandovers' });
 
-Handover.hasMany(LMSShipment, { foreignKey: 'handoverId', as: 'LMSShipments' });
+Handover.hasMany(LMSShipment, { foreignKey: 'handoverId', as: 'LMSShips' });
 LMSShipment.belongsTo(Handover, { foreignKey: 'handoverId', as: 'Handover' });
 
 PackingJob.hasMany(PackingEvent, { foreignKey: 'jobId', as: 'Events' });
@@ -140,17 +117,19 @@ WarehouseStaffAssignment.belongsTo(Warehouse, { foreignKey: 'warehouse_id', as: 
 WarehouseStaffAssignment.belongsTo(User, { foreignKey: 'user_id', as: 'User' });
 User.hasMany(WarehouseStaffAssignment, { foreignKey: 'user_id', as: 'StaffAssignments' });
 
-// Product associations
-Product.hasMany(ProductVariant, { foreignKey: 'product_id', as: 'Variants' });
-ProductVariant.belongsTo(Product, { foreignKey: 'product_id', as: 'Product' });
+// Payment associations
+Order.hasMany(PaymentRequest, { foreignKey: 'order_id', as: 'PaymentRequests' });
+PaymentRequest.belongsTo(Order, { foreignKey: 'order_id', as: 'Order' });
 
-// Order-OrderDetail associations
-Order.hasMany(OrderDetail, { foreignKey: 'order_id', as: 'OrderDetails' });
-OrderDetail.belongsTo(Order, { foreignKey: 'order_id', as: 'Order' });
+Order.hasMany(OrderPayment, { foreignKey: 'order_id', as: 'OrderPayments' });
+OrderPayment.belongsTo(Order, { foreignKey: 'order_id', as: 'Order' });
 
-// OrderDetail-Product associations
-OrderDetail.belongsTo(Product, { foreignKey: 'product_id', as: 'Product' });
-Product.hasMany(OrderDetail, { foreignKey: 'product_id', as: 'OrderDetails' });
+Order.hasMany(OrderTransaction, { foreignKey: 'order_id', as: 'OrderTransactions' });
+OrderTransaction.belongsTo(Order, { foreignKey: 'order_id', as: 'Order' });
+
+// Scanner associations
+ScannerBin.hasMany(ScannerSku, { foreignKey: 'binLocationScanId', sourceKey: 'binLocationScanId', as: 'SkuScans' });
+ScannerSku.belongsTo(ScannerBin, { foreignKey: 'binLocationScanId', targetKey: 'binLocationScanId', as: 'BinLocation' });
 
 export { 
   User, 
@@ -165,19 +144,16 @@ export {
   PickingException,
   PackingJob,
   PackingItem,
-  PhotoEvidence,
-  Seal,
-  Rider,
   Handover,
   LMSShipment,
   PackingEvent,
   Warehouse,
   WarehouseZone,
   WarehouseStaffAssignment,
-  UniversalLog,
-  Product,
-  ProductVariant,
-  OrderDetail,
-  BarcodeMapping,
-  BarcodeItem
+  Rider,
+  ScannerBin,
+  ScannerSku,
+  PaymentRequest,
+  OrderPayment,
+  OrderTransaction
 };
