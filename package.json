@@ -26,7 +26,9 @@
     "db:validate": "tsx src/script/validateDatabaseSchema.ts",
     "script:fix-order-ids": "tsx src/script/fixExistingOrderIds.ts",
     "test-warehouse": "tsx src/script/testWarehouseModule.ts",
-    "test-new-scanning": "tsx src/script/testNewScanningFlow.ts"
+    "test-new-scanning": "tsx src/script/testNewScanningFlow.ts",
+    "init-scanner": "tsx src/script/initScannerTables.ts",
+    "test-scanner-lookup": "tsx src/script/testScannerLookup.ts"
   },
   "dependencies": {
     "aws-sdk": "^2.1691.0",

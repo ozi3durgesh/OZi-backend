@@ -115,7 +115,7 @@ async function testPickingWaveGeneration() {
             orderId: orderData.id,
             sku: item.sku.toString(),
             productName: `Product-${item.sku}`,
-            binLocation: `A${Math.floor(Math.random() * 10) + 1}-B${Math.floor(Math.random() * 10) + 1}-C${Math.floor(Math.random() * 10) + 1}`,
+                              binLocation: 'Z05B02R02S4B1', // Use actual bin location from scanner system
             quantity: quantity,
             scanSequence: Math.floor(Math.random() * 100) + 1,
             pickedQuantity: 0,

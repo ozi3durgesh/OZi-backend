@@ -5,7 +5,7 @@ import sequelize from '../config/database';
 export interface ScannerSkuAttributes {
   id: number;
   skuScanId: string;
-  sku: string;
+  sku: Array<{ skuId: string; quantity: number }>;
   binLocationScanId: string;
   createdAt: Date;
   updatedAt: Date;
@@ -16,7 +16,7 @@ export interface ScannerSkuCreationAttributes extends Omit<ScannerSkuAttributes,
 class ScannerSku extends Model<ScannerSkuAttributes, ScannerSkuCreationAttributes> implements ScannerSkuAttributes {
   declare id: number;
   declare skuScanId: string;
-  declare sku: string;
+  declare sku: Array<{ skuId: string; quantity: number }>;
   declare binLocationScanId: string;
   declare createdAt: Date;
   declare updatedAt: Date;
@@ -35,9 +35,9 @@ ScannerSku.init({
     comment: 'Alphanumeric SKU scan ID',
   },
   sku: {
-    type: DataTypes.TEXT,
+    type: DataTypes.JSON,
     allowNull: false,
-    comment: 'SKU information as JSON string or comma-separated values',
+    comment: 'JSON object with SKU information',
   },
   binLocationScanId: {
     type: DataTypes.STRING(100),

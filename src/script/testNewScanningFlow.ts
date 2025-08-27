@@ -34,15 +34,8 @@ async function testNewScanningFlow() {
     });
     
     if (bin) {
-      // Parse SKU string - it's stored as comma-separated values or JSON string
-      let skuArray: string[] = [];
-      try {
-        // Try to parse as JSON first
-        skuArray = JSON.parse(bin.sku);
-      } catch {
-        // If not JSON, split by comma
-        skuArray = bin.sku.split(',').map(s => s.trim()).filter(s => s.length > 0);
-      }
+      // SKU is now stored as JSON array directly
+      const skuArray = bin.sku;
       
       const skuExists = skuArray.includes(testSku);
       console.log(`✓ Bin location ${testBinLocation} found`);
@@ -82,13 +75,8 @@ async function testNewScanningFlow() {
     
     // Check if SKU exists at bin location
     if (bin) {
-      // Parse SKU string for validation
-      let skuArray: string[] = [];
-      try {
-        skuArray = JSON.parse(bin.sku);
-      } catch {
-        skuArray = bin.sku.split(',').map(s => s.trim()).filter(s => s.length > 0);
-      }
+      // SKU is now stored as JSON array directly
+      const skuArray = bin.sku;
       
       const skuExistsAtLocation = skuArray.includes(validSkuId);
       console.log(`✓ SKU ${validSkuId} exists at bin location: ${skuExistsAtLocation}`);

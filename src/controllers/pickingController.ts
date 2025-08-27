@@ -120,12 +120,37 @@ export class PickingController {
               console.log(`✓ Valid item - SKU: ${item.sku}, quantity: ${quantity}, amount: ${item.amount}`);
               
               try {
+                // Find the SKU in ScannerSku table to get bin location
+                const scannerSku = await ScannerSku.findOne({
+                  where: { skuScanId: item.sku.toString() }
+                });
+
+                if (!scannerSku) {
+                  console.error(`✗ SKU ${item.sku} not found in ScannerSku table`);
+                  throw new Error(`SKU ${item.sku} not found in scanner system. Please ensure the SKU is properly scanned and registered.`);
+                }
+
+                // Get the bin location from ScannerBin table
+                const scannerBin = await ScannerBin.findOne({
+                  where: {
+                    binLocationScanId: scannerSku.binLocationScanId
+                  }
+                });
+
+                if (!scannerBin) {
+                  console.error(`✗ Bin location not found for SKU ${item.sku} with binLocationScanId: ${scannerSku.binLocationScanId}`);
+                  throw new Error(`Bin location not found for SKU ${item.sku}. Please ensure the bin location is properly scanned and registered.`);
+                }
+
+                // Use the actual bin location from scanner system
+                const binLocation = scannerBin.binLocationScanId;
+
                 const picklistItem = await PicklistItem.create({
                   waveId: wave.id,
                   orderId: orderData.id, // Keep using internal ID for database relationships
                   sku: item.sku.toString(), // Convert number to string for storage
                   productName: `Product-${item.sku}`, // Generate product name from SKU
-                  binLocation: `A${Math.floor(Math.random() * 10) + 1}-B${Math.floor(Math.random() * 10) + 1}-C${Math.floor(Math.random() * 10) + 1}`, // Generate random bin location
+                  binLocation: binLocation, // Use actual bin location from scanner system
                   quantity: quantity, // Use quantity or default to 1
                   scanSequence: Math.floor(Math.random() * 100) + 1, // Random sequence for demo
                   fefoBatch: fefoRequired ? `BATCH-${Date.now()}` : undefined,

@@ -5,7 +5,7 @@ import sequelize from '../config/database';
 export interface ScannerBinAttributes {
   id: number;
   binLocationScanId: string;
-  sku: string;
+  sku: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -15,7 +15,7 @@ export interface ScannerBinCreationAttributes extends Omit<ScannerBinAttributes,
 class ScannerBin extends Model<ScannerBinAttributes, ScannerBinCreationAttributes> implements ScannerBinAttributes {
   declare id: number;
   declare binLocationScanId: string;
-  declare sku: string;
+  declare sku: string[];
   declare createdAt: Date;
   declare updatedAt: Date;
 }
@@ -33,9 +33,9 @@ ScannerBin.init({
     comment: 'Alphanumeric bin location scan ID',
   },
   sku: {
-    type: DataTypes.TEXT,
+    type: DataTypes.JSON,
     allowNull: false,
-    comment: 'Comma-separated SKU IDs or JSON string',
+    comment: 'JSON array of SKU IDs',
   },
   createdAt: {
     type: DataTypes.DATE,
