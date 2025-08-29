@@ -1,0 +1,48 @@
+import { DataTypes, Model } from 'sequelize';
+import sequelize from '../config/database';
+import { GRNBatchAttributes, GRNBatchCreationAttributes } from '../types';
+
+class GRNBatch
+  extends Model<GRNBatchAttributes, GRNBatchCreationAttributes>
+  implements GRNBatchAttributes
+{
+  public id!: number;
+  public grn_line_id!: number;
+  public batch_no!: string;
+  public expiry_date!: Date;
+  public qty!: number;
+}
+
+GRNBatch.init(
+  {
+    id: {
+      type: DataTypes.INTEGER,
+      autoIncrement: true,
+      primaryKey: true,
+    },
+    grn_line_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+    batch_no: {
+      type: DataTypes.STRING(50),
+      allowNull: false,
+    },
+    expiry_date: {
+      type: DataTypes.DATE,
+      allowNull: false,
+    },
+    qty: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+  },
+  {
+    sequelize,
+    tableName: 'grn_batches',
+    timestamps: false,
+    indexes: [{ fields: ['grn_line_id'] }],
+  }
+);
+
+export default GRNBatch;

@@ -13,6 +13,7 @@ import pickingRoutes from './routes/pickingRoutes';
 import packingRoutes from './routes/packingRoutes';
 import handoverRoutes from './routes/handoverRoutes';
 import warehouseRoutes from './routes/warehouseRoutes';
+import grnRoutes from './routes/grnRoutes';
 import { errorHandler } from './middleware/errorHandler';
 import UniversalLogger from './middleware/universalLogger';
 
@@ -47,6 +48,7 @@ app.use('/api/picking', pickingRoutes);
 app.use('/api/packing', packingRoutes);
 app.use('/api/handover', handoverRoutes);
 app.use('/api/warehouses', warehouseRoutes);
+app.use('/api/grn', grnRoutes);
 
 // PHP Production Compatible Routes
 app.use('/api/v1/customer/order', orderRoutes);
