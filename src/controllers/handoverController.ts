@@ -10,6 +10,8 @@ import {
 } from '../types';
 import sequelize from '../config/database';
 import { ResponseHandler } from '../middleware/responseHandler';
+import Wave from "../models/wave";
+ 
 
 interface AuthRequest extends Request {
   user?: any;
@@ -705,3 +707,86 @@ export class HandoverController {
     }
   }
 }
+
+export const dispatchWave = async (req: Request, res: Response) => {
+  try {
+    const { waveId } = req.params;
+    const { riderId, dispatchNotes } = req.body;
+    const handoverPhoto = req.file; // multer saves here
+    const staffId = (req as any).user.id; // JWT decoded userId
+
+    // 1. Validate Wave
+    const wave = await Wave.findByPk(waveId);
+    if (!wave) {
+      return res.status(404).json({ success: false, message: "Wave not found" });
+    }
+
+   if (!["PACKED", "CREATED"].includes(wave.status)) {
+  return res.status(400).json({ success: false, message: "Wave not ready for dispatch" });
+}
+
+// 2. Validate Rider
+const rider = await Rider.findOne({
+  where: {
+    id: riderId,
+    isActive: true,
+    availabilityStatus: "AVAILABLE", // must match Rider ENUM (uppercase)
+  },
+});
+
+if (!rider) {
+  return res.status(400).json({ success: false, message: "Rider not available" });
+}
+
+    // 3. Update Wave → Dispatched
+    wave.status = "DISPATCHED";
+    wave.handoverAt = new Date();
+    wave.handoverBy = staffId;
+    wave.riderId = rider.id;
+    wave.dispatchNotes = dispatchNotes || null;
+    if (handoverPhoto) {
+      wave.handoverPhoto = handoverPhoto.path;
+    }
+    await wave.save();
+
+    // 4. Response
+    return res.status(200).json({
+      statusCode: 200,
+      success: true,
+      message: "Order dispatched successfully",
+      data: {
+        waveId: wave.id,
+        status: wave.status,
+        handoverAt: wave.handoverAt,
+        handoverBy: { id: staffId },
+        deliveryPartner: {
+          id: rider.id,
+          riderCode: rider.riderCode,
+          name: rider.name,
+          phone: rider.phone,
+          email: rider.email,
+          vehicleType: rider.vehicleType,
+          vehicleNumber: rider.vehicleNumber,
+          availabilityStatus: rider.availabilityStatus,
+          rating: rider.rating,
+          totalDeliveries: rider.totalDeliveries,
+        },
+        photo: handoverPhoto
+          ? {
+              filename: handoverPhoto.filename,
+              path: handoverPhoto.path,
+              mimetype: handoverPhoto.mimetype,
+              size: handoverPhoto.size,
+            }
+          : null,
+      },
+    });
+  } catch (error: any) {
+    console.error("Dispatch Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to dispatch order",
+      error: error.message,
+    });
+  }
+};

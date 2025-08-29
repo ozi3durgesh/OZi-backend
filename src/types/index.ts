@@ -40,6 +40,7 @@ export interface JwtPayload {
   permissions: string[];
 }
 
+// types.ts
 export interface UserAttributes {
   id: number;
   email: string;
@@ -49,6 +50,16 @@ export interface UserAttributes {
   availabilityStatus: 'available' | 'break' | 'off-shift';
   createdAt: Date;
   updatedAt: Date;
+
+  // Rider-specific fields if you want them here
+  riderCode?: string;
+  name?: string;
+  phone?: string;
+  vehicleType?: string;
+  vehicleNumber?: string;
+  currentLocation?: string;
+  rating?: number;
+  totalDeliveries?: number;
 }
 
 export interface UserCreationAttributes {
@@ -58,6 +69,7 @@ export interface UserCreationAttributes {
   isActive?: boolean;
   availabilityStatus?: 'available' | 'break' | 'off-shift';
 }
+
 
 // Add these to your existing types/index.ts file
 
