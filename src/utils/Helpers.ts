@@ -87,7 +87,7 @@ export class Helpers {
       // Detect if current domain matches vestiqq.com
       const currentDomain = process.env.CURRENT_DOMAIN || 'localhost';
       
-      if (currentDomain.includes('vestiqq.com') || currentDomain === 'localhost') {
+      if (!currentDomain.includes('admin.ozi.in')) {
         // Just log and return without placing the order
         console.log(`Ecommorder skipped for domain: ${currentDomain}`, { order_id: order.id });
         return;
