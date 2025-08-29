@@ -28,7 +28,8 @@
     "test-warehouse": "tsx src/script/testWarehouseModule.ts",
     "test-new-scanning": "tsx src/script/testNewScanningFlow.ts",
     "init-scanner": "tsx src/script/initScannerTables.ts",
-    "test-scanner-lookup": "tsx src/script/testScannerLookup.ts"
+    "test-scanner-lookup": "tsx src/script/testScannerLookup.ts",
+    "test-ecommorder": "tsx src/script/testEcommorder.ts"
   },
   "dependencies": {
     "aws-sdk": "^2.1691.0",

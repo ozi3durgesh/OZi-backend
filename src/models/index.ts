@@ -23,6 +23,9 @@ import ScannerSku from './ScannerSku';
 import PaymentRequest from './PaymentRequest';
 import OrderPayment from './OrderPayment';
 import OrderTransaction from './OrderTransaction';
+import OrderDetails from './OrderDetails';
+import Item from './Item';
+import EcomLog from './EcomLog';
 
 // Set up associations
 Coupon.hasMany(CouponTranslation, {
@@ -127,6 +130,13 @@ OrderPayment.belongsTo(Order, { foreignKey: 'order_id', as: 'Order' });
 Order.hasMany(OrderTransaction, { foreignKey: 'order_id', as: 'OrderTransactions' });
 OrderTransaction.belongsTo(Order, { foreignKey: 'order_id', as: 'Order' });
 
+// Ecommerce associations
+Order.hasMany(OrderDetails, { foreignKey: 'order_id', as: 'orderDetails' });
+OrderDetails.belongsTo(Order, { foreignKey: 'order_id', as: 'order' });
+
+Order.hasMany(EcomLog, { foreignKey: 'order_id', as: 'ecomLogs' });
+EcomLog.belongsTo(Order, { foreignKey: 'order_id', as: 'order' });
+
 // Scanner associations
 ScannerBin.hasMany(ScannerSku, { foreignKey: 'binLocationScanId', sourceKey: 'binLocationScanId', as: 'SkuScans' });
 ScannerSku.belongsTo(ScannerBin, { foreignKey: 'binLocationScanId', targetKey: 'binLocationScanId', as: 'BinLocation' });
@@ -155,5 +165,8 @@ export {
   ScannerSku,
   PaymentRequest,
   OrderPayment,
-  OrderTransaction
+  OrderTransaction,
+  OrderDetails,
+  Item,
+  EcomLog
 };

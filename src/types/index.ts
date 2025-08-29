@@ -231,6 +231,10 @@ export interface OrderAttributes {
   create_new_user?: number;
   guest_id?: string;
   password?: string;
+  
+  // Associations
+  orderDetails?: any[];
+  ecomLogs?: any[];
 }
 
 export interface OrderCreationAttributes {
