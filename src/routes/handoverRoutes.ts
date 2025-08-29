@@ -1,12 +1,35 @@
 // routes/handoverRoutes.ts
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
-import { HandoverController } from '../controllers/handoverController';
+import { HandoverController, dispatchWave } from '../controllers/handoverController';
+import multer from "multer";
 
 const router = Router();
 
 // Apply authentication middleware to all routes
 router.use(authenticate);
+
+// Multer setup
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, "uploads/"),
+  filename: (req, file, cb) =>
+    cb(null, Date.now() + "-" + file.originalname),
+});
+const upload = multer({ storage });
+
+/**
+ * @route POST /api/handover/dispatch
+ * @desc Handover packed products to dispatch and generate AWB/Manifest ID
+ * @access Manager, Dispatcher
+ */
+router.post('/dispatch', HandoverController.handoverToDispatch);
+
+/**
+ * @route POST /api/handover/:waveId/dispatch
+ * @desc Dispatch wave with photo upload
+ * @access Manager, Dispatcher
+ */
+router.post("/:waveId/dispatch", upload.single("handoverPhoto"), dispatchWave);
 
 /**
  * @route POST /api/handover/assign-rider
@@ -128,13 +151,6 @@ router.put('/:handoverId/status', (req, res) => {
     });
   }
 });
-
-/**
- * @route POST /api/handover/dispatch
- * @desc Handover packed products to dispatch and generate AWB/Manifest ID
- * @access Manager, Dispatcher
- */
-router.post('/dispatch', HandoverController.handoverToDispatch);
 
 /**
  * @route GET /api/handover/riders/available
