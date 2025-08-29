@@ -60,8 +60,8 @@ class OrderConnector {
 
   constructor(config?: Partial<OrderConnectorConfig>) {
     this.config = {
-      baseURL: process.env.ECOMM_API_BASE_URL || 'https://api.easyecom.com',
-      apiKey: process.env.ECOMM_API_KEY,
+      baseURL: process.env.ECOM_BASE_URL || 'https://connector.ozi.in',
+      apiKey: process.env.ECOM_API_KEY,
       timeout: 30000,
       ...config,
     };
