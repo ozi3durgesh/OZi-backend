@@ -252,6 +252,54 @@ export class EasyEcomWebhookController {
   }
 
   /**
+   * Test endpoint for EcomLog functionality
+   * @param req - Request object
+   * @param res - Response object
+   */
+  public static async testEcomLog(req: Request, res: Response): Promise<void> {
+    try {
+      console.log('🧪 Testing EcomLog functionality...');
+      
+      // Test creating a log entry
+      const testLog = await EcomLog.create({
+        order_id: 999999, // Test order ID
+        action: 'test',
+        payload: JSON.stringify({ test: true, timestamp: new Date().toISOString() }),
+        response: JSON.stringify({ status: 'test_success' }),
+        status: 'success'
+      });
+      
+      console.log('✅ Test EcomLog created:', testLog.toJSON());
+      
+      // Get all logs to verify
+      const allLogs = await EcomLog.findAll({
+        order: [['created_at', 'DESC']],
+        limit: 10
+      });
+      
+      ResponseHandler.success(res, {
+        message: 'EcomLog test successful',
+        test_log: testLog.toJSON(),
+        total_logs: allLogs.length,
+        recent_logs: allLogs.map(log => {
+          const logData = log.get({ plain: true }) as any;
+          return {
+            id: logData.id,
+            order_id: logData.order_id,
+            action: logData.action,
+            status: logData.status,
+            created_at: logData.created_at
+          };
+        })
+      });
+      
+    } catch (error: any) {
+      console.error('❌ EcomLog test failed:', error);
+      ResponseHandler.error(res, `EcomLog test failed: ${error.message}`, 500);
+    }
+  }
+
+  /**
    * Health check endpoint for PHP to verify Node.js service is running
    * @param req - Express request object
    * @param res - Express response object

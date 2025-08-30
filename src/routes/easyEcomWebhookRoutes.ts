@@ -34,6 +34,11 @@ router.post('/php-integration',
   EasyEcomWebhookController.phpIntegration
 );
 
+// Test endpoint for EcomLog functionality
+router.post('/test-ecomlog', 
+  EasyEcomWebhookController.testEcomLog
+);
+
 router.get('/health', 
   EasyEcomWebhookController.healthCheck
 );

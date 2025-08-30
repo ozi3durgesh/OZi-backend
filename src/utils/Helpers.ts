@@ -84,17 +84,26 @@ export class Helpers {
    */
   public static async Ecommorder(order: OrderAttributes): Promise<any> {
     try {
+      console.log(`🔄 Processing order ${order.id} through Ecommorder...`);
+      
       // Detect if current domain matches vestiqq.com
       const currentDomain = process.env.CURRENT_DOMAIN || 'localhost';
+      console.log(`🌐 Current domain: ${currentDomain}`);
       
       // Store success log
-      await EcomLog.create({
-        order_id: order.id,
-        action: 'createOrder',
-        payload: JSON.stringify('payload'),
-        response: JSON.stringify('response'),
-        status: 'success'
-      });
+      try {
+        await EcomLog.create({
+          order_id: order.id,
+          action: 'createOrder',
+          payload: JSON.stringify({ order_id: order.id, action: 'createOrder' }),
+          response: JSON.stringify({ status: 'processing' }),
+          status: 'success'
+        });
+        console.log(`✅ EcomLog created successfully for order ${order.id}`);
+      } catch (logError) {
+        console.error(`❌ Failed to create EcomLog for order ${order.id}:`, logError);
+        // Don't fail the entire process if logging fails
+      }
 
       if (!currentDomain.includes('admin.ozi.in')) {
         // Just log and return without placing the order

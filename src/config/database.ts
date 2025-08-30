@@ -85,6 +85,12 @@ export const connectDatabase = async (): Promise<void> => {
     await import('../models/index.js');
     console.log('Models imported successfully.');
     
+    // Run custom migrations
+    console.log('Running custom migrations...');
+    const { runMigrations } = await import('./migrations.js');
+    await runMigrations();
+    console.log('Custom migrations completed.');
+    
     // Disable foreign key checks temporarily
     await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
     

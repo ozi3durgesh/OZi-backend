@@ -15,7 +15,7 @@ The integration includes:
 
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Order Model   │───▶│  Helpers.Ecommorder │───▶│ OrderConnector  │
+│   Order Model   │───▶│ Helpers.Ecommorder │───▶│ OrderConnector  │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
          │                        │                        │
          ▼                        ▼                        ▼

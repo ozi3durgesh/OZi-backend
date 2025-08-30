@@ -15,6 +15,7 @@ import packingRoutes from './routes/packingRoutes';
 import handoverRoutes from './routes/handoverRoutes';
 import warehouseRoutes from './routes/warehouseRoutes';
 import paymentRoutes from './routes/paymentRoutes';
+import easyEcomWebhookRoutes from './routes/easyEcomWebhookRoutes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -52,6 +53,9 @@ app.use('/api/warehouses', warehouseRoutes);
 
 // PHP Production Compatible Routes
 app.use('/api/v1/customer/order', orderRoutes);
+
+// Ecommerce integration routes
+app.use('/api/ecommerce', easyEcomWebhookRoutes);
 
 // Payment routes
 app.use('/payment', paymentRoutes);
