@@ -359,6 +359,73 @@ export class EasyEcomWebhookController {
   }
 
   /**
+   * Test timestamp parsing functionality
+   * @param req - Request object
+   * @param res - Response object
+   */
+  public static async testTimestampParsing(req: Request, res: Response): Promise<void> {
+    try {
+      console.log('🧪 Testing timestamp parsing...');
+      
+      const testTimestamps = [
+        '2025-08-30 16:24:03',
+        '2025-08-30T16:24:03.000000Z',
+        '1732986243',
+        '1732986243000',
+        new Date().toISOString(),
+        Date.now().toString(),
+        (Date.now() / 1000).toString()
+      ];
+      
+      const results = testTimestamps.map(timestamp => {
+        try {
+          let parsedDate: Date;
+          
+          if (typeof timestamp === 'string') {
+            if (timestamp.includes('T') || timestamp.includes(' ')) {
+              parsedDate = new Date(timestamp);
+            } else {
+              const numTimestamp = parseInt(timestamp);
+              if (!isNaN(numTimestamp)) {
+                parsedDate = new Date(numTimestamp * 1000);
+              } else {
+                throw new Error('Invalid timestamp format');
+              }
+            }
+          } else {
+            parsedDate = new Date(timestamp);
+          }
+          
+          const isValid = !isNaN(parsedDate.getTime());
+          
+          return {
+            input: timestamp,
+            parsed: parsedDate.toISOString(),
+            valid: isValid,
+            error: null
+          };
+        } catch (error: any) {
+          return {
+            input: timestamp,
+            parsed: null,
+            valid: false,
+            error: error.message
+          };
+        }
+      });
+      
+      ResponseHandler.success(res, {
+        message: 'Timestamp parsing test completed',
+        results
+      });
+      
+    } catch (error: any) {
+      console.error('❌ Timestamp parsing test failed:', error);
+      ResponseHandler.error(res, `Timestamp parsing test failed: ${error.message}`, 500);
+    }
+  }
+
+  /**
    * Health check endpoint for PHP to verify Node.js service is running
    * @param req - Express request object
    * @param res - Express response object

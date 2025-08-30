@@ -44,6 +44,11 @@ router.post('/test-ecomlog',
   EasyEcomWebhookController.testEcomLog
 );
 
+// Test timestamp parsing functionality
+router.get('/test-timestamp', 
+  EasyEcomWebhookController.testTimestampParsing
+);
+
 router.get('/health', 
   EasyEcomWebhookController.healthCheck
 );
