@@ -50,27 +50,50 @@ async function fixDatabase(): Promise<void> {
       console.log('ℹ️ ecom_logs table already exists');
     }
     
-    // Test inserting a record
+    // Test EcomLog insertion with a valid order ID
     console.log('🧪 Testing EcomLog insertion...');
-    await sequelize.query(`
-      INSERT INTO ecom_logs (order_id, action, payload, response, status) 
-      VALUES (999999, 'test', '{"test": true}', '{"status": "success"}', 'success')
-    `);
-    console.log('✅ Test record inserted successfully');
     
-    // Verify the record
-    const logs = await sequelize.query(
-      'SELECT * FROM ecom_logs ORDER BY created_at DESC LIMIT 5',
+    // First, check if there are any existing orders to use for testing
+    const existingOrders = await sequelize.query(
+      "SELECT id FROM orders LIMIT 1",
       { type: QueryTypes.SELECT }
     );
-    console.log('📊 Recent logs:', logs);
     
+    let testOrderId = 1; // Default fallback
+    if (existingOrders.length > 0) {
+      testOrderId = (existingOrders[0] as any).id;
+      console.log(`📋 Using existing order ID: ${testOrderId} for testing`);
+    } else {
+      console.log('⚠️ No existing orders found, using default test ID: 1');
+    }
+
+    await sequelize.query(`
+      INSERT INTO ecom_logs (order_id, action, payload, response, status) 
+      VALUES (?, 'test', '{"test": true}', '{"status": "success"}', 'success')
+    `, {
+      replacements: [testOrderId],
+      type: QueryTypes.INSERT
+    });
+
+    console.log('✅ Test EcomLog entry created successfully');
+    
+    // Verify the entry was created
+    const testLogs = await sequelize.query(
+      "SELECT * FROM ecom_logs ORDER BY created_at DESC LIMIT 1",
+      { type: QueryTypes.SELECT }
+    );
+    
+    if (testLogs.length > 0) {
+      console.log('✅ Database verification successful');
+      console.log('📊 Total ecom_logs entries:', testLogs.length);
+    }
+
     console.log('🎉 Database fix completed successfully!');
-    
+    process.exit(0);
+
   } catch (error) {
     console.error('❌ Database fix failed:', error);
-  } finally {
-    await sequelize.close();
+    process.exit(1);
   }
 }
 
