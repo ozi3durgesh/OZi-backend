@@ -120,9 +120,19 @@ export class Helpers {
       const connector = new OrderConnector();
       const decodeRequest: DeliveryAddress = JSON.parse(order.delivery_address);
       
-      const localTimezone = process.env.TZ || 'UTC';
-      const localDatetime = new Date(order.created_at * 1000); // Convert timestamp to Date
-      const utcDatetime = new Date(localDatetime.toISOString());
+      // Fix timestamp conversion - handle both string and number formats
+      let orderDate: Date;
+      if (typeof order.created_at === 'string') {
+        orderDate = new Date(order.created_at);
+      } else if (typeof order.created_at === 'number') {
+        // If it's a Unix timestamp, convert to milliseconds
+        orderDate = new Date(order.created_at * 1000);
+      } else {
+        // Default to current date if invalid
+        orderDate = new Date();
+      }
+      
+      const utcDatetime = new Date(orderDate.toISOString());
 
       let paymentMode = 2;
       let shippingMethod = 1;

@@ -107,22 +107,22 @@ export class EasyEcomWebhookController {
   public static async getEcomLogs(req: Request, res: Response): Promise<void> {
     try {
       const page = parseInt(req.query.page as string) || 1;
-      const limit = parseInt(req.query.limit as string) || 20;
+      const limit = parseInt(req.query.limit as string) || 50;
       const offset = (page - 1) * limit;
 
-      const { count, rows: logs } = await EcomLog.findAndCountAll({
+      const logs = await EcomLog.findAndCountAll({
         order: [['created_at', 'DESC']],
         limit,
         offset,
       });
 
       ResponseHandler.success(res, {
-        logs,
+        logs: logs.rows,
         pagination: {
           current_page: page,
-          total_pages: Math.ceil(count / limit),
-          total_records: count,
-          per_page: limit
+          total_pages: Math.ceil(logs.count / limit),
+          total_records: logs.count,
+          records_per_page: limit
         }
       });
 
@@ -133,7 +133,7 @@ export class EasyEcomWebhookController {
   }
 
   /**
-   * Get ecommerce log by ID
+   * Get specific ecommerce log by ID
    * @param req - Express request object
    * @param res - Express response object
    */
@@ -144,20 +144,20 @@ export class EasyEcomWebhookController {
       const log = await EcomLog.findByPk(id);
       
       if (!log) {
-        ResponseHandler.error(res, 'Ecommerce log not found', 404);
+        ResponseHandler.error(res, 'Log not found', 404);
         return;
       }
 
       ResponseHandler.success(res, { log });
 
     } catch (error: any) {
-      console.error('Error getting ecommerce log:', error);
+      console.error('Error getting ecommerce log by ID:', error);
       ResponseHandler.error(res, `Failed to get log: ${error.message}`, 500);
     }
   }
 
   /**
-   * Get ecommerce logs by order ID
+   * Get ecommerce logs for specific order
    * @param req - Express request object
    * @param res - Express response object
    */
@@ -327,7 +327,8 @@ export class EasyEcomWebhookController {
         status: 'success'
       });
       
-      console.log('✅ Test EcomLog created:', testLog.toJSON());
+      const logData = testLog.get({ plain: true }) as any;
+      console.log('✅ Test EcomLog created:', logData);
       
       // Get all logs to verify
       const allLogs = await EcomLog.findAll({
@@ -337,7 +338,7 @@ export class EasyEcomWebhookController {
       
       ResponseHandler.success(res, {
         message: 'EcomLog test successful',
-        test_log: testLog.toJSON(),
+        test_log: logData,
         total_logs: allLogs.length,
         recent_logs: allLogs.map(log => {
           const logData = log.get({ plain: true }) as any;
