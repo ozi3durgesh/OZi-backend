@@ -741,6 +741,9 @@ if (!rider) {
   return res.status(400).json({ success: false, message: "Rider not available" });
 }
 
+rider.availabilityStatus = "BUSY"; // Set the rider's availability to BUSY
+    await rider.save();
+
     // 3. Update Wave → Dispatched
     wave.status = "COMPLETED"; // Update to COMPLETED
     wave.handoverAt = new Date();
