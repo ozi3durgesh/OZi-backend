@@ -34,6 +34,11 @@ router.post('/php-integration',
   EasyEcomWebhookController.phpIntegration
 );
 
+// Direct logging endpoint for PHP
+router.post('/log-order', 
+  EasyEcomWebhookController.logOrderDirectly
+);
+
 // Test endpoint for EcomLog functionality
 router.post('/test-ecomlog', 
   EasyEcomWebhookController.testEcomLog

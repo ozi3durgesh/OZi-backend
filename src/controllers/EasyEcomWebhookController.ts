@@ -252,6 +252,64 @@ export class EasyEcomWebhookController {
   }
 
   /**
+   * Direct logging endpoint for PHP - creates EcomLog entry immediately
+   * @param req - Express request object
+   * @param res - Express response object
+   */
+  public static async logOrderDirectly(req: Request, res: Response): Promise<void> {
+    try {
+      const { order } = req.body;
+      
+      if (!order) {
+        ResponseHandler.error(res, 'Order data is required', 400);
+        return;
+      }
+
+      console.log('📝 Direct logging called for order:', order.id);
+      
+      // Create EcomLog entry immediately
+      const ecomLog = await EcomLog.create({
+        order_id: order.id,
+        action: 'order_received_from_php',
+        payload: JSON.stringify({
+          order_id: order.id,
+          user_id: order.user_id,
+          order_amount: order.order_amount,
+          payment_method: order.payment_method,
+          delivery_address: order.delivery_address,
+          timestamp: new Date().toISOString()
+        }),
+        response: JSON.stringify({
+          status: 'logged_successfully',
+          node_service: 'ozi-backend',
+          timestamp: new Date().toISOString()
+        }),
+        status: 'success'
+      });
+      
+      const logData = ecomLog.get({ plain: true }) as any;
+      console.log('✅ EcomLog created successfully:', logData);
+      
+      ResponseHandler.success(res, {
+        message: 'Order logged successfully in Node.js database',
+        order_id: order.id,
+        log_id: logData.id,
+        log_entry: {
+          id: logData.id,
+          order_id: logData.order_id,
+          action: logData.action,
+          status: logData.status,
+          created_at: logData.created_at
+        }
+      });
+      
+    } catch (error: any) {
+      console.error('❌ Direct logging error:', error);
+      ResponseHandler.error(res, `Direct logging failed: ${error.message}`, 500);
+    }
+  }
+
+  /**
    * Test endpoint for EcomLog functionality
    * @param req - Request object
    * @param res - Response object

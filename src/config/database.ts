@@ -1,4 +1,4 @@
-import { Sequelize } from 'sequelize';
+import { Sequelize, QueryTypes } from 'sequelize';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -85,11 +85,40 @@ export const connectDatabase = async (): Promise<void> => {
     await import('../models/index.js');
     console.log('Models imported successfully.');
     
-    // Run custom migrations
-    console.log('Running custom migrations...');
-    const { runMigrations } = await import('./migrations.js');
-    await runMigrations();
-    console.log('Custom migrations completed.');
+    // Create ecom_logs table if it doesn't exist
+    console.log('Checking for ecom_logs table...');
+    try {
+      const tableExists = await sequelize.query(
+        "SHOW TABLES LIKE 'ecom_logs'",
+        { type: QueryTypes.SELECT }
+      );
+      
+      if (tableExists.length === 0) {
+        console.log('Creating ecom_logs table...');
+        await sequelize.query(`
+          CREATE TABLE IF NOT EXISTS ecom_logs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            order_id INT NOT NULL,
+            action VARCHAR(255) NOT NULL,
+            payload TEXT NOT NULL,
+            response TEXT NOT NULL,
+            status VARCHAR(50) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_order_id (order_id),
+            INDEX idx_action (action),
+            INDEX idx_status (status),
+            INDEX idx_created_at (created_at)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        `);
+        console.log('✅ ecom_logs table created successfully');
+      } else {
+        console.log('ℹ️ ecom_logs table already exists');
+      }
+    } catch (tableError) {
+      console.error('Error creating ecom_logs table:', tableError);
+      // Continue anyway
+    }
     
     // Disable foreign key checks temporarily
     await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
