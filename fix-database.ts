@@ -3,15 +3,21 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Create database connection
+// Create database connection with hardcoded credentials for AWS RDS
 const sequelize = new Sequelize({
-  database: process.env.DB_NAME || 'ozi_backend',
-  username: process.env.DB_USER || 'admin',
-  password: process.env.DB_PASSWORD || 'rLfcu9Y80S8X',
-  host: process.env.DB_HOST || 'ozi-db1.c306iyoqqj8p.ap-south-1.rds.amazonaws.com',
-  port: parseInt(process.env.DB_PORT || '3306'),
+  database: 'ozi_backend',
+  username: 'admin',
+  password: 'rLfcu9Y80S8X',
+  host: 'ozi-db1.c306iyoqqj8p.ap-south-1.rds.amazonaws.com',
+  port: 3306,
   dialect: 'mysql',
-  logging: false
+  logging: false,
+  pool: {
+    max: 5,
+    min: 0,
+    acquire: 30000,
+    idle: 10000
+  }
 });
 
 async function fixDatabase(): Promise<void> {
