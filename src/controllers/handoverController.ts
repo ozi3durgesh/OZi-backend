@@ -716,13 +716,17 @@ export const dispatchWave = async (req: Request, res: Response) => {
 
     // 1. Validate Wave
     const wave = await PickingWave.findByPk(waveId);
+    console.log(wave);
     if (!wave) {
       return res.status(404).json({ success: false, message: "Wave not found" });
     }
 
-   if (!["PACKED", "CREATED"].includes(wave.status)) {
-  return res.status(400).json({ success: false, message: "Wave not ready for dispatch" });
+   if (wave.status !== "PACKED") {
+  return res
+    .status(400)
+    .json({ success: false, message: "Wave not ready for dispatch" });
 }
+
 
 // 2. Validate Rider
 const rider = await Rider.findOne({
