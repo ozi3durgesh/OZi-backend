@@ -6,7 +6,7 @@ import PicklistItem from './PicklistItem';
 interface PickingWaveAttributes {
   id: number;
   waveNumber: string;
-  status: 'GENERATED' | 'ASSIGNED' | 'PICKING' | 'PACKING' | 'COMPLETED' | 'CANCELLED';
+  status: 'GENERATED' | 'ASSIGNED' | 'PICKING' | 'PACKING' | 'PACKED' | 'COMPLETED' | 'CANCELLED';
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   pickerId?: number;
   riderId?: number;
@@ -24,12 +24,17 @@ interface PickingWaveAttributes {
   tagsAndBags: boolean;
   createdAt: Date;
   updatedAt: Date;
+  // New fields
+  handoverAt?: Date;
+  handoverBy?: number;
+  dispatchNotes?: string | null;
+  handoverPhoto?: string | null;
 }
 
 class PickingWave extends Model<PickingWaveAttributes> implements PickingWaveAttributes {
   declare id: number;
   declare waveNumber: string;
-  declare status: 'GENERATED' | 'ASSIGNED' | 'PICKING' | 'PACKING' | 'COMPLETED' | 'CANCELLED';
+  declare status: 'GENERATED' | 'ASSIGNED' | 'PICKING' | 'PACKING' | 'PACKED' | 'COMPLETED' | 'CANCELLED';
   declare priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   declare pickerId?: number;
   declare riderId?: number;
@@ -47,16 +52,21 @@ class PickingWave extends Model<PickingWaveAttributes> implements PickingWaveAtt
   declare tagsAndBags: boolean;
   declare createdAt: Date;
   declare updatedAt: Date;
+  // New fields
+  declare handoverAt?: Date;
+  declare handoverBy?: number;
+  declare dispatchNotes?: string | null;
+  declare handoverPhoto?: string | null;
 
   // Associations
-  declare PicklistItems?: any[];
+  declare PicklistItems?: PicklistItem[];
 }
 
 PickingWave.init({
   id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
   waveNumber: { type: DataTypes.STRING(50), allowNull: false, unique: true },
   status: {
-    type: DataTypes.ENUM('GENERATED', 'ASSIGNED', 'PICKING', 'PACKING', 'COMPLETED', 'CANCELLED'),
+    type: DataTypes.ENUM('GENERATED', 'ASSIGNED', 'PICKING', 'PACKING', 'PACKED', 'COMPLETED', 'CANCELLED'),
     allowNull: false,
     defaultValue: 'GENERATED',
   },
@@ -66,7 +76,7 @@ PickingWave.init({
     defaultValue: 'MEDIUM',
   },
   pickerId: { type: DataTypes.INTEGER, allowNull: true, references: { model: 'Users', key: 'id' } },
-  riderId: { type: DataTypes.INTEGER, allowNull: true, references: { model: 'Users', key: 'id' } }, // or Riders table
+  riderId: { type: DataTypes.INTEGER, allowNull: true, references: { model: 'Users', key: 'id' } },
   riderAssignedAt: { type: DataTypes.DATE, allowNull: true },
   photoPath: { type: DataTypes.STRING, allowNull: true },
   assignedAt: { type: DataTypes.DATE, allowNull: true },
@@ -81,6 +91,11 @@ PickingWave.init({
   tagsAndBags: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
   createdAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   updatedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+  // New fields
+  handoverAt: { type: DataTypes.DATE, allowNull: true },
+  handoverBy: { type: DataTypes.INTEGER, allowNull: true },
+  dispatchNotes: { type: DataTypes.STRING, allowNull: true },
+  handoverPhoto: { type: DataTypes.STRING, allowNull: true },
 }, {
   sequelize,
   tableName: 'picking_waves',
@@ -93,5 +108,8 @@ PickingWave.init({
     { fields: ['waveNumber'] },
   ],
 });
+
+// Example association if needed
+// PickingWave.hasMany(PicklistItem, { foreignKey: 'waveId', as: 'PicklistItems' });
 
 export default PickingWave;

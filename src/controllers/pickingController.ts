@@ -97,6 +97,7 @@ export class PickingController {
           fefoRequired,
           tagsAndBags
         } as any);
+        
 
         // Create picklist items for this single order
         let actualTotalItems = 0;
@@ -367,7 +368,7 @@ export class PickingController {
         where: { pickerId: picker.id, status: ['ASSIGNED', 'PICKING'] }
       });
 
-      if (pickerWaves >= 3) {
+      if (pickerWaves >= 20) {
         return ResponseHandler.error(res, 'Picker has reached maximum wave limit (3)', 400);
       }
 
@@ -793,7 +794,7 @@ export class PickingController {
 
       if (remainingItems === 0) {
         await wave.update({
-          status: 'COMPLETED',
+          status: 'PACKED',
           completedAt: new Date()
         });
       }
@@ -946,7 +947,7 @@ export class PickingController {
 
       // Update wave status
       await wave.update({
-        status: 'COMPLETED',
+        status: 'PACKED',
         completedAt: new Date()
       });
 

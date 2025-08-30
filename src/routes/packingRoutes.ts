@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
 import { PackingController } from '../controllers/packingController';
 import Wave from '../models/wave';
+import PickingWave from '../models/PickingWave';
 import Rider from '../models/Rider';
 import multer from 'multer';
 import fs from 'fs';
@@ -159,7 +160,7 @@ router.post('/:waveId/pack-and-seal', upload.single('photo'), async (req, res) =
     }
 
     // Ensure wave exists
-    const wave = await Wave.findByPk(waveId);
+    const wave = await PickingWave.findByPk(waveId);
     if (!wave) {
       return res.status(404).json({
         statusCode: 404,
@@ -167,6 +168,7 @@ router.post('/:waveId/pack-and-seal', upload.single('photo'), async (req, res) =
         error: `Wave with id ${waveId} not found`
       });
     }
+
 
     // Find minimum deliveries
     const minDeliveries = await Rider.min('totalDeliveries', {
@@ -216,7 +218,7 @@ router.post('/:waveId/pack-and-seal', upload.single('photo'), async (req, res) =
     await wave.update({
       riderId: assignedRider.id,
       status: 'PACKED',
-      handoverPhoto: relativePhotoPath
+      photoPath: relativePhotoPath
     });
 
     // Increment totalDeliveries for assigned rider
