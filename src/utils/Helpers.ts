@@ -88,22 +88,28 @@ export class Helpers {
       
       // Detect if current domain matches vestiqq.com
       const currentDomain = process.env.CURRENT_DOMAIN || 'localhost';
-      console.log(`🌐 Current domain: ${currentDomain}`);
+      console.log(`🌐 Current domain: ${order.id}, ${ currentDomain }` );
       
-      // Store success log
-      try {
-        await EcomLog.create({
-          order_id: order.id,
-          action: 'createOrder',
-          payload: JSON.stringify({ order_id: order.id, action: 'createOrder' }),
-          response: JSON.stringify({ status: 'processing' }),
-          status: 'success'
-        });
-        console.log(`✅ EcomLog created successfully for order ${order.id}`);
-      } catch (logError) {
-        console.error(`❌ Failed to create EcomLog for order ${order.id}:`, logError);
-        // Don't fail the entire process if logging fails
-      }
+
+    // Convert full order object into JSON
+    const orderJson = JSON.stringify(order);
+
+    // Store success log with full order payload
+    await EcomLog.create({
+      order_id: order.id,
+      action: 'createOrder',
+      payload: orderJson,  // full order JSON here
+      response: JSON.stringify({ status: 'processing' }),
+      status: 'success'
+    });
+      
+      // try {
+
+      //   console.log(`✅ EcomLog created successfully for order ${order.id}`);
+      // } catch (logError) {
+      //   console.error(`❌ Failed to create EcomLog for order ${order.id}:`, logError);
+      //   // Don't fail the entire process if logging fails
+      // }
 
       if (!currentDomain.includes('admin.ozi.in')) {
         // Just log and return without placing the order
