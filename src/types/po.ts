@@ -1,11 +1,31 @@
+// add/extend these
+
+export enum ApprovalStage {
+  CATEGORY_HEAD = 'CATEGORY_HEAD',
+  ADMIN = 'ADMIN',
+  VENDOR = 'VENDOR',
+}
+
+export enum ApprovalStatus {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+}
+
+// extend existing POStatus with gated states
 export enum POStatus {
   DRAFT = 'DRAFT',
   OPEN = 'OPEN',
   INBOUND_IN_PROGRESS = 'INBOUND_IN_PROGRESS',
   PARTIAL_GRN = 'PARTIAL_GRN',
   CLOSED = 'CLOSED',
-  CANCELLED = 'CANCELLED',
+  // new
+  AWAITING_CATEGORY_APPROVAL = 'AWAITING_CATEGORY_APPROVAL',
+  AWAITING_ADMIN_APPROVAL = 'AWAITING_ADMIN_APPROVAL',
+  AWAITING_VENDOR_APPROVAL = 'AWAITING_VENDOR_APPROVAL',
+  REJECTED = 'REJECTED',
 }
+
 export enum POLineStatus {
   OPEN = 'OPEN',
   PARTIAL = 'PARTIAL',
