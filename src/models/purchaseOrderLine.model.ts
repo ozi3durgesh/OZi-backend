@@ -56,7 +56,7 @@ PurchaseOrderLine.init(
   },
   {
     sequelize,
-    modelName: 'purchase_order_lines',
+    tableName: 'purchase_order_lines',
     indexes: [
       { fields: ['po_id'] },
       { fields: ['sku'] },

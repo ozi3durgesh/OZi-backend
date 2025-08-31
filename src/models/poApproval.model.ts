@@ -34,5 +34,5 @@ POApproval.init(
     approved_by: { type: DataTypes.STRING(64) },
     approved_at: { type: DataTypes.DATE },
   },
-  { sequelize, modelName: 'po_approvals', timestamps: true }
+  { sequelize, tableName: 'po_approvals', timestamps: true }
 );
