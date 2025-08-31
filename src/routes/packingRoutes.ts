@@ -2,7 +2,6 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
 import { PackingController } from '../controllers/packingController';
-import Wave from '../models/wave';
 import PickingWave from '../models/PickingWave';
 import Rider from '../models/Rider';
 import multer from 'multer';
