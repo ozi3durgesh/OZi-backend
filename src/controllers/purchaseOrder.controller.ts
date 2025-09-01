@@ -1,6 +1,7 @@
+// src/controllers/purchaseOrder.controller.ts
 import { Request, Response } from 'express';
-import * as svc from '../services/purchaseOrder.service';
-import { ApprovalStage } from '../types/po';
+import * as svc from '../services/purchaseOrder.service.js';
+import { ApprovalStage } from '../types/po.js';
 
 const handle = (res: Response, p: Promise<any>) =>
   p.then((data) => res.json(data))
@@ -46,3 +47,9 @@ export const rejectPO = (req: Request, res: Response) =>
     req.body?.reason,
     (req as any).user
   ));
+
+export const getApprovalStatus = (req: Request, res: Response) =>
+  handle(res, svc.getApprovalStatus(req.params.id));
+
+export const resendApproval = (req: Request, res: Response) =>
+  handle(res, svc.resendApproval(req.params.id, req.body?.stage as ApprovalStage));
