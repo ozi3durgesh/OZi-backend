@@ -11,6 +11,101 @@ async function initializeRBAC() {
     await sequelize.sync({ force: false });
     console.log('Database tables created successfully.');
 
+    // Initialize scanner tables with default data
+    console.log('Initializing scanner tables...');
+    try {
+      const { ScannerBin, ScannerSku } = await import('../models/index.js');
+      
+      // Initialize scanner_bin table with default bin locations
+      const defaultBinLocations = [
+        {
+          binLocationScanId: 'Z05B02R02S4B1',
+          sku: ['100000003001', '100000008001', '100000009001', '100000010001']
+        },
+        {
+          binLocationScanId: 'Z06C02R02S4B1',
+          sku: ['100000012001', '100000013001', '100000015001', '100000015002', '100000016001', '100000017001', '100000019001', '100000020001', '100000021001', '100000022001', '100000023001']
+        },
+        {
+          binLocationScanId: 'Z02A03R06S5B1',
+          sku: ['100000024001']
+        },
+        {
+          binLocationScanId: 'Z02A03R06S1B1',
+          sku: ['100000024002']
+        }
+      ];
+
+      for (const binLocation of defaultBinLocations) {
+        await ScannerBin.findOrCreate({
+          where: { binLocationScanId: binLocation.binLocationScanId },
+          defaults: binLocation
+        });
+      }
+      console.log(`✓ Initialized ${defaultBinLocations.length} bin locations`);
+
+      // Initialize scanner_sku table with default SKU records
+      const defaultSkuRecords = [
+        {
+          skuScanId: '100000003001',
+          sku: [{ skuId: '100000003001', quantity: 10 }],
+          binLocationScanId: 'Z05B02R02S4B1'
+        },
+        {
+          skuScanId: '100000008001',
+          sku: [{ skuId: '100000008001', quantity: 5 }],
+          binLocationScanId: 'Z05B02R02S4B1'
+        },
+        {
+          skuScanId: '100000009001',
+          sku: [{ skuId: '100000009001', quantity: 5 }],
+          binLocationScanId: 'Z05B02R02S4B1'
+        },
+        {
+          skuScanId: '100000010001',
+          sku: [{ skuId: '100000010001', quantity: 5 }],
+          binLocationScanId: 'Z05B02R02S4B1'
+        },
+        {
+          skuScanId: '100000012001',
+          sku: [{ skuId: '100000012001', quantity: 4 }],
+          binLocationScanId: 'Z06C02R02S4B1'
+        },
+        {
+          skuScanId: '100000013001',
+          sku: [{ skuId: '100000013001', quantity: 2 }],
+          binLocationScanId: 'Z06C02R02S4B1'
+        },
+        {
+          skuScanId: '100000015001',
+          sku: [{ skuId: '100000015001', quantity: 4 }],
+          binLocationScanId: 'Z06C02R02S4B1'
+        },
+        {
+          skuScanId: '100000024001',
+          sku: [{ skuId: '100000024001', quantity: 2 }],
+          binLocationScanId: 'Z02A03R06S5B1'
+        },
+        {
+          skuScanId: '100000024002',
+          sku: [{ skuId: '100000024002', quantity: 3 }],
+          binLocationScanId: 'Z02A03R06S1B1'
+        }
+      ];
+
+      for (const skuRecord of defaultSkuRecords) {
+        await ScannerSku.findOrCreate({
+          where: { skuScanId: skuRecord.skuScanId },
+          defaults: skuRecord
+        });
+      }
+      console.log(`✓ Initialized ${defaultSkuRecords.length} SKU records`);
+      
+    } catch (scannerError) {
+      console.warn('Warning: Could not initialize scanner tables:', scannerError);
+      console.log('Continuing with RBAC initialization...');
+    }
+
     // Create permissions based on the role matrix
     const permissions = [
       // Users & Roles

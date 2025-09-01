@@ -6,29 +6,40 @@ import PicklistItem from './PicklistItem';
 interface PickingWaveAttributes {
   id: number;
   waveNumber: string;
-  status: 'GENERATED' | 'ASSIGNED' | 'PICKING' | 'PACKING' | 'COMPLETED' | 'CANCELLED';
+  status: 'GENERATED' | 'ASSIGNED' | 'PICKING' | 'PACKING' | 'PACKED' | 'COMPLETED' | 'CANCELLED';
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   pickerId?: number;
+  riderId?: number;
+  riderAssignedAt?: Date;
+  photoPath?: string | null;
   assignedAt?: Date;
   startedAt?: Date;
   completedAt?: Date;
   totalOrders: number;
   totalItems: number;
-  estimatedDuration: number; // in minutes
+  estimatedDuration: number;
   slaDeadline: Date;
   routeOptimization: boolean;
   fefoRequired: boolean;
   tagsAndBags: boolean;
   createdAt: Date;
   updatedAt: Date;
+  // New fields
+  handoverAt?: Date;
+  handoverBy?: number;
+  dispatchNotes?: string | null;
+  handoverPhoto?: string | null;
 }
 
 class PickingWave extends Model<PickingWaveAttributes> implements PickingWaveAttributes {
   declare id: number;
   declare waveNumber: string;
-  declare status: 'GENERATED' | 'ASSIGNED' | 'PICKING' | 'PACKING' | 'COMPLETED' | 'CANCELLED';
+  declare status: 'GENERATED' | 'ASSIGNED' | 'PICKING' | 'PACKING' | 'PACKED' | 'COMPLETED' | 'CANCELLED';
   declare priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   declare pickerId?: number;
+  declare riderId?: number;
+  declare riderAssignedAt?: Date;
+  declare photoPath?: string | null;
   declare assignedAt?: Date;
   declare startedAt?: Date;
   declare completedAt?: Date;
@@ -41,24 +52,21 @@ class PickingWave extends Model<PickingWaveAttributes> implements PickingWaveAtt
   declare tagsAndBags: boolean;
   declare createdAt: Date;
   declare updatedAt: Date;
+  // New fields
+  declare handoverAt?: Date;
+  declare handoverBy?: number;
+  declare dispatchNotes?: string | null;
+  declare handoverPhoto?: string | null;
 
   // Associations
-  declare PicklistItems?: any[]; // PicklistItem instances
+  declare PicklistItems?: PicklistItem[];
 }
 
 PickingWave.init({
-  id: {
-    type: DataTypes.INTEGER,
-    autoIncrement: true,
-    primaryKey: true,
-  },
-  waveNumber: {
-    type: DataTypes.STRING(50),
-    allowNull: false,
-    unique: true,
-  },
+  id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+  waveNumber: { type: DataTypes.STRING(50), allowNull: false, unique: true },
   status: {
-    type: DataTypes.ENUM('GENERATED', 'ASSIGNED', 'PICKING', 'PACKING', 'COMPLETED', 'CANCELLED'),
+    type: DataTypes.ENUM('GENERATED', 'ASSIGNED', 'PICKING', 'PACKING', 'PACKED', 'COMPLETED', 'CANCELLED'),
     allowNull: false,
     defaultValue: 'GENERATED',
   },
@@ -67,70 +75,27 @@ PickingWave.init({
     allowNull: false,
     defaultValue: 'MEDIUM',
   },
-  pickerId: {
-    type: DataTypes.INTEGER,
-    allowNull: true,
-    references: {
-      model: 'Users',
-      key: 'id',
-    },
-  },
-  assignedAt: {
-    type: DataTypes.DATE,
-    allowNull: true,
-  },
-  startedAt: {
-    type: DataTypes.DATE,
-    allowNull: true,
-  },
-  completedAt: {
-    type: DataTypes.DATE,
-    allowNull: true,
-  },
-  totalOrders: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    defaultValue: 0,
-  },
-  totalItems: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    defaultValue: 0,
-  },
-  estimatedDuration: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    defaultValue: 30,
-  },
-  slaDeadline: {
-    type: DataTypes.DATE,
-    allowNull: false,
-  },
-  routeOptimization: {
-    type: DataTypes.BOOLEAN,
-    allowNull: false,
-    defaultValue: true,
-  },
-  fefoRequired: {
-    type: DataTypes.BOOLEAN,
-    allowNull: false,
-    defaultValue: false,
-  },
-  tagsAndBags: {
-    type: DataTypes.BOOLEAN,
-    allowNull: false,
-    defaultValue: false,
-  },
-  createdAt: {
-    type: DataTypes.DATE,
-    allowNull: false,
-    defaultValue: DataTypes.NOW,
-  },
-  updatedAt: {
-    type: DataTypes.DATE,
-    allowNull: false,
-    defaultValue: DataTypes.NOW,
-  },
+  pickerId: { type: DataTypes.INTEGER, allowNull: true, references: { model: 'Users', key: 'id' } },
+  riderId: { type: DataTypes.INTEGER, allowNull: true, references: { model: 'Users', key: 'id' } },
+  riderAssignedAt: { type: DataTypes.DATE, allowNull: true },
+  photoPath: { type: DataTypes.STRING, allowNull: true },
+  assignedAt: { type: DataTypes.DATE, allowNull: true },
+  startedAt: { type: DataTypes.DATE, allowNull: true },
+  completedAt: { type: DataTypes.DATE, allowNull: true },
+  totalOrders: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+  totalItems: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+  estimatedDuration: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 30 },
+  slaDeadline: { type: DataTypes.DATE, allowNull: false },
+  routeOptimization: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+  fefoRequired: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+  tagsAndBags: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+  createdAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+  updatedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+  // New fields
+  handoverAt: { type: DataTypes.DATE, allowNull: true },
+  handoverBy: { type: DataTypes.INTEGER, allowNull: true },
+  dispatchNotes: { type: DataTypes.STRING, allowNull: true },
+  handoverPhoto: { type: DataTypes.STRING, allowNull: true },
 }, {
   sequelize,
   tableName: 'picking_waves',
@@ -138,9 +103,13 @@ PickingWave.init({
     { fields: ['status'] },
     { fields: ['priority'] },
     { fields: ['pickerId'] },
+    { fields: ['riderId'] },
     { fields: ['slaDeadline'] },
     { fields: ['waveNumber'] },
   ],
 });
+
+// Example association if needed
+// PickingWave.hasMany(PicklistItem, { foreignKey: 'waveId', as: 'PicklistItems' });
 
 export default PickingWave;

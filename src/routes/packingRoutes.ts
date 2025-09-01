@@ -1,22 +1,41 @@
 // routes/packingRoutes.ts
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
+import { PackingController } from '../controllers/packingController';
+import PickingWave from '../models/PickingWave';
+import Rider from '../models/Rider';
+import multer from 'multer';
+import fs from 'fs';
+import path from 'path';
 
 const router = Router();
+
+// ---- Multer setup for file uploads ----
+const uploadDir = path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    cb(null, `${Date.now()}-${file.originalname}`);
+  }
+});
+const upload = multer({ storage });
 
 // Apply authentication middleware to all routes
 router.use(authenticate);
 
 /**
  * @route POST /api/packing/start
- * @desc Start a new packing job from completed picking wave
- * @access Packer, Manager
  */
 router.post('/start', (req, res) => {
   try {
     const { waveId, packerId, priority, workflowType, specialInstructions } = req.body;
     
-    // Simple validation
     if (!waveId) {
       return res.status(400).json({
         statusCode: 400,
@@ -25,7 +44,6 @@ router.post('/start', (req, res) => {
       });
     }
 
-    // Mock response for testing
     return res.status(201).json({
       statusCode: 201,
       success: true,
@@ -52,8 +70,6 @@ router.post('/start', (req, res) => {
 
 /**
  * @route POST /api/packing/verify
- * @desc Verify an item during packing process
- * @access Packer, Manager
  */
 router.post('/verify', (req, res) => {
   try {
@@ -92,8 +108,6 @@ router.post('/verify', (req, res) => {
 
 /**
  * @route POST /api/packing/complete
- * @desc Complete packing job with photos and seals
- * @access Packer, Manager
  */
 router.post('/complete', (req, res) => {
   try {
@@ -129,11 +143,123 @@ router.post('/complete', (req, res) => {
 });
 
 /**
- * @route GET /api/packing/status/:jobId
- * @desc Get packing job status
- * @access Packer, Manager
+ * @route POST /api/packing/:waveId/pack-and-seal
  */
-router.get('/status/:jobId', (req, res) => {
+router.post('/:waveId/pack-and-seal', upload.single('photo'), async (req, res) => {
+  try {
+    const { waveId } = req.params;
+    const photo = req.file as Express.Multer.File | undefined;
+
+    if (!photo) {
+      return res.status(400).json({
+        statusCode: 400,
+        success: false,
+        error: 'photo file is required'
+      });
+    }
+
+    // Ensure wave exists
+    const wave = await PickingWave.findByPk(waveId);
+    if (!wave) {
+      return res.status(404).json({
+        statusCode: 404,
+        success: false,
+        error: `Wave with id ${waveId} not found`
+      });
+    }
+
+
+    // Find minimum deliveries
+    const minDeliveries = await Rider.min('totalDeliveries', {
+      where: { isActive: true, availabilityStatus: 'AVAILABLE' }
+    });
+
+    if (minDeliveries === null) {
+      return res.status(404).json({
+        statusCode: 404,
+        success: false,
+        error: 'No eligible riders found'
+      });
+    }
+
+    // Riders with minimum deliveries
+    const candidates = await Rider.findAll({
+      where: { isActive: true, availabilityStatus: 'AVAILABLE', totalDeliveries: minDeliveries },
+      attributes: [
+        'id',
+        'riderCode',
+        'name',
+        'phone',
+        'email',
+        'vehicleType',
+        'vehicleNumber',
+        'availabilityStatus',
+        'rating',
+        'totalDeliveries'
+      ]
+    });
+
+    if (!candidates.length) {
+      return res.status(404).json({
+        statusCode: 404,
+        success: false,
+        error: 'No eligible riders found'
+      });
+    }
+
+    // Random from candidates
+    const assignedRider = candidates[Math.floor(Math.random() * candidates.length)];
+
+    // ✅ Use relative URL for EC2 instead of absolute path
+    const relativePhotoPath = `/uploads/${photo.filename}`;
+
+    // Update wave → assign rider + mark as PACKED + save photo URL
+    await wave.update({
+      riderId: assignedRider.id,
+      status: 'PACKED',
+      photoPath: relativePhotoPath
+    });
+
+    // Increment totalDeliveries for assigned rider
+    await assignedRider.update({
+      totalDeliveries: assignedRider.totalDeliveries + 1
+    });
+
+    // ✅ Response with URL instead of local path
+    return res.status(201).json({
+      statusCode: 201,
+      success: true,
+      message: 'Product packed and sealed successfully',
+      data: {
+        waveId: wave.id,
+        photo: {
+          filename: photo.filename,
+          url: relativePhotoPath,
+          mimetype: photo.mimetype,
+          size: photo.size
+        },
+        deliveryPartner: assignedRider
+      }
+    });
+  } catch (error) {
+    console.error('Error in pack-and-seal:', error);
+    return res.status(500).json({
+      statusCode: 500,
+      success: false,
+      error: 'Failed to pack and seal product'
+    });
+  }
+});
+
+/**
+ * @route GET /api/packing/status/:jobId
+ */
+router.get('/status/:jobId', PackingController.getPackingStatus);
+
+/**
+ * @route GET /api/packing/status/:jobId/mock
+ */
+router.get('/status/:jobId/mock', (req, res) => {
   try {
     const { jobId } = req.params;
     
@@ -173,8 +299,6 @@ router.get('/status/:jobId', (req, res) => {
 
 /**
  * @route GET /api/packing/awaiting-handover
- * @desc Get jobs awaiting handover
- * @access Manager
  */
 router.get('/awaiting-handover', (req, res) => {
   try {
@@ -203,8 +327,6 @@ router.get('/awaiting-handover', (req, res) => {
 
 /**
  * @route GET /api/packing/sla-status
- * @desc Get SLA status for all jobs
- * @access Manager
  */
 router.get('/sla-status', (req, res) => {
   try {

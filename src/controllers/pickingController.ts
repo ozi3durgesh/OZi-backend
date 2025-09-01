@@ -1,6 +1,6 @@
 // controllers/pickingController.ts
 import { Request, Response } from 'express';
-import { PickingWave, PicklistItem, PickingException, User, Order } from '../models';
+import { PickingWave, PicklistItem, PickingException, User, Order, ScannerBin, ScannerSku } from '../models';
 import { ResponseHandler } from '../middleware/responseHandler';
 import { OrderAttributes } from '../types';
 
@@ -21,12 +21,16 @@ export class PickingController {
         priority = 'MEDIUM', 
         routeOptimization = true, 
         fefoRequired = false,
-        tagsAndBags = false,
-        maxOrdersPerWave = 20 
+        tagsAndBags = false
       } = req.body;
 
       if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
-        return ResponseHandler.error(res, 'Order IDs array is required', 400);
+        return ResponseHandler.error(res, 'Order IDs array is required. Please provide the order_id values (e.g., ["ozi17559724672480002"])', 400);
+      }
+
+      // Enforce one-order-per-wave restriction
+      if (orderIds.length > 1) {
+        return ResponseHandler.error(res, 'Only one order can be picked per wave. Multiple orders are not allowed.', 400);
       }
 
       // Check for duplicate order IDs in the request
@@ -49,112 +53,129 @@ export class PickingController {
 
       // Validate orders exist and are eligible for picking
       const orders = await Order.findAll({
-        where: { id: uniqueOrderIds },
-        attributes: ['id', 'order_amount', 'created_at', 'cart']
+        where: { order_id: uniqueOrderIds },
+        attributes: ['id', 'order_id', 'order_amount', 'created_at', 'cart']
       });
 
       if (orders.length !== uniqueOrderIds.length) {
-        return ResponseHandler.error(res, 'Some orders not found', 404);
+        return ResponseHandler.error(res, `Some order IDs not found: ${uniqueOrderIds.filter(id => !orders.find(order => order.get({ plain: true }).order_id === id)).join(', ')}`, 404);
       }
 
-      // Group orders into waves
+      // Create one wave per order (one-order-per-wave restriction)
       const waves: any[] = [];
-      for (let i = 0; i < orders.length; i += maxOrdersPerWave) {
-        const waveOrders = orders.slice(i, i + maxOrdersPerWave);
-        const waveNumber = `W${Date.now()}-${Math.floor(i / maxOrdersPerWave) + 1}`;
+      for (const order of orders) {
+        const orderData = order.get({ plain: true });
+        const waveNumber = `W${Date.now()}-${orderData.order_id}`;
         
         // Calculate SLA deadline (24 hours from now for demo)
         const slaDeadline = new Date(Date.now() + 24 * 60 * 60 * 1000);
         
-        // Calculate total items correctly - count the actual number of items in cart
+        // Calculate total items for this single order
         let totalItems = 0;
-        for (const order of waveOrders) {
-          const orderData = order.get({ plain: true });
-          console.log(`Order ${orderData.id} cart data:`, JSON.stringify(orderData.cart));
-          if (orderData.cart && Array.isArray(orderData.cart)) {
-            // Count the actual number of items in the cart, not the price amounts
-            // If cart items have quantity field, sum those; otherwise count by array length
-            totalItems += orderData.cart.reduce((sum: number, item: any) => {
-              return sum + (item.quantity || 1);
-            }, 0);
-          } else {
-            console.warn(`Order ${orderData.id} has invalid cart data:`, orderData.cart);
-          }
+        console.log(`Order ${orderData.order_id} cart data:`, JSON.stringify(orderData.cart));
+        if (orderData.cart && Array.isArray(orderData.cart)) {
+          // Count the actual number of items in the cart, not the price amounts
+          // If cart items have quantity field, sum those; otherwise count by array length
+          totalItems = orderData.cart.reduce((sum: number, item: any) => {
+            return sum + (item.quantity || 1);
+          }, 0);
+        } else {
+          console.warn(`Order ${orderData.id} has invalid cart data:`, orderData.cart);
         }
         
-        console.log(`Wave ${waveNumber}: ${waveOrders.length} orders, ${totalItems} total items`);
+        console.log(`Wave ${waveNumber}: 1 order (${orderData.order_id}), ${totalItems} total items`);
         
         const wave = await PickingWave.create({
           waveNumber,
           status: 'GENERATED',
           priority,
-          totalOrders: waveOrders.length,
+          totalOrders: 1, // Always 1 order per wave
           totalItems: totalItems,
-          estimatedDuration: Math.ceil(waveOrders.length * 2), // 2 minutes per order
+          estimatedDuration: 2, // 2 minutes per order (fixed for single order)
           slaDeadline,
           routeOptimization,
           fefoRequired,
           tagsAndBags
         } as any);
+        
 
-        // Create picklist items for each order
+        // Create picklist items for this single order
         let actualTotalItems = 0;
         let createdItems = 0;
         
-        for (const order of waveOrders) {
-          const orderData = order.get({ plain: true });
-          console.log(`\n=== Processing order ${orderData.id} ===`);
-          console.log(`Order cart data:`, JSON.stringify(orderData.cart, null, 2));
+        if (orderData.cart && Array.isArray(orderData.cart)) {
+          console.log(`Cart is array with ${orderData.cart.length} items`);
           
-          if (orderData.cart && Array.isArray(orderData.cart)) {
-            console.log(`Cart is array with ${orderData.cart.length} items`);
+          for (let i = 0; i < orderData.cart.length; i++) {
+            const item = orderData.cart[i];
+            console.log(`\n--- Processing cart item ${i + 1} ---`);
+            console.log(`Item data:`, JSON.stringify(item, null, 2));
+            console.log(`Item type:`, typeof item);
+            console.log(`Item keys:`, Object.keys(item));
             
-            for (let i = 0; i < orderData.cart.length; i++) {
-              const item = orderData.cart[i];
-              console.log(`\n--- Processing cart item ${i + 1} ---`);
-              console.log(`Item data:`, JSON.stringify(item, null, 2));
-              console.log(`Item type:`, typeof item);
-              console.log(`Item keys:`, Object.keys(item));
+            // More flexible validation - check for sku and either amount or quantity
+            if (item && item.sku !== undefined && item.sku !== null) {
+              // For cart items with amount but no quantity, use amount as quantity
+              // This handles the case where cart items have {sku: 123, amount: 25.99}
+              const quantity = item.quantity || (item.amount ? 1 : 1);
+              console.log(`✓ Valid item - SKU: ${item.sku}, quantity: ${quantity}, amount: ${item.amount}`);
               
-              // More flexible validation - check for sku and either amount or quantity
-              if (item && item.sku !== undefined && item.sku !== null) {
-                // For cart items with amount but no quantity, use amount as quantity
-                // This handles the case where cart items have {sku: 123, amount: 25.99}
-                const quantity = item.quantity || (item.amount ? 1 : 1);
-                console.log(`✓ Valid item - SKU: ${item.sku}, quantity: ${quantity}, amount: ${item.amount}`);
-                
-                try {
-                  const picklistItem = await PicklistItem.create({
-                    waveId: wave.id,
-                    orderId: orderData.id,
-                    sku: item.sku.toString(), // Convert number to string for storage
-                    productName: `Product-${item.sku}`, // Generate product name from SKU
-                    binLocation: `A${Math.floor(Math.random() * 10) + 1}-B${Math.floor(Math.random() * 10) + 1}-C${Math.floor(Math.random() * 10) + 1}`, // Generate random bin location
-                    quantity: quantity, // Use quantity or default to 1
-                    scanSequence: Math.floor(Math.random() * 100) + 1, // Random sequence for demo
-                    fefoBatch: fefoRequired ? `BATCH-${Date.now()}` : undefined,
-                    expiryDate: fefoRequired ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : undefined
-                  } as any);
-                  
-                  console.log(`✓ Successfully created picklist item with ID: ${picklistItem.id}`);
-                  createdItems++;
-                  actualTotalItems += quantity;
-                  
-                } catch (createError) {
-                  console.error(`✗ Error creating picklist item:`, createError);
-                  console.error(`Error details:`, createError instanceof Error ? createError.message : String(createError));
+              try {
+                // Find the SKU in ScannerSku table to get bin location
+                const scannerSku = await ScannerSku.findOne({
+                  where: { skuScanId: item.sku.toString() }
+                });
+
+                if (!scannerSku) {
+                  console.error(`✗ SKU ${item.sku} not found in ScannerSku table`);
+                  throw new Error(`SKU ${item.sku} not found in scanner system. Please ensure the SKU is properly scanned and registered.`);
                 }
-              } else {
-                console.warn(`✗ Skipping cart item without SKU:`, JSON.stringify(item));
-                console.warn(`Item.sku value:`, item?.sku);
-                console.warn(`Item.sku type:`, typeof item?.sku);
+
+                // Get the bin location from ScannerBin table
+                const scannerBin = await ScannerBin.findOne({
+                  where: {
+                    binLocationScanId: scannerSku.binLocationScanId
+                  }
+                });
+
+                if (!scannerBin) {
+                  console.error(`✗ Bin location not found for SKU ${item.sku} with binLocationScanId: ${scannerSku.binLocationScanId}`);
+                  throw new Error(`Bin location not found for SKU ${item.sku}. Please ensure the bin location is properly scanned and registered.`);
+                }
+
+                // Use the actual bin location from scanner system
+                const binLocation = scannerBin.binLocationScanId;
+
+                const picklistItem = await PicklistItem.create({
+                  waveId: wave.id,
+                  orderId: orderData.id, // Keep using internal ID for database relationships
+                  sku: item.sku.toString(), // Convert number to string for storage
+                  productName: `Product-${item.sku}`, // Generate product name from SKU
+                  binLocation: binLocation, // Use actual bin location from scanner system
+                  quantity: quantity, // Use quantity or default to 1
+                  scanSequence: Math.floor(Math.random() * 100) + 1, // Random sequence for demo
+                  fefoBatch: fefoRequired ? `BATCH-${Date.now()}` : undefined,
+                  expiryDate: fefoRequired ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : undefined
+                } as any);
+                
+                console.log(`✓ Successfully created picklist item with ID: ${picklistItem.id}`);
+                createdItems++;
+                actualTotalItems += quantity;
+                
+              } catch (createError) {
+                console.error(`✗ Error creating picklist item:`, createError);
+                console.error(`Error details:`, createError instanceof Error ? createError.message : String(createError));
               }
+            } else {
+              console.warn(`✗ Skipping cart item without SKU:`, JSON.stringify(item));
+              console.warn(`Item.sku value:`, item?.sku);
+              console.warn(`Item.sku type:`, typeof item?.sku);
             }
-          } else {
-            console.warn(`✗ Order ${orderData.id} has invalid cart data:`, orderData.cart);
-            console.warn(`Cart type:`, typeof orderData.cart);
-            console.warn(`Cart is array:`, Array.isArray(orderData.cart));
           }
+        } else {
+          console.warn(`✗ Order ${orderData.order_id} has invalid cart data:`, orderData.cart);
+          console.warn(`Cart type:`, typeof orderData.cart);
+          console.warn(`Cart is array:`, Array.isArray(orderData.cart));
         }
         
         console.log(`\n=== Summary for wave ${wave.id} ===`);
@@ -171,15 +192,16 @@ export class PickingController {
       }
 
       return ResponseHandler.success(res, {
-        message: `Generated ${waves.length} picking waves`,
-        waves: waves.map(wave => ({
+        message: `Generated ${waves.length} picking wave(s) - one order per wave`,
+        waves: waves.map((wave, index) => ({
           id: wave.id,
           waveNumber: wave.waveNumber,
           status: wave.status,
           totalOrders: wave.totalOrders,
           totalItems: wave.totalItems,
           estimatedDuration: wave.estimatedDuration,
-          slaDeadline: wave.slaDeadline
+          slaDeadline: wave.slaDeadline,
+          orderId: orders[index].get({ plain: true }).order_id // Include the order_id for each wave
         }))
       }, 201);
 
@@ -285,6 +307,93 @@ export class PickingController {
 
     } catch (error) {
       console.error('Assign waves error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+  /**
+   * Manually assign a specific wave to a specific picker
+   */
+  static async assignWaveToPicker(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { waveId, pickerId, priority } = req.body;
+
+      if (!waveId || !pickerId) {
+        return ResponseHandler.error(res, 'Wave ID and picker ID are required', 400);
+      }
+
+      // Validate wave exists and is available for assignment
+      const wave = await PickingWave.findByPk(waveId);
+      if (!wave) {
+        return ResponseHandler.error(res, 'Wave not found', 404);
+      }
+
+      if (wave.status !== 'GENERATED') {
+        return ResponseHandler.error(res, `Wave is not available for assignment. Current status: ${wave.status}`, 400);
+      }
+
+      // Validate picker exists and has picking permissions
+      const picker = await User.findByPk(pickerId, {
+        include: [{
+          association: 'Role',
+          include: ['Permissions']
+        }],
+        attributes: ['id', 'email', 'availabilityStatus', 'isActive']
+      });
+
+      if (!picker) {
+        return ResponseHandler.error(res, 'Picker not found', 404);
+      }
+
+      if (!picker.isActive) {
+        return ResponseHandler.error(res, 'Picker is not active', 400);
+      }
+
+      if (picker.availabilityStatus !== 'available') {
+        return ResponseHandler.error(res, `Picker is not available. Current status: ${picker.availabilityStatus}`, 400);
+      }
+
+      // Check if picker has picking permissions
+      const permissions = (picker as any).Role?.Permissions || [];
+      const hasPickingPermission = permissions.some((p: any) => 
+        p.module === 'picking' && ['view', 'assign_manage', 'execute'].includes(p.action)
+      );
+
+      if (!hasPickingPermission) {
+        return ResponseHandler.error(res, 'Picker does not have picking permissions', 403);
+      }
+
+      // Check if picker can handle more waves (max 3)
+      const pickerWaves = await PickingWave.count({
+        where: { pickerId: picker.id, status: ['ASSIGNED', 'PICKING'] }
+      });
+
+      if (pickerWaves >= 20) {
+        return ResponseHandler.error(res, 'Picker has reached maximum wave limit (3)', 400);
+      }
+
+      // Update wave with assignment
+      await wave.update({
+        status: 'ASSIGNED',
+        pickerId: picker.id,
+        assignedAt: new Date(),
+        priority: priority || wave.priority // Use provided priority or keep existing
+      });
+
+      return ResponseHandler.success(res, {
+        message: 'Wave assigned successfully',
+        assignment: {
+          waveId: wave.id,
+          waveNumber: wave.waveNumber,
+          pickerId: picker.id,
+          pickerEmail: picker.email,
+          assignedAt: wave.assignedAt,
+          priority: wave.priority
+        }
+      });
+
+    } catch (error) {
+      console.error('Assign wave to picker error:', error);
       return ResponseHandler.error(res, 'Internal server error', 500);
     }
   }
@@ -485,6 +594,237 @@ export class PickingController {
   }
 
   /**
+   * Scan bin location for validation using new scanner tables
+   */
+  static async scanBinLocation(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { waveId } = req.params;
+      const { scannedId, skuID, binlocation } = req.body;
+      const pickerId = req.user!.id;
+
+      if (!scannedId || !skuID || !binlocation) {
+        return ResponseHandler.error(res, 'scannedId, skuID, and binlocation are required', 400);
+      }
+
+      // Get wave to validate status and picker
+      const wave = await PickingWave.findByPk(waveId);
+      if (!wave) {
+        return ResponseHandler.error(res, 'Wave not found', 404);
+      }
+
+      if (wave.status !== 'PICKING') {
+        return ResponseHandler.error(res, 'Wave is not in picking status', 400);
+      }
+
+      if (wave.pickerId !== pickerId) {
+        return ResponseHandler.error(res, 'You are not assigned to this wave', 403);
+      }
+
+      // Check if scannedId and binlocation match
+      if (scannedId !== binlocation) {
+        return ResponseHandler.error(res, 'Scanned ID and bin location do not match', 400);
+      }
+
+      // Find bin location in scanner_bin table
+      const scannerBin = await ScannerBin.findOne({
+        where: { binLocationScanId: binlocation }
+      });
+
+      if (!scannerBin) {
+        return ResponseHandler.success(res, {
+          message: 'Bin location not found in system',
+          binLocationFound: false,
+          scannedId,
+          binlocation,
+          waveId: parseInt(waveId),
+          error: 'INVALID_BIN_LOCATION'
+        });
+      }
+
+      // Check if SKU exists in the bin location's SKU array
+      const skuExists = scannerBin.sku.includes(skuID);
+      
+      if (!skuExists) {
+        return ResponseHandler.success(res, {
+          message: 'SKU not found at this bin location',
+          binLocationFound: false,
+          scannedId,
+          skuID,
+          binlocation,
+          waveId: parseInt(waveId),
+          error: 'SKU_NOT_FOUND_AT_LOCATION'
+        });
+      }
+
+      // Find picklist items with matching bin location
+      const picklistItems = await PicklistItem.findAll({
+        where: { 
+          waveId: parseInt(waveId),
+          binLocation: binlocation,
+          status: ['PENDING', 'PICKING']
+        }
+      });
+
+      const binLocationFound = picklistItems.length > 0;
+
+      return ResponseHandler.success(res, {
+        message: binLocationFound ? 'Bin location and SKU validated successfully' : 'Bin location validated but no picklist items found',
+        binLocationFound,
+        scannedId,
+        skuID,
+        binlocation,
+        availableSkus: scannerBin.sku,
+        totalSkusAtLocation: scannerBin.sku.length,
+        picklistItems: picklistItems.map(item => ({
+          id: item.id,
+          sku: item.sku,
+          productName: item.productName,
+          quantity: item.quantity,
+          status: item.status,
+          scanSequence: item.scanSequence
+        })),
+        waveId: parseInt(waveId)
+      });
+
+    } catch (error) {
+      console.error('Scan bin location error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+  /**
+   * Scan SKU for validation using new scanner tables
+   */
+  static async scanSku(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { waveId } = req.params;
+      const { scannedId, skuID, binlocation } = req.body;
+      const pickerId = req.user!.id;
+
+      if (!scannedId || !skuID || !binlocation) {
+        return ResponseHandler.error(res, 'scannedId, skuID, and binlocation are required', 400);
+      }
+
+      // Get wave to validate status and picker
+      const wave = await PickingWave.findByPk(waveId);
+      if (!wave) {
+        return ResponseHandler.error(res, 'Wave not found', 404);
+      }
+
+      if (wave.status !== 'PICKING') {
+        return ResponseHandler.error(res, 'Wave is not in picking status', 400);
+      }
+
+      if (wave.pickerId !== pickerId) {
+        return ResponseHandler.error(res, 'You are not assigned to this wave', 403);
+      }
+
+      // Check if scannedId and skuID match
+      if (scannedId !== skuID) {
+        return ResponseHandler.error(res, 'Scanned ID and SKU ID do not match', 400);
+      }
+
+      // Find SKU scan in scanner_sku table
+      const scannerSku = await ScannerSku.findOne({
+        where: { skuScanId: skuID }
+      });
+
+      if (!scannerSku) {
+        return ResponseHandler.success(res, {
+          message: 'SKU scan not found in system',
+          skuFound: false,
+          scannedId,
+          skuID,
+          waveId: parseInt(waveId),
+          error: 'INVALID_SKU_SCAN'
+        });
+      }
+
+      // Check if binlocation matches the binLocationScanId in scanner_sku table
+      if (scannerSku.binLocationScanId !== binlocation) {
+        return ResponseHandler.success(res, {
+          message: 'Bin location does not match SKU scan location',
+          skuFound: false,
+          scannedId,
+          skuID,
+          binlocation,
+          expectedBinLocation: scannerSku.binLocationScanId,
+          waveId: parseInt(waveId),
+          error: 'BIN_LOCATION_MISMATCH'
+        });
+      }
+
+      // Find picklist item with matching SKU and bin location
+      const currentItem = await PicklistItem.findOne({
+        where: { 
+          waveId: parseInt(waveId),
+          sku: skuID,
+          binLocation: binlocation,
+          status: ['PENDING', 'PICKING']
+        }
+      });
+
+      if (!currentItem) {
+        return ResponseHandler.success(res, {
+          message: 'No matching picklist item found',
+          skuFound: false,
+          scannedId,
+          skuID,
+          binlocation,
+          waveId: parseInt(waveId),
+          error: 'NO_MATCHING_PICKLIST_ITEM'
+        });
+      }
+
+      // Update item status to PICKED
+      await currentItem.update({
+        status: 'PICKED',
+        pickedQuantity: currentItem.quantity,
+        pickedAt: new Date(),
+        pickedBy: pickerId
+      });
+
+      // Check if all items in wave are picked
+      const remainingItems = await PicklistItem.count({
+        where: { 
+          waveId: parseInt(waveId),
+          status: ['PENDING', 'PICKING']
+        }
+      });
+
+      if (remainingItems === 0) {
+        await wave.update({
+          status: 'PACKED',
+          completedAt: new Date()
+        });
+      }
+
+      return ResponseHandler.success(res, {
+        message: 'SKU validated and item picked successfully',
+        skuFound: true,
+        scannedId,
+        skuID,
+        binlocation,
+        skuData: scannerSku.sku,
+        item: {
+          id: currentItem.id,
+          sku: currentItem.sku,
+          productName: currentItem.productName,
+          status: 'PICKED',
+          pickedQuantity: currentItem.quantity,
+          remainingQuantity: 0
+        },
+        waveStatus: wave.status,
+        remainingItems
+      });
+
+    } catch (error) {
+      console.error('Scan SKU error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+  /**
    * Report partial pick with reason
    */
   static async reportPartialPick(req: AuthRequest, res: Response): Promise<Response> {
@@ -607,7 +947,7 @@ export class PickingController {
 
       // Update wave status
       await wave.update({
-        status: 'COMPLETED',
+        status: 'PACKED',
         completedAt: new Date()
       });
 

@@ -1,6 +1,6 @@
 // controllers/handoverController.ts
 import { Request, Response } from 'express';
-import { Handover, PackingJob, Rider, User, PackingEvent, LMSShipment } from '../models';
+import { Handover, PackingJob, Rider, User, PackingEvent, LMSShipment, PickingWave } from '../models';
 import { LMSIntegration } from '../utils/lmsIntegration';
 import { 
   AssignRiderRequest, 
@@ -8,6 +8,13 @@ import {
   ApiResponse,
   LMSIntegrationConfig 
 } from '../types';
+import sequelize from '../config/database';
+import { ResponseHandler } from '../middleware/responseHandler';
+
+
+interface AuthRequest extends Request {
+  user?: any;
+}
 
 export class HandoverController {
   private lmsIntegration: LMSIntegration;
@@ -21,7 +28,7 @@ export class HandoverController {
       retryAttempts: parseInt(process.env.LMS_RETRY_ATTEMPTS || '3'),
       retryDelay: parseInt(process.env.LMS_RETRY_DELAY || '1000'),
     };
-    
+
     this.lmsIntegration = new LMSIntegration(lmsConfig);
   }
 
@@ -255,7 +262,7 @@ export class HandoverController {
       }
 
       const updateData: any = { status };
-      
+
       // Set appropriate timestamp based on status
       switch (status) {
         case 'IN_TRANSIT':
@@ -544,7 +551,7 @@ export class HandoverController {
 
     } catch (error) {
       console.error('LMS sync error:', error);
-      
+
       // Update handover with error
       const existingHandover = await Handover.findByPk(handoverId);
       if (existingHandover) {
@@ -595,4 +602,197 @@ export class HandoverController {
 
     return validTransitions[currentStatus]?.includes(newStatus) || false;
   }
+
+  /**
+   * Handover packed products to dispatch with validation
+   */
+  static async handoverToDispatch(req: AuthRequest, res: Response): Promise<Response> {
+    const transaction = await sequelize.transaction();
+
+    try {
+      const { jobNumber, sku, quantity, destination, warehouseId, specialInstructions } = req.body;
+      const dispatcherId = req.user!.id;
+
+      // Basic validation
+      if (!jobNumber || !sku || !quantity || !destination || !warehouseId) {
+        return ResponseHandler.error(res, 'jobNumber, sku, quantity, destination, and warehouseId are required', 400);
+      }
+
+      if (quantity <= 0) {
+        return ResponseHandler.error(res, 'quantity must be greater than 0', 400);
+      }
+
+      // Find the packing job
+      const packingJob = await PackingJob.findOne({
+        where: { jobNumber },
+        include: [
+          { model: PickingWave, as: 'Wave' },
+          { model: User, as: 'Packer' }
+        ]
+      });
+
+      if (!packingJob) {
+        return ResponseHandler.error(res, 'Packing job not found', 404);
+      }
+
+      // Check if packing job is completed
+      if (packingJob.status !== 'COMPLETED') {
+        return ResponseHandler.error(res, 'Cannot handover - packing job is not completed', 400);
+      }
+
+      // Note: SKU validation would need to be added to PackingJob model
+      // For now, we'll validate quantity match
+      if (packingJob.packedItems !== quantity) {
+        return ResponseHandler.error(res, 'Quantity mismatch with packing job', 400);
+      }
+
+      // Check if already handed over
+      const existingHandover = await Handover.findOne({
+        where: { jobId: packingJob.id }
+      });
+
+      if (existingHandover) {
+        return ResponseHandler.error(res, 'Product already handed over to dispatch', 409);
+      }
+
+      // Generate AWB/Manifest ID
+      const { generateAWBNumber, generateTrackingNumber } = require('../../utils/awbGenerator');
+      const awbNumber = generateAWBNumber();
+      const trackingNumber = generateTrackingNumber();
+
+      // Create handover record
+      const handover = await Handover.create({
+        jobId: packingJob.id,
+        riderId: 0, // Will be assigned later (0 indicates unassigned)
+        status: 'ASSIGNED',
+        assignedAt: new Date(),
+        trackingNumber,
+        manifestNumber: awbNumber,
+        specialInstructions,
+        lmsSyncStatus: 'PENDING'
+      }, { transaction });
+
+      // Update packing job status
+      await packingJob.update({
+        status: 'AWAITING_HANDOVER',
+        handoverAt: new Date()
+      }, { transaction });
+
+      // Commit transaction
+      await transaction.commit();
+
+      return ResponseHandler.success(res, {
+        message: 'Product handed over to dispatch successfully',
+        handoverId: handover.id,
+        jobNumber,
+        sku,
+        quantity,
+        destination,
+        warehouseId,
+        awbNumber,
+        trackingNumber,
+        specialInstructions,
+        status: 'DISPATCHED',
+        dispatchedAt: new Date(),
+        estimatedDelivery: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours from now
+        readyForDelivery: true
+      }, 201);
+
+    } catch (error) {
+      // Rollback transaction on error
+      await transaction.rollback();
+      console.error('Handover to dispatch error:', error);
+      return ResponseHandler.error(res, 'Failed to handover product to dispatch', 500);
+    }
+  }
 }
+
+export const dispatchWave = async (req: Request, res: Response) => {
+  try {
+    const { waveId } = req.params;
+    const { riderId, dispatchNotes } = req.body;
+    const handoverPhoto = req.file; // multer saves here
+    const staffId = (req as any).user.id; // JWT decoded userId
+
+    // 1. Validate Wave
+    const wave = await PickingWave.findByPk(waveId);
+    console.log(wave);
+    if (!wave) {
+      return res.status(404).json({ success: false, message: "Wave not found" });
+    }
+
+   if (wave.status !== "PACKED") {
+  return res
+    .status(400)
+    .json({ success: false, message: "Wave not ready for dispatch" });
+}
+
+
+// 2. Validate Rider
+const rider = await Rider.findOne({
+  where: {
+    id: riderId,
+    isActive: true,
+    availabilityStatus: "AVAILABLE", // must match Rider ENUM (uppercase)
+  },
+});
+
+if (!rider) {
+  return res.status(400).json({ success: false, message: "Rider not available" });
+}
+
+rider.availabilityStatus = "BUSY"; // Set the rider's availability to BUSY
+    await rider.save();
+
+    // 3. Update Wave → Dispatched
+    wave.status = "COMPLETED"; // Update to COMPLETED
+    wave.handoverAt = new Date();
+    wave.handoverBy = staffId;
+    wave.riderId = rider.id;
+    wave.dispatchNotes = dispatchNotes || null;
+    if (handoverPhoto) {
+      wave.handoverPhoto = handoverPhoto.path;
+    }
+    await wave.save();
+
+    // 4. Response
+    return res.status(200).json({
+      statusCode: 200,
+      success: true,
+      message: "Order dispatched successfully",
+      data: {
+        waveId: wave.id,
+        status: wave.status,
+        handoverAt: wave.handoverAt,
+        handoverBy: { id: staffId },
+        deliveryPartner: {
+          id: rider.id,
+          riderCode: rider.riderCode,
+          name: rider.name,
+          phone: rider.phone,
+          email: rider.email,
+          vehicleType: rider.vehicleType,
+          vehicleNumber: rider.vehicleNumber,
+          availabilityStatus: rider.availabilityStatus,
+          rating: rider.rating,
+          totalDeliveries: rider.totalDeliveries,
+        },
+        photo: handoverPhoto
+          ? {
+              filename: handoverPhoto.filename,
+              path: handoverPhoto.path,
+              mimetype: handoverPhoto.mimetype,
+              size: handoverPhoto.size,
+            }
+          : null,
+      },
+    });
+  } catch (error: any) {
+    console.error("Dispatch Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to dispatch order",
+      error: error.message,
+    });
+  }
+};

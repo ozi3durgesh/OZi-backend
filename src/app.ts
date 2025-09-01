@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import path from 'path';
 import authRoutes from './routes/authRoutes';
 import userRoutes from './routes/userRoutes';
 import couponRoutes from './routes/couponRoutes';
@@ -14,8 +15,10 @@ import packingRoutes from './routes/packingRoutes';
 import handoverRoutes from './routes/handoverRoutes';
 import warehouseRoutes from './routes/warehouseRoutes';
 import grnRoutes from './routes/grnRoutes';
+import paymentRoutes from './routes/paymentRoutes';
+import easyEcomWebhookRoutes from './routes/easyEcomWebhookRoutes';
 import { errorHandler } from './middleware/errorHandler';
-import UniversalLogger from './middleware/universalLogger';
+import poRoutes from './routes/purchaseOrder.routes';
 
 const app = express();
 
@@ -34,8 +37,9 @@ app.use(limiter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Universal logging middleware - must be after body parsing but before routes
-app.use(UniversalLogger.logRequest);
+// ✅ Serve uploads folder so EC2 can access files
+const uploadDir = path.join(process.cwd(), 'uploads');
+app.use('/uploads', express.static(uploadDir));
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -44,14 +48,21 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/coupon', couponRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/api/permissions', permissionRoutes);
-app.use('/api/picking', pickingRoutes);
+app.use('/api/picklist', pickingRoutes);
 app.use('/api/packing', packingRoutes);
 app.use('/api/handover', handoverRoutes);
 app.use('/api/warehouses', warehouseRoutes);
 app.use('/api/grn', grnRoutes);
+app.use('/api/po', poRoutes);
 
 // PHP Production Compatible Routes
 app.use('/api/v1/customer/order', orderRoutes);
+
+// Ecommerce integration routes
+app.use('/api/ecommerce', easyEcomWebhookRoutes);
+
+// Payment routes
+app.use('/payment', paymentRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -60,6 +71,17 @@ app.get('/health', (req, res) => {
     success: true,
     data: { message: 'Server is running' },
     error: null,
+  });
+});
+
+// Debug endpoint to check JWT configuration
+app.get('/debug/jwt', (req, res) => {
+  res.json({
+    jwtAccessSecret: process.env.JWT_ACCESS_SECRET ? 'Set' : 'Not set',
+    jwtRefreshSecret: process.env.JWT_REFRESH_SECRET ? 'Set' : 'Not set',
+    jwtAccessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN,
+    jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN,
+    nodeEnv: process.env.NODE_ENV,
   });
 });
 

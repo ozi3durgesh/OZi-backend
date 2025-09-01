@@ -20,6 +20,7 @@ interface PicklistItemAttributes {
   pickedAt?: Date;
   pickedBy?: number;
   notes?: string;
+  scannerId?: string;   // ✅ NEW FIELD
   createdAt: Date;
   updatedAt: Date;
 }
@@ -42,6 +43,7 @@ class PicklistItem extends Model<PicklistItemAttributes> implements PicklistItem
   declare pickedAt?: Date;
   declare pickedBy?: number;
   declare notes?: string;
+  declare scannerId?: string;   // ✅ NEW FIELD
   declare createdAt: Date;
   declare updatedAt: Date;
 }
@@ -132,6 +134,10 @@ PicklistItem.init({
     type: DataTypes.TEXT,
     allowNull: true,
   },
+  scannerId: {                 // ✅ NEW FIELD
+    type: DataTypes.STRING(100),
+    allowNull: true,
+  },
   createdAt: {
     type: DataTypes.DATE,
     allowNull: false,
@@ -153,6 +159,7 @@ PicklistItem.init({
     { fields: ['status'] },
     { fields: ['fefoBatch'] },
     { fields: ['expiryDate'] },
+    { fields: ['scannerId'] }, // ✅ index for faster lookups
   ],
 });
 

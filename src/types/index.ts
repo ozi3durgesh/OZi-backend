@@ -40,6 +40,7 @@ export interface JwtPayload {
   permissions: string[];
 }
 
+// types.ts
 export interface UserAttributes {
   id: number;
   email: string;
@@ -49,6 +50,16 @@ export interface UserAttributes {
   availabilityStatus: 'available' | 'break' | 'off-shift';
   createdAt: Date;
   updatedAt: Date;
+
+  // Rider-specific fields if you want them here
+  riderCode?: string;
+  name?: string;
+  phone?: string;
+  vehicleType?: string;
+  vehicleNumber?: string;
+  currentLocation?: string;
+  rating?: number;
+  totalDeliveries?: number;
 }
 
 export interface UserCreationAttributes {
@@ -58,6 +69,7 @@ export interface UserCreationAttributes {
   isActive?: boolean;
   availabilityStatus?: 'available' | 'break' | 'off-shift';
 }
+
 
 // Add these to your existing types/index.ts file
 
@@ -231,6 +243,10 @@ export interface OrderAttributes {
   create_new_user?: number;
   guest_id?: string;
   password?: string;
+  
+  // Associations
+  orderDetails?: any[];
+  ecomLogs?: any[];
 }
 
 export interface OrderCreationAttributes {
@@ -381,12 +397,19 @@ export interface PackingJobCreationAttributes {
   jobNumber?: string;
   waveId: number;
   packerId?: number;
+  status?: 'PENDING' | 'PACKING' | 'VERIFYING' | 'COMPLETED' | 'CANCELLED' | 'AWAITING_HANDOVER' | 'HANDOVER_ASSIGNED';
   priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   workflowType?: 'PICKER_PACKS' | 'DEDICATED_PACKER';
   specialInstructions?: string;
   slaDeadline?: Date;
   totalItems?: number;
+  packedItems?: number;
+  verifiedItems?: number;
   estimatedDuration?: number;
+  assignedAt?: Date;
+  startedAt?: Date;
+  completedAt?: Date;
+  handoverAt?: Date;
 }
 
 export interface PackingItemAttributes {
@@ -532,6 +555,12 @@ export interface HandoverCreationAttributes {
   status?: 'ASSIGNED' | 'CONFIRMED' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
   assignedAt?: Date;
   specialInstructions?: string;
+  trackingNumber?: string;
+  manifestNumber?: string;
+  lmsSyncStatus?: 'PENDING' | 'SYNCED' | 'FAILED' | 'RETRY';
+  lmsSyncAttempts?: number;
+  lmsLastSyncAt?: Date;
+  lmsErrorMessage?: string;
 }
 
 export interface LMSShipmentAttributes {

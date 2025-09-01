@@ -7,7 +7,7 @@ import { ResponseHandler } from '../middleware/responseHandler';
 import { CartItem } from '../types';
 import sequelize from '../config/database';
 import { generateSimpleOrderId } from '../utils/orderIdGenerator';
-import { CartProcessor } from '../utils/cartProcessor';
+
 import { OrderTransactionService, OrderTransactionData } from '../services/OrderTransactionService';
 
 interface AuthRequest extends Request {
@@ -708,38 +708,18 @@ export class OrderController {
         return ResponseHandler.error(res, 'Cart must contain at least one item', 400);
       }
 
-      // CART RETRIEVAL AND PRODUCT PROCESSING
-      // Process cart items with product lookup, variant processing, and stock validation
-      console.log('Processing cart items with product lookup and validation...');
-      const cartProcessingResult = await CartProcessor.processCart(
-        orderData.cart,
-        orderData.store_id,
-        orderData.coupon_code
-      );
-
-      if (!cartProcessingResult.success) {
-        const errorMessage = cartProcessingResult.errors.length > 0 
-          ? cartProcessingResult.errors.join('. ')
-          : 'Cart processing failed';
-        return ResponseHandler.error(res, errorMessage, 400);
+      // CART VALIDATION
+      // Basic cart validation without product lookup
+      console.log('Validating cart items...');
+      
+      if (!orderData.cart || orderData.cart.length === 0) {
+        return ResponseHandler.error(res, 'Cart cannot be empty', 400);
       }
 
-      // Log successful cart processing
-      console.log('Cart processing completed successfully');
-      console.log('Processed items:', cartProcessingResult.processedItems.length);
-      console.log('Subtotal:', cartProcessingResult.subtotal);
-      console.log('Stock validation passed:', cartProcessingResult.stockValidationPassed);
-      console.log('Price validation passed:', cartProcessingResult.priceValidationPassed);
-
-      // Validate that calculated amounts match provided amounts
-      const calculatedTotal = cartProcessingResult.finalAmount;
-      if (Math.abs(calculatedTotal - orderData.order_amount) > 0.01) {
-        return ResponseHandler.error(
-          res, 
-          `Order amount mismatch. Calculated: ${calculatedTotal}, Provided: ${orderData.order_amount}`, 
-          400
-        );
-      }
+      // Log cart validation
+      console.log('Cart validation completed successfully');
+      console.log('Cart items:', orderData.cart.length);
+      console.log('Order amount:', orderData.order_amount);
 
       // Validate order type specific requirements
       if (orderData.order_type === 'delivery' || orderData.order_type === 'parcel') {
@@ -789,12 +769,9 @@ export class OrderController {
         return ResponseHandler.error(res, 'Final order amount must be greater than 0', 400);
       }
 
-      // Use coupon processing results from CartProcessor
-      if (cartProcessingResult.couponDiscountAmount > 0) {
-        couponDiscountAmount = cartProcessingResult.couponDiscountAmount;
-        // Note: Coupon validation and usage increment already handled by CartProcessor
-      } else if (orderData.coupon_code) {
-        // Fallback to existing coupon validation if not processed by CartProcessor
+      // Process coupon if provided
+      if (orderData.coupon_code) {
+        // Process coupon validation
         const couponValidation = await OrderController.validateAndApplyCoupon(
           orderData.coupon_code,
           orderData.store_id,
@@ -820,67 +797,25 @@ export class OrderController {
       // Prepare data for transaction service
       const transactionData: OrderTransactionData = {
         user_id: finalUserId,
-        order_amount: finalOrderAmount,
-        coupon_discount_amount: couponDiscountAmount,
-        coupon_discount_title: orderData.coupon_discount_title,
-        payment_method: orderData.payment_method,
-        order_type: orderData.order_type,
         store_id: orderData.store_id,
-        delivery_charge: orderData.delivery_charge || 0,
+        order_amount: finalOrderAmount,
+        tax_amount: taxAmount,
+        payment_method: orderData.payment_method,
         delivery_address: orderData.address,
-        latitude: orderData.latitude || 0,
-        longitude: orderData.longitude || 0,
-        contact_person_name: orderData.contact_person_name || 'Unknown',
-        contact_person_number: orderData.contact_person_number,
-        is_guest: Boolean(orderData.is_guest) || false,
-        guest_id: orderData.guest_id,
-        dm_tips: orderData.dm_tips || 0,
-        cutlery: orderData.cutlery || 0,
-        order_note: orderData.order_note,
-        schedule_at: orderData.scheduled_timestamp,
-        zone_id: orderData.zone_id || 1,
-        module_id: orderData.module_id || 1,
-        order_attachment: orderData.order_attachment,
-        parcel_category_id: orderData.parcel_category_id,
-        receiver_details: orderData.receiver_details,
-        charge_payer: orderData.charge_payer || 'sender',
-        distance: orderData.distance || 0,
         cart: orderData.cart,
         coupon_code: orderData.coupon_code,
-        transaction_reference: orderData.transaction_reference,
-        delivery_address_id: orderData.delivery_address_id,
-        delivery_man_id: orderData.delivery_man_id,
-        delivery_time: orderData.delivery_time,
-        tax_amount: taxAmount,
-        store_discount_amount: orderData.store_discount_amount || 0,
-        original_delivery_charge: orderData.original_delivery_charge || 0,
-        is_scheduled: orderData.is_scheduled || false,
-        scheduled_timestamp: orderData.scheduled_timestamp,
-        callback: orderData.callback,
-        prescription_order: Boolean(orderData.prescription_order) || false,
-        tax_status: orderData.tax_status || 'excluded',
-        dm_vehicle_id: orderData.dm_vehicle_id,
-        processing_time: orderData.processing_time,
-        unavailable_item_note: orderData.unavailable_item_note,
-        delivery_instruction: orderData.delivery_instruction,
-        tax_percentage: orderData.tax_percentage || 10,
-        additional_charge: orderData.additional_charge || 0,
-        order_proof: orderData.order_proof,
-        partially_paid_amount: orderData.partially_paid_amount || 0,
-        flash_admin_discount_amount: orderData.flash_admin_discount_amount || 0,
-        flash_store_discount_amount: orderData.flash_store_discount_amount || 0,
-        cash_back_id: orderData.cash_back_id,
-        extra_packaging_amount: orderData.extra_packaging_amount || 0,
-        ref_bonus_amount: orderData.ref_bonus_amount || 0,
-        EcommInvoiceID: orderData.EcommInvoiceID,
-        EcommOrderID: orderData.EcommOrderID,
-        awb_number: orderData.awb_number,
-        promised_duration: orderData.promised_duration,
-        address_type: orderData.address_type || 'others',
         partial_payment: Boolean(orderData.partial_payment) || false,
         is_buy_now: Boolean(orderData.is_buy_now) || false,
         create_new_user: Boolean(orderData.create_new_user) || false,
         password: orderData.password,
+        order_type: orderData.order_type,
+        latitude: orderData.latitude,
+        longitude: orderData.longitude,
+        contact_person_name: orderData.contact_person_name,
+        contact_person_number: orderData.contact_person_number,
+        coupon_discount_amount: couponDiscountAmount,
+        coupon_discount_title: orderData.coupon_discount_title,
+        discount_amount: discountAmount,
       };
 
       // Execute comprehensive transaction
@@ -1112,6 +1047,215 @@ export class OrderController {
       });
     } catch (error) {
       console.error('Get order by custom ID error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+  /**
+   * Cancel order
+   */
+  static async cancelOrder(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { order_id, cancellation_reason } = req.body;
+
+      if (!order_id) {
+        return ResponseHandler.error(res, 'Order ID is required', 400);
+      }
+
+      // Find order
+      let whereClause: any = {};
+      if (order_id.startsWith('ozi')) {
+        whereClause.order_id = order_id;
+      } else if (!isNaN(parseInt(order_id))) {
+        whereClause.id = parseInt(order_id);
+      } else {
+        return ResponseHandler.error(res, 'Invalid order ID format', 400);
+      }
+
+      const order = await Order.findOne({ where: whereClause });
+      if (!order) {
+        return ResponseHandler.error(res, 'Order not found', 404);
+      }
+
+      // Check if order can be cancelled
+      if ((order as any).order_status === 'cancelled') {
+        return ResponseHandler.error(res, 'Order is already cancelled', 400);
+      }
+
+      if ((order as any).order_status === 'delivered') {
+        return ResponseHandler.error(res, 'Cannot cancel delivered order', 400);
+      }
+
+      // Update order status
+      await order.update({
+        order_status: 'cancelled',
+        cancellation_reason: cancellation_reason || 'Cancelled by customer',
+        canceled_by: 'customer'
+      });
+
+      return ResponseHandler.success(res, {
+        message: 'Order cancelled successfully',
+        order_id: (order as any).order_id,
+        status: 'cancelled'
+      });
+
+    } catch (error) {
+      console.error('Cancel order error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+  /**
+   * Track order
+   */
+  static async trackOrder(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { order_id } = req.query;
+
+      console.log('Track order request:', { order_id, type: typeof order_id });
+
+      if (!order_id) {
+        return ResponseHandler.error(res, 'Order ID is required', 400);
+      }
+
+      // Find order
+      let whereClause: any = {};
+      if (order_id.toString().startsWith('ozi')) {
+        whereClause.order_id = order_id;
+        console.log('Using order_id field:', order_id);
+      } else if (!isNaN(parseInt(order_id.toString()))) {
+        whereClause.id = parseInt(order_id.toString());
+        console.log('Using id field:', parseInt(order_id.toString()));
+      } else {
+        console.log('Invalid order ID format:', order_id);
+        return ResponseHandler.error(res, 'Invalid order ID format', 400);
+      }
+
+      console.log('Where clause:', whereClause);
+
+      const order = await Order.findOne({ where: whereClause });
+      if (!order) {
+        console.log('Order not found with where clause:', whereClause);
+        return ResponseHandler.error(res, 'Order not found', 404);
+      }
+
+      console.log('Order found:', order);
+
+      return ResponseHandler.success(res, {
+        order_id: (order as any).order_id,
+        status: (order as any).order_status,
+        payment_status: (order as any).payment_status,
+        delivery_address: (order as any).delivery_address || (order as any).address || 'N/A',
+        order_amount: (order as any).order_amount,
+        created_at: (order as any).created_at,
+        delivery_man: null, // In production, this would fetch delivery man details
+        estimated_delivery: null // In production, this would calculate estimated delivery time
+      });
+
+    } catch (error) {
+      console.error('Track order error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+  /**
+   * Request refund for order
+   */
+  static async refundRequest(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { order_id, refund_reason, refund_amount, contact_number } = req.body;
+
+      if (!order_id || !refund_reason) {
+        return ResponseHandler.error(res, 'Order ID and refund reason are required', 400);
+      }
+
+      // Find order
+      let whereClause: any = {};
+      if (order_id.startsWith('ozi')) {
+        whereClause.order_id = order_id;
+      } else if (!isNaN(parseInt(order_id))) {
+        whereClause.id = parseInt(order_id);
+      } else {
+        return ResponseHandler.error(res, 'Invalid order ID format', 400);
+      }
+
+      const order = await Order.findOne({ where: whereClause });
+      if (!order) {
+        return ResponseHandler.error(res, 'Order not found', 404);
+      }
+
+      // Check if order is eligible for refund
+      if ((order as any).order_status === 'pending') {
+        return ResponseHandler.error(res, 'Cannot request refund for pending order', 400);
+      }
+
+      // In production, this would create a refund request record
+      // For now, we'll just return success
+      const refund_id = `REF${Date.now()}`;
+
+      return ResponseHandler.success(res, {
+        message: 'Refund request submitted successfully',
+        refund_id: refund_id,
+        order_id: (order as any).order_id,
+        status: 'pending_review'
+      });
+
+    } catch (error) {
+      console.error('Refund request error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+  /**
+   * Debug endpoint to test order tracking
+   */
+  static async debugOrderTracking(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { order_id } = req.query;
+
+      console.log('Debug track order request:', { order_id, type: typeof order_id });
+
+      if (!order_id) {
+        return ResponseHandler.error(res, 'Order ID is required', 400);
+      }
+
+      // Find order
+      let whereClause: any = {};
+      if (order_id.toString().startsWith('ozi')) {
+        whereClause.order_id = order_id;
+        console.log('Using order_id field:', order_id);
+      } else if (!isNaN(parseInt(order_id.toString()))) {
+        whereClause.id = parseInt(order_id.toString());
+        console.log('Using id field:', parseInt(order_id.toString()));
+      } else {
+        console.log('Invalid order ID format:', order_id);
+        return ResponseHandler.error(res, 'Invalid order ID format', 400);
+      }
+
+      console.log('Where clause:', whereClause);
+
+      const order = await Order.findOne({ where: whereClause });
+      if (!order) {
+        console.log('Order not found with where clause:', whereClause);
+        return ResponseHandler.error(res, 'Order not found', 404);
+      }
+
+      console.log('Order found:', order);
+
+      return ResponseHandler.success(res, {
+        debug: true,
+        order_id: (order as any).order_id,
+        status: (order as any).order_status,
+        payment_status: (order as any).payment_status,
+        delivery_address: (order as any).delivery_address || (order as any).address || 'N/A',
+        order_amount: (order as any).order_amount,
+        created_at: (order as any).created_at,
+        whereClause,
+        orderData: order
+      });
+
+    } catch (error) {
+      console.error('Debug track order error:', error);
       return ResponseHandler.error(res, 'Internal server error', 500);
     }
   }

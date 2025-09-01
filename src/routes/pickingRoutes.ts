@@ -9,54 +9,75 @@ const router = express.Router();
 // Apply version check middleware to all picking routes
 router.use(versionCheck);
 
-// Wave Management
-router.post('/waves/generate', 
+// Picklist Management
+router.post('/generate', 
   authenticate, 
   hasPermission('picking:assign_manage'), 
   PickingController.generateWaves
 );
 
-router.get('/waves/assign', 
+router.get('/assign', 
   authenticate, 
   hasPermission('picking:assign_manage'), 
   PickingController.assignWaves
 );
 
-router.get('/waves/available', 
+router.post('/assign', 
+  authenticate, 
+  hasPermission('picking:assign_manage'), 
+  PickingController.assignWaveToPicker
+);
+
+router.get('/available', 
   authenticate, 
   hasPermission('picking:view'), 
   PickingController.getAvailableWaves
 );
 
 // Picker Operations
-router.post('/waves/:waveId/start', 
+router.post('/:waveId/start', 
   authenticate, 
   hasPermission('picking:execute'), 
   checkAvailability, 
   PickingController.startPicking
 );
 
-router.get('/waves/:waveId/items', 
+router.get('/:waveId/items', 
   authenticate, 
   hasPermission('picking:view'), 
   PickingController.getPicklistItems
 );
 
-router.post('/waves/:waveId/scan', 
+router.post('/:waveId/scan', 
   authenticate, 
   hasPermission('picking:execute'), 
   checkAvailability, 
   PickingController.scanItem
 );
 
-router.post('/waves/:waveId/partial', 
+// New scanning routes for bin location and SKU validation
+router.post('/:waveId/scan/binLocation', 
+  authenticate, 
+  hasPermission('picking:execute'), 
+  checkAvailability, 
+  PickingController.scanBinLocation
+);
+
+router.post('/:waveId/scan/sku', 
+  authenticate, 
+  hasPermission('picking:execute'), 
+  checkAvailability, 
+  PickingController.scanSku
+);
+
+router.post('/:waveId/partial', 
   authenticate, 
   hasPermission('picking:execute'), 
   checkAvailability, 
   PickingController.reportPartialPick
 );
 
-router.post('/waves/:waveId/complete', 
+router.post('/:waveId/complete', 
   authenticate, 
   hasPermission('picking:execute'), 
   checkAvailability, 
