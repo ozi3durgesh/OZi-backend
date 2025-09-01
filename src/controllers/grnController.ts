@@ -15,7 +15,7 @@ export class GrnController {
     try {
       const data: GRNRequest = req.body;
       const userId = req.user?.id;
-      console.log(data, userId);
+
       if (!userId) {
         res.status(401).json({
           statusCode: 401,
@@ -53,7 +53,6 @@ export class GrnController {
           { model: User, as: 'CreatedBy', attributes: ['id', 'email'] },
         ],
       });
-      console.log(createdGrn);
       res.status(201).json({
         statusCode: 201,
         success: true,
@@ -120,7 +119,7 @@ export class GrnController {
       const totalPages = Math.ceil(count / limit);
 
       const response = {
-        warehouses: rows,
+        grn: rows,
         pagination: {
           page: parseInt(page.toString()),
           limit: parseInt(limit.toString()),
@@ -148,6 +147,7 @@ export class GrnController {
 
   static async getGrnById(req: Request, res: Response): Promise<void> {
     try {
+      console.log(req.params);
       const { id } = req.params;
       const grn = await GRN.findByPk(id, {
         include: [
@@ -187,7 +187,7 @@ export class GrnController {
     try {
       const { id } = req.params;
       const updates = req.body;
-
+      console.log(updates);
       const grn = await GRN.findByPk(id);
       if (!grn) {
         res.status(404).json({

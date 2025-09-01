@@ -1,6 +1,7 @@
 import { DataTypes, Model } from 'sequelize';
 import sequelize from '../config/database';
 import { GRNLineAttributes, GRNLineCreationAttributes } from '../types';
+import GRN from './Grn.model';
 
 class GRNLine
   extends Model<GRNLineAttributes, GRNLineCreationAttributes>
@@ -97,5 +98,8 @@ GRNLine.init(
     indexes: [{ fields: ['grn_id'] }, { fields: ['sku_id'] }],
   }
 );
+
+GRNLine.belongsTo(GRN, { foreignKey: 'grn_id', as: 'GrnId' });
+// GRN.hasMany(GRNLine, { foreignKey: 'grn_id', as: 'CreatedGrnLine' });
 
 export default GRNLine;

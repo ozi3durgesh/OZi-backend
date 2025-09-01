@@ -912,7 +912,7 @@ export interface WarehouseDetailResponse {
 export interface GRNAttributes {
   id: number;
   po_id: number;
-  vendor: string;
+  // vendor: string;
   status:
     | 'partial'
     | 'completed'
@@ -959,6 +959,8 @@ export interface GRNBatchAttributes {
   batch_no: string;
   expiry_date: Date;
   qty: number;
+  created_at?: Date;
+  updated_at?: Date;
 }
 
 export type GRNBatchCreationAttributes = Omit<GRNBatchAttributes, 'id'>;
@@ -976,7 +978,8 @@ export type GRNPhotoCreationAttributes = Omit<GRNPhotoAttributes, 'id'>;
 export interface GRNRequest {
   po_id: number;
   vendor: string;
-  status:  'partial'
+  status:
+    | 'partial'
     | 'completed'
     | 'closed'
     | 'pending-qc'

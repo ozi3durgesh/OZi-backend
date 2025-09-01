@@ -1,6 +1,7 @@
 import { DataTypes, Model } from 'sequelize';
 import sequelize from '../config/database';
 import { GRNBatchAttributes, GRNBatchCreationAttributes } from '../types';
+import GRNLine from './GrnLine';
 
 class GRNBatch
   extends Model<GRNBatchAttributes, GRNBatchCreationAttributes>
@@ -11,6 +12,8 @@ class GRNBatch
   public batch_no!: string;
   public expiry_date!: Date;
   public qty!: number;
+  public created_at!: Date;
+  public updated_at!: Date;
 }
 
 GRNBatch.init(
@@ -36,6 +39,16 @@ GRNBatch.init(
       type: DataTypes.INTEGER,
       allowNull: false,
     },
+    created_at: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW,
+    },
+    updated_at: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW,
+    },
   },
   {
     sequelize,
@@ -44,5 +57,11 @@ GRNBatch.init(
     indexes: [{ fields: ['grn_line_id'] }],
   }
 );
+
+GRNBatch.belongsTo(GRNLine, {
+  foreignKey: 'grn_line_id',
+  as: 'CreatedGrnLine',
+});
+GRNLine.hasMany(GRNBatch, { foreignKey: 'grn_line_id', as: 'CreatedGrnBatch' });
 
 export default GRNBatch;
