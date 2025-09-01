@@ -10,8 +10,7 @@ import {
 } from '../types';
 import sequelize from '../config/database';
 import { ResponseHandler } from '../middleware/responseHandler';
-import Wave from "../models/wave";
- 
+
 
 interface AuthRequest extends Request {
   user?: any;
@@ -29,7 +28,7 @@ export class HandoverController {
       retryAttempts: parseInt(process.env.LMS_RETRY_ATTEMPTS || '3'),
       retryDelay: parseInt(process.env.LMS_RETRY_DELAY || '1000'),
     };
-    
+
     this.lmsIntegration = new LMSIntegration(lmsConfig);
   }
 
@@ -263,7 +262,7 @@ export class HandoverController {
       }
 
       const updateData: any = { status };
-      
+
       // Set appropriate timestamp based on status
       switch (status) {
         case 'IN_TRANSIT':
@@ -552,7 +551,7 @@ export class HandoverController {
 
     } catch (error) {
       console.error('LMS sync error:', error);
-      
+
       // Update handover with error
       const existingHandover = await Handover.findByPk(handoverId);
       if (existingHandover) {
@@ -609,7 +608,7 @@ export class HandoverController {
    */
   static async handoverToDispatch(req: AuthRequest, res: Response): Promise<Response> {
     const transaction = await sequelize.transaction();
-    
+
     try {
       const { jobNumber, sku, quantity, destination, warehouseId, specialInstructions } = req.body;
       const dispatcherId = req.user!.id;
@@ -716,14 +715,18 @@ export const dispatchWave = async (req: Request, res: Response) => {
     const staffId = (req as any).user.id; // JWT decoded userId
 
     // 1. Validate Wave
-    const wave = await Wave.findByPk(waveId);
+    const wave = await PickingWave.findByPk(waveId);
+    console.log(wave);
     if (!wave) {
       return res.status(404).json({ success: false, message: "Wave not found" });
     }
 
-   if (!["PACKED", "CREATED"].includes(wave.status)) {
-  return res.status(400).json({ success: false, message: "Wave not ready for dispatch" });
+   if (wave.status !== "PACKED") {
+  return res
+    .status(400)
+    .json({ success: false, message: "Wave not ready for dispatch" });
 }
+
 
 // 2. Validate Rider
 const rider = await Rider.findOne({
@@ -738,8 +741,11 @@ if (!rider) {
   return res.status(400).json({ success: false, message: "Rider not available" });
 }
 
+rider.availabilityStatus = "BUSY"; // Set the rider's availability to BUSY
+    await rider.save();
+
     // 3. Update Wave → Dispatched
-    wave.status = "DISPATCHED";
+    wave.status = "COMPLETED"; // Update to COMPLETED
     wave.handoverAt = new Date();
     wave.handoverBy = staffId;
     wave.riderId = rider.id;
