@@ -18,7 +18,9 @@ import grnRoutes from './routes/grnRoutes';
 import paymentRoutes from './routes/paymentRoutes';
 import easyEcomWebhookRoutes from './routes/easyEcomWebhookRoutes';
 import { errorHandler } from './middleware/errorHandler';
-import poRoutes from './routes/purchaseOrder.routes';
+import vendorRoutes from './routes/vendorRoutes';
+import productRoutes from './routes/productRoutes';
+import purchaOrderRoutes from './routes/purchaseOrderRoutes';
 
 const app = express();
 
@@ -35,6 +37,7 @@ app.use(limiter);
 
 // Body parsing middleware
 app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // ✅ Serve uploads folder so EC2 can access files
@@ -53,7 +56,10 @@ app.use('/api/packing', packingRoutes);
 app.use('/api/handover', handoverRoutes);
 app.use('/api/warehouses', warehouseRoutes);
 app.use('/api/grn', grnRoutes);
-app.use('/api/po', poRoutes);
+
+app.use('/api', vendorRoutes);
+app.use('/api', productRoutes);
+app.use('/api/purchase-orders', purchaOrderRoutes);
 
 // PHP Production Compatible Routes
 app.use('/api/v1/customer/order', orderRoutes);
