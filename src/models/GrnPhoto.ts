@@ -1,6 +1,8 @@
 import { DataTypes, Model } from 'sequelize';
 import sequelize from '../config/database';
 import { GRNPhotoAttributes, GRNPhotoCreationAttributes } from '../types';
+import GRNLine from './GrnLine';
+import GRNBatch from './GrnBatch';
 
 class GRNPhoto
   extends Model<GRNPhotoAttributes, GRNPhotoCreationAttributes>
@@ -41,5 +43,9 @@ GRNPhoto.init(
     indexes: [{ fields: ['grn_line_id'] }],
   }
 );
+GRNLine.hasMany(GRNPhoto, { foreignKey: 'grn_line_id', as: 'Photos' });
+GRNPhoto.belongsTo(GRNLine, { foreignKey: 'grn_line_id', as: 'Line' });
 
+GRNBatch.hasMany(GRNPhoto, { foreignKey: 'grn_batch_id', as: 'Photos' });
+GRNPhoto.belongsTo(GRNBatch, { foreignKey: 'grn_batch_id', as: 'Batch' });
 export default GRNPhoto;

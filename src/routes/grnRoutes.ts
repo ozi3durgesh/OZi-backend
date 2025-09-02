@@ -14,8 +14,10 @@ router.get('/');
 
 // GRN Management Routes
 router.post('/', GrnController.createGrn);
+router.get('/list', GrnController.getGrnDetails);
 router.get('/:id', GrnController.getGrnById);
-router.get('/', GrnController.getGrnDetails);
+router.post('/create-flow', GrnController.createFullGRN);
+router.get('/po/:poId', GrnController.getGrnsByPoIdWithDetails);
 
 router.put('/:id', GrnController.updateGrn);
 router.patch('/:id/status', GrnController.updateGrnStatus);
@@ -23,8 +25,9 @@ router.delete('/:id', GrnController.deleteGrn);
 
 // Grn-line route
 
-router.post('/line/', GrnLineController.createGrnLine);
+router.post('/line/create', GrnLineController.createGrnLine);
 router.get('/line/list', GrnLineController.getGrnLines);
+router.get('/line/grn-id/:id', GrnLineController.getGrnLineByGrnId);
 router.get('/line/:id', GrnLineController.getGrnLineById);
 router.put('/line/:id', GrnLineController.updateGrnLine);
 router.delete('/line/:id', GrnLineController.deleteGrnLine);

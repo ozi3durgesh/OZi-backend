@@ -57,11 +57,7 @@ GRNBatch.init(
     indexes: [{ fields: ['grn_line_id'] }],
   }
 );
-
-GRNBatch.belongsTo(GRNLine, {
-  foreignKey: 'grn_line_id',
-  as: 'CreatedGrnLine',
-});
-GRNLine.hasMany(GRNBatch, { foreignKey: 'grn_line_id', as: 'CreatedGrnBatch' });
+GRNLine.hasMany(GRNBatch, { foreignKey: 'grn_line_id', as: 'Batches' });
+GRNBatch.belongsTo(GRNLine, { foreignKey: 'grn_line_id', as: 'Line' });
 
 export default GRNBatch;

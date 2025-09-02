@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import GRNLine from '../models/GrnLine';
 import { CreateGRNLineRequest } from '../types';
+import GRNBatch from '../models/GrnBatch';
+import GRNPhoto from '../models/GrnPhoto';
 
 export class GrnLineController {
   static async createGrnLine(req: Request, res: Response) {
@@ -74,7 +76,53 @@ export class GrnLineController {
       });
     }
   }
+  static async getGrnLineByGrnId(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
 
+      const grnLines = await GRNLine.findAll({
+        where: { grn_id: id },
+        include: [
+          {
+            model: GRNBatch,
+            as: 'Batches',
+            include: [
+              {
+                model: GRNPhoto,
+                as: 'Photos',
+                attributes: ['id', 'url', 'reason'],
+              },
+            ],
+          },
+        ],
+        order: [['id', 'ASC']],
+      });
+
+      if (!grnLines || grnLines.length === 0) {
+        res.status(404).json({
+          statusCode: 404,
+          success: false,
+          data: null,
+          error: `No GRN Lines found for GRN ID ${id}`,
+        });
+      }
+
+      res.status(200).json({
+        statusCode: 200,
+        success: true,
+        data: grnLines,
+        error: null,
+      });
+    } catch (error: any) {
+      console.error('Error fetching GRN Lines:', error);
+      res.status(500).json({
+        statusCode: 500,
+        success: false,
+        data: null,
+        error: error.message,
+      });
+    }
+  }
   static async getGrnLineById(req: Request, res: Response) {
     try {
       const { id } = req.params;

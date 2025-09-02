@@ -100,6 +100,6 @@ GRNLine.init(
 );
 
 GRNLine.belongsTo(GRN, { foreignKey: 'grn_id', as: 'GrnId' });
-// GRN.hasMany(GRNLine, { foreignKey: 'grn_id', as: 'CreatedGrnLine' });
+GRN.hasMany(GRNLine, { foreignKey: 'grn_id', as: 'Line' });
 
 export default GRNLine;

@@ -1,5 +1,11 @@
 import { Request, Response } from 'express';
 import GRNPhoto from '../models/GrnPhoto';
+export interface CreateGRNPhotoRequest {
+  grnLineId: number;
+  grnBatchId?: number;
+  photos: string[];
+  reason?: string;
+}
 
 export class GrnPhotoController {
   static async createGRNPhotos(req: Request, res: Response) {

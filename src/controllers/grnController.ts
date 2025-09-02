@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
-
+import sequelize from '../config/database';
+import GRNLine from '../models/GrnLine';
+import GRNBatch from '../models/GrnBatch';
 import { User } from '../models';
 import GRN from '../models/Grn.model';
 import GRNPhoto from '../models/GrnPhoto';
@@ -9,6 +11,24 @@ import {
   GRNFilters,
   GRNRequest,
 } from '../types';
+interface CreateFullGRNInput {
+  poId: number;
+  lines: {
+    skuId: string;
+    orderedQty: number;
+    receivedQty: number;
+    qcPassQty?: number;
+    heldQty?: number;
+    rtvQty?: number;
+    lineStatus?: string;
+    batches?: {
+      batchNo: string;
+      expiry: Date;
+      qty: number;
+      photos?: { url: string; reason?: string }[];
+    }[];
+  }[];
+}
 
 export class GrnController {
   static async createGrn(req: AuthRequest, res: Response): Promise<void> {
@@ -67,23 +87,206 @@ export class GrnController {
       });
     }
   }
+  static async createFullGRN(req: AuthRequest, res: Response) {
+    const input: CreateFullGRNInput = req.body;
+    const userId = req.user?.id;
+    console.log({ input });
+    if (!userId) {
+      res.status(401).json({
+        statusCode: 401,
+        success: false,
+        data: null,
+        error: 'User not authenticated',
+      });
+      return;
+    }
+    const t = await sequelize.transaction();
+    try {
+      // 1. Create GRN
+      const grn = await GRN.create(
+        {
+          po_id: input.poId,
+          status: 'pending-qc',
+          created_by: userId,
+          created_at: new Date(),
+          updated_at: new Date(),
+        },
+        { transaction: t }
+      );
+      console.log({ grn });
+      // 2. Create GRN Lines
+      for (const line of input.lines) {
+        const grnLine = await GRNLine.create(
+          {
+            grn_id: grn.id,
+            sku_id: line.skuId,
+            ordereded_qty: line.orderedQty,
+            received_qty: line.receivedQty,
+            qc_pass_qty: line.qcPassQty ?? line.receivedQty,
+            qc_fail_qty: (line.heldQty ?? 0) + (line.rtvQty ?? 0),
+            held_qty: line.heldQty ?? 0,
+            rtv_qty: line.rtvQty ?? 0,
+            line_status: line.lineStatus ?? 'pending',
+          },
+          { transaction: t }
+        );
 
-  // static async createGRNPhotos(req: Request, res: Response) {
-  //   const data: CreateGRNPhotoRequest = req.body;
-  //   const { grnLineId, grnBatchId, photos, reason } = data;
-  //   const created: GRNPhoto[] = [];
+        if (line.batches && line.batches.length > 0) {
+          for (const batch of line.batches) {
+            const grnBatch = await GRNBatch.create(
+              {
+                grn_line_id: grnLine.id,
+                batch_no: batch.batchNo,
+                expiry_date: batch.expiry,
+                qty: batch.qty,
+              },
+              { transaction: t }
+            );
 
-  //   for (const url of photos) {
-  //     const photo = await GRNPhoto.create({
-  //       grn_line_id: grnLineId,
-  //       grn_batch_id: grnBatchId,
-  //       url,
-  //       reason: reason ?? 'general',
+            if (batch.photos && batch.photos.length > 0) {
+              for (const photo of batch.photos) {
+                await GRNPhoto.create(
+                  {
+                    grn_line_id: grnLine.id,
+                    grn_batch_id: grnBatch.id,
+                    url: photo.url,
+                    reason: photo.reason ?? 'general',
+                  },
+                  { transaction: t }
+                );
+              }
+            }
+          }
+        }
+      }
+
+      await t.commit();
+      return grn;
+    } catch (err) {
+      await t.rollback();
+      throw err;
+    }
+  }
+
+  // static async getGrnByPoId(req: Request, res: Response): Promise<void> {
+  //   try {
+  //     const { poId } = req.params;
+
+  //     const grn = await GRN.findOne({
+  //       where: { po_id: poId },
+  //       include: [
+  //         { model: User, as: 'CreatedBy', attributes: ['id', 'email'] },
+  //         { model: User, as: 'ApprovedBy', attributes: ['id', 'email'] },
+  //       ],
   //     });
-  //     created.push(photo);
+
+  //     if (!grn) {
+  //       res.status(404).json({
+  //         statusCode: 404,
+  //         success: false,
+  //         data: null,
+  //         error: `No GRN found for PO ID ${poId}`,
+  //       });
+  //       return;
+  //     }
+  //     const grlLines = await GRNLine.findAll({
+  //       where: { grn_id: grn.id },
+  //     });
+  //     console.log({ grlLines });
+  //     const batches = await GRNBatch.findAll({
+  //       where: { grn_line_id: grlLines.map((line) => line.id) },
+  //     });
+  //     res.status(200).json({
+  //       statusCode: 200,
+  //       success: true,
+  //       data: grn,
+  //       error: null,
+  //     });
+  //   } catch (error: any) {
+  //     console.error('Error fetching GRN by PO ID:', error);
+  //     res.status(500).json({
+  //       statusCode: 500,
+  //       success: false,
+  //       data: null,
+  //       error: error.message,
+  //     });
   //   }
-  //   return created;
   // }
+  static async getGrnsByPoIdWithDetails(
+    req: Request,
+    res: Response
+  ): Promise<void> {
+    try {
+      const { poId } = req.params;
+
+      const grns = await GRN.findAll({
+        where: { po_id: poId },
+        include: [
+          { model: User, as: 'CreatedBy', attributes: ['id', 'email'] },
+          { model: User, as: 'ApprovedBy', attributes: ['id', 'email'] },
+          {
+            model: GRNLine,
+            as: 'Line',
+            include: [
+              {
+                model: GRNBatch,
+                as: 'Batches',
+                include: [
+                  {
+                    model: GRNPhoto,
+                    as: 'Photos',
+                    attributes: ['id', 'url', 'reason'],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        order: [
+          ['created_at', 'DESC'],
+          [{ model: GRNLine, as: 'Line' }, 'id', 'ASC'],
+          [
+            { model: GRNLine, as: 'Line' },
+            { model: GRNBatch, as: 'Batches' },
+            'id',
+            'ASC',
+          ],
+          [
+            { model: GRNLine, as: 'Line' },
+            { model: GRNBatch, as: 'Batches' },
+            { model: GRNPhoto, as: 'Photos' },
+            'id',
+            'ASC',
+          ],
+        ],
+      });
+
+      if (!grns || grns.length === 0) {
+        res.status(404).json({
+          statusCode: 404,
+          success: false,
+          data: null,
+          error: `No GRNs found for PO ID ${poId}`,
+        });
+        return;
+      }
+
+      res.status(200).json({
+        statusCode: 200,
+        success: true,
+        data: grns,
+        error: null,
+      });
+    } catch (error: any) {
+      console.error('Error fetching GRNs with details:', error);
+      res.status(500).json({
+        statusCode: 500,
+        success: false,
+        data: null,
+        error: error.message,
+      });
+    }
+  }
 
   static async getGrnDetails(req: Request, res: Response): Promise<void> {
     try {
