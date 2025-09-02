@@ -15,8 +15,10 @@ interface CreateFullGRNInput {
   poId: number;
   lines: {
     skuId: string;
+
     orderedQty: number;
     receivedQty: number;
+    ean?: string;
     qcPassQty?: number;
     heldQty?: number;
     rtvQty?: number;
@@ -161,10 +163,26 @@ export class GrnController {
       }
 
       await t.commit();
-      return grn;
-    } catch (err) {
+      const createdGrn = await GRN.findByPk(grn.id, {
+        include: [
+          { model: User, as: 'CreatedBy', attributes: ['id', 'email'] },
+        ],
+      });
+      res.status(201).json({
+        statusCode: 201,
+        success: true,
+        data: createdGrn,
+        error: null,
+      });
+    } catch (err: any) {
       await t.rollback();
-      throw err;
+      console.error('Error creating GRN:', err);
+      res.status(500).json({
+        statusCode: 500,
+        success: false,
+        data: err.message,
+        error: 'Internal server error',
+      });
     }
   }
 

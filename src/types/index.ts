@@ -947,7 +947,6 @@ export interface WarehouseDetailResponse {
 export interface GRNAttributes {
   id: number;
   po_id: number;
-  ean?: string;
   status:
     | 'partial'
     | 'completed'
@@ -967,6 +966,7 @@ export interface GRNLineAttributes {
   id: number;
   grn_id: number;
   sku_id: string;
+  ean?: string;
   ordered_qty: number;
   received_qty: number;
   qc_pass_qty: number;

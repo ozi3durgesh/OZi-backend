@@ -9,7 +9,7 @@ class GRN
 {
   public id!: number;
   public po_id!: number;
-  public ean!: string;
+
   public status!:
     | 'partial'
     | 'completed'
@@ -28,11 +28,7 @@ GRN.init(
     id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
     po_id: { type: DataTypes.INTEGER, allowNull: false },
     // vendor: { type: DataTypes.STRING(100), allowNull: false },
-    ean: {
-      type: DataTypes.STRING(13),
-      allowNull: true,
-      unique: true,
-    },
+
     status: {
       type: DataTypes.ENUM(
         'partial',

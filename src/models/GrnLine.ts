@@ -10,6 +10,7 @@ class GRNLine
   public id!: number;
   public grn_id!: number;
   public sku_id!: string;
+  public ean!: string;
   public ordered_qty!: number;
   public received_qty!: number;
   public qc_pass_qty!: number;
@@ -40,6 +41,11 @@ GRNLine.init(
     sku_id: {
       type: DataTypes.STRING(50),
       allowNull: false,
+    },
+    ean: {
+      type: DataTypes.STRING(13),
+      allowNull: true,
+      unique: true,
     },
     ordered_qty: {
       type: DataTypes.INTEGER,
