@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
 import GRNPhoto from '../models/GrnPhoto';
-import { GRNBatchAttributes } from '../types';
 
 export class GrnPhotoController {
   static async createGRNPhotos(req: Request, res: Response) {
@@ -55,6 +54,40 @@ export class GrnPhotoController {
     }
   }
 
+  static async getGrnPhotoByLineId(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const photos = await GRNPhoto.findAll({
+        where: {
+          grn_line_id: id,
+        },
+      });
+
+      if (photos.length === 0) {
+        return res.status(404).json({
+          statusCode: 404,
+          success: false,
+          data: null,
+          error: 'Photo not found',
+        });
+      }
+
+      return res.status(200).json({
+        statusCode: 200,
+        success: true,
+        data: photos,
+        error: null,
+      });
+    } catch (error: any) {
+      console.error('Error fetching GRN photo:', error);
+      return res.status(500).json({
+        statusCode: 500,
+        success: false,
+        data: null,
+        error: error.message,
+      });
+    }
+  }
   static async getGrnPhotoById(req: Request, res: Response) {
     try {
       const { id } = req.params;

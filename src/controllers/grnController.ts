@@ -25,8 +25,6 @@ export class GrnController {
         });
         return;
       }
-
-      // Check if grn code already exists
       const existingGRN = await GRN.findOne({
         where: { po_id: data.po_id },
       });
@@ -70,22 +68,22 @@ export class GrnController {
     }
   }
 
-  static async createGRNPhotos(req: Request, res: Response) {
-    const data: CreateGRNPhotoRequest = req.body;
-    const { grnLineId, grnBatchId, photos, reason } = data;
-    const created: GRNPhoto[] = [];
+  // static async createGRNPhotos(req: Request, res: Response) {
+  //   const data: CreateGRNPhotoRequest = req.body;
+  //   const { grnLineId, grnBatchId, photos, reason } = data;
+  //   const created: GRNPhoto[] = [];
 
-    for (const url of photos) {
-      const photo = await GRNPhoto.create({
-        grn_line_id: grnLineId,
-        grn_batch_id: grnBatchId,
-        url,
-        reason: reason ?? 'general',
-      });
-      created.push(photo);
-    }
-    return created;
-  }
+  //   for (const url of photos) {
+  //     const photo = await GRNPhoto.create({
+  //       grn_line_id: grnLineId,
+  //       grn_batch_id: grnBatchId,
+  //       url,
+  //       reason: reason ?? 'general',
+  //     });
+  //     created.push(photo);
+  //   }
+  //   return created;
+  // }
 
   static async getGrnDetails(req: Request, res: Response): Promise<void> {
     try {

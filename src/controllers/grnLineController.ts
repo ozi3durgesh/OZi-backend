@@ -12,13 +12,12 @@ export class GrnLineController {
         receivedQty,
         orderedQty,
         qcPassQty,
-        qcFailQty,
         held_qty,
         rtv_qty,
         line_status,
       } = data;
+      const qcFailQty = (held_qty ?? 0) + (rtv_qty ?? 0);
 
-      // 1️⃣ Validate
       if (!grnId || !skuId || !receivedQty) {
         return res.status(400).json({ message: 'Missing required fields' });
       }

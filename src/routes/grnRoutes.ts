@@ -37,7 +37,7 @@ router.put('/batch/:id', GrnBatchController.updateGrnBatch);
 router.delete('/batch/:id', GrnBatchController.deleteGrnBatch);
 
 router.post('/photo/', GrnPhotoController.createGRNPhotos);
-router.get('/photo/list', GrnPhotoController.getGrnPhotos);
+router.get('/photo/line/:id', GrnPhotoController.getGrnPhotoByLineId);
 router.get('/photo/:id', GrnPhotoController.getGrnPhotoById);
 router.delete('/photo/:id', GrnPhotoController.deleteGrnPhoto);
 
