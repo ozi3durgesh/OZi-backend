@@ -11,7 +11,11 @@ export class AuthController {
       const { email, password, roleId, roleName, adminSecret } = req.body;
 
       if (!email || !password) {
-        return ResponseHandler.error(res, 'Email and password are required', 400);
+        return ResponseHandler.error(
+          res,
+          'Email and password are required',
+          400
+        );
       }
 
       if (!ValidationUtils.validateEmail(email)) {
@@ -42,7 +46,9 @@ export class AuthController {
         finalRoleId = role.id;
       } else if (!roleId) {
         // Default to WH Staff 1 if no role specified
-        const defaultRole = await Role.findOne({ where: { name: 'wh_staff_1' } });
+        const defaultRole = await Role.findOne({
+          where: { name: 'wh_staff_1' },
+        });
         if (defaultRole) {
           finalRoleId = defaultRole.id;
         }
@@ -57,7 +63,10 @@ export class AuthController {
       }
 
       // Handle admin registration
-      if (roleName === 'admin' || (finalRoleId && await AuthController.isAdminRole(finalRoleId))) {
+      if (
+        roleName === 'admin' ||
+        (finalRoleId && (await AuthController.isAdminRole(finalRoleId)))
+      ) {
         if (isFirstUser) {
           // First user can become admin without secret
           console.log('First user registration - creating admin account');
@@ -65,23 +74,31 @@ export class AuthController {
           // Subsequent admin registrations require admin secret
           const expectedAdminSecret = process.env.ADMIN_REGISTRATION_SECRET;
           if (!expectedAdminSecret) {
-            return ResponseHandler.error(res, 'Admin registration is not configured', 500);
+            return ResponseHandler.error(
+              res,
+              'Admin registration is not configured',
+              500
+            );
           }
-          
+
           if (!adminSecret || adminSecret !== expectedAdminSecret) {
-            return ResponseHandler.error(res, 'Invalid admin registration secret', 403);
+            return ResponseHandler.error(
+              res,
+              'Invalid admin registration secret',
+              403
+            );
           }
         }
       }
 
       const hashedPassword = await bcrypt.hash(password, 10);
-      
+
       const user = await User.create({
         email,
         password: hashedPassword,
         roleId: finalRoleId,
         isActive: true,
-        availabilityStatus: 'available'
+        availabilityStatus: 'available',
       });
 
       const accessToken = await JwtUtils.generateAccessToken(user);
@@ -93,27 +110,40 @@ export class AuthController {
           {
             association: 'Role',
             include: ['Permissions'],
-          }
+          },
         ],
-        attributes: ['id', 'email', 'roleId', 'isActive', 'availabilityStatus', 'createdAt']
+        attributes: [
+          'id',
+          'email',
+          'roleId',
+          'isActive',
+          'availabilityStatus',
+          'createdAt',
+        ],
       });
 
-      return ResponseHandler.success(res, {
-        user: {
-          id: user.id,
-          email: user.email,
-          roleId: user.roleId,
-          role: userWithRole?.Role?.name || '',
-          permissions: userWithRole?.Role?.Permissions 
-            ? userWithRole.Role.Permissions.map(p => `${p.module}:${p.action}`)
-            : [],
-          availabilityStatus: user.availabilityStatus,
-          createdAt: user.createdAt,
+      return ResponseHandler.success(
+        res,
+        {
+          user: {
+            id: user.id,
+            email: user.email,
+            roleId: user.roleId,
+            role: userWithRole?.Role?.name || '',
+            permissions: userWithRole?.Role?.Permissions
+              ? userWithRole.Role.Permissions.map(
+                  (p) => `${p.module}:${p.action}`
+                )
+              : [],
+            availabilityStatus: user.availabilityStatus,
+            createdAt: user.createdAt,
+          },
+          accessToken,
+          refreshToken,
+          isFirstUser: isFirstUser,
         },
-        accessToken,
-        refreshToken,
-        isFirstUser: isFirstUser
-      }, 201);
+        201
+      );
     } catch (error) {
       console.error('Register error:', error);
       return ResponseHandler.error(res, 'Internal server error', 500);
@@ -125,18 +155,30 @@ export class AuthController {
       const { email, password } = req.body;
 
       if (!email || !password) {
-        return ResponseHandler.error(res, 'Email and password are required', 400);
+        return ResponseHandler.error(
+          res,
+          'Email and password are required',
+          400
+        );
       }
 
-      const user = await User.findOne({ 
+      const user = await User.findOne({
         where: { email },
         include: [
           {
             association: 'Role',
             include: ['Permissions'],
-          }
+          },
         ],
-        attributes: ['id', 'email', 'password', 'roleId', 'isActive', 'availabilityStatus', 'createdAt']
+        attributes: [
+          'id',
+          'email',
+          'password',
+          'roleId',
+          'isActive',
+          'availabilityStatus',
+          'createdAt',
+        ],
       });
 
       if (!user) {
@@ -161,8 +203,8 @@ export class AuthController {
           email: user.email,
           roleId: user.roleId,
           role: user.Role?.name || '',
-          permissions: user.Role?.Permissions 
-            ? user.Role.Permissions.map(p => `${p.module}:${p.action}`)
+          permissions: user.Role?.Permissions
+            ? user.Role.Permissions.map((p) => `${p.module}:${p.action}`)
             : [],
           availabilityStatus: user.availabilityStatus,
           createdAt: user.createdAt,
@@ -185,15 +227,22 @@ export class AuthController {
       }
 
       const payload = JwtUtils.verifyRefreshToken(refreshToken);
-      
+
       const user = await User.findByPk(payload.userId, {
         include: [
           {
             association: 'Role',
             include: ['Permissions'],
-          }
+          },
         ],
-        attributes: ['id', 'email', 'roleId', 'isActive', 'availabilityStatus', 'createdAt']
+        attributes: [
+          'id',
+          'email',
+          'roleId',
+          'isActive',
+          'availabilityStatus',
+          'createdAt',
+        ],
       });
 
       if (!user) {
@@ -213,8 +262,8 @@ export class AuthController {
           email: user.email,
           roleId: user.roleId,
           role: user.Role?.name || '',
-          permissions: user.Role?.Permissions 
-            ? user.Role.Permissions.map(p => `${p.module}:${p.action}`)
+          permissions: user.Role?.Permissions
+            ? user.Role.Permissions.map((p) => `${p.module}:${p.action}`)
             : [],
           availabilityStatus: user.availabilityStatus,
           createdAt: user.createdAt,
@@ -252,7 +301,7 @@ export class AuthController {
       const roles = await Role.findAll({
         where: { isActive: true },
         attributes: ['id', 'name', 'description'],
-        order: [['name', 'ASC']]
+        order: [['name', 'ASC']],
       });
 
       return ResponseHandler.success(res, { roles });
@@ -263,7 +312,10 @@ export class AuthController {
   }
 
   // Check if system has any users
-  static async checkSystemStatus(req: Request, res: Response): Promise<Response> {
+  static async checkSystemStatus(
+    req: Request,
+    res: Response
+  ): Promise<Response> {
     try {
       const totalUsers = await User.count();
       const hasUsers = totalUsers > 0;
@@ -271,7 +323,9 @@ export class AuthController {
       return ResponseHandler.success(res, {
         hasUsers,
         totalUsers,
-        message: hasUsers ? 'System is initialized' : 'System needs initial admin setup'
+        message: hasUsers
+          ? 'System is initialized'
+          : 'System needs initial admin setup',
       });
     } catch (error) {
       console.error('Check system status error:', error);

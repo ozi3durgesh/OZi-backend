@@ -70,7 +70,6 @@ export interface UserCreationAttributes {
   availabilityStatus?: 'available' | 'break' | 'off-shift';
 }
 
-
 // Add these to your existing types/index.ts file
 
 export interface CouponAttributes {
@@ -225,7 +224,7 @@ export interface OrderAttributes {
   EcommOrderID?: string;
   awb_number?: string;
   promised_duration?: string;
-  
+
   // Legacy fields for backward compatibility
   cart?: CartItem[];
   discount_amount?: number;
@@ -243,7 +242,7 @@ export interface OrderAttributes {
   create_new_user?: number;
   guest_id?: string;
   password?: string;
-  
+
   // Associations
   orderDetails?: any[];
   ecomLogs?: any[];
@@ -327,7 +326,7 @@ export interface OrderCreationAttributes {
   EcommOrderID?: string;
   awb_number?: string;
   promised_duration?: string;
-  
+
   // Legacy fields for backward compatibility
   cart?: CartItem[];
   discount_amount?: number;
@@ -369,7 +368,14 @@ export interface PackingJobAttributes {
   jobNumber: string;
   waveId: number;
   packerId?: number;
-  status: 'PENDING' | 'PACKING' | 'VERIFYING' | 'COMPLETED' | 'CANCELLED' | 'AWAITING_HANDOVER' | 'HANDOVER_ASSIGNED';
+  status:
+    | 'PENDING'
+    | 'PACKING'
+    | 'VERIFYING'
+    | 'COMPLETED'
+    | 'CANCELLED'
+    | 'AWAITING_HANDOVER'
+    | 'HANDOVER_ASSIGNED';
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   assignedAt?: Date;
   startedAt?: Date;
@@ -390,7 +396,14 @@ export interface PackingJobCreationAttributes {
   jobNumber?: string;
   waveId: number;
   packerId?: number;
-  status?: 'PENDING' | 'PACKING' | 'VERIFYING' | 'COMPLETED' | 'CANCELLED' | 'AWAITING_HANDOVER' | 'HANDOVER_ASSIGNED';
+  status?:
+    | 'PENDING'
+    | 'PACKING'
+    | 'VERIFYING'
+    | 'COMPLETED'
+    | 'CANCELLED'
+    | 'AWAITING_HANDOVER'
+    | 'HANDOVER_ASSIGNED';
   priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   workflowType?: 'PICKER_PACKS' | 'DEDICATED_PACKER';
   specialInstructions?: string;
@@ -579,7 +592,15 @@ export interface LMSShipmentCreationAttributes {
 export interface PackingEventAttributes {
   id: number;
   jobId: number;
-  eventType: 'PACKING_STARTED' | 'ITEM_PACKED' | 'ITEM_VERIFIED' | 'PACKING_COMPLETED' | 'HANDOVER_ASSIGNED' | 'HANDOVER_CONFIRMED' | 'HANDOVER_STATUS_UPDATED' | 'LMS_SYNCED';
+  eventType:
+    | 'PACKING_STARTED'
+    | 'ITEM_PACKED'
+    | 'ITEM_VERIFIED'
+    | 'PACKING_COMPLETED'
+    | 'HANDOVER_ASSIGNED'
+    | 'HANDOVER_CONFIRMED'
+    | 'HANDOVER_STATUS_UPDATED'
+    | 'LMS_SYNCED';
   eventData: any;
   userId?: number;
   timestamp: Date;
@@ -588,7 +609,15 @@ export interface PackingEventAttributes {
 
 export interface PackingEventCreationAttributes {
   jobId: number;
-  eventType: 'PACKING_STARTED' | 'ITEM_PACKED' | 'ITEM_VERIFIED' | 'PACKING_COMPLETED' | 'HANDOVER_ASSIGNED' | 'HANDOVER_CONFIRMED' | 'HANDOVER_STATUS_UPDATED' | 'LMS_SYNCED';
+  eventType:
+    | 'PACKING_STARTED'
+    | 'ITEM_PACKED'
+    | 'ITEM_VERIFIED'
+    | 'PACKING_COMPLETED'
+    | 'HANDOVER_ASSIGNED'
+    | 'HANDOVER_CONFIRMED'
+    | 'HANDOVER_STATUS_UPDATED'
+    | 'LMS_SYNCED';
   eventData: any;
   userId?: number;
   timestamp: Date;
@@ -704,7 +733,7 @@ export interface WarehouseAttributes {
   name: string;
   type: 'MAIN' | 'SATELLITE' | 'STOREFRONT' | 'DISTRIBUTION';
   status: 'ACTIVE' | 'INACTIVE' | 'UNDER_MAINTENANCE';
-  
+
   // Location Information
   address: string;
   city: string;
@@ -713,32 +742,32 @@ export interface WarehouseAttributes {
   pincode: string;
   latitude?: number;
   longitude?: number;
-  
+
   // Contact Information
   contact_person?: string;
   contact_email?: string;
   contact_phone?: string;
   emergency_contact?: string;
-  
+
   // Operational Details
   operational_hours?: any;
   capacity_sqft?: number;
   storage_capacity_units?: number;
   current_utilization_percentage: number;
-  
+
   // Services & Capabilities
   services_offered?: any;
   supported_fulfillment_types?: any;
-  
+
   // Configuration
   is_auto_assignment_enabled: boolean;
   max_orders_per_day: number;
   sla_hours: number;
-  
+
   // Integration Details
   lms_warehouse_id?: string;
   integration_status: 'PENDING' | 'COMPLETED' | 'FAILED';
-  
+
   // Audit Fields
   created_by: number;
   updated_by?: number;
@@ -746,25 +775,33 @@ export interface WarehouseAttributes {
   updated_at: Date;
 }
 
-export interface WarehouseCreationAttributes extends Omit<WarehouseAttributes, 'id' | 'created_at' | 'updated_at'> {}
+export interface WarehouseCreationAttributes
+  extends Omit<WarehouseAttributes, 'id' | 'created_at' | 'updated_at'> {}
 
 export interface WarehouseZoneAttributes {
   id: number;
   warehouse_id: number;
   zone_code: string;
   zone_name: string;
-  zone_type: 'PICKING' | 'STORAGE' | 'RECEIVING' | 'PACKING' | 'SHIPPING' | 'RETURNS';
+  zone_type:
+    | 'PICKING'
+    | 'STORAGE'
+    | 'RECEIVING'
+    | 'PACKING'
+    | 'SHIPPING'
+    | 'RETURNS';
   temperature_zone: 'AMBIENT' | 'CHILLED' | 'FROZEN' | 'CONTROLLED';
   capacity_units?: number;
   current_utilization: number;
   is_active: boolean;
-  
+
   // Audit Fields
   created_at: Date;
   updated_at: Date;
 }
 
-export interface WarehouseZoneCreationAttributes extends Omit<WarehouseZoneAttributes, 'id' | 'created_at' | 'updated_at'> {}
+export interface WarehouseZoneCreationAttributes
+  extends Omit<WarehouseZoneAttributes, 'id' | 'created_at' | 'updated_at'> {}
 
 export interface WarehouseStaffAssignmentAttributes {
   id: number;
@@ -774,13 +811,17 @@ export interface WarehouseStaffAssignmentAttributes {
   assigned_date: Date;
   end_date?: Date;
   is_active: boolean;
-  
+
   // Audit Fields
   created_at: Date;
   updated_at: Date;
 }
 
-export interface WarehouseStaffAssignmentCreationAttributes extends Omit<WarehouseStaffAssignmentAttributes, 'id' | 'created_at' | 'updated_at'> {}
+export interface WarehouseStaffAssignmentCreationAttributes
+  extends Omit<
+    WarehouseStaffAssignmentAttributes,
+    'id' | 'created_at' | 'updated_at'
+  > {}
 
 // Warehouse API Request/Response Types
 export interface CreateWarehouseRequest {
@@ -809,7 +850,8 @@ export interface CreateWarehouseRequest {
   lms_warehouse_id?: string;
 }
 
-export interface UpdateWarehouseRequest extends Partial<CreateWarehouseRequest> {}
+export interface UpdateWarehouseRequest
+  extends Partial<CreateWarehouseRequest> {}
 
 export interface WarehouseStatusUpdateRequest {
   status: 'ACTIVE' | 'INACTIVE' | 'UNDER_MAINTENANCE';
@@ -818,7 +860,13 @@ export interface WarehouseStatusUpdateRequest {
 export interface CreateZoneRequest {
   zone_code: string;
   zone_name: string;
-  zone_type: 'PICKING' | 'STORAGE' | 'RECEIVING' | 'PACKING' | 'SHIPPING' | 'RETURNS';
+  zone_type:
+    | 'PICKING'
+    | 'STORAGE'
+    | 'RECEIVING'
+    | 'PACKING'
+    | 'SHIPPING'
+    | 'RETURNS';
   temperature_zone?: 'AMBIENT' | 'CHILLED' | 'FROZEN' | 'CONTROLLED';
   capacity_units?: number;
 }
@@ -896,6 +944,144 @@ export interface WarehouseDetailResponse {
   };
 }
 
+export interface GRNAttributes {
+  id: number;
+  po_id: number;
+  status:
+    | 'partial'
+    | 'completed'
+    | 'closed'
+    | 'pending-qc'
+    | 'variance-review'
+    | 'rtv-initiated';
+  created_by: number;
+  approved_by?: number | null;
+  created_at?: Date;
+  updated_at?: Date;
+}
+
+export type GRNCreationAttributes = Omit<GRNAttributes, 'id'>;
+
+export interface GRNLineAttributes {
+  id: number;
+  grn_id: number;
+  sku_id: string;
+  ean?: string;
+  ordered_qty: number;
+  received_qty: number;
+  qc_pass_qty: number;
+  held_qty?: number;
+  rtv_qty?: number;
+  qc_fail_qty: number;
+  variance_reason?: string;
+  line_status: string;
+  remarks?: string | null;
+  expected_date?: Date;
+  received_date?: Date;
+  qc_date?: Date;
+  created_at?: Date;
+  updated_at?: Date;
+}
+
+export type GRNLineCreationAttributes = Omit<GRNLineAttributes, 'id'>;
+
+export interface GRNBatchAttributes {
+  id: number;
+  grn_line_id: number;
+  batch_no: string;
+  expiry_date: Date;
+  qty: number;
+  created_at?: Date;
+  updated_at?: Date;
+}
+
+export type GRNBatchCreationAttributes = Omit<GRNBatchAttributes, 'id'>;
+
+export interface GRNPhotoAttributes {
+  id: number;
+  grn_line_id: number;
+  url: string;
+  grn_batch_id: number;
+  reason?: string;
+}
+
+export type GRNPhotoCreationAttributes = Omit<GRNPhotoAttributes, 'id'>;
+
+export interface GRNRequest {
+  po_id: number;
+  vendor: string;
+  status:
+    | 'partial'
+    | 'completed'
+    | 'closed'
+    | 'pending-qc'
+    | 'variance-review'
+    | 'rtv-initiated';
+}
+export interface scanItemRequest {
+  grnId: number;
+  skuId: string;
+  receivedQty: number;
+  batchNo: string;
+  expiry: Date;
+  photos: string[];
+  variance_reason?:
+    | 'short'
+    | 'excess'
+    | 'damage'
+    | 'wrong'
+    | 'near-expiry'
+    | null;
+  remarks?: string | null;
+  orderedQty: number;
+  qcPassQty: number;
+  qcFailQty: number;
+}
+
+// --- Line ---
+export interface CreateGRNLineRequest {
+  grnId: number;
+  skuId: string;
+  orderedQty: number;
+  receivedQty: number;
+  qcPassQty?: number;
+  qcFailQty?: number;
+  varianceReason?:
+    | 'short'
+    | 'excess'
+    | 'damage'
+    | 'wrong'
+    | 'near-expiry'
+    | null;
+  line_status: string;
+  held_qty?: number;
+  rtv_qty?: number;
+  remarks?: string;
+}
+
+// --- Batch ---
+export interface CreateGRNBatchRequest {
+  grnLineId: number;
+  batchNo: string;
+  expiry: Date;
+  qty: number;
+}
+
+// --- Photo ---
+export interface CreateGRNPhotoRequest {
+  grnLineId: number;
+  grnBatchId: number;
+  photos: string[];
+  reason?: string;
+}
+
+export interface GRNFilters {
+  status?: 'in-progress' | 'completed' | 'closed';
+  po_id?: number;
+  page?: number;
+  limit?: number;
+  search?: string;
+}
 // Request type extensions for middleware
 export interface AuthRequest extends Request {
   user?: {
