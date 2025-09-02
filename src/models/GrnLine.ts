@@ -10,7 +10,7 @@ class GRNLine
   public id!: number;
   public grn_id!: number;
   public sku_id!: string;
-  public ordereded_qty!: number;
+  public ordered_qty!: number;
   public received_qty!: number;
   public qc_pass_qty!: number;
   public qc_fail_qty!: number;
@@ -19,6 +19,9 @@ class GRNLine
   public line_status!: string;
   public variance_reason!: any | null;
   public remarks!: string | null;
+  public expected_date!: Date;
+  public received_date!: Date;
+  public qc_date!: Date;
   public created_at!: Date;
   public updated_at!: Date;
 }
@@ -38,7 +41,7 @@ GRNLine.init(
       type: DataTypes.STRING(50),
       allowNull: false,
     },
-    ordereded_qty: {
+    ordered_qty: {
       type: DataTypes.INTEGER,
       allowNull: false,
     },
@@ -79,6 +82,21 @@ GRNLine.init(
     remarks: {
       type: DataTypes.STRING(255),
       allowNull: true,
+    },
+    expected_date: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW,
+    },
+    received_date: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW,
+    },
+    qc_date: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW,
     },
     created_at: {
       type: DataTypes.DATE,

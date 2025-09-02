@@ -3,8 +3,122 @@ import GRNLine from '../models/GrnLine';
 import { CreateGRNLineRequest } from '../types';
 import GRNBatch from '../models/GrnBatch';
 import GRNPhoto from '../models/GrnPhoto';
+export interface CreateGRNLineInput {
+  grnId: number;
+
+  lines: {
+    skuId: string;
+    orderedQty: number;
+    receivedQty: number;
+    qcPassQty?: number;
+    heldQty?: number;
+    rtvQty?: number;
+    lineStatus?: string;
+
+    batches?: {
+      batchNo: string;
+      expiry: Date;
+      qty: number;
+
+      photos?: {
+        url: string;
+        reason?: string;
+      }[];
+    }[];
+  }[];
+}
 
 export class GrnLineController {
+  static async createGrnLineByGrnId(
+    req: Request,
+    res: Response
+  ): Promise<void> {
+    const t = await GRNLine.sequelize?.transaction(); // transaction for atomicity
+    try {
+      const data: CreateGRNLineInput = req.body;
+      const { grnId, lines } = data;
+
+      if (!grnId || !lines || lines.length === 0) {
+        res.status(400).json({
+          success: false,
+          message: 'Missing GRN ID or lines',
+        });
+        return;
+      }
+
+      const createdLines: any = [];
+
+      for (const line of lines) {
+        const qcFailQty = (line.heldQty ?? 0) + (line.rtvQty ?? 0);
+
+        if ((line.qcPassQty ?? 0) + qcFailQty !== line.receivedQty) {
+          throw new Error(
+            `Validation failed for SKU ${line.skuId}: qcPassQty + qcFailQty must equal receivedQty`
+          );
+        }
+
+        const grnLine = await GRNLine.create(
+          {
+            grn_id: grnId,
+            sku_id: line.skuId,
+            ordered_qty: line.orderedQty,
+            received_qty: line.receivedQty,
+            qc_pass_qty: line.qcPassQty ?? line.receivedQty,
+            qc_fail_qty: qcFailQty,
+            held_qty: line.heldQty ?? 0,
+            rtv_qty: line.rtvQty ?? 0,
+            line_status: line.lineStatus ?? 'PENDING',
+          },
+          { transaction: t }
+        );
+
+        if (line.batches && line.batches.length > 0) {
+          for (const batch of line.batches) {
+            const grnBatch = await GRNBatch.create(
+              {
+                grn_line_id: grnLine.id,
+                batch_no: batch.batchNo,
+                expiry_date: batch.expiry,
+                qty: batch.qty,
+              },
+              { transaction: t }
+            );
+
+            if (batch.photos && batch.photos.length > 0) {
+              for (const photo of batch.photos) {
+                await GRNPhoto.create(
+                  {
+                    grn_line_id: grnLine.id,
+                    grn_batch_id: grnBatch.id,
+                    url: photo.url,
+                    reason: photo.reason ?? 'general',
+                  },
+                  { transaction: t }
+                );
+              }
+            }
+          }
+        }
+
+        createdLines.push(grnLine);
+      }
+
+      await t?.commit();
+
+      res.status(201).json({
+        success: true,
+        message: 'GRN lines created successfully',
+        data: createdLines,
+      });
+    } catch (error: any) {
+      await t?.rollback();
+      console.error('Error creating GRN lines:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message ?? 'Internal Server Error',
+      });
+    }
+  }
   static async createGrnLine(req: Request, res: Response) {
     try {
       const data: CreateGRNLineRequest = req.body;
@@ -34,7 +148,7 @@ export class GrnLineController {
         grn_id: grnId,
         sku_id: skuId,
         received_qty: receivedQty,
-        ordereded_qty: orderedQty,
+        ordered_qty: orderedQty,
         qc_pass_qty: qcPassQty ?? receivedQty,
         qc_fail_qty: qcFailQty ?? 0,
         held_qty,

@@ -120,7 +120,7 @@ export class GrnController {
           {
             grn_id: grn.id,
             sku_id: line.skuId,
-            ordereded_qty: line.orderedQty,
+            ordered_qty: line.orderedQty,
             received_qty: line.receivedQty,
             qc_pass_qty: line.qcPassQty ?? line.receivedQty,
             qc_fail_qty: (line.heldQty ?? 0) + (line.rtvQty ?? 0),

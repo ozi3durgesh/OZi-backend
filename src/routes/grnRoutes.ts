@@ -26,6 +26,7 @@ router.delete('/:id', GrnController.deleteGrn);
 // Grn-line route
 
 router.post('/line/create', GrnLineController.createGrnLine);
+router.post('/line/create-grn-id', GrnLineController.createGrnLineByGrnId);
 router.get('/line/list', GrnLineController.getGrnLines);
 router.get('/line/grn-id/:id', GrnLineController.getGrnLineByGrnId);
 router.get('/line/:id', GrnLineController.getGrnLineById);

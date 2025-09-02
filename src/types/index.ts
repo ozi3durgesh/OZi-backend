@@ -70,7 +70,6 @@ export interface UserCreationAttributes {
   availabilityStatus?: 'available' | 'break' | 'off-shift';
 }
 
-
 // Add these to your existing types/index.ts file
 
 export interface CouponAttributes {
@@ -243,7 +242,7 @@ export interface OrderAttributes {
   create_new_user?: number;
   guest_id?: string;
   password?: string;
-  
+
   // Associations
   orderDetails?: any[];
   ecomLogs?: any[];
@@ -397,7 +396,14 @@ export interface PackingJobCreationAttributes {
   jobNumber?: string;
   waveId: number;
   packerId?: number;
-  status?: 'PENDING' | 'PACKING' | 'VERIFYING' | 'COMPLETED' | 'CANCELLED' | 'AWAITING_HANDOVER' | 'HANDOVER_ASSIGNED';
+  status?:
+    | 'PENDING'
+    | 'PACKING'
+    | 'VERIFYING'
+    | 'COMPLETED'
+    | 'CANCELLED'
+    | 'AWAITING_HANDOVER'
+    | 'HANDOVER_ASSIGNED';
   priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   workflowType?: 'PICKER_PACKS' | 'DEDICATED_PACKER';
   specialInstructions?: string;
@@ -941,7 +947,7 @@ export interface WarehouseDetailResponse {
 export interface GRNAttributes {
   id: number;
   po_id: number;
-  // vendor: string;
+  ean?: string;
   status:
     | 'partial'
     | 'completed'
@@ -961,21 +967,18 @@ export interface GRNLineAttributes {
   id: number;
   grn_id: number;
   sku_id: string;
-  ordereded_qty: number;
+  ordered_qty: number;
   received_qty: number;
   qc_pass_qty: number;
   held_qty?: number;
   rtv_qty?: number;
   qc_fail_qty: number;
-  variance_reason?:
-    | 'short'
-    | 'excess'
-    | 'damage'
-    | 'wrong'
-    | 'near-expiry'
-    | null;
+  variance_reason?: string;
   line_status: string;
   remarks?: string | null;
+  expected_date?: Date;
+  received_date?: Date;
+  qc_date?: Date;
   created_at?: Date;
   updated_at?: Date;
 }
