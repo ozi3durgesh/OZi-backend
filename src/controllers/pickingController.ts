@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import { PickingWave, PicklistItem, PickingException, User, Order, ScannerBin, ScannerSku } from '../models';
 import { ResponseHandler } from '../middleware/responseHandler';
 import { OrderAttributes } from '../types';
+import { Product } from '../models/productModel';
 
 interface AuthRequest extends Request {
   user?: any;
@@ -467,38 +468,56 @@ export class PickingController {
 
       // Get picklist items with pagination
       const picklistItems = await PicklistItem.findAndCountAll({
-        where: { waveId },
-        order: [['scanSequence', 'ASC']],
-        limit: parseInt(limit.toString()),
-        offset
-      });
+  where: { waveId },
+  order: [['scanSequence', 'ASC']],
+  limit: parseInt(limit.toString()),
+  offset,
+  include: [
+    {
+      model: Product,
+      as: 'product',
+      attributes: ['ImageURL', 'MRP', 'EAN_UPC']
+    }
+  ]
+});
 
-      return ResponseHandler.success(res, {
-        message: 'Picking started successfully',
-        wave: {
-          id: wave.id,
-          waveNumber: wave.waveNumber,
-          status: wave.status,
-          totalItems: wave.totalItems,
-          estimatedDuration: wave.estimatedDuration
-        },
-        picklistItems: picklistItems.rows.map(item => ({
-          id: item.id,
-          sku: item.sku,
-          productName: item.productName,
-          binLocation: item.binLocation,
-          quantity: item.quantity,
-          scanSequence: item.scanSequence,
-          fefoBatch: item.fefoBatch,
-          expiryDate: item.expiryDate
-        })),
-        pagination: {
-          page: parseInt(page.toString()),
-          limit: parseInt(limit.toString()),
-          total: picklistItems.count,
-          totalPages: Math.ceil(picklistItems.count / parseInt(limit.toString()))
-        }
-      });
+// Always calculate totalItems from picklist count
+const totalItems = picklistItems.count;
+
+return ResponseHandler.success(res, {
+  message: 'Picking started successfully',
+  wave: {
+    id: wave.id,
+    waveNumber: wave.waveNumber,
+    status: wave.status,
+    totalItems, // live count
+    estimatedDuration: wave.estimatedDuration
+  },
+  picklistItems: picklistItems.rows.map(item => ({
+    id: item.id,
+    sku: item.sku,
+    productName: item.productName,
+    binLocation: item.binLocation,
+    quantity: item.quantity,
+    scanSequence: item.scanSequence,
+    fefoBatch: item.fefoBatch,
+    expiryDate: item.expiryDate,
+    productDetails: item.product ? {
+      imageUrl: item.product.ImageURL,
+      mrp: item.product.MRP,
+      ean: item.product.EAN_UPC
+    } : null
+  })),
+  pagination: {
+    page: parseInt(page.toString()),
+    limit: parseInt(limit.toString()),
+    total: picklistItems.count,
+    totalPages: Math.ceil(picklistItems.count / parseInt(limit.toString()))
+  }
+});
+
+
+
 
     } catch (error) {
       console.error('Start picking error:', error);

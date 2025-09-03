@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import nodemailer from 'nodemailer';
 import PurchaseOrder from '../models/PurchaseOrder';
 import POProduct from '../models/POProduct';
+import { ResponseHandler } from '../middleware/responseHandler';
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -64,8 +65,10 @@ export const createPurchaseOrder = async (req: Request, res: Response) => {
     const totalAmount = calculateTotalAmount(products);
     const totalUnits = products.reduce((sum: number, prod: any) => sum + prod.units, 0);
     const totalSkus = products.length;
-    const basePrice = products.reduce((sum: number, prod: any) => sum + prod.mrp * prod.units, 0);
-    const base_price = products.reduce((sum: number, prod: any) => sum + prod.mrp * prod.units / (1 + parseFloat(prod.total_gst)), 0);
+    const base_price = products.reduce(
+      (sum: number, prod: any) => sum + prod.mrp * prod.units / (1 + parseFloat(prod.total_gst)),
+      0
+    );
 
     // Query the last inserted purchase order to get the latest po_id
     let latestPo = await PurchaseOrder.findOne({
@@ -80,25 +83,24 @@ export const createPurchaseOrder = async (req: Request, res: Response) => {
       lastPoNumber = parseInt(latestPoId.replace('OZIPO', ''), 10) || 0;
     }
 
-    // Generate a unique po_id
-    let nextPoId = `OZIPO${lastPoNumber + 1}`;  // Start with incremented value
+    let nextPoId = `OZIPO${lastPoNumber + 1}`;
 
-    // Ensure unique po_id by checking if it already exists
+    // Ensure unique po_id
     while (await PurchaseOrder.findOne({ where: { po_id: nextPoId } })) {
-      lastPoNumber++;  // Increment if duplicate is found
+      lastPoNumber++;
       nextPoId = `OZIPO${lastPoNumber + 1}`;
     }
 
     // Create the PO
     const newPo = await PurchaseOrder.create({
-      po_id: nextPoId,  // Use the newly generated unique po_id
+      po_id: nextPoId,
       vendor_id, vendor_name, poc_name, poc_phone, vendor_tax_id,
       payment_term, payment_mode, purchase_date, expected_delivery_date,
       shipping_address, billing_address,
       total_amount: totalAmount,
       total_units: totalUnits,
       total_skus: totalSkus,
-      base_price: base_price,
+      base_price,
       approval_status: 'pending'
     });
 
@@ -124,10 +126,10 @@ export const createPurchaseOrder = async (req: Request, res: Response) => {
     // Send PDF to Category Head (email logic commented out for now)
     // if (pdfPath && poWithProducts) await sendApprovalEmail(poWithProducts, 'category_head', pdfPath);
 
-    return res.status(201).json({ message: 'PO created and sent for Category Head approval', po_id: newPo.po_id });
-  } catch (error) {
+    return ResponseHandler.success(res, { PO: { message: 'PO created and sent for Category Head approval', po_id: newPo.po_id } }, 201);
+  } catch (error: any) {
     console.error('Error creating PO:', error);
-    return res.status(500).json({ message: 'Error creating PO', error });
+    return ResponseHandler.error(res, error.message || 'Error creating PO', 500);
   }
 };
 
@@ -135,9 +137,9 @@ export const createPurchaseOrder = async (req: Request, res: Response) => {
 export const getAllPOs = async (_req: Request, res: Response) => {
   try {
     const pos = await PurchaseOrder.findAll({ include: [{ model: POProduct, as: 'products' }] });
-    return res.status(200).json(pos);
-  } catch (error) {
-    return res.status(500).json({ message: 'Error fetching POs', error });
+    return ResponseHandler.success(res, { PO: pos }, 200);
+  } catch (error: any) {
+    return ResponseHandler.error(res, error.message || 'Error fetching POs', 500);
   }
 };
 
@@ -145,10 +147,10 @@ export const getAllPOs = async (_req: Request, res: Response) => {
 export const getPOById = async (req: Request, res: Response) => {
   try {
     const po = await PurchaseOrder.findByPk(req.params.id, { include: [{ model: POProduct, as: 'products' }] });
-    if (!po) return res.status(404).json({ message: 'PO not found' });
-    return res.status(200).json(po);
-  } catch (error) {
-    return res.status(500).json({ message: 'Error fetching PO', error });
+    if (!po) return ResponseHandler.error(res, 'PO not found', 404);
+    return ResponseHandler.success(res, { PO: po }, 200);
+  } catch (error: any) {
+    return ResponseHandler.error(res, error.message || 'Error fetching PO', 500);
   }
 };
 
@@ -156,12 +158,12 @@ export const getPOById = async (req: Request, res: Response) => {
 export const approvePO = async (req: Request, res: Response) => {
   const { role, pdfPath } = req.body; // role: category_head/admin/vendor
   if (!['category_head', 'admin', 'vendor'].includes(role)) {
-    return res.status(400).json({ message: 'Invalid role' });
+    return ResponseHandler.error(res, 'Invalid role', 400);
   }
 
   try {
     const po = await PurchaseOrder.findByPk(req.params.id, { include: [{ model: POProduct, as: 'products' }] });
-    if (!po) return res.status(404).json({ message: 'PO not found' });
+    if (!po) return ResponseHandler.error(res, 'PO not found', 404);
 
     po.approval_status = role;
     await po.save();
@@ -172,8 +174,8 @@ export const approvePO = async (req: Request, res: Response) => {
 
     //if (nextRole && pdfPath) await sendApprovalEmail(po, nextRole, pdfPath);
 
-    return res.status(200).json({ message: `PO approved by ${role}`, po_id: po.po_id });
-  } catch (error) {
-    return res.status(500).json({ message: 'Error approving PO', error });
+    return ResponseHandler.success(res, { PO: { message: `PO approved by ${role}`, po_id: po.po_id } }, 200);
+  } catch (error: any) {
+    return ResponseHandler.error(res, error.message || 'Error approving PO', 500);
   }
 };

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import Vendor from '../models/vendor'; // ⬅️ make sure file is named Vendor.ts with capital V
+import { ResponseHandler } from '../middleware/responseHandler'; // ✅ adjust path if needed
 
 export const createVendor = async (req: Request, res: Response) => {
   try {
@@ -8,7 +9,7 @@ export const createVendor = async (req: Request, res: Response) => {
     // ✅ Check duplicate taxId
     const existingVendor = await Vendor.findOne({ where: { taxId } });
     if (existingVendor) {
-      return res.status(409).json({ message: 'Vendor with this Tax ID already exists.' });
+      return ResponseHandler.error(res, 'Vendor with this Tax ID already exists.', 409);
     }
 
     // ✅ Find latest vendorId
@@ -46,14 +47,14 @@ export const createVendor = async (req: Request, res: Response) => {
       taxId,
     });
 
-    return res.status(201).json({ message: 'Vendor created successfully!', data: newVendor });
-  } catch (error) {
+    return ResponseHandler.success(res, { message: 'Vendor created successfully!', data: newVendor }, 201);
+  } catch (error: any) {
     console.error(error);
-    return res.status(500).json({ message: 'Server error' });
+    return ResponseHandler.error(res, error.message || 'Server error', 500);
   }
 };
 
-// Get a product by SKU
+// Get a vendor by ID
 export const getVendorById = async (req: Request, res: Response) => {
   const { vid } = req.params;
 
@@ -61,21 +62,21 @@ export const getVendorById = async (req: Request, res: Response) => {
     const vendor = await Vendor.findOne({ where: { vendorId: vid } });
 
     if (!vendor) {
-      return res.status(404).json({ message: 'Product not found' });
+      return ResponseHandler.error(res, 'Vendor not found', 404);
     }
 
-    return res.status(200).json(vendor);
-  } catch (error) {
-    return res.status(500).json({ message: 'Error fetching product', error });
+    return ResponseHandler.success(res, vendor);
+  } catch (error: any) {
+    return ResponseHandler.error(res, error.message || 'Error fetching vendor', 500);
   }
 };
 
 export const getVendors = async (req: Request, res: Response) => {
   try {
     const vendors = await Vendor.findAll();
-    return res.status(200).json({ message: 'Vendors fetched successfully', data: vendors });
-  } catch (error) {
+    return ResponseHandler.success(res, { message: 'Vendors fetched successfully', data: vendors });
+  } catch (error: any) {
     console.error(error);
-    return res.status(500).json({ message: 'Server error' });
+    return ResponseHandler.error(res, error.message || 'Server error', 500);
   }
 };
