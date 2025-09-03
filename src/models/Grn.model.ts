@@ -2,6 +2,7 @@ import { DataTypes, Model } from 'sequelize';
 import sequelize from '../config/database';
 import User from './User';
 import { GRNAttributes, GRNCreationAttributes } from '../types/index';
+import PurchaseOrder from './PurchaseOrder';
 
 class GRN
   extends Model<GRNAttributes, GRNCreationAttributes>
@@ -40,6 +41,21 @@ GRN.init(
       ),
       defaultValue: 'partial',
     },
+    // expected_date: {
+    //   type: DataTypes.DATE,
+    //   allowNull: false,
+    //   defaultValue: DataTypes.NOW,
+    // },
+    // received_date: {
+    //   type: DataTypes.DATE,
+    //   allowNull: false,
+    //   defaultValue: DataTypes.NOW,
+    // },
+    // qc_date: {
+    //   type: DataTypes.DATE,
+    //   allowNull: false,
+    //   defaultValue: DataTypes.NOW,
+    // },
     created_by: {
       type: DataTypes.INTEGER,
       allowNull: false,
@@ -66,9 +82,10 @@ GRN.init(
     indexes: [{ fields: ['po_id'] }, { fields: ['status'] }],
   }
 );
-
+GRN.belongsTo(PurchaseOrder, { foreignKey: 'po_id', as: 'PurchaseOrder' });
 GRN.belongsTo(User, { foreignKey: 'created_by', as: 'CreatedBy' });
 GRN.belongsTo(User, { foreignKey: 'approved_by', as: 'ApprovedBy' });
 User.hasMany(GRN, { foreignKey: 'created_by', as: 'CreatedGrns' });
 User.hasMany(GRN, { foreignKey: 'approved_by', as: 'ApprovedGrns' });
+PurchaseOrder.hasMany(GRN, { foreignKey: 'po_id', as: 'GRNs' });
 export default GRN;
