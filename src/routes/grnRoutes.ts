@@ -15,6 +15,7 @@ router.get('/');
 // GRN Management Routes
 router.post('/', GrnController.createGrn);
 router.get('/list', GrnController.getGrnDetails);
+router.get('/stats/status-wise', GrnController.getGrnStats);
 router.get('/:id', GrnController.getGrnById);
 router.post('/create-flow', GrnController.createFullGRN);
 router.get('/po/:poId', GrnController.getGrnsByPoIdWithDetails);

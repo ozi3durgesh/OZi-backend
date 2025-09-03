@@ -43,7 +43,7 @@ GRNLine.init(
       allowNull: false,
     },
     ean: {
-      type: DataTypes.STRING(13),
+      type: DataTypes.STRING(20),
       allowNull: true,
       unique: true,
     },
@@ -109,7 +109,7 @@ GRNLine.init(
   }
 );
 
-GRNLine.belongsTo(GRN, { foreignKey: 'grn_id', as: 'GrnId' });
+GRNLine.belongsTo(GRN, { foreignKey: 'grn_id', as: 'Grn' });
 GRN.hasMany(GRNLine, { foreignKey: 'grn_id', as: 'Line' });
 
 export default GRNLine;

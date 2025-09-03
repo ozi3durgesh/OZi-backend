@@ -63,6 +63,7 @@ export class GrnController {
 
       const grn = await GRN.create({
         ...data,
+        status: data.status || 'partial',
         created_by: userId,
         created_at: new Date(),
         updated_at: new Date(),
@@ -104,6 +105,30 @@ export class GrnController {
     }
     const t = await sequelize.transaction();
     try {
+      for (const line of input.lines) {
+        const existingLine = await GRNLine.findOne({
+          include: [
+            {
+              model: GRN,
+              as: 'Grn',
+              where: { po_id: input.poId },
+            },
+          ],
+          where: { sku_id: line.skuId },
+          transaction: t,
+        });
+
+        if (existingLine) {
+          await t.rollback();
+          res.status(400).json({
+            statusCode: 400,
+            success: false,
+            data: null,
+            error: `GRN already exists for PO ${input.poId} and SKU ${line.skuId}`,
+          });
+          return;
+        }
+      }
       // 1. Create GRN
       const grn = await GRN.create(
         {
@@ -297,6 +322,48 @@ export class GrnController {
       });
     } catch (error: any) {
       console.error('Error fetching GRNs with details:', error);
+      res.status(500).json({
+        statusCode: 500,
+        success: false,
+        data: null,
+        error: error.message,
+      });
+    }
+  }
+  static async getGrnStats(req: Request, res: Response): Promise<void> {
+    try {
+      // 1. Total GRNs
+      const totalGrns = await GRN.count();
+
+      const grnsWithVariance = await GRN.count({
+        where: {
+          status: 'partial',
+        },
+      });
+      console.log({ grnsWithVariance });
+      // 3. Pending QC
+      const pendingQc = await GRN.count({
+        where: { status: 'pending-qc' },
+      });
+
+      // 4. RTV Initiated
+      const rtvInitiated = await GRN.count({
+        where: { status: 'rtv-initiated' },
+      });
+
+      res.status(200).json({
+        statusCode: 200,
+        success: true,
+        data: {
+          totalGrns,
+          grnsWithVariance,
+          pendingQc,
+          rtvInitiated,
+        },
+        error: null,
+      });
+    } catch (error: any) {
+      console.error('Error fetching GRN stats:', error);
       res.status(500).json({
         statusCode: 500,
         success: false,
