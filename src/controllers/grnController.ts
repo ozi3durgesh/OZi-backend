@@ -92,7 +92,7 @@ export class GrnController {
   static async createFullGRN(req: AuthRequest, res: Response) {
     const input: CreateFullGRNInput = req.body;
     const userId = req.user?.id;
-    console.log({ input });
+
     if (!userId) {
       res.status(401).json({
         statusCode: 401,
@@ -115,7 +115,7 @@ export class GrnController {
         },
         { transaction: t }
       );
-      console.log({ grn });
+
       // 2. Create GRN Lines
       for (const line of input.lines) {
         const grnLine = await GRNLine.create(
@@ -366,7 +366,6 @@ export class GrnController {
 
   static async getGrnById(req: Request, res: Response): Promise<void> {
     try {
-      console.log(req.params);
       const { id } = req.params;
       const grn = await GRN.findByPk(id, {
         include: [
@@ -406,7 +405,7 @@ export class GrnController {
     try {
       const { id } = req.params;
       const updates = req.body;
-      console.log(updates);
+
       const grn = await GRN.findByPk(id);
       if (!grn) {
         res.status(404).json({
