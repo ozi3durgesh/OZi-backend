@@ -20,38 +20,6 @@ function calculateTotalAmount(products: any[]) {
   return products.reduce((sum, prod) => sum + prod.amount, 0);
 }
 
-// Send approval email
-/*async function sendApprovalEmail(po: any, role: 'category_head' | 'admin' | 'vendor', pdfPath: string) {
-  let productLines = '';
-  for (const p of po.products) {
-    productLines += `${p.product} | SKU: ${p.sku_id} | Units: ${p.units} | MRP: ₹${p.mrp} | Amount: ₹${p.amount}\n`;
-  }
-
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: approvalEmails[role],
-    subject: `PO ${po.po_id} - Approval Request`,
-    text: `Dear ${role.replace('_', ' ')},
-
-Please review the attached Purchase Order and approve it.
-
-Vendor: ${po.vendor_name}
-PO Amount: ₹${po.total_amount}
-PO ID: ${po.po_id}
-
-Products:
-${productLines}
-
-Thanks,
-Ozi Technologies`,
-    attachments: [{ filename: `PO_${po.po_id}.pdf`, path: pdfPath }]
-  };
-
-  await transporter.sendMail(mailOptions);
-  console.log(`Approval email sent to ${role}: ${approvalEmails[role]}`);
-}
-*/
-
 // Create PO
 export const createPurchaseOrder = async (req: Request, res: Response) => {
   const {
@@ -120,24 +88,45 @@ export const createPurchaseOrder = async (req: Request, res: Response) => {
 
     await POProduct.bulkCreate(productRecords);
 
-    // Fetch PO with products for email (email logic commented out for now)
-    // const poWithProducts = await PurchaseOrder.findByPk(newPo.id, { include: [{ model: POProduct, as: 'products' }] });
-
-    // Send PDF to Category Head (email logic commented out for now)
-    // if (pdfPath && poWithProducts) await sendApprovalEmail(poWithProducts, 'category_head', pdfPath);
-
-    return ResponseHandler.success(res, { PO: { message: 'PO created and sent for Category Head approval', po_id: newPo.po_id } }, 201);
+    return ResponseHandler.success(
+      res,
+      { PO: { message: 'PO created and sent for Category Head approval', po_id: newPo.po_id } },
+      201
+    );
   } catch (error: any) {
     console.error('Error creating PO:', error);
     return ResponseHandler.error(res, error.message || 'Error creating PO', 500);
   }
 };
 
-// Get all POs
-export const getAllPOs = async (_req: Request, res: Response) => {
+// Get all POs with pagination
+export const getAllPOs = async (req: Request, res: Response) => {
   try {
-    const pos = await PurchaseOrder.findAll({ include: [{ model: POProduct, as: 'products' }] });
-    return ResponseHandler.success(res, { PO: pos }, 200);
+    const { page = 1, limit = 20, status } = req.query;
+    const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
+
+    const whereClause: any = {};
+    if (status) {
+      whereClause.approval_status = status; // ✅ Optional filter by status
+    }
+
+    const { count, rows } = await PurchaseOrder.findAndCountAll({
+      where: whereClause,
+      include: [{ model: POProduct, as: 'products' }],
+      limit: parseInt(limit.toString()),
+      offset,
+      order: [['id', 'DESC']]
+    });
+
+    return ResponseHandler.success(res, {
+      PO: rows,
+      pagination: {
+        total: count,
+        page: parseInt(page.toString()),
+        pages: Math.ceil(count / parseInt(limit.toString())),
+        limit: parseInt(limit.toString())
+      }
+    });
   } catch (error: any) {
     return ResponseHandler.error(res, error.message || 'Error fetching POs', 500);
   }
@@ -146,7 +135,9 @@ export const getAllPOs = async (_req: Request, res: Response) => {
 // Get PO by ID
 export const getPOById = async (req: Request, res: Response) => {
   try {
-    const po = await PurchaseOrder.findByPk(req.params.id, { include: [{ model: POProduct, as: 'products' }] });
+    const po = await PurchaseOrder.findByPk(req.params.id, {
+      include: [{ model: POProduct, as: 'products' }]
+    });
     if (!po) return ResponseHandler.error(res, 'PO not found', 404);
     return ResponseHandler.success(res, { PO: po }, 200);
   } catch (error: any) {
@@ -162,7 +153,9 @@ export const approvePO = async (req: Request, res: Response) => {
   }
 
   try {
-    const po = await PurchaseOrder.findByPk(req.params.id, { include: [{ model: POProduct, as: 'products' }] });
+    const po = await PurchaseOrder.findByPk(req.params.id, {
+      include: [{ model: POProduct, as: 'products' }]
+    });
     if (!po) return ResponseHandler.error(res, 'PO not found', 404);
 
     po.approval_status = role;
@@ -172,9 +165,11 @@ export const approvePO = async (req: Request, res: Response) => {
     if (role === 'category_head') nextRole = 'admin';
     else if (role === 'admin') nextRole = 'vendor';
 
-    //if (nextRole && pdfPath) await sendApprovalEmail(po, nextRole, pdfPath);
-
-    return ResponseHandler.success(res, { PO: { message: `PO approved by ${role}`, po_id: po.po_id } }, 200);
+    return ResponseHandler.success(
+      res,
+      { PO: { message: `PO approved by ${role}`, po_id: po.po_id } },
+      200
+    );
   } catch (error: any) {
     return ResponseHandler.error(res, error.message || 'Error approving PO', 500);
   }

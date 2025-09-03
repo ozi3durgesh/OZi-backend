@@ -69,28 +69,63 @@ export const updateProduct = async (req: Request, res: Response) => {
   }
 };
 
-// Get a product by SKU
+// Get a product by SKU (with pagination)
 export const getProductBySKU = async (req: Request, res: Response) => {
   const { sku } = req.params;
+  const { page = 1, limit = 20 } = req.query;
+  const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
 
   try {
-    const product = await Product.findOne({ where: { SKU: sku } });
+    const { count, rows } = await Product.findAndCountAll({
+      where: { SKU: sku },
+      limit: parseInt(limit.toString()),
+      offset,
+    });
 
-    if (!product) {
+    if (count === 0) {
       return ResponseHandler.error(res, 'Product not found', 404);
     }
 
-    return ResponseHandler.success(res, product);
+    return ResponseHandler.success(res, {
+      data: rows,
+      pagination: {
+        total: count,
+        page: parseInt(page.toString()),
+        pages: Math.ceil(count / parseInt(limit.toString())),
+        limit: parseInt(limit.toString()),
+      },
+    });
   } catch (error: any) {
     return ResponseHandler.error(res, error.message || 'Error fetching product', 500);
   }
 };
 
-// Get list of products
+// Get list of products with pagination
 export const getProducts = async (req: Request, res: Response) => {
   try {
-    const products = await Product.findAll();
-    return ResponseHandler.success(res, products);
+    const { page = 1, limit = 20, status } = req.query;
+    const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
+
+    const whereClause: any = {};
+    if (status) {
+      whereClause.Status = status; // ✅ Optional filter by status
+    }
+
+    const { count, rows } = await Product.findAndCountAll({
+      where: whereClause,
+      limit: parseInt(limit.toString()),
+      offset,
+    });
+
+    return ResponseHandler.success(res, {
+      data: rows,
+      pagination: {
+        total: count,
+        page: parseInt(page.toString()),
+        pages: Math.ceil(count / parseInt(limit.toString())),
+        limit: parseInt(limit.toString()),
+      },
+    });
   } catch (error: any) {
     return ResponseHandler.error(res, error.message || 'Error fetching products', 500);
   }
