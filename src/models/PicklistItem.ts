@@ -1,6 +1,6 @@
-// models/PicklistItem.ts
 import { DataTypes, Model } from 'sequelize';
 import sequelize from '../config/database';
+import { Product } from './productModel.js';
 
 interface PicklistItemAttributes {
   id: number;
@@ -20,12 +20,15 @@ interface PicklistItemAttributes {
   pickedAt?: Date;
   pickedBy?: number;
   notes?: string;
-  scannerId?: string;   // ✅ NEW FIELD
+  scannerId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
 
-class PicklistItem extends Model<PicklistItemAttributes> implements PicklistItemAttributes {
+class PicklistItem
+  extends Model<PicklistItemAttributes>
+  implements PicklistItemAttributes
+{
   declare id: number;
   declare waveId: number;
   declare orderId: number;
@@ -43,124 +46,144 @@ class PicklistItem extends Model<PicklistItemAttributes> implements PicklistItem
   declare pickedAt?: Date;
   declare pickedBy?: number;
   declare notes?: string;
-  declare scannerId?: string;   // ✅ NEW FIELD
+  declare scannerId?: string;
   declare createdAt: Date;
   declare updatedAt: Date;
+
+    declare product?: Product;
 }
 
-PicklistItem.init({
-  id: {
-    type: DataTypes.INTEGER,
-    autoIncrement: true,
-    primaryKey: true,
-  },
-  waveId: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    references: {
-      model: 'picking_waves',
-      key: 'id',
+PicklistItem.init(
+  {
+    id: {
+      type: DataTypes.INTEGER,
+      autoIncrement: true,
+      primaryKey: true,
+    },
+    waveId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: 'picking_waves',
+        key: 'id',
+      },
+    },
+    orderId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: 'orders',
+        key: 'id',
+      },
+    },
+    sku: {
+      type: DataTypes.STRING(100),
+      allowNull: false,
+    },
+    productName: {
+      type: DataTypes.STRING(255),
+      allowNull: false,
+    },
+    binLocation: {
+      type: DataTypes.STRING(50),
+      allowNull: false,
+    },
+    quantity: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 1,
+    },
+    pickedQuantity: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    status: {
+      type: DataTypes.ENUM(
+        'PENDING',
+        'PICKING',
+        'PICKED',
+        'PARTIAL',
+        'OOS',
+        'DAMAGED'
+      ),
+      allowNull: false,
+      defaultValue: 'PENDING',
+    },
+    fefoBatch: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    expiryDate: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    scanSequence: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 1,
+    },
+    partialReason: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    partialPhoto: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
+    },
+    pickedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    pickedBy: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'Users',
+        key: 'id',
+      },
+    },
+    notes: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    scannerId: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    createdAt: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW,
+    },
+    updatedAt: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW,
     },
   },
-  orderId: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    references: {
-      model: 'orders',
-      key: 'id',
-    },
-  },
-  sku: {
-    type: DataTypes.STRING(100),
-    allowNull: false,
-  },
-  productName: {
-    type: DataTypes.STRING(255),
-    allowNull: false,
-  },
-  binLocation: {
-    type: DataTypes.STRING(50),
-    allowNull: false,
-  },
-  quantity: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    defaultValue: 1,
-  },
-  pickedQuantity: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    defaultValue: 0,
-  },
-  status: {
-    type: DataTypes.ENUM('PENDING', 'PICKING', 'PICKED', 'PARTIAL', 'OOS', 'DAMAGED'),
-    allowNull: false,
-    defaultValue: 'PENDING',
-  },
-  fefoBatch: {
-    type: DataTypes.STRING(100),
-    allowNull: true,
-  },
-  expiryDate: {
-    type: DataTypes.DATE,
-    allowNull: true,
-  },
-  scanSequence: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    defaultValue: 1,
-  },
-  partialReason: {
-    type: DataTypes.STRING(255),
-    allowNull: true,
-  },
-  partialPhoto: {
-    type: DataTypes.STRING(500),
-    allowNull: true,
-  },
-  pickedAt: {
-    type: DataTypes.DATE,
-    allowNull: true,
-  },
-  pickedBy: {
-    type: DataTypes.INTEGER,
-    allowNull: true,
-    references: {
-      model: 'Users',
-      key: 'id',
-    },
-  },
-  notes: {
-    type: DataTypes.TEXT,
-    allowNull: true,
-  },
-  scannerId: {                 // ✅ NEW FIELD
-    type: DataTypes.STRING(100),
-    allowNull: true,
-  },
-  createdAt: {
-    type: DataTypes.DATE,
-    allowNull: false,
-    defaultValue: DataTypes.NOW,
-  },
-  updatedAt: {
-    type: DataTypes.DATE,
-    allowNull: false,
-    defaultValue: DataTypes.NOW,
-  },
-}, {
-  sequelize,
-  tableName: 'picklist_items',
-  indexes: [
-    { fields: ['waveId'] },
-    { fields: ['orderId'] },
-    { fields: ['sku'] },
-    { fields: ['binLocation'] },
-    { fields: ['status'] },
-    { fields: ['fefoBatch'] },
-    { fields: ['expiryDate'] },
-    { fields: ['scannerId'] }, // ✅ index for faster lookups
-  ],
+  {
+    sequelize,
+    tableName: 'picklist_items',
+    indexes: [
+      { fields: ['waveId'] },
+      { fields: ['orderId'] },
+      { fields: ['sku'] },
+      { fields: ['binLocation'] },
+      { fields: ['status'] },
+      { fields: ['fefoBatch'] },
+      { fields: ['expiryDate'] },
+      { fields: ['scannerId'] },
+    ],
+  }
+);
+
+// 🔗 Association: PicklistItem → Product (via SKU)
+PicklistItem.belongsTo(Product, {
+  foreignKey: 'sku', // PicklistItem.sku
+  targetKey: 'SKU',  // Product.SKU
+  as: 'product',
 });
+
 
 export default PicklistItem;
