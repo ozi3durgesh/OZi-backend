@@ -20,9 +20,9 @@ class GRNLine
   public line_status!: string;
   public variance_reason!: any | null;
   public remarks!: string | null;
-  public expected_date!: Date;
-  public received_date!: Date;
-  public qc_date!: Date;
+  // public expected_date!: Date;
+  // public received_date!: Date;
+  // public qc_date!: Date;
   public created_at!: Date;
   public updated_at!: Date;
 }
@@ -89,21 +89,7 @@ GRNLine.init(
       type: DataTypes.STRING(255),
       allowNull: true,
     },
-    expected_date: {
-      type: DataTypes.DATE,
-      allowNull: false,
-      defaultValue: DataTypes.NOW,
-    },
-    received_date: {
-      type: DataTypes.DATE,
-      allowNull: false,
-      defaultValue: DataTypes.NOW,
-    },
-    qc_date: {
-      type: DataTypes.DATE,
-      allowNull: false,
-      defaultValue: DataTypes.NOW,
-    },
+
     created_at: {
       type: DataTypes.DATE,
       allowNull: false,
