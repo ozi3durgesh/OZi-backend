@@ -955,6 +955,7 @@ export interface GRNAttributes {
     | 'variance-review'
     | 'rtv-initiated';
   created_by: number;
+  closeReason?: string | null;
   approved_by?: number | null;
   created_at?: Date;
   updated_at?: Date;
@@ -1081,6 +1082,8 @@ export interface GRNFilters {
   page?: number;
   limit?: number;
   search?: string;
+  startDate?: string;
+  endDate?: string;
 }
 // Request type extensions for middleware
 export interface AuthRequest extends Request {

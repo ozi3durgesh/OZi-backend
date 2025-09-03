@@ -19,6 +19,7 @@ class GRN
     | 'variance-review'
     | 'rtv-initiated';
   public created_by!: number;
+  public closeReason!: string | null;
   public approved_by!: number | null;
   public created_at!: Date;
   public updated_at!: Date;
@@ -40,6 +41,11 @@ GRN.init(
         'rtv-initiated'
       ),
       defaultValue: 'partial',
+    },
+
+    closeReason: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
     },
     // expected_date: {
     //   type: DataTypes.DATE,
@@ -82,7 +88,7 @@ GRN.init(
     indexes: [{ fields: ['po_id'] }, { fields: ['status'] }],
   }
 );
-GRN.belongsTo(PurchaseOrder, { foreignKey: 'po_id', as: 'PurchaseOrder' });
+GRN.belongsTo(PurchaseOrder, { foreignKey: 'po_id', as: 'PO' });
 GRN.belongsTo(User, { foreignKey: 'created_by', as: 'CreatedBy' });
 GRN.belongsTo(User, { foreignKey: 'approved_by', as: 'ApprovedBy' });
 User.hasMany(GRN, { foreignKey: 'created_by', as: 'CreatedGrns' });

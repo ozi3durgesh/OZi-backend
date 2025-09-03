@@ -31,7 +31,7 @@ router.post('/line/create-grn-id', GrnLineController.createGrnLineByGrnId);
 router.get('/line/list', GrnLineController.getGrnLines);
 router.get('/line/grn-id/:id', GrnLineController.getGrnLineByGrnId);
 router.get('/line/:id', GrnLineController.getGrnLineById);
-router.put('/line/:id', GrnLineController.updateGrnLine);
+router.put('/line/:id', GrnLineController.updateGrnLineById);
 router.delete('/line/:id', GrnLineController.deleteGrnLine);
 
 router.post('/batch/', GrnBatchController.createGrnBatch);

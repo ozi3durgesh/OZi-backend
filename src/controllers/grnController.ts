@@ -11,11 +11,12 @@ import {
   GRNFilters,
   GRNRequest,
 } from '../types';
+import { Op } from 'sequelize';
+import PurchaseOrder from '../models/PurchaseOrder';
 interface CreateFullGRNInput {
   poId: number;
   lines: {
     skuId: string;
-
     orderedQty: number;
     receivedQty: number;
     ean?: string;
@@ -129,7 +130,7 @@ export class GrnController {
           return;
         }
       }
-      // 1. Create GRN
+
       const grn = await GRN.create(
         {
           po_id: input.poId,
@@ -141,7 +142,6 @@ export class GrnController {
         { transaction: t }
       );
 
-      // 2. Create GRN Lines
       for (const line of input.lines) {
         const grnLine = await GRNLine.create(
           {
@@ -381,23 +381,51 @@ export class GrnController {
         page = 1,
         limit = 10,
         search,
+        startDate,
+        endDate,
       } = req.query as GRNFilters;
 
       const offset: number = (page - 1) * limit;
       const whereClause: any = {};
 
-      // Apply filters
       if (status) whereClause.status = status;
 
-      // Search functionality
+      if (po_id) whereClause.po_id = po_id;
+      if (startDate && endDate) {
+        whereClause.created_at = {
+          [Op.between]: [
+            new Date(startDate as string),
+            new Date(endDate as string),
+          ],
+        };
+      }
 
       const { count, rows } = await GRN.findAndCountAll({
         where: whereClause,
         include: [
+          {
+            model: PurchaseOrder,
+            as: 'PO',
+            attributes: ['id', 'po_id', 'vendor_name'],
+            where: search ? { vendor_name: { [Op.like]: `%${search}%` } } : {},
+          },
+          {
+            model: GRNLine,
+            as: 'Line',
+            attributes: [
+              'id',
+              'sku_id',
+              'ordered_qty',
+              'received_qty',
+              'qc_pass_qty',
+              'qc_fail_qty',
+              'rtv_qty',
+              'held_qty',
+            ],
+          },
           { model: User, as: 'CreatedBy', attributes: ['id', 'email'] },
-          { model: User, as: 'ApprovedBy', attributes: ['id', 'email'] },
         ],
-        limit: parseInt(limit.toString()),
+        limit: Number(limit),
         offset,
         order: [['created_at', 'DESC']],
       });
