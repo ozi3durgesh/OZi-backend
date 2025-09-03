@@ -15,6 +15,7 @@ router.get('/');
 // GRN Management Routes
 router.post('/', GrnController.createGrn);
 router.get('/list', GrnController.getGrnDetails);
+router.get('/stats/status-wise', GrnController.getGrnStats);
 router.get('/:id', GrnController.getGrnById);
 router.post('/create-flow', GrnController.createFullGRN);
 router.get('/po/:poId', GrnController.getGrnsByPoIdWithDetails);
@@ -30,7 +31,7 @@ router.post('/line/create-grn-id', GrnLineController.createGrnLineByGrnId);
 router.get('/line/list', GrnLineController.getGrnLines);
 router.get('/line/grn-id/:id', GrnLineController.getGrnLineByGrnId);
 router.get('/line/:id', GrnLineController.getGrnLineById);
-router.put('/line/:id', GrnLineController.updateGrnLine);
+router.put('/line/:id', GrnLineController.updateGrnLineById);
 router.delete('/line/:id', GrnLineController.deleteGrnLine);
 
 router.post('/batch/', GrnBatchController.createGrnBatch);

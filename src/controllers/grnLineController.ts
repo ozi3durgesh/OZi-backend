@@ -3,6 +3,7 @@ import GRNLine from '../models/GrnLine';
 import { CreateGRNLineRequest } from '../types';
 import GRNBatch from '../models/GrnBatch';
 import GRNPhoto from '../models/GrnPhoto';
+import GRN from '../models/Grn.model';
 export interface CreateGRNLineInput {
   grnId: number;
 
@@ -119,6 +120,255 @@ export class GrnLineController {
       });
     }
   }
+  static async getGrnLineByGrnId(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+
+      const grnLines = await GRNLine.findAll({
+        where: { grn_id: id },
+        include: [
+          {
+            model: GRNBatch,
+            as: 'Batches',
+            include: [
+              {
+                model: GRNPhoto,
+                as: 'Photos',
+                attributes: ['id', 'url', 'reason'],
+              },
+            ],
+          },
+        ],
+        order: [['id', 'ASC']],
+      });
+
+      if (!grnLines || grnLines.length === 0) {
+        res.status(404).json({
+          statusCode: 404,
+          success: false,
+          data: null,
+          error: `No GRN Lines found for GRN ID ${id}`,
+        });
+      }
+
+      res.status(200).json({
+        statusCode: 200,
+        success: true,
+        data: grnLines,
+        error: null,
+      });
+    } catch (error: any) {
+      console.error('Error fetching GRN Lines:', error);
+      res.status(500).json({
+        statusCode: 500,
+        success: false,
+        data: null,
+        error: error.message,
+      });
+    }
+  }
+
+  static async getGrnLineById(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+
+      const line = await GRNLine.findByPk(id, {
+        include: [
+          {
+            model: GRN,
+            as: 'Grn',
+            attributes: ['id', 'po_id', 'status'],
+          },
+          {
+            model: GRNBatch,
+            as: 'Batches',
+            include: [
+              {
+                model: GRNPhoto,
+                as: 'Photos',
+                attributes: ['id', 'url', 'reason'],
+              },
+            ],
+            attributes: ['id', 'batch_no', 'expiry_date', 'qty'],
+          },
+        ],
+      });
+
+      if (!line) {
+        return res.status(404).json({
+          success: false,
+          message: 'GRN Line not found',
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: 'GRN Line fetched successfully',
+        data: line,
+      });
+    } catch (error: any) {
+      console.error('Error fetching GRN Line:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Internal Server Error',
+        error: error.message,
+      });
+    }
+  }
+  static async updateGrnLineById(req: Request, res: Response): Promise<void> {
+    const t = await GRNLine.sequelize?.transaction();
+    try {
+      const { grnLineId } = req.params;
+      const data = req.body;
+
+      if (!grnLineId) {
+        res.status(400).json({
+          success: false,
+          message: 'Missing GRN Line ID',
+        });
+        return;
+      }
+
+      const existingLine = await GRNLine.findByPk(grnLineId, {
+        transaction: t,
+      });
+      if (!existingLine) {
+        await t?.rollback();
+        res.status(404).json({
+          success: false,
+          message: `GRN Line with ID ${grnLineId} not found`,
+        });
+        return;
+      }
+
+      const qcFailQty = (data.heldQty ?? 0) + (data.rtvQty ?? 0);
+
+      if ((data.qcPassQty ?? 0) + qcFailQty !== data.receivedQty) {
+        throw new Error(
+          `Validation failed: qcPassQty + qcFailQty must equal receivedQty`
+        );
+      }
+
+      await existingLine.update(
+        {
+          ordered_qty: data.orderedQty ?? existingLine.ordered_qty,
+          received_qty: data.receivedQty ?? existingLine.received_qty,
+          qc_pass_qty: data.qcPassQty ?? existingLine.qc_pass_qty,
+          qc_fail_qty: qcFailQty,
+          held_qty: data.heldQty ?? existingLine.held_qty,
+          rtv_qty: data.rtvQty ?? existingLine.rtv_qty,
+          line_status:
+            data.receivedQty === 0
+              ? 'pending'
+              : data.orderedQty === data.receivedQty
+                ? 'completed'
+                : 'partial',
+        },
+        { transaction: t }
+      );
+
+      if (data.batches && Array.isArray(data.batches)) {
+        await GRNBatch.destroy({
+          where: { grn_line_id: grnLineId },
+          transaction: t,
+        });
+        await GRNPhoto.destroy({
+          where: { grn_line_id: grnLineId },
+          transaction: t,
+        });
+
+        for (const batch of data.batches) {
+          const grnBatch = await GRNBatch.create(
+            {
+              grn_line_id: existingLine.id,
+              batch_no: batch.batchNo,
+              expiry_date: batch.expiry,
+              qty: batch.qty,
+            },
+            { transaction: t }
+          );
+
+          if (batch.photos && batch.photos.length > 0) {
+            for (const photo of batch.photos) {
+              await GRNPhoto.create(
+                {
+                  grn_line_id: existingLine.id,
+                  grn_batch_id: grnBatch.id,
+                  url: photo.url,
+                  reason: photo.reason ?? 'general',
+                },
+                { transaction: t }
+              );
+            }
+          }
+        }
+      }
+
+      await t?.commit();
+
+      res.status(200).json({
+        success: true,
+        message: 'GRN Line updated successfully',
+        data: existingLine,
+      });
+    } catch (error: any) {
+      await t?.rollback();
+      console.error('Error updating GRN line:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message ?? 'Internal Server Error',
+      });
+    }
+  }
+
+  static async deleteGrnLine(req: Request, res: Response): Promise<void> {
+    const t = await GRNLine.sequelize?.transaction();
+    try {
+      const { id } = req.params;
+
+      if (!id) {
+        res.status(400).json({
+          success: false,
+          message: 'Missing GRN Line ID',
+        });
+        return;
+      }
+
+      const existingLine = await GRNLine.findByPk(id, { transaction: t });
+      if (!existingLine) {
+        await t?.rollback();
+        res.status(404).json({
+          success: false,
+          message: `GRN Line with ID ${id} not found`,
+        });
+        return;
+      }
+
+      // Delete related photos first
+      await GRNPhoto.destroy({ where: { grn_line_id: id }, transaction: t });
+
+      // Delete related batches
+      await GRNBatch.destroy({ where: { grn_line_id: id }, transaction: t });
+
+      // Delete the GRN line
+      await existingLine.destroy({ transaction: t });
+
+      await t?.commit();
+
+      res.status(200).json({
+        success: true,
+        message: `GRN Line with ID ${id} deleted successfully`,
+      });
+    } catch (error: any) {
+      await t?.rollback();
+      console.error('Error deleting GRN Line:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message ?? 'Internal Server Error',
+      });
+    }
+  }
+
   static async createGrnLine(req: Request, res: Response) {
     try {
       const data: CreateGRNLineRequest = req.body;
@@ -190,77 +440,6 @@ export class GrnLineController {
       });
     }
   }
-  static async getGrnLineByGrnId(req: Request, res: Response) {
-    try {
-      const { id } = req.params;
-
-      const grnLines = await GRNLine.findAll({
-        where: { grn_id: id },
-        include: [
-          {
-            model: GRNBatch,
-            as: 'Batches',
-            include: [
-              {
-                model: GRNPhoto,
-                as: 'Photos',
-                attributes: ['id', 'url', 'reason'],
-              },
-            ],
-          },
-        ],
-        order: [['id', 'ASC']],
-      });
-
-      if (!grnLines || grnLines.length === 0) {
-        res.status(404).json({
-          statusCode: 404,
-          success: false,
-          data: null,
-          error: `No GRN Lines found for GRN ID ${id}`,
-        });
-      }
-
-      res.status(200).json({
-        statusCode: 200,
-        success: true,
-        data: grnLines,
-        error: null,
-      });
-    } catch (error: any) {
-      console.error('Error fetching GRN Lines:', error);
-      res.status(500).json({
-        statusCode: 500,
-        success: false,
-        data: null,
-        error: error.message,
-      });
-    }
-  }
-  static async getGrnLineById(req: Request, res: Response) {
-    try {
-      const { id } = req.params;
-
-      const line = await GRNLine.findByPk(id, {
-        // include: [{ model: SKU, attributes: ['id', 'name', 'code'] }],
-      });
-
-      if (!line) {
-        return res.status(404).json({ message: 'GRN Line not found' });
-      }
-
-      return res.status(200).json({
-        message: 'GRN Line fetched successfully',
-        data: line,
-      });
-    } catch (error: any) {
-      console.error('Error fetching GRN Line:', error);
-      return res.status(500).json({
-        message: 'Internal Server Error',
-        error: error.message,
-      });
-    }
-  }
 
   static async updateGrnLine(req: Request, res: Response) {
     try {
@@ -280,29 +459,6 @@ export class GrnLineController {
       });
     } catch (error: any) {
       console.error('Error updating GRN Line:', error);
-      return res.status(500).json({
-        message: 'Internal Server Error',
-        error: error.message,
-      });
-    }
-  }
-
-  static async deleteGrnLine(req: Request, res: Response) {
-    try {
-      const { id } = req.params;
-
-      const line = await GRNLine.findByPk(id);
-      if (!line) {
-        return res.status(404).json({ message: 'GRN Line not found' });
-      }
-
-      await line.destroy();
-
-      return res
-        .status(200)
-        .json({ message: `GRN Line ${id} deleted successfully` });
-    } catch (error: any) {
-      console.error('Error deleting GRN Line:', error);
       return res.status(500).json({
         message: 'Internal Server Error',
         error: error.message,

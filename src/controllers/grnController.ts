@@ -11,11 +11,13 @@ import {
   GRNFilters,
   GRNRequest,
 } from '../types';
+import { Op } from 'sequelize';
+import PurchaseOrder from '../models/PurchaseOrder';
+import POProduct from '../models/POProduct';
 interface CreateFullGRNInput {
   poId: number;
   lines: {
     skuId: string;
-
     orderedQty: number;
     receivedQty: number;
     ean?: string;
@@ -63,6 +65,7 @@ export class GrnController {
 
       const grn = await GRN.create({
         ...data,
+        status: data.status || 'partial',
         created_by: userId,
         created_at: new Date(),
         updated_at: new Date(),
@@ -104,7 +107,31 @@ export class GrnController {
     }
     const t = await sequelize.transaction();
     try {
-      // 1. Create GRN
+      for (const line of input.lines) {
+        const existingLine = await GRNLine.findOne({
+          include: [
+            {
+              model: GRN,
+              as: 'Grn',
+              where: { po_id: input.poId },
+            },
+          ],
+          where: { sku_id: line.skuId },
+          transaction: t,
+        });
+
+        if (existingLine) {
+          await t.rollback();
+          res.status(400).json({
+            statusCode: 400,
+            success: false,
+            data: null,
+            error: `GRN already exists for PO ${input.poId} and SKU ${line.skuId}`,
+          });
+          return;
+        }
+      }
+
       const grn = await GRN.create(
         {
           po_id: input.poId,
@@ -116,7 +143,6 @@ export class GrnController {
         { transaction: t }
       );
 
-      // 2. Create GRN Lines
       for (const line of input.lines) {
         const grnLine = await GRNLine.create(
           {
@@ -128,11 +154,25 @@ export class GrnController {
             qc_fail_qty: (line.heldQty ?? 0) + (line.rtvQty ?? 0),
             held_qty: line.heldQty ?? 0,
             rtv_qty: line.rtvQty ?? 0,
-            line_status: line.lineStatus ?? 'pending',
+            line_status:
+              line.receivedQty === 0
+                ? 'pending'
+                : line.orderedQty === line.receivedQty
+                  ? 'completed'
+                  : 'partial',
           },
           { transaction: t }
         );
-
+        await POProduct.update(
+          { grnStatus: 'created' },
+          {
+            where: {
+              sku_id: line.skuId,
+              po_id: grn.po_id,
+            },
+            transaction: t,
+          }
+        );
         if (line.batches && line.batches.length > 0) {
           for (const batch of line.batches) {
             const grnBatch = await GRNBatch.create(
@@ -305,6 +345,48 @@ export class GrnController {
       });
     }
   }
+  static async getGrnStats(req: Request, res: Response): Promise<void> {
+    try {
+      // 1. Total GRNs
+      const totalGrns = await GRN.count();
+
+      const grnsWithVariance = await GRN.count({
+        where: {
+          status: 'partial',
+        },
+      });
+      console.log({ grnsWithVariance });
+      // 3. Pending QC
+      const pendingQc = await GRN.count({
+        where: { status: 'pending-qc' },
+      });
+
+      // 4. RTV Initiated
+      const rtvInitiated = await GRN.count({
+        where: { status: 'rtv-initiated' },
+      });
+
+      res.status(200).json({
+        statusCode: 200,
+        success: true,
+        data: {
+          totalGrns,
+          grnsWithVariance,
+          pendingQc,
+          rtvInitiated,
+        },
+        error: null,
+      });
+    } catch (error: any) {
+      console.error('Error fetching GRN stats:', error);
+      res.status(500).json({
+        statusCode: 500,
+        success: false,
+        data: null,
+        error: error.message,
+      });
+    }
+  }
 
   static async getGrnDetails(req: Request, res: Response): Promise<void> {
     try {
@@ -314,23 +396,51 @@ export class GrnController {
         page = 1,
         limit = 10,
         search,
+        startDate,
+        endDate,
       } = req.query as GRNFilters;
 
       const offset: number = (page - 1) * limit;
       const whereClause: any = {};
 
-      // Apply filters
       if (status) whereClause.status = status;
 
-      // Search functionality
+      if (po_id) whereClause.po_id = po_id;
+      if (startDate && endDate) {
+        whereClause.created_at = {
+          [Op.between]: [
+            new Date(startDate as string),
+            new Date(endDate as string),
+          ],
+        };
+      }
 
       const { count, rows } = await GRN.findAndCountAll({
         where: whereClause,
         include: [
+          {
+            model: PurchaseOrder,
+            as: 'PO',
+            attributes: ['id', 'po_id', 'vendor_name'],
+            where: search ? { vendor_name: { [Op.like]: `%${search}%` } } : {},
+          },
+          {
+            model: GRNLine,
+            as: 'Line',
+            attributes: [
+              'id',
+              'sku_id',
+              'ordered_qty',
+              'received_qty',
+              'qc_pass_qty',
+              'qc_fail_qty',
+              'rtv_qty',
+              'held_qty',
+            ],
+          },
           { model: User, as: 'CreatedBy', attributes: ['id', 'email'] },
-          { model: User, as: 'ApprovedBy', attributes: ['id', 'email'] },
         ],
-        limit: parseInt(limit.toString()),
+        limit: Number(limit),
         offset,
         order: [['created_at', 'DESC']],
       });
