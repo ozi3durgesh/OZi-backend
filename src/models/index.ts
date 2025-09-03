@@ -26,6 +26,7 @@ import OrderTransaction from './OrderTransaction';
 import OrderDetails from './OrderDetails';
 import Item from './Item';
 import EcomLog from './EcomLog';
+import Product from './productModel';
 
 // Set up associations
 Coupon.hasMany(CouponTranslation, {
@@ -141,6 +142,15 @@ EcomLog.belongsTo(Order, { foreignKey: 'order_id', as: 'order' });
 ScannerBin.hasMany(ScannerSku, { foreignKey: 'binLocationScanId', sourceKey: 'binLocationScanId', as: 'SkuScans' });
 ScannerSku.belongsTo(ScannerBin, { foreignKey: 'binLocationScanId', targetKey: 'binLocationScanId', as: 'BinLocation' });
 
+// associations
+// PicklistItem.ts
+PicklistItem.belongsTo(Product, { foreignKey: 'sku', targetKey: 'SKU', as: 'productInfo' });
+Product.hasMany(PicklistItem, { foreignKey: 'sku', sourceKey: 'SKU', as: 'picklistItems' });
+
+
+
+
+
 export { 
   User, 
   Order, 
@@ -168,5 +178,6 @@ export {
   OrderTransaction,
   OrderDetails,
   Item,
-  EcomLog
+  EcomLog, 
+  Product
 };

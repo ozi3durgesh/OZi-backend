@@ -1,6 +1,6 @@
 import { DataTypes, Model } from 'sequelize';
 import sequelize from '../config/database';
-import { Product } from './productModel.js';
+import Product  from './productModel.js';
 
 interface PicklistItemAttributes {
   id: number;

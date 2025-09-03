@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { Product } from '../models/productModel';
+import Product from '../models/productModel';
 import { ResponseHandler } from '../middleware/responseHandler';  // ✅ adjust path if needed
 
 // Create a new product
