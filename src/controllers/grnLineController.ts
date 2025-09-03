@@ -257,7 +257,12 @@ export class GrnLineController {
           qc_fail_qty: qcFailQty,
           held_qty: data.heldQty ?? existingLine.held_qty,
           rtv_qty: data.rtvQty ?? existingLine.rtv_qty,
-          line_status: data.lineStatus ?? existingLine.line_status,
+          line_status:
+            data.receivedQty === 0
+              ? 'pending'
+              : data.orderedQty === data.receivedQty
+                ? 'completed'
+                : 'partial',
         },
         { transaction: t }
       );

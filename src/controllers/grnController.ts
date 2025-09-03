@@ -13,6 +13,7 @@ import {
 } from '../types';
 import { Op } from 'sequelize';
 import PurchaseOrder from '../models/PurchaseOrder';
+import POProduct from '../models/POProduct';
 interface CreateFullGRNInput {
   poId: number;
   lines: {
@@ -153,11 +154,25 @@ export class GrnController {
             qc_fail_qty: (line.heldQty ?? 0) + (line.rtvQty ?? 0),
             held_qty: line.heldQty ?? 0,
             rtv_qty: line.rtvQty ?? 0,
-            line_status: line.lineStatus ?? 'pending',
+            line_status:
+              line.receivedQty === 0
+                ? 'pending'
+                : line.orderedQty === line.receivedQty
+                  ? 'completed'
+                  : 'partial',
           },
           { transaction: t }
         );
-
+        await POProduct.update(
+          { grnStatus: 'created' },
+          {
+            where: {
+              sku_id: line.skuId,
+              po_id: grn.po_id,
+            },
+            transaction: t,
+          }
+        );
         if (line.batches && line.batches.length > 0) {
           for (const batch of line.batches) {
             const grnBatch = await GRNBatch.create(
