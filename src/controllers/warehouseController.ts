@@ -65,7 +65,7 @@ export class WarehouseController {
       // Fetch created warehouse with associations
       const createdWarehouse = await Warehouse.findByPk(warehouse.id, {
         include: [
-          { model: User, as: 'CreatedBy', attributes: ['id', 'email'] },
+          { model: User, as: 'WarehouseCreatedBy', attributes: ['id', 'email'] },
           { model: User, as: 'UpdatedBy', attributes: ['id', 'email'] }
         ]
       });
@@ -128,7 +128,7 @@ export class WarehouseController {
       const { count, rows } = await Warehouse.findAndCountAll({
         where: whereClause,
         include: [
-          { model: User, as: 'CreatedBy', attributes: ['id', 'email'] },
+          { model: User, as: 'WarehouseCreatedBy', attributes: ['id', 'email'] },
           { model: User, as: 'UpdatedBy', attributes: ['id', 'email'] }
         ],
         limit: parseInt(limit.toString()),
@@ -178,7 +178,7 @@ export class WarehouseController {
 
       const warehouse = await Warehouse.findByPk(parseInt(id), {
         include: [
-          { model: User, as: 'CreatedBy', attributes: ['id', 'email'] },
+          { model: User, as: 'WarehouseCreatedBy', attributes: ['id', 'email'] },
           { model: User, as: 'UpdatedBy', attributes: ['id', 'email'] }
         ]
       });
@@ -314,7 +314,7 @@ export class WarehouseController {
       // Fetch updated warehouse with associations
       const updatedWarehouse = await Warehouse.findByPk(parseInt(id), {
         include: [
-          { model: User, as: 'CreatedBy', attributes: ['id', 'email'] },
+          { model: User, as: 'WarehouseCreatedBy', attributes: ['id', 'email'] },
           { model: User, as: 'UpdatedBy', attributes: ['id', 'email'] }
         ]
       });

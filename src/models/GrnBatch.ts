@@ -57,7 +57,6 @@ GRNBatch.init(
     indexes: [{ fields: ['grn_line_id'] }],
   }
 );
-GRNLine.hasMany(GRNBatch, { foreignKey: 'grn_line_id', as: 'Batches' });
-GRNBatch.belongsTo(GRNLine, { foreignKey: 'grn_line_id', as: 'Line' });
+// Associations are defined in models/index.ts to avoid conflicts
 
 export default GRNBatch;

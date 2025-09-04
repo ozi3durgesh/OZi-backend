@@ -109,7 +109,6 @@ GRNLine.init(
   }
 );
 
-GRNLine.belongsTo(GRN, { foreignKey: 'grn_id', as: 'Grn' });
-GRN.hasMany(GRNLine, { foreignKey: 'grn_id', as: 'Line' });
+// Associations are defined in models/index.ts to avoid conflicts
 
 export default GRNLine;

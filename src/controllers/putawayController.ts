@@ -4,7 +4,7 @@ import sequelize from '../config/database';
 import GRN from '../models/Grn.model';
 import GRNLine from '../models/GrnLine';
 import PurchaseOrder from '../models/PurchaseOrder';
-import { Product } from '../models/productModel';
+import Product from '../models/productModel';
 import PutawayTask from '../models/PutawayTask';
 import PutawayAudit from '../models/PutawayAudit';
 import BinLocation from '../models/BinLocation';

@@ -88,10 +88,5 @@ GRN.init(
     indexes: [{ fields: ['po_id'] }, { fields: ['status'] }],
   }
 );
-GRN.belongsTo(PurchaseOrder, { foreignKey: 'po_id', as: 'PO' });
-GRN.belongsTo(User, { foreignKey: 'created_by', as: 'CreatedBy' });
-GRN.belongsTo(User, { foreignKey: 'approved_by', as: 'ApprovedBy' });
-User.hasMany(GRN, { foreignKey: 'created_by', as: 'CreatedGrns' });
-User.hasMany(GRN, { foreignKey: 'approved_by', as: 'ApprovedGrns' });
-PurchaseOrder.hasMany(GRN, { foreignKey: 'po_id', as: 'GRNs' });
+// Associations are defined in models/index.ts to avoid conflicts
 export default GRN;

@@ -26,6 +26,8 @@ import PutawayAudit from './PutawayAudit';
 import BinLocation from './BinLocation';
 import GRN from './Grn.model';
 import GRNLine from './GrnLine';
+import GRNBatch from './GrnBatch';
+import GRNPhoto from './GrnPhoto';
 import PurchaseOrder from './PurchaseOrder';
 import OrderPayment from './OrderPayment';
 import OrderTransaction from './OrderTransaction';
@@ -113,7 +115,7 @@ PackingEvent.belongsTo(User, { foreignKey: 'userId', as: 'User' });
 User.hasMany(PackingEvent, { foreignKey: 'userId', as: 'PackingEvents' });
 
 // Warehouse associations
-Warehouse.belongsTo(User, { foreignKey: 'created_by', as: 'CreatedBy' });
+Warehouse.belongsTo(User, { foreignKey: 'created_by', as: 'WarehouseCreatedBy' });
 Warehouse.belongsTo(User, { foreignKey: 'updated_by', as: 'UpdatedBy' });
 User.hasMany(Warehouse, { foreignKey: 'created_by', as: 'CreatedWarehouses' });
 User.hasMany(Warehouse, { foreignKey: 'updated_by', as: 'UpdatedWarehouses' });
@@ -159,7 +161,7 @@ Product.hasMany(PicklistItem, { foreignKey: 'sku', sourceKey: 'SKU', as: 'pickli
 
 // GRN associations
 GRN.belongsTo(PurchaseOrder, { foreignKey: 'po_id', as: 'PurchaseOrder' });
-GRN.belongsTo(User, { foreignKey: 'created_by', as: 'CreatedBy' });
+GRN.belongsTo(User, { foreignKey: 'created_by', as: 'GrnCreatedBy' });
 GRN.belongsTo(User, { foreignKey: 'approved_by', as: 'ApprovedBy' });
 User.hasMany(GRN, { foreignKey: 'created_by', as: 'CreatedGrns' });
 User.hasMany(GRN, { foreignKey: 'approved_by', as: 'ApprovedGrns' });
@@ -168,6 +170,17 @@ PurchaseOrder.hasMany(GRN, { foreignKey: 'po_id', as: 'GRNs' });
 // GRN Line associations
 GRN.hasMany(GRNLine, { foreignKey: 'grn_id', as: 'Line' });
 GRNLine.belongsTo(GRN, { foreignKey: 'grn_id', as: 'GrnId' });
+
+// GRN Batch associations
+GRNLine.hasMany(GRNBatch, { foreignKey: 'grn_line_id', as: 'Batches' });
+GRNBatch.belongsTo(GRNLine, { foreignKey: 'grn_line_id', as: 'Line' });
+
+// GRN Photo associations
+GRNLine.hasMany(GRNPhoto, { foreignKey: 'grn_line_id', as: 'Photos' });
+GRNPhoto.belongsTo(GRNLine, { foreignKey: 'grn_line_id', as: 'Line' });
+
+GRNBatch.hasMany(GRNPhoto, { foreignKey: 'grn_batch_id', as: 'Photos' });
+GRNPhoto.belongsTo(GRNBatch, { foreignKey: 'grn_batch_id', as: 'Batch' });
 
 // Putaway associations
 PutawayTask.belongsTo(User, { foreignKey: 'assigned_to', as: 'PutawayAssignedTo' });
@@ -213,5 +226,7 @@ export {
   BinLocation,
   GRN,
   GRNLine,
+  GRNBatch,
+  GRNPhoto,
   PurchaseOrder
 };

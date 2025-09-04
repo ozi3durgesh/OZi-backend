@@ -43,9 +43,5 @@ GRNPhoto.init(
     indexes: [{ fields: ['grn_line_id'] }],
   }
 );
-GRNLine.hasMany(GRNPhoto, { foreignKey: 'grn_line_id', as: 'Photos' });
-GRNPhoto.belongsTo(GRNLine, { foreignKey: 'grn_line_id', as: 'Line' });
-
-GRNBatch.hasMany(GRNPhoto, { foreignKey: 'grn_batch_id', as: 'Photos' });
-GRNPhoto.belongsTo(GRNBatch, { foreignKey: 'grn_batch_id', as: 'Batch' });
+// Associations are defined in models/index.ts to avoid conflicts
 export default GRNPhoto;

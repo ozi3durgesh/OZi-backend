@@ -73,7 +73,7 @@ export class GrnController {
 
       const createdGrn = await GRN.findByPk(grn.id, {
         include: [
-          { model: User, as: 'CreatedBy', attributes: ['id', 'email'] },
+          { model: User, as: 'GrnCreatedBy', attributes: ['id', 'email'] },
         ],
       });
       res.status(201).json({
@@ -205,7 +205,7 @@ export class GrnController {
       await t.commit();
       const createdGrn = await GRN.findByPk(grn.id, {
         include: [
-          { model: User, as: 'CreatedBy', attributes: ['id', 'email'] },
+          { model: User, as: 'GrnCreatedBy', attributes: ['id', 'email'] },
         ],
       });
       res.status(201).json({
@@ -280,7 +280,7 @@ export class GrnController {
       const grns = await GRN.findAll({
         where: { po_id: poId },
         include: [
-          { model: User, as: 'CreatedBy', attributes: ['id', 'email'] },
+          { model: User, as: 'GrnCreatedBy', attributes: ['id', 'email'] },
           { model: User, as: 'ApprovedBy', attributes: ['id', 'email'] },
           {
             model: GRNLine,
@@ -438,7 +438,7 @@ export class GrnController {
               'held_qty',
             ],
           },
-          { model: User, as: 'CreatedBy', attributes: ['id', 'email'] },
+          { model: User, as: 'GrnCreatedBy', attributes: ['id', 'email'] },
         ],
         limit: Number(limit),
         offset,
@@ -479,7 +479,7 @@ export class GrnController {
       const { id } = req.params;
       const grn = await GRN.findByPk(id, {
         include: [
-          { model: User, as: 'CreatedBy', attributes: ['id', 'email'] },
+          { model: User, as: 'GrnCreatedBy', attributes: ['id', 'email'] },
           { model: User, as: 'ApprovedBy', attributes: ['id', 'email'] },
         ],
       });
