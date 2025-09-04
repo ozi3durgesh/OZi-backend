@@ -60,6 +60,9 @@ class PurchaseOrder
   declare total_units?: number;
   declare total_skus?: number;
   declare base_price?: number;
+
+  // 👇 Add this so TS knows about association
+  declare products?: POProduct[];
 }
 
 PurchaseOrder.init(
@@ -85,7 +88,7 @@ PurchaseOrder.init(
     current_approver: {
       type: DataTypes.ENUM('category_head', 'admin', 'vendor'),
       allowNull: true,
-      defaultValue: 'category_head', // First approver
+      defaultValue: 'category_head',
     },
     rejection_reason: {
       type: DataTypes.STRING,
