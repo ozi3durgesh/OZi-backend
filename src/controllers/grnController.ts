@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import sequelize from '../config/database';
+import { QueryTypes } from 'sequelize';
 import GRNLine from '../models/GrnLine';
 import GRNBatch from '../models/GrnBatch';
 import { User } from '../models';
@@ -105,33 +106,9 @@ export class GrnController {
       });
       return;
     }
+
     const t = await sequelize.transaction();
     try {
-      for (const line of input.lines) {
-        const existingLine = await GRNLine.findOne({
-          include: [
-            {
-              model: GRN,
-              as: 'Grn',
-              where: { po_id: input.poId },
-            },
-          ],
-          where: { sku_id: line.skuId },
-          transaction: t,
-        });
-
-        if (existingLine) {
-          await t.rollback();
-          res.status(400).json({
-            statusCode: 400,
-            success: false,
-            data: null,
-            error: `GRN already exists for PO ${input.poId} and SKU ${line.skuId}`,
-          });
-          return;
-        }
-      }
-
       const grn = await GRN.create(
         {
           po_id: input.poId,
@@ -144,6 +121,50 @@ export class GrnController {
       );
 
       for (const line of input.lines) {
+        const poProduct = await POProduct.findOne({
+          where: { po_id: input.poId, sku_id: line.skuId },
+          transaction: t,
+        });
+        if (!poProduct) {
+          await t.rollback();
+          res.status(400).json({
+            statusCode: 400,
+            success: false,
+            data: null,
+            error: `PO Product not found for PO ${input.poId} and SKU ${line.skuId}`,
+          });
+          return;
+        }
+
+        const [result] = await sequelize.query(
+          `
+          SELECT COALESCE(SUM(gl.received_qty), 0) as totalReceived
+          FROM grn_lines gl
+          INNER JOIN grns g ON g.id = gl.grn_id
+          WHERE g.po_id = :poId AND gl.sku_id = :skuId
+        `,
+          {
+            replacements: { poId: input.poId, skuId: line.skuId },
+            type: QueryTypes.SELECT,
+            transaction: t,
+          }
+        );
+
+        const receivedSoFar = Number((result as any).totalReceived || 0);
+
+        const newTotalReceived = receivedSoFar + (line.receivedQty || 0);
+
+        if (newTotalReceived > line.orderedQty) {
+          await t.rollback();
+          res.status(400).json({
+            statusCode: 400,
+            success: false,
+            data: null,
+            error: `Received qty exceeds ordered qty for SKU ${line.skuId}`,
+          });
+          return;
+        }
+
         const grnLine = await GRNLine.create(
           {
             grn_id: grn.id,
@@ -155,24 +176,27 @@ export class GrnController {
             held_qty: line.heldQty ?? 0,
             rtv_qty: line.rtvQty ?? 0,
             line_status:
-              line.receivedQty === 0
+              newTotalReceived === 0
                 ? 'pending'
-                : line.orderedQty === line.receivedQty
-                  ? 'completed'
-                  : 'partial',
+                : newTotalReceived < line.orderedQty
+                  ? 'partial'
+                  : 'completed',
           },
           { transaction: t }
         );
+
         await POProduct.update(
-          { grnStatus: 'created' },
           {
-            where: {
-              sku_id: line.skuId,
-              id: input.poId,
-            },
-            transaction: t,
-          }
+            grnStatus:
+              newTotalReceived === 0
+                ? 'pending'
+                : newTotalReceived < line.orderedQty
+                  ? 'partial'
+                  : 'completed',
+          },
+          { where: { po_id: input.poId, sku_id: line.skuId }, transaction: t }
         );
+
         if (line.batches && line.batches.length > 0) {
           for (const batch of line.batches) {
             const grnBatch = await GRNBatch.create(
@@ -203,11 +227,13 @@ export class GrnController {
       }
 
       await t.commit();
+
       const createdGrn = await GRN.findByPk(grn.id, {
         include: [
           { model: User, as: 'GrnCreatedBy', attributes: ['id', 'email'] },
         ],
       });
+
       res.status(201).json({
         statusCode: 201,
         success: true,
