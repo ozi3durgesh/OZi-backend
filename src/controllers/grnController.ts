@@ -168,7 +168,7 @@ export class GrnController {
           {
             where: {
               sku_id: line.skuId,
-              po_id: grn.po_id,
+              id: input.poId,
             },
             transaction: t,
           }
