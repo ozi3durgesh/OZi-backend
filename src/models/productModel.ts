@@ -1,9 +1,8 @@
-import { DataTypes, Model, Optional } from 'sequelize';
+import { DataTypes, Model, Optional, InferAttributes, InferCreationAttributes, CreationOptional } from 'sequelize';
 import sequelize from '../config/database.js';
 
-// Define the interface for Product attributes
 interface ProductAttributes {
-  id: number;  // Required, as it is the primary key in the database
+  id: number;
   CPId: string;
   Status: string;
   ModelNum: string;
@@ -47,55 +46,56 @@ interface ProductAttributes {
   MaterialType: string;
 }
 
-// Optional<ProductAttributes, 'id'> means that `id` is not required for create
 interface ProductCreationAttributes extends Optional<ProductAttributes, 'id'> {}
 
-class Product extends Model<ProductAttributes, ProductCreationAttributes> implements ProductAttributes {
-  public id!: number;
-  public CPId!: string;
-  public Status!: string;
-  public ModelNum!: string;
-  public Category!: string;
-  public SKU!: string;
-  public ParentSKU!: string;
-  public IS_MPS!: string;
-  public ProductName!: string;
-  public Description!: string;
-  public ManufacturerDescription!: string;
-  public ProductTaxCode!: string;
-  public ImageURL!: string;
-  public MRP!: number;
-  public COST!: number;
-  public EAN_UPC!: string;
-  public Color!: string;
-  public Size!: string;
-  public Brand!: string;
-  public Weight!: number;
-  public Length!: number;
-  public Height!: number;
-  public Width!: number;
-  public AccountingSKU!: string;
-  public AccountingUnit!: string;
-  public SPThreshold!: number;
-  public InventoryThreshold!: number;
-  public ERPSystemId!: number;
-  public SyncTally!: number;
-  public ShelfLife!: string;
-  public ShelfLifePercentage!: number;
-  public ProductExpiryInDays!: number;
-  public ReverseWeight!: number;
-  public ReverseLength!: number;
-  public ReverseHeight!: number;
-  public ReverseWidth!: number;
-  public ProductTaxRule!: string;
-  public CESS!: number;
-  public CreatedDate!: string;
-  public LastUpdatedDate!: string;
-  public SKUType!: string;
-  public MaterialType!: string;
+class Product extends Model<
+  InferAttributes<Product>,
+  InferCreationAttributes<Product>
+> {
+  declare id: CreationOptional<number>;
+  declare CPId: string;
+  declare Status: string;
+  declare ModelNum: string;
+  declare Category: string;
+  declare SKU: string;
+  declare ParentSKU: string;
+  declare IS_MPS: string;
+  declare ProductName: string;
+  declare Description: string;
+  declare ManufacturerDescription: string;
+  declare ProductTaxCode: string;
+  declare ImageURL: string;
+  declare MRP: number;
+  declare COST: number;
+  declare EAN_UPC: string;
+  declare Color: string;
+  declare Size: string;
+  declare Brand: string;
+  declare Weight: number;
+  declare Length: number;
+  declare Height: number;
+  declare Width: number;
+  declare AccountingSKU: string;
+  declare AccountingUnit: string;
+  declare SPThreshold: number;
+  declare InventoryThreshold: number;
+  declare ERPSystemId: number;
+  declare SyncTally: number;
+  declare ShelfLife: string;
+  declare ShelfLifePercentage: number;
+  declare ProductExpiryInDays: number;
+  declare ReverseWeight: number;
+  declare ReverseLength: number;
+  declare ReverseHeight: number;
+  declare ReverseWidth: number;
+  declare ProductTaxRule: string;
+  declare CESS: number;
+  declare CreatedDate: string;
+  declare LastUpdatedDate: string;
+  declare SKUType: string;
+  declare MaterialType: string;
 }
 
-// Define the model attributes using Sequelize's `init()` method
 Product.init(
   {
     id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
