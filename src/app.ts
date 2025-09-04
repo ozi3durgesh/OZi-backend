@@ -21,6 +21,7 @@ import { errorHandler } from './middleware/errorHandler';
 import vendorRoutes from './routes/vendorRoutes';
 import productRoutes from './routes/productRoutes';
 import purchaOrderRoutes from './routes/purchaseOrderRoutes';
+import putawayRoutes from './routes/putawayRoutes';
 
 const app = express();
 
@@ -60,6 +61,7 @@ app.use('/api/grn', grnRoutes);
 app.use('/api', vendorRoutes);
 app.use('/api', productRoutes);
 app.use('/api/purchase-orders', purchaOrderRoutes);
+app.use('/api/putaway', putawayRoutes);
 
 // PHP Production Compatible Routes
 app.use('/api/v1/customer/order', orderRoutes);

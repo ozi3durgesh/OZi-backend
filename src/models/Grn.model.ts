@@ -8,21 +8,21 @@ class GRN
   extends Model<GRNAttributes, GRNCreationAttributes>
   implements GRNAttributes
 {
-  public id!: number;
-  public po_id!: number;
+  declare id: number;
+  declare po_id: number;
 
-  public status!:
+  declare status:
     | 'partial'
     | 'completed'
     | 'closed'
     | 'pending-qc'
     | 'variance-review'
     | 'rtv-initiated';
-  public created_by!: number;
+  declare created_by: number;
   public closeReason!: string | null;
-  public approved_by!: number | null;
-  public created_at!: Date;
-  public updated_at!: Date;
+  declare approved_by: number | null;
+  declare created_at: Date;
+  declare updated_at: Date;
 }
 
 GRN.init(

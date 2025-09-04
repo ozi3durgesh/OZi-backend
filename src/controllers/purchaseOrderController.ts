@@ -3,29 +3,42 @@ import nodemailer from 'nodemailer';
 import PurchaseOrder from '../models/PurchaseOrder';
 import POProduct from '../models/POProduct';
 import { ResponseHandler } from '../middleware/responseHandler';
+import dotenv from "dotenv";
 
+dotenv.config();
+
+// 📧 Nodemailer transporter
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
 });
 
+// 📧 Approval Emails
 const approvalEmails: Record<string, string> = {
-  category_head: 'ankitgupta13c@gmail.com',
-  admin: 'ankitg13c@gmail.com',
+  category_head: 'ankit.gupta@ozi.in',
+  admin: 'ozipurchaseorders@gmail.com',
   vendor: 'ankit.gupta@ozi.in'
 };
 
-// Utility to calculate totals
+// 🧮 Utility to calculate totals
 function calculateTotalAmount(products: any[]) {
   return products.reduce((sum, prod) => sum + prod.amount, 0);
 }
 
-// Send approval email
-/*async function sendApprovalEmail(po: any, role: 'category_head' | 'admin' | 'vendor', pdfPath: string) {
+// 📧 Send Approval Email with Approve/Reject links
+async function sendApprovalEmail(
+  po: any,
+  role: 'category_head' | 'admin' | 'vendor',
+  pdfPath: string
+) {
   let productLines = '';
   for (const p of po.products) {
     productLines += `${p.product} | SKU: ${p.sku_id} | Units: ${p.units} | MRP: ₹${p.mrp} | Amount: ₹${p.amount}\n`;
   }
+
+  // Approve / Reject links
+  const approveUrl = `${process.env.APP_BASE_URL}/api/purchase-orders/${po.id}/approve?role=${role}&action=approve&pdfPath=${encodeURIComponent(pdfPath)}`;
+  const rejectUrl = `${process.env.APP_BASE_URL}/api/purchase-orders/${po.id}/approve?role=${role}&action=reject`;
 
   const mailOptions = {
     from: process.env.EMAIL_USER,
@@ -33,7 +46,7 @@ function calculateTotalAmount(products: any[]) {
     subject: `PO ${po.po_id} - Approval Request`,
     text: `Dear ${role.replace('_', ' ')},
 
-Please review the attached Purchase Order and approve it.
+Please review the attached Purchase Order and approve/reject it.
 
 Vendor: ${po.vendor_name}
 PO Amount: ₹${po.total_amount}
@@ -41,6 +54,9 @@ PO ID: ${po.po_id}
 
 Products:
 ${productLines}
+
+Approve: ${approveUrl}
+Reject: ${rejectUrl}
 
 Thanks,
 Ozi Technologies`,
@@ -50,9 +66,10 @@ Ozi Technologies`,
   await transporter.sendMail(mailOptions);
   console.log(`Approval email sent to ${role}: ${approvalEmails[role]}`);
 }
-*/
 
-// Create PO
+//
+// 📌 Create Purchase Order
+//
 export const createPurchaseOrder = async (req: Request, res: Response) => {
   const {
     vendor_id, vendor_name, poc_name, poc_phone, vendor_tax_id,
@@ -61,7 +78,7 @@ export const createPurchaseOrder = async (req: Request, res: Response) => {
   } = req.body;
 
   try {
-    // Calculate totals
+    // 🧮 Calculate totals
     const totalAmount = calculateTotalAmount(products);
     const totalUnits = products.reduce((sum: number, prod: any) => sum + prod.units, 0);
     const totalSkus = products.length;
@@ -70,13 +87,12 @@ export const createPurchaseOrder = async (req: Request, res: Response) => {
       0
     );
 
-    // Query the last inserted purchase order to get the latest po_id
+    // 🔢 Generate next PO ID
     let latestPo = await PurchaseOrder.findOne({
       order: [['id', 'DESC']],
       attributes: ['po_id']
     });
 
-    // Generate the next po_id
     let lastPoNumber = 0;
     if (latestPo) {
       const latestPoId = latestPo.po_id;
@@ -84,14 +100,12 @@ export const createPurchaseOrder = async (req: Request, res: Response) => {
     }
 
     let nextPoId = `OZIPO${lastPoNumber + 1}`;
-
-    // Ensure unique po_id
     while (await PurchaseOrder.findOne({ where: { po_id: nextPoId } })) {
       lastPoNumber++;
       nextPoId = `OZIPO${lastPoNumber + 1}`;
     }
 
-    // Create the PO
+    // 📝 Create the PO
     const newPo = await PurchaseOrder.create({
       po_id: nextPoId,
       vendor_id, vendor_name, poc_name, poc_phone, vendor_tax_id,
@@ -101,10 +115,11 @@ export const createPurchaseOrder = async (req: Request, res: Response) => {
       total_units: totalUnits,
       total_skus: totalSkus,
       base_price,
-      approval_status: 'pending'
+      approval_status: 'pending',
+      current_approver: 'category_head'
     });
 
-    // Save products
+    // 📦 Save products
     const productRecords = products.map((p: any) => ({
       po_id: newPo.id,
       product: p.product,
@@ -120,62 +135,142 @@ export const createPurchaseOrder = async (req: Request, res: Response) => {
 
     await POProduct.bulkCreate(productRecords);
 
-    // Fetch PO with products for email (email logic commented out for now)
-    // const poWithProducts = await PurchaseOrder.findByPk(newPo.id, { include: [{ model: POProduct, as: 'products' }] });
+    // 🔎 Fetch PO with products
+    const poWithProducts = await PurchaseOrder.findByPk(newPo.id, {
+      include: [{ model: POProduct, as: 'products' }]
+    });
 
-    // Send PDF to Category Head (email logic commented out for now)
-    // if (pdfPath && poWithProducts) await sendApprovalEmail(poWithProducts, 'category_head', pdfPath);
+    // 📧 Send to Category Head first
+    if (pdfPath && poWithProducts) {
+      await sendApprovalEmail(poWithProducts, 'category_head', pdfPath);
+    }
 
-    return ResponseHandler.success(res, { PO: { message: 'PO created and sent for Category Head approval', po_id: newPo.po_id } }, 201);
+    return ResponseHandler.success(
+      res,
+      { PO: { message: 'PO created and sent for Category Head approval', po_id: newPo.po_id } },
+      201
+    );
   } catch (error: any) {
     console.error('Error creating PO:', error);
     return ResponseHandler.error(res, error.message || 'Error creating PO', 500);
   }
 };
 
-// Get all POs
-export const getAllPOs = async (_req: Request, res: Response) => {
-  try {
-    const pos = await PurchaseOrder.findAll({ include: [{ model: POProduct, as: 'products' }] });
-    return ResponseHandler.success(res, { PO: pos }, 200);
-  } catch (error: any) {
-    return ResponseHandler.error(res, error.message || 'Error fetching POs', 500);
-  }
-};
-
-// Get PO by ID
-export const getPOById = async (req: Request, res: Response) => {
-  try {
-    const po = await PurchaseOrder.findByPk(req.params.id, { include: [{ model: POProduct, as: 'products' }] });
-    if (!po) return ResponseHandler.error(res, 'PO not found', 404);
-    return ResponseHandler.success(res, { PO: po }, 200);
-  } catch (error: any) {
-    return ResponseHandler.error(res, error.message || 'Error fetching PO', 500);
-  }
-};
-
-// Approve PO
+//
+// 📌 Approve / Reject PO
+//
 export const approvePO = async (req: Request, res: Response) => {
-  const { role, pdfPath } = req.body; // role: category_head/admin/vendor
+  const role = (req.body.role || req.query.role) as 'category_head' | 'admin' | 'vendor';
+  const action = (req.body.action || req.query.action) as 'approve' | 'reject';
+  const pdfPath = (req.body.pdfPath || req.query.pdfPath) as string;
+  const reason = (req.body.reason || req.query.reason) as string;
+
   if (!['category_head', 'admin', 'vendor'].includes(role)) {
     return ResponseHandler.error(res, 'Invalid role', 400);
   }
 
   try {
-    const po = await PurchaseOrder.findByPk(req.params.id, { include: [{ model: POProduct, as: 'products' }] });
+    const po = await PurchaseOrder.findByPk(req.params.id, {
+      include: [{ model: POProduct, as: 'products' }]
+    });
     if (!po) return ResponseHandler.error(res, 'PO not found', 404);
 
-    po.approval_status = role;
-    await po.save();
+    // ❌ Rejected
+    if (action === 'reject') {
+      po.approval_status = 'rejected' as 'rejected';
+      (po as any).rejection_reason = reason || `${role} rejected the PO`;
+      po.current_approver = null;
+      await po.save();
 
-    let nextRole: 'admin' | 'vendor' | null = null;
-    if (role === 'category_head') nextRole = 'admin';
-    else if (role === 'admin') nextRole = 'vendor';
+      return ResponseHandler.success(res, { 
+        PO: { message: `PO rejected by ${role}`, po_id: po.po_id } 
+      }, 200);
+    }
 
-    //if (nextRole && pdfPath) await sendApprovalEmail(po, nextRole, pdfPath);
+    // ✅ Approved
+    if (action === 'approve') {
+      let nextRole: 'admin' | 'vendor' | null = null;
 
-    return ResponseHandler.success(res, { PO: { message: `PO approved by ${role}`, po_id: po.po_id } }, 200);
+      if (role === 'category_head') nextRole = 'admin';
+      else if (role === 'admin') nextRole = 'vendor';
+      else if (role === 'vendor') {
+        po.approval_status = 'approved' as 'approved';
+        po.current_approver = null;
+        await po.save();
+
+        return ResponseHandler.success(res, { 
+          PO: { message: `PO fully approved`, po_id: po.po_id } 
+        }, 200);
+      }
+
+      // Update PO for next approver
+      po.approval_status = role as 'category_head' | 'admin' | 'vendor';
+      po.current_approver = nextRole;
+      await po.save();
+
+      // 📧 Send email to next approver
+      if (nextRole && pdfPath) {
+        await sendApprovalEmail(po, nextRole, pdfPath);
+      }
+
+      return ResponseHandler.success(res, { 
+        PO: { message: `PO approved by ${role}`, po_id: po.po_id } 
+      }, 200);
+    }
+
+    return ResponseHandler.error(res, 'Invalid action', 400);
+
   } catch (error: any) {
     return ResponseHandler.error(res, error.message || 'Error approving PO', 500);
+  }
+};
+
+//
+// 📌 Get all POs
+//
+export const getAllPOs = async (req: Request, res: Response) => {
+  try {
+    const { page = 1, limit = 20, status } = req.query;
+    const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
+
+    const whereClause: any = {};
+    if (status) {
+      whereClause.approval_status = status;
+    }
+
+    const { count, rows } = await PurchaseOrder.findAndCountAll({
+      where: whereClause,
+      include: [{ model: POProduct, as: 'products' }],
+      limit: parseInt(limit.toString()),
+      offset,
+      order: [['id', 'DESC']]
+    });
+
+    return ResponseHandler.success(res, {
+      PO: rows,
+      pagination: {
+        total: count,
+        page: parseInt(page.toString()),
+        pages: Math.ceil(count / parseInt(limit.toString())),
+        limit: parseInt(limit.toString())
+      }
+    });
+  } catch (error: any) {
+    return ResponseHandler.error(res, error.message || 'Error fetching POs', 500);
+  }
+};
+
+//
+// 📌 Get PO by ID
+//
+export const getPOById = async (req: Request, res: Response) => {
+  try {
+    const po = await PurchaseOrder.findByPk(req.params.id, {
+      include: [{ model: POProduct, as: 'products' }]
+    });
+    if (!po) return ResponseHandler.error(res, 'PO not found', 404);
+    return ResponseHandler.success(res, { PO: po }, 200);
+  } catch (error: any) {
+    return ResponseHandler.error(res, error.message || 'Error fetching POs', 500);
   }
 };

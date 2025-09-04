@@ -21,11 +21,18 @@ import Rider from './Rider';
 import ScannerBin from './ScannerBin';
 import ScannerSku from './ScannerSku';
 import PaymentRequest from './PaymentRequest';
+import PutawayTask from './PutawayTask';
+import PutawayAudit from './PutawayAudit';
+import BinLocation from './BinLocation';
+import GRN from './Grn.model';
+import GRNLine from './GrnLine';
+import PurchaseOrder from './PurchaseOrder';
 import OrderPayment from './OrderPayment';
 import OrderTransaction from './OrderTransaction';
 import OrderDetails from './OrderDetails';
 import Item from './Item';
 import EcomLog from './EcomLog';
+import Product from './productModel';
 
 // Set up associations
 Coupon.hasMany(CouponTranslation, {
@@ -141,6 +148,37 @@ EcomLog.belongsTo(Order, { foreignKey: 'order_id', as: 'order' });
 ScannerBin.hasMany(ScannerSku, { foreignKey: 'binLocationScanId', sourceKey: 'binLocationScanId', as: 'SkuScans' });
 ScannerSku.belongsTo(ScannerBin, { foreignKey: 'binLocationScanId', targetKey: 'binLocationScanId', as: 'BinLocation' });
 
+// associations
+// PicklistItem.ts
+PicklistItem.belongsTo(Product, { foreignKey: 'sku', targetKey: 'SKU', as: 'productInfo' });
+Product.hasMany(PicklistItem, { foreignKey: 'sku', sourceKey: 'SKU', as: 'picklistItems' });
+
+
+
+
+
+// GRN associations
+GRN.belongsTo(PurchaseOrder, { foreignKey: 'po_id', as: 'PurchaseOrder' });
+GRN.belongsTo(User, { foreignKey: 'created_by', as: 'CreatedBy' });
+GRN.belongsTo(User, { foreignKey: 'approved_by', as: 'ApprovedBy' });
+User.hasMany(GRN, { foreignKey: 'created_by', as: 'CreatedGrns' });
+User.hasMany(GRN, { foreignKey: 'approved_by', as: 'ApprovedGrns' });
+PurchaseOrder.hasMany(GRN, { foreignKey: 'po_id', as: 'GRNs' });
+
+// GRN Line associations
+GRN.hasMany(GRNLine, { foreignKey: 'grn_id', as: 'Line' });
+GRNLine.belongsTo(GRN, { foreignKey: 'grn_id', as: 'GrnId' });
+
+// Putaway associations
+PutawayTask.belongsTo(User, { foreignKey: 'assigned_to', as: 'PutawayAssignedTo' });
+User.hasMany(PutawayTask, { foreignKey: 'assigned_to', as: 'PutawayTasks' });
+
+PutawayAudit.belongsTo(PutawayTask, { foreignKey: 'putaway_task_id', as: 'PutawayTask' });
+PutawayTask.hasMany(PutawayAudit, { foreignKey: 'putaway_task_id', as: 'AuditLogs' });
+
+PutawayAudit.belongsTo(User, { foreignKey: 'user_id', as: 'PutawayAuditUser' });
+User.hasMany(PutawayAudit, { foreignKey: 'user_id', as: 'PutawayAudits' });
+
 export { 
   User, 
   Order, 
@@ -168,5 +206,12 @@ export {
   OrderTransaction,
   OrderDetails,
   Item,
-  EcomLog
+  EcomLog, 
+  Product,
+  PutawayTask,
+  PutawayAudit,
+  BinLocation,
+  GRN,
+  GRNLine,
+  PurchaseOrder
 };

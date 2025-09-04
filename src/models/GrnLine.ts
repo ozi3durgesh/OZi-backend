@@ -7,24 +7,24 @@ class GRNLine
   extends Model<GRNLineAttributes, GRNLineCreationAttributes>
   implements GRNLineAttributes
 {
-  public id!: number;
-  public grn_id!: number;
-  public sku_id!: string;
-  public ean!: string;
-  public ordered_qty!: number;
-  public received_qty!: number;
-  public qc_pass_qty!: number;
-  public qc_fail_qty!: number;
-  public rtv_qty!: number;
-  public held_qty!: number;
-  public line_status!: string;
-  public variance_reason!: any | null;
-  public remarks!: string | null;
+  declare id: number;
+  declare grn_id: number;
+  declare sku_id: string;
+  declare ean: string;
+  declare ordered_qty: number;
+  declare received_qty: number;
+  declare qc_pass_qty: number;
+  declare qc_fail_qty: number;
+  declare rtv_qty: number;
+  declare held_qty: number;
+  declare line_status: string;
+  declare variance_reason: any | null;
+  declare remarks: string | null;
   // public expected_date!: Date;
   // public received_date!: Date;
   // public qc_date!: Date;
-  public created_at!: Date;
-  public updated_at!: Date;
+  declare created_at: Date;
+  declare updated_at: Date;
 }
 
 GRNLine.init(

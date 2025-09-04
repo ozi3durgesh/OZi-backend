@@ -16,7 +16,13 @@ interface PurchaseOrderAttributes {
   expected_delivery_date?: Date;
   shipping_address?: string;
   billing_address?: string;
-  approval_status?: 'pending' | 'category_head' | 'admin' | 'vendor' | 'grn';
+
+  // Approval Workflow
+  approval_status?: 'pending' | 'category_head' | 'admin' | 'vendor' | 'approved' | 'rejected';
+  current_approver?: 'category_head' | 'admin' | 'vendor' | null;
+  rejection_reason?: string;
+
+  // Totals
   total_amount?: number;
   total_units?: number;
   total_skus?: number;
@@ -25,14 +31,13 @@ interface PurchaseOrderAttributes {
 
 type PurchaseOrderCreationAttributes = Optional<
   PurchaseOrderAttributes,
-  'id' | 'approval_status'
+  'id' | 'approval_status' | 'current_approver' | 'rejection_reason'
 >;
 
 class PurchaseOrder
   extends Model<PurchaseOrderAttributes, PurchaseOrderCreationAttributes>
   implements PurchaseOrderAttributes
 {
-  // ✅ no public field declarations here
   declare id: number;
   declare po_id: string;
   declare vendor_id?: string;
@@ -46,7 +51,11 @@ class PurchaseOrder
   declare expected_delivery_date?: Date;
   declare shipping_address?: string;
   declare billing_address?: string;
-  declare approval_status?: 'pending' | 'category_head' | 'admin' | 'vendor' | 'grn';
+
+  declare approval_status?: 'pending' | 'category_head' | 'admin' | 'vendor' | 'approved' | 'rejected';
+  declare current_approver?: 'category_head' | 'admin' | 'vendor' | null;
+  declare rejection_reason?: string;
+
   declare total_amount?: number;
   declare total_units?: number;
   declare total_skus?: number;
@@ -68,10 +77,21 @@ PurchaseOrder.init(
     expected_delivery_date: DataTypes.DATE,
     shipping_address: DataTypes.TEXT,
     billing_address: DataTypes.TEXT,
+
     approval_status: {
-      type: DataTypes.ENUM('pending', 'category_head', 'admin', 'vendor', 'grn'),
+      type: DataTypes.ENUM('pending', 'category_head', 'admin', 'vendor', 'approved', 'rejected'),
       defaultValue: 'pending',
     },
+    current_approver: {
+      type: DataTypes.ENUM('category_head', 'admin', 'vendor'),
+      allowNull: true,
+      defaultValue: 'category_head', // First approver
+    },
+    rejection_reason: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+
     total_amount: DataTypes.DECIMAL(10, 2),
     total_units: DataTypes.INTEGER,
     total_skus: DataTypes.INTEGER,

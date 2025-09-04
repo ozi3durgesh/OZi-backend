@@ -3,7 +3,8 @@ import { Request, Response } from 'express';
 import { PickingWave, PicklistItem, PickingException, User, Order, ScannerBin, ScannerSku } from '../models';
 import { ResponseHandler } from '../middleware/responseHandler';
 import { OrderAttributes } from '../types';
-import { Product } from '../models/productModel';
+import Product from '../models/productModel';
+import { Sequelize, Op } from 'sequelize';
 
 interface AuthRequest extends Request {
   user?: any;
@@ -468,56 +469,38 @@ export class PickingController {
 
       // Get picklist items with pagination
       const picklistItems = await PicklistItem.findAndCountAll({
-  where: { waveId },
-  order: [['scanSequence', 'ASC']],
-  limit: parseInt(limit.toString()),
-  offset,
-  include: [
-    {
-      model: Product,
-      as: 'product',
-      attributes: ['ImageURL', 'MRP', 'EAN_UPC']
-    }
-  ]
-});
+        where: { waveId },
+        order: [['scanSequence', 'ASC']],
+        limit: parseInt(limit.toString()),
+        offset
+      });
 
-// Always calculate totalItems from picklist count
-const totalItems = picklistItems.count;
-
-return ResponseHandler.success(res, {
-  message: 'Picking started successfully',
-  wave: {
-    id: wave.id,
-    waveNumber: wave.waveNumber,
-    status: wave.status,
-    totalItems, // live count
-    estimatedDuration: wave.estimatedDuration
-  },
-  picklistItems: picklistItems.rows.map(item => ({
-    id: item.id,
-    sku: item.sku,
-    productName: item.productName,
-    binLocation: item.binLocation,
-    quantity: item.quantity,
-    scanSequence: item.scanSequence,
-    fefoBatch: item.fefoBatch,
-    expiryDate: item.expiryDate,
-    productDetails: item.product ? {
-      imageUrl: item.product.ImageURL,
-      mrp: item.product.MRP,
-      ean: item.product.EAN_UPC
-    } : null
-  })),
-  pagination: {
-    page: parseInt(page.toString()),
-    limit: parseInt(limit.toString()),
-    total: picklistItems.count,
-    totalPages: Math.ceil(picklistItems.count / parseInt(limit.toString()))
-  }
-});
-
-
-
+      return ResponseHandler.success(res, {
+        message: 'Picking started successfully',
+        wave: {
+          id: wave.id,
+          waveNumber: wave.waveNumber,
+          status: wave.status,
+          totalItems: wave.totalItems,
+          estimatedDuration: wave.estimatedDuration
+        },
+        picklistItems: picklistItems.rows.map(item => ({
+          id: item.id,
+          sku: item.sku,
+          productName: item.productName,
+          binLocation: item.binLocation,
+          quantity: item.quantity,
+          scanSequence: item.scanSequence,
+          fefoBatch: item.fefoBatch,
+          expiryDate: item.expiryDate
+        })),
+        pagination: {
+          page: parseInt(page.toString()),
+          limit: parseInt(limit.toString()),
+          total: picklistItems.count,
+          totalPages: Math.ceil(picklistItems.count / parseInt(limit.toString()))
+        }
+      });
 
     } catch (error) {
       console.error('Start picking error:', error);
@@ -1138,97 +1121,103 @@ return ResponseHandler.success(res, {
    * Get picklist items for a wave with pagination
    */
   static async getPicklistItems(req: AuthRequest, res: Response): Promise<Response> {
-    try {
-      const { waveId } = req.params;
-      const { page = 1, limit = 20, status } = req.query;
-      const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
+  try {
+     const { waveId } = req.params;
+    const { page = 1, limit = 20, status } = req.query;
+    const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
 
-      // Verify wave exists and user has access
-      const wave = await PickingWave.findByPk(waveId);
-      if (!wave) {
-        return ResponseHandler.error(res, 'Wave not found', 404);
-      }
-
-      // Check if user has permission to view this wave
-      const userPermissions = req.user!.permissions || [];
-      const canView = userPermissions.includes('picking:view') || 
-                     userPermissions.includes('picking:assign_manage') ||
-                     (userPermissions.includes('picking:execute') && wave.pickerId === req.user!.id);
-
-      if (!canView) {
-        return ResponseHandler.error(res, 'Insufficient permissions to view this wave', 403);
-      }
-
-      // Build where clause - ensure waveId is properly handled
-      const whereClause: any = { waveId: parseInt(waveId) };
-      if (status) whereClause.status = status;
-
-      console.log('Querying for waveId:', parseInt(waveId));
-      console.log('Where clause:', whereClause);
-
-      // Get picklist items with pagination
-      console.log(`\n=== Querying picklist items for wave ${waveId} ===`);
-      console.log('Where clause:', whereClause);
-      
-      const picklistItems = await PicklistItem.findAndCountAll({
-        where: whereClause,
-        order: [['scanSequence', 'ASC']],
-        limit: parseInt(limit.toString()),
-        offset
-      });
-
-      // Debug logging
-      console.log(`✓ Found ${picklistItems.count} picklist items`);
-      console.log('Sample items:', picklistItems.rows.slice(0, 2).map(item => ({
-        id: item.id,
-        orderId: item.orderId,
-        sku: item.sku,
-        waveId: item.waveId,
-        quantity: item.quantity
-      })));
-      
-      // Also check all items without pagination for debugging
-      const allItems = await PicklistItem.findAll({
-        where: { waveId: parseInt(waveId) },
-        order: [['scanSequence', 'ASC']]
-      });
-      console.log(`Total items in database for wave ${waveId}: ${allItems.length}`);
-      allItems.forEach(item => {
-        console.log(`  - ID: ${item.id}, Order: ${item.orderId}, SKU: ${item.sku}, Qty: ${item.quantity}`);
-      });
-
-      return ResponseHandler.success(res, {
-        wave: {
-          id: wave.id,
-          waveNumber: wave.waveNumber,
-          status: wave.status,
-          totalItems: wave.totalItems
-        },
-        items: picklistItems.rows.map(item => ({
-          id: item.id,
-          orderId: item.orderId, // Add orderId to response
-          sku: item.sku,
-          productName: item.productName,
-          binLocation: item.binLocation,
-          quantity: item.quantity,
-          status: item.status,
-          scanSequence: item.scanSequence,
-          fefoBatch: item.fefoBatch,
-          expiryDate: item.expiryDate,
-          pickedQuantity: item.pickedQuantity,
-          partialReason: item.partialReason
-        })),
-        pagination: {
-          page: parseInt(page.toString()),
-          limit: parseInt(limit.toString()),
-          total: picklistItems.count,
-          totalPages: Math.ceil(picklistItems.count / parseInt(limit.toString()))
-        }
-      });
-
-    } catch (error) {
-      console.error('Get picklist items error:', error);
-      return ResponseHandler.error(res, 'Internal server error', 500);
+    // Verify wave exists
+    const wave = await PickingWave.findByPk(waveId);
+    if (!wave) {
+      return ResponseHandler.error(res, 'Wave not found', 404);
     }
+
+    // Check permissions
+    const userPermissions = req.user!.permissions || [];
+    const canView =
+      userPermissions.includes('picking:view') ||
+      userPermissions.includes('picking:assign_manage') ||
+      (userPermissions.includes('picking:execute') && wave.pickerId === req.user!.id);
+    if (!canView) {
+      return ResponseHandler.error(res, 'Insufficient permissions to view this wave', 403);
+    }
+
+    // Build where clause
+    const whereClause: any = { waveId: parseInt(waveId) };
+    if (status) whereClause.status = status;
+    console.log('Querying for waveId:', waveId);
+    console.log('Where clause:', whereClause);
+
+    // Extend PicklistItem type to include productInfo
+    interface PicklistItemWithProduct extends PicklistItem {
+      productInfo?: Product;
+    }
+
+    // Fetch picklist items with included Product info
+    const picklistItems = await PicklistItem.findAndCountAll({
+  where: whereClause,
+  order: [['scanSequence', 'ASC']],
+  limit: parseInt(limit.toString()),
+  offset,
+  include: [
+    {
+      model: Product,
+      as: 'productInfo',
+      attributes: ['ImageURL', 'EAN_UPC', 'MRP'],
+      required: false, // Left join
+    }
+  ],
+  logging: console.log,  // Enable SQL query logging
+}) as { count: number; rows: PicklistItemWithProduct[] };
+
+    // Debug logging
+  /*  picklistItems.rows.forEach(item => {
+  console.log(`- ID: ${item.id}, SKU: ${item.sku}, Qty: ${item.quantity}`);
+  if (item.productInfo) {
+    console.log(`   Product -> ImageURL: ${item.productInfo.ImageURL}, EAN: ${item.productInfo.EAN_UPC}, MRP: ${item.productInfo.MRP}`);
+  } else {
+    console.log('   Product -> Not found');
   }
+});*/
+
+    // Build API response
+    return ResponseHandler.success(res, {
+  wave: {
+    id: wave.id,
+    waveNumber: wave.waveNumber,
+    status: wave.status,
+    totalItems: wave.totalItems,
+  },
+  items: picklistItems.rows.map(item => ({
+    id: item.id,
+    orderId: item.orderId,
+    sku: item.sku,
+    productName: item.productName,
+    binLocation: item.binLocation,
+    quantity: item.quantity,
+    status: item.status,
+    scanSequence: item.scanSequence,
+    fefoBatch: item.fefoBatch,
+    expiryDate: item.expiryDate,
+    pickedQuantity: item.pickedQuantity,
+    partialReason: item.partialReason,
+    imageUrl: item.productInfo?.ImageURL || null,  // Safely access productInfo
+    ean: item.productInfo?.EAN_UPC || null,
+    mrp: item.productInfo?.MRP || null,
+  })),
+  pagination: {
+    page: parseInt(page.toString()),
+    limit: parseInt(limit.toString()),
+    total: picklistItems.count,
+    totalPages: Math.ceil(picklistItems.count / parseInt(limit.toString()))
+  }
+});
+
+  } catch (error) {
+    console.error('Get picklist items error:', error);
+    return ResponseHandler.error(res, 'Internal server error', 500);
+  }
+ }
+
 }
+
