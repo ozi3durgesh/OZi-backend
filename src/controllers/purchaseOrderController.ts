@@ -17,8 +17,8 @@ const s3 = new S3Client({
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
   },
 });
-const BUCKET_NAME = "oms-stage-storage"; // your bucket
-const FOLDER_NAME = "po-approval-pdf";   // folder inside bucket
+const BUCKET_NAME = "oms-stage-storage";
+const FOLDER_NAME = "po-approval-pdf";
 
 // Nodemailer transporter
 const transporter = nodemailer.createTransport({
@@ -155,7 +155,7 @@ Approve: ${approveUrl}
 Reject: ${rejectUrl}
 
 PDF Link: ${s3Url || 'Attached'}
-    
+
 Thanks,
 Ozi Technologies`,
   };
@@ -235,6 +235,10 @@ export const createPurchaseOrder = async (req: Request, res: Response) => {
       const pdfBuffer = await generatePOPdf(poWithProducts, poWithProducts.products ?? []);
       const s3Url = await uploadPdfToS3(pdfBuffer, `PO_${poWithProducts.po_id}.pdf`);
 
+      // Save S3 URL in DB
+      poWithProducts.pdf_url = s3Url;
+      await poWithProducts.save();
+
       // Send to category head
       await sendApprovalEmail(poWithProducts, 'category_head', pdfBuffer, s3Url);
 
@@ -271,7 +275,7 @@ export const approvePO = async (req: Request, res: Response) => {
       (po as any).rejection_reason = reason || `${role} rejected the PO`;
       po.current_approver = null;
       await po.save();
-      return ResponseHandler.success(res, { PO: { message: `PO rejected by ${role}`, po_id: po.po_id } }, 200);
+      return ResponseHandler.success(res, { PO: { message: `PO rejected by ${role}`, po_id: po.po_id, pdf_url: po.pdf_url } }, 200);
     }
 
     if (action === 'approve') {
@@ -283,7 +287,7 @@ export const approvePO = async (req: Request, res: Response) => {
         po.approval_status = 'approved';
         po.current_approver = null;
         await po.save();
-        return ResponseHandler.success(res, { PO: { message: `PO fully approved`, po_id: po.po_id } }, 200);
+        return ResponseHandler.success(res, { PO: { message: `PO fully approved`, po_id: po.po_id, pdf_url: po.pdf_url } }, 200);
       }
 
       po.approval_status = role;
@@ -293,10 +297,12 @@ export const approvePO = async (req: Request, res: Response) => {
       if (nextRole) {
         const pdfBuffer = await generatePOPdf(po, po.products ?? []);
         const s3Url = await uploadPdfToS3(pdfBuffer, `PO_${po.po_id}.pdf`);
+        po.pdf_url = s3Url;
+        await po.save();
         await sendApprovalEmail(po, nextRole, pdfBuffer, s3Url);
       }
 
-      return ResponseHandler.success(res, { PO: { message: `PO approved by ${role}`, po_id: po.po_id } }, 200);
+      return ResponseHandler.success(res, { PO: { message: `PO approved by ${role}`, po_id: po.po_id, pdf_url: po.pdf_url } }, 200);
     }
 
     return ResponseHandler.error(res, 'Invalid action', 400);
@@ -324,8 +330,13 @@ export const getAllPOs = async (req: Request, res: Response) => {
       order: [['id', 'DESC']]
     });
 
+    const responsePOs = rows.map(po => ({
+      ...po.toJSON(),
+      pdf_url: po.pdf_url
+    }));
+
     return ResponseHandler.success(res, {
-      PO: rows,
+      PO: responsePOs,
       pagination: { total: count, page: pageNum, pages: Math.ceil(count / limitNum), limit: limitNum }
     });
   } catch (error: any) {
@@ -340,7 +351,8 @@ export const getPOById = async (req: Request, res: Response) => {
       include: [{ model: POProduct, as: 'products' }]
     });
     if (!po) return ResponseHandler.error(res, 'PO not found', 404);
-    return ResponseHandler.success(res, { PO: po }, 200);
+
+    return ResponseHandler.success(res, { PO: { ...po.toJSON(), pdf_url: po.pdf_url } }, 200);
   } catch (error: any) {
     return ResponseHandler.error(res, error.message || 'Error fetching POs', 500);
   }

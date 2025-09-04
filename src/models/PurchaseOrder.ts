@@ -27,11 +27,14 @@ interface PurchaseOrderAttributes {
   total_units?: number;
   total_skus?: number;
   base_price?: number;
+
+  // PDF URL
+  pdf_url?: string; // <-- Add this
 }
 
 type PurchaseOrderCreationAttributes = Optional<
   PurchaseOrderAttributes,
-  'id' | 'approval_status' | 'current_approver' | 'rejection_reason'
+  'id' | 'approval_status' | 'current_approver' | 'rejection_reason' | 'pdf_url'
 >;
 
 class PurchaseOrder
@@ -60,6 +63,8 @@ class PurchaseOrder
   declare total_units?: number;
   declare total_skus?: number;
   declare base_price?: number;
+
+  declare pdf_url?: string; // <-- Add this
 
   // 👇 Add this so TS knows about association
   declare products?: POProduct[];
@@ -99,6 +104,11 @@ PurchaseOrder.init(
     total_units: DataTypes.INTEGER,
     total_skus: DataTypes.INTEGER,
     base_price: DataTypes.DECIMAL(10, 2),
+
+    pdf_url: { // <-- Add this
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
   },
   {
     sequelize,
