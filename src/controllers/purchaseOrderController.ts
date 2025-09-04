@@ -4,6 +4,7 @@ import PurchaseOrder from '../models/PurchaseOrder';
 import POProduct from '../models/POProduct';
 import { ResponseHandler } from '../middleware/responseHandler';
 import dotenv from "dotenv";
+import PDFDocument from "pdfkit";
 
 dotenv.config();
 
@@ -25,19 +26,102 @@ function calculateTotalAmount(products: any[]) {
   return products.reduce((sum, prod) => sum + prod.amount, 0);
 }
 
-// 📧 Send Approval Email with Approve/Reject links
+// 📝 Generate PDF in memory (Buffer)
+async function generatePOPdf(po: any, products: any[]): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ margin: 40 });
+      const chunks: any[] = [];
+
+      doc.on("data", (chunk) => chunks.push(chunk));
+      doc.on("end", () => resolve(Buffer.concat(chunks)));
+      doc.on("error", reject);
+
+      // Header
+      doc.fontSize(18).text("PURCHASE ORDER", { align: "center", underline: true });
+      doc.moveDown();
+
+      doc.fontSize(12).text(`PO No: ${po.po_id ?? 'N/A'}`);
+      doc.text(`PO Date: ${po.purchase_date ?? 'N/A'}`);
+      doc.moveDown();
+
+      // Vendor details
+      doc.font("Helvetica-Bold").text("Vendor Details:");
+      doc.font("Helvetica").text(`Vendor: ${po.vendor_name ?? 'N/A'}`);
+      doc.text(`Vendor Tax ID: ${po.vendor_tax_id ?? 'N/A'}`);
+      doc.text(`POC: ${(po.poc_name ?? 'N/A')} (${po.poc_phone ?? 'N/A'})`);
+      doc.moveDown();
+
+      // Order details
+      doc.font("Helvetica-Bold").text("Order Details:");
+      doc.font("Helvetica").text(`Payment Term: ${po.payment_term ?? 'N/A'}`);
+      doc.text(`Payment Mode: ${po.payment_mode ?? 'N/A'}`);
+      doc.text(`Expected Delivery: ${po.expected_delivery_date ?? 'N/A'}`);
+      doc.moveDown();
+
+      // Product Table Header
+      doc.font("Helvetica-Bold");
+      doc.text("Product", 50, doc.y, { continued: true });
+      doc.text("SKU", 200, doc.y, { continued: true });
+      doc.text("Units", 280, doc.y, { continued: true });
+      doc.text("MRP", 340, doc.y, { continued: true });
+      doc.text("Amount", 420);
+      doc.moveDown();
+      doc.font("Helvetica");
+
+      // Product Rows - Defensive
+      products.forEach((p: any) => {
+        const productName = p.product ?? 'N/A';
+        const skuId = p.sku_id ?? 'N/A';
+        const units = p.units != null ? p.units.toString() : '0';
+        const mrp = p.mrp != null ? `₹${p.mrp}` : '₹0';
+        const amount = p.amount != null ? `₹${p.amount}` : '₹0';
+
+        doc.text(productName, 50, doc.y, { continued: true });
+        doc.text(skuId, 200, doc.y, { continued: true });
+        doc.text(units, 280, doc.y, { continued: true });
+        doc.text(mrp, 340, doc.y, { continued: true });
+        doc.text(amount, 420);
+      });
+
+      doc.moveDown();
+
+      // Totals - Defensive
+      doc.font("Helvetica-Bold");
+      const totalUnits = po.total_units ?? 0;
+      const totalSkus = po.total_skus ?? 0;
+      const basePrice = Number(po.base_price ?? 0);
+      const totalAmount = Number(po.total_amount ?? 0);
+
+      doc.text(`TOTAL UNITS: ${totalUnits}`);
+      doc.text(`TOTAL SKUS: ${totalSkus}`);
+      doc.text(`BASE PRICE: ₹${basePrice.toFixed(2)}`);
+      doc.text(`TOTAL AMOUNT: ₹${totalAmount.toFixed(2)}`);
+      doc.moveDown();
+
+      // Footer
+      doc.text("For Ozi Technologies Pvt Ltd", { align: "right" });
+      doc.text("Authorised Signatory", { align: "right" });
+
+      doc.end();
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+// 📧 Send Approval Email
 async function sendApprovalEmail(
   po: any,
   role: 'category_head' | 'admin' | 'vendor',
-  pdfPath: string
+  pdfBuffer: Buffer
 ) {
   let productLines = '';
-  for (const p of po.products) {
+  for (const p of po.products ?? []) {
     productLines += `${p.product} | SKU: ${p.sku_id} | Units: ${p.units} | MRP: ₹${p.mrp} | Amount: ₹${p.amount}\n`;
   }
 
-  // Approve / Reject links
-  const approveUrl = `${process.env.APP_BASE_URL}/api/purchase-orders/${po.id}/approve?role=${role}&action=approve&pdfPath=${encodeURIComponent(pdfPath)}`;
+  const approveUrl = `${process.env.APP_BASE_URL}/api/purchase-orders/${po.id}/approve?role=${role}&action=approve`;
   const rejectUrl = `${process.env.APP_BASE_URL}/api/purchase-orders/${po.id}/approve?role=${role}&action=reject`;
 
   const mailOptions = {
@@ -60,7 +144,13 @@ Reject: ${rejectUrl}
 
 Thanks,
 Ozi Technologies`,
-    attachments: [{ filename: `PO_${po.po_id}.pdf`, path: pdfPath }]
+    attachments: [
+      {
+        filename: `PO_${po.po_id}.pdf`,
+        content: pdfBuffer,
+        contentType: "application/pdf"
+      }
+    ]
   };
 
   await transporter.sendMail(mailOptions);
@@ -74,7 +164,7 @@ export const createPurchaseOrder = async (req: Request, res: Response) => {
   const {
     vendor_id, vendor_name, poc_name, poc_phone, vendor_tax_id,
     payment_term, payment_mode, purchase_date, expected_delivery_date,
-    shipping_address, billing_address, products, pdfPath
+    shipping_address, billing_address, products
   } = req.body;
 
   try {
@@ -140,9 +230,15 @@ export const createPurchaseOrder = async (req: Request, res: Response) => {
       include: [{ model: POProduct, as: 'products' }]
     });
 
+    // ✅ Generate PDF in memory
+    let pdfBuffer: Buffer | undefined;
+    if (poWithProducts) {
+      pdfBuffer = await generatePOPdf(poWithProducts, poWithProducts.products ?? []);
+    }
+
     // 📧 Send to Category Head first
-    if (pdfPath && poWithProducts) {
-      await sendApprovalEmail(poWithProducts, 'category_head', pdfPath);
+    if (pdfBuffer && poWithProducts) {
+      await sendApprovalEmail(poWithProducts, 'category_head', pdfBuffer);
     }
 
     return ResponseHandler.success(
@@ -162,7 +258,6 @@ export const createPurchaseOrder = async (req: Request, res: Response) => {
 export const approvePO = async (req: Request, res: Response) => {
   const role = (req.body.role || req.query.role) as 'category_head' | 'admin' | 'vendor';
   const action = (req.body.action || req.query.action) as 'approve' | 'reject';
-  const pdfPath = (req.body.pdfPath || req.query.pdfPath) as string;
   const reason = (req.body.reason || req.query.reason) as string;
 
   if (!['category_head', 'admin', 'vendor'].includes(role)) {
@@ -208,9 +303,10 @@ export const approvePO = async (req: Request, res: Response) => {
       po.current_approver = nextRole;
       await po.save();
 
-      // 📧 Send email to next approver
-      if (nextRole && pdfPath) {
-        await sendApprovalEmail(po, nextRole, pdfPath);
+      // 📧 Generate PDF again & send to next approver
+      if (nextRole) {
+        const pdfBuffer = await generatePOPdf(po, po.products ?? []);
+        await sendApprovalEmail(po, nextRole, pdfBuffer);
       }
 
       return ResponseHandler.success(res, { 
@@ -230,8 +326,11 @@ export const approvePO = async (req: Request, res: Response) => {
 //
 export const getAllPOs = async (req: Request, res: Response) => {
   try {
-    const { page = 1, limit = 20, status } = req.query;
-    const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
+    const { page = "1", limit = "20", status } = req.query;
+
+    const pageNum = parseInt(String(page), 10);
+    const limitNum = parseInt(String(limit), 10);
+    const offset = (pageNum - 1) * limitNum;
 
     const whereClause: any = {};
     if (status) {
@@ -241,7 +340,7 @@ export const getAllPOs = async (req: Request, res: Response) => {
     const { count, rows } = await PurchaseOrder.findAndCountAll({
       where: whereClause,
       include: [{ model: POProduct, as: 'products' }],
-      limit: parseInt(limit.toString()),
+      limit: limitNum,
       offset,
       order: [['id', 'DESC']]
     });
@@ -250,9 +349,9 @@ export const getAllPOs = async (req: Request, res: Response) => {
       PO: rows,
       pagination: {
         total: count,
-        page: parseInt(page.toString()),
-        pages: Math.ceil(count / parseInt(limit.toString())),
-        limit: parseInt(limit.toString())
+        page: pageNum,
+        pages: Math.ceil(count / limitNum),
+        limit: limitNum
       }
     });
   } catch (error: any) {
