@@ -235,7 +235,105 @@ export class PutawayController {
     }
   }
 
-  // 4. Scan SKU Product Detail API
+  // 4. Scan SKU API
+  static async scanSku(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { sku_id, grn_id } = req.body;
+      const userId = req.user?.id;
+
+      if (!userId) {
+        res.status(401).json({
+          statusCode: 401,
+          success: false,
+          data: null,
+          error: 'User not authenticated',
+        });
+        return;
+      }
+
+      if (!sku_id || !grn_id) {
+        res.status(400).json({
+          statusCode: 400,
+          success: false,
+          data: null,
+          error: 'SKU ID and GRN ID are required',
+        });
+        return;
+      }
+
+      // Find product in product_master table
+      const product = await Product.findOne({
+        where: { SKU: sku_id },
+      });
+
+      if (!product) {
+        res.status(404).json({
+          statusCode: 404,
+          success: false,
+          data: null,
+          error: 'Product not found',
+        });
+        return;
+      }
+
+      // Check if SKU exists in the specified GRN line with QC passed quantity
+      const grnLine = await GRNLine.findOne({
+        where: {
+          sku_id: sku_id,
+          grn_id: grn_id,
+          qc_pass_qty: {
+            [Op.gt]: 0,
+          },
+        },
+        include: [
+          {
+            model: GRN,
+            as: 'Grn',
+            include: [
+              {
+                model: PurchaseOrder,
+                as: 'PO',
+                attributes: ['po_id', 'vendor_name'],
+              },
+            ],
+          },
+        ],
+      });
+
+      if (!grnLine) {
+        res.status(404).json({
+          statusCode: 404,
+          success: false,
+          data: null,
+          error: 'No QC passed quantity found for this SKU in the specified GRN',
+        });
+        return;
+      }
+
+      res.status(200).json({
+        statusCode: 200,
+        success: true,
+        data: {
+          message: 'SKU scanned successfully',
+          sku_id: sku_id,
+          grn_id: grnLine.grn_id,
+          po_id: (grnLine as any).Grn?.po_id || 'N/A',
+          available_quantity: grnLine.qc_pass_qty,
+        },
+        error: null,
+      });
+    } catch (error: any) {
+      console.error('Error scanning SKU:', error);
+      res.status(500).json({
+        statusCode: 500,
+        success: false,
+        data: null,
+        error: 'Internal server error',
+      });
+    }
+  }
+
+  // 5. Scan SKU Product Detail API
   static async scanSkuProductDetail(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { sku_id } = req.body;
@@ -453,19 +551,26 @@ export class PutawayController {
         return;
       }
 
-      // Validate bin location
-      const binLocation = await BinLocation.findOne({
-        where: { bin_code: bin_location, status: 'active' },
+      // Validate bin location or create if doesn't exist
+      let binLocation = await BinLocation.findOne({
+        where: { bin_code: bin_location },
       });
 
       if (!binLocation) {
-        res.status(400).json({
-          statusCode: 400,
-          success: false,
-          data: null,
-          error: 'Invalid or inactive bin location',
+        // Create new bin location if it doesn't exist
+        binLocation = await BinLocation.create({
+          bin_code: bin_location,
+          zone: 'A1',
+          aisle: 'B1', 
+          rack: 'R1',
+          shelf: 'S1',
+          capacity: 100, // Default capacity
+          current_quantity: 0,
+          status: 'active',
         });
-        return;
+      } else if (binLocation.status !== 'active') {
+        // Activate the bin if it's inactive
+        await binLocation.update({ status: 'active' });
       }
 
       // Check bin capacity
@@ -502,6 +607,43 @@ export class PutawayController {
           error: 'Quantity exceeds available QC passed quantity',
         });
         return;
+      }
+
+      // Check if SKU is already scanned and placed in a different bin
+      const existingSkuScan = await ScannerSku.findOne({
+        where: sequelize.literal(`JSON_CONTAINS(sku, JSON_OBJECT('skuId', '${sku_id}'))`),
+        order: [['created_at', 'DESC']]
+      });
+
+      if (existingSkuScan && existingSkuScan.binLocationScanId !== bin_location) {
+        res.status(400).json({
+          statusCode: 400,
+          success: false,
+          data: null,
+          error: `SKU ${sku_id} is already placed in bin ${existingSkuScan.binLocationScanId}. Cannot place in different bin ${bin_location}`,
+        });
+        return;
+      }
+
+      // Check if bin already contains different SKUs
+      const existingBinScan = await ScannerBin.findOne({
+        where: { binLocationScanId: bin_location }
+      });
+
+      if (existingBinScan && existingBinScan.sku && existingBinScan.sku.length > 0) {
+        const binSkus = existingBinScan.sku;
+        // Check if SKU already exists in this bin
+        const skuExists = binSkus.includes(sku_id);
+        
+        if (!skuExists) {
+          res.status(400).json({
+            statusCode: 400,
+            success: false,
+            data: null,
+            error: `Bin ${bin_location} already contains different SKUs: ${binSkus.join(', ')}. Cannot place SKU ${sku_id} in this bin`,
+          });
+          return;
+        }
       }
 
       // Start transaction
@@ -559,13 +701,18 @@ export class PutawayController {
 
         if (existingBin) {
           const currentSkus = existingBin.sku || [];
-          if (!currentSkus.includes(sku_id)) {
+          // Check if SKU already exists in this bin
+          const skuExists = currentSkus.includes(sku_id);
+          
+          if (!skuExists) {
+            // Add SKU to bin
             currentSkus.push(sku_id);
             await existingBin.update({
               sku: currentSkus,
             }, { transaction });
           }
         } else {
+          // Create new bin
           await ScannerBin.create({
             binLocationScanId: bin_location,
             sku: [sku_id],
