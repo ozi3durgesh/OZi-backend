@@ -199,7 +199,7 @@ export class PutawayController {
         return;
       }
 
-      // First get the GRN to get the po_id
+      // Get the GRN data from grns table
       const grn = await GRN.findByPk(grnId);
 
       if (!grn) {
@@ -212,26 +212,10 @@ export class PutawayController {
         return;
       }
 
-      // Now get the PurchaseOrder using the po_id from GRN
-      const purchaseOrder = await PurchaseOrder.findByPk(grn.po_id);
-
-      if (!purchaseOrder) {
-        res.status(404).json({
-          statusCode: 404,
-          success: false,
-          data: null,
-          error: 'Purchase Order not found',
-        });
-        return;
-      }
-
       const grnDetails = {
         GRN: grn.id,
-        'Supplier Invoice Number': purchaseOrder.vendor_tax_id || 'N/A', // Using vendor_tax_id as supplier invoice number
         'Created On': grn.created_at ? grn.created_at.toLocaleDateString() : 'N/A',
-        'Supplier Invoice Date': purchaseOrder.purchase_date ? purchaseOrder.purchase_date.toLocaleDateString() : 'N/A',
-        'PO Number': purchaseOrder.po_id,
-        'Ref No': purchaseOrder.vendor_id || 'N/A', // Using vendor_id as ref number
+        'PO Number': grn.po_id,
       };
 
       res.status(200).json({
