@@ -21,8 +21,10 @@ interface CreateFullGRNInput {
     skuId: string;
     orderedQty: number;
     receivedQty: number;
+    rejectedQty: number;
     ean?: string;
     qcPassQty?: number;
+    remarks?: string;
     heldQty?: number;
     rtvQty?: number;
     lineStatus?: string;
@@ -153,26 +155,40 @@ export class GrnController {
         const receivedSoFar = Number((result as any).totalReceived || 0);
 
         const newTotalReceived = receivedSoFar + (line.receivedQty || 0);
+        const totalRejected = line.rejectedQty || 0;
 
-        if (newTotalReceived > line.orderedQty) {
+        const maxReceivable = line.orderedQty - totalRejected;
+
+        if (newTotalReceived > maxReceivable) {
           await t.rollback();
           res.status(400).json({
             statusCode: 400,
             success: false,
             data: null,
-            error: `Received qty exceeds ordered qty for SKU ${line.skuId}`,
+            error: `Received and Rejected qty cannot exceed Ordered qty for SKU ${line.skuId}`,
           });
           return;
         }
 
+        if (line.rejectedQty > 0 && line.remarks?.trim() === '') {
+          await t.rollback();
+          res.status(400).json({
+            statusCode: 400,
+            success: false,
+            data: null,
+            error: `Remarks required for rejected items for SKU ${line.skuId}`,
+          });
+          return;
+        }
         const grnLine = await GRNLine.create(
           {
             grn_id: grn.id,
             sku_id: line.skuId,
             ordered_qty: line.orderedQty,
             received_qty: line.receivedQty,
+            rejected_qty: line.rejectedQty || 0,
             qc_pass_qty: line.qcPassQty ?? line.receivedQty,
-            qc_fail_qty: (line.heldQty ?? 0) + (line.rtvQty ?? 0),
+            qc_fail_qty: line.rejectedQty ?? 0,
             held_qty: line.heldQty ?? 0,
             rtv_qty: line.rtvQty ?? 0,
             line_status:
@@ -381,13 +397,11 @@ export class GrnController {
           status: 'partial',
         },
       });
-      console.log({ grnsWithVariance });
-      // 3. Pending QC
+
       const pendingQc = await GRN.count({
         where: { status: 'pending-qc' },
       });
 
-      // 4. RTV Initiated
       const rtvInitiated = await GRN.count({
         where: { status: 'rtv-initiated' },
       });

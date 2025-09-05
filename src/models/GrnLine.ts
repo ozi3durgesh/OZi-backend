@@ -13,6 +13,7 @@ class GRNLine
   declare ean: string;
   declare ordered_qty: number;
   declare received_qty: number;
+  declare rejected_qty: number;
   declare qc_pass_qty: number;
   declare qc_fail_qty: number;
   declare rtv_qty: number;
@@ -54,6 +55,12 @@ GRNLine.init(
     received_qty: {
       type: DataTypes.INTEGER,
       allowNull: false,
+    },
+
+    rejected_qty: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 0,
     },
     qc_pass_qty: {
       type: DataTypes.INTEGER,
