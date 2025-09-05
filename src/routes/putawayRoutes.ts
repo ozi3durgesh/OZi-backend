@@ -16,8 +16,8 @@ router.get('/return-list', PutawayController.getReturnPutawayList);
 // 3. Get GRN Details by ID (GET)
 router.get('/grn/:id', PutawayController.getGrnDetailsById);
 
-// 4. Scan SKU API (POST)
-router.post('/scan-sku', PutawayController.scanSku);
+// 4. Scan SKU Product Detail API (POST)
+router.post('/scan-sku-product-detail', PutawayController.scanSkuProductDetail);
 
 // 5. Get Scanned Product Details (GET)
 router.get('/product-details', PutawayController.getScannedProductDetails);

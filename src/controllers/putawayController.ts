@@ -235,8 +235,8 @@ export class PutawayController {
     }
   }
 
-  // 4. Scan SKU API
-  static async scanSku(req: AuthRequest, res: Response): Promise<void> {
+  // 4. Scan SKU Product Detail API
+  static async scanSkuProductDetail(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { sku_id } = req.body;
       const userId = req.user?.id;
@@ -318,6 +318,8 @@ export class PutawayController {
           grn_id: grnLine.grn_id,
           po_id: (grnLine as any).Grn?.po_id || 'N/A',
           available_quantity: grnLine.qc_pass_qty,
+          'Scanned Product detail': product.dataValues, // All product fields from product_master table
+          'Vendor Name': (grnLine as any).Grn?.PO?.vendor_name || '',
         },
         error: null,
       });
@@ -401,15 +403,7 @@ export class PutawayController {
       }
 
       const productDetails = {
-        'Scanned Product detail': {
-          SKU: product.SKU,
-          EAN: product.EAN_UPC,
-          MRP: product.MRP,
-          NAME: product.ProductName,
-          MODEL: product.ModelNum,
-          COLOUR: product.Color,
-          SIZE: product.Size,
-        },
+        'Scanned Product detail': product.dataValues, // Return all product fields from product_master table
         'PO ID': (grn as any).PO?.po_id || '',
         GRN: grn.id,
         'Vendor Name': (grn as any).PO?.vendor_name || '',
