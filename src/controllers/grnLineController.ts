@@ -11,6 +11,7 @@ export interface CreateGRNLineInput {
     skuId: string;
     orderedQty: number;
     receivedQty: number;
+    rejectedQty?: number;
     qcPassQty?: number;
     heldQty?: number;
     rtvQty?: number;
@@ -64,6 +65,7 @@ export class GrnLineController {
             sku_id: line.skuId,
             ordered_qty: line.orderedQty,
             received_qty: line.receivedQty,
+            rejected_qty: line.rejectedQty ?? 0,
             qc_pass_qty: line.qcPassQty ?? line.receivedQty,
             qc_fail_qty: qcFailQty,
             held_qty: line.heldQty ?? 0,
@@ -381,6 +383,7 @@ export class GrnLineController {
         held_qty,
         rtv_qty,
         line_status,
+        rejectedQty,
       } = data;
       const qcFailQty = (held_qty ?? 0) + (rtv_qty ?? 0);
 
@@ -398,6 +401,7 @@ export class GrnLineController {
         grn_id: grnId,
         sku_id: skuId,
         received_qty: receivedQty,
+        rejected_qty: rejectedQty ?? 0,
         ordered_qty: orderedQty,
         qc_pass_qty: qcPassQty ?? receivedQty,
         qc_fail_qty: qcFailQty ?? 0,
