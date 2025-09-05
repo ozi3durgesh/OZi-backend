@@ -15,6 +15,7 @@ import {
 import { Op } from 'sequelize';
 import PurchaseOrder from '../models/PurchaseOrder';
 import POProduct from '../models/POProduct';
+import { rejects } from 'assert';
 interface CreateFullGRNInput {
   poId: number;
   lines: {
@@ -138,6 +139,16 @@ export class GrnController {
           return;
         }
 
+        if (poProduct.get('grnStatus') === 'completed') {
+          await t.rollback();
+          res.status(400).json({
+            statusCode: 400,
+            success: false,
+            data: null,
+            error: `GRN already completed for PO ${input.poId} and SKU ${line.skuId}`,
+          });
+          return;
+        }
         const [result] = await sequelize.query(
           `
           SELECT COALESCE(SUM(gl.received_qty), 0) as totalReceived
@@ -169,8 +180,11 @@ export class GrnController {
           });
           return;
         }
-
-        if (line.rejectedQty > 0 && line.remarks?.trim() === '') {
+        console.log(line.rejectedQty, line.remarks);
+        if (
+          line.rejectedQty > 0 &&
+          (line.remarks === undefined || line.remarks?.trim() === '')
+        ) {
           await t.rollback();
           res.status(400).json({
             statusCode: 400,
