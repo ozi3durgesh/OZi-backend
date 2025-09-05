@@ -20,63 +20,70 @@ export class PutawayController {
       const limit = parseInt(req.query.limit as string) || 10;
       const offset = (page - 1) * limit;
 
-      // First, get GRNs that have QC passed quantities
-      const { count, rows } = await GRN.findAndCountAll({
+      // First, get all GRN lines with the required line_status
+      const allGrnLines = await GRNLine.findAll({
         include: [
           {
-            model: PurchaseOrder,
-            as: 'PurchaseOrder',
-            attributes: ['id', 'po_id', 'vendor_name'],
+            model: GRN,
+            as: 'Grn',
+            include: [
+              {
+                model: PurchaseOrder,
+                as: 'PO',
+                attributes: ['id', 'po_id', 'vendor_name'],
+              },
+            ],
           },
         ],
         where: {
-          status: {
-            [Op.in]: ['completed', 'partial'],
+          line_status: {
+            [Op.in]: ['completed', 'pending', 'partial'],
           },
         },
-        limit,
-        offset,
         order: [['created_at', 'DESC']],
       });
 
-      // Now get the GRN lines with ordered quantities for each GRN
-      const putawayList = await Promise.all(
-        rows.map(async (grn: any) => {
-          const grnLines = await GRNLine.findAll({
-            where: {
-              grn_id: grn.id,
-            },
-            attributes: ['id', 'sku_id', 'ordered_qty', 'received_qty'],
+      // Group GRN lines by GRN ID to get unique GRNs
+      const grnMap = new Map();
+      
+      allGrnLines.forEach((grnLine: any) => {
+        const grnId = grnLine.grn_id;
+        const grn = grnLine.Grn;
+        
+        if (!grnMap.has(grnId)) {
+          grnMap.set(grnId, {
+            GRN: grnId,
+            'PO id': grn?.po_id || 'N/A',
+            SKU: new Set(),
+            Quantity: 0,
+            'GRN Date': grn?.created_at ? grn.created_at.toLocaleDateString() : 'N/A',
           });
+        }
+        
+        const grnData = grnMap.get(grnId);
+        grnData.SKU.add(grnLine.sku_id);
+        grnData.Quantity += grnLine.ordered_qty;
+      });
 
-          // Count unique SKUs for this GRN
-          const uniqueSkus = new Set(grnLines.map((line: any) => line.sku_id));
-          const skuCount = uniqueSkus.size;
-          
-          // Calculate total ordered quantity across all SKUs
-          const totalQty = grnLines.reduce((sum: number, line: any) => sum + line.ordered_qty, 0);
-          
-          const result = {
-            GRN: grn.id,
-            'PO id': grn.po_id, // Direct from grns table
-            SKU: skuCount, // Count of unique SKUs
-            Quantity: totalQty, // Total ordered quantity across all SKUs
-            'GRN Date': grn.created_at ? grn.created_at.toLocaleDateString() : 'N/A', // Created date from grns table
-          };
-          
-          return result;
-        })
-      );
+      // Convert Map to Array and format SKU count
+      const allPutawayList = Array.from(grnMap.values()).map(grnData => ({
+        ...grnData,
+        SKU: grnData.SKU.size, // Convert Set to count
+      }));
+
+      // Apply pagination to the grouped results
+      const totalItems = allPutawayList.length;
+      const paginatedList = allPutawayList.slice(offset, offset + limit);
 
       res.status(200).json({
         statusCode: 200,
         success: true,
         data: {
-          putawayList,
+          putawayList: paginatedList,
           pagination: {
             currentPage: page,
-            totalPages: Math.ceil(count / limit),
-            totalItems: count,
+            totalPages: Math.ceil(totalItems / limit),
+            totalItems: totalItems,
             itemsPerPage: limit,
           },
         },
@@ -105,7 +112,7 @@ export class PutawayController {
         include: [
           {
             model: PurchaseOrder,
-            as: 'PurchaseOrder',
+            as: 'PO',
             attributes: ['id', 'po_id', 'vendor_name'],
           },
         ],
@@ -300,7 +307,7 @@ export class PutawayController {
             include: [
               {
                 model: PurchaseOrder,
-                as: 'PurchaseOrder',
+                as: 'PO',
                 attributes: ['po_id', 'vendor_name'],
               },
             ],
@@ -386,7 +393,7 @@ export class PutawayController {
         include: [
           {
             model: PurchaseOrder,
-            as: 'PurchaseOrder',
+            as: 'PO',
             attributes: ['po_id', 'vendor_name'],
           },
           {
@@ -418,9 +425,9 @@ export class PutawayController {
           COLOUR: product.Color,
           SIZE: product.Size,
         },
-        'PO ID': (grn as any).PurchaseOrder?.po_id || '',
+        'PO ID': (grn as any).PO?.po_id || '',
         GRN: grn.id,
-        'Vendor Name': (grn as any).PurchaseOrder?.vendor_name || '',
+        'Vendor Name': (grn as any).PO?.vendor_name || '',
         'Available Quantity': (grn as any).Line?.[0]?.qc_pass_qty || 0,
       };
 
@@ -728,7 +735,7 @@ export class PutawayController {
             include: [
               {
                 model: PurchaseOrder,
-                as: 'PurchaseOrder',
+                as: 'PO',
                 attributes: ['po_id', 'vendor_name'],
               },
             ],
@@ -747,8 +754,8 @@ export class PutawayController {
         scanned_quantity: task.scanned_quantity,
         status: task.status,
         bin_location: task.bin_location,
-        po_id: task.GRN?.PurchaseOrder?.po_id,
-        vendor_name: task.GRN?.PurchaseOrder?.vendor_name,
+        po_id: task.GRN?.PO?.po_id,
+        vendor_name: task.GRN?.PO?.vendor_name,
         created_at: task.created_at,
       }));
 
@@ -806,7 +813,7 @@ export class PutawayController {
         include: [
           {
             model: PurchaseOrder,
-            as: 'PurchaseOrder',
+            as: 'PO',
             attributes: ['id', 'po_id'],
           },
         ],
@@ -828,7 +835,7 @@ export class PutawayController {
             po_id: sampleGrn.get('po_id'),
             status: sampleGrn.get('status'),
             created_at: sampleGrn.get('created_at'),
-            purchaseOrder: (sampleGrn as any).PurchaseOrder
+            purchaseOrder: (sampleGrn as any).PO
           } : null
         },
         error: null,
