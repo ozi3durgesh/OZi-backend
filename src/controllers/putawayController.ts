@@ -287,7 +287,7 @@ export class PutawayController {
         include: [
           {
             model: GRN,
-            as: 'GrnId',
+            as: 'Grn',
             include: [
               {
                 model: PurchaseOrder,
@@ -316,6 +316,7 @@ export class PutawayController {
           message: 'SKU scanned successfully',
           sku_id: sku_id,
           grn_id: grnLine.grn_id,
+          po_id: (grnLine as any).Grn?.po_id || 'N/A',
           available_quantity: grnLine.qc_pass_qty,
         },
         error: null,
