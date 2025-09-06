@@ -67,6 +67,7 @@ export class PutawayController {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
       const offset = (page - 1) * limit;
+      const statusFilter = req.query.status as string; // Get status filter from query params
 
       // First, get all GRN lines with the required putaway_status
       const allGrnLines = await GRNLine.findAll({
@@ -84,9 +85,11 @@ export class PutawayController {
           },
         ],
         where: {
-          putaway_status: {
-            [Op.in]: ['pending', 'partial', 'completed'],
-          },
+          putaway_status: statusFilter 
+            ? statusFilter 
+            : {
+                [Op.in]: ['pending', 'partial', 'completed'],
+              },
         },
         order: [['created_at', 'DESC']],
       });
@@ -147,7 +150,7 @@ export class PutawayController {
       });
 
       // Convert Map to Array and format the response
-      const allPutawayList = Array.from(grnMap.values()).map(grnData => ({
+      let allPutawayList = Array.from(grnMap.values()).map(grnData => ({
         grn: grnData.grn,
         poId: grnData.poId,
         sku: grnData.skuIds.size, // Count of unique SKUs
@@ -157,7 +160,12 @@ export class PutawayController {
         status: grnData.status, // GRN status
       }));
 
-      // Apply pagination to the grouped results
+      // Apply status filter to the grouped results if specified
+      if (statusFilter) {
+        allPutawayList = allPutawayList.filter(item => item.status === statusFilter);
+      }
+
+      // Apply pagination to the filtered results
       const totalItems = allPutawayList.length;
       const paginatedList = allPutawayList.slice(offset, offset + limit);
 
