@@ -707,51 +707,60 @@ export class HandoverController {
   }
 }
 
+interface MulterS3File extends Express.Multer.File {
+  location: string; // Public S3 URL
+  key: string;      // Object key inside S3
+}
+
 export const dispatchWave = async (req: Request, res: Response) => {
   try {
     const { waveId } = req.params;
     const { riderId, dispatchNotes } = req.body;
-    const handoverPhoto = req.file; // multer saves here
     const staffId = (req as any).user.id; // JWT decoded userId
+
+    // Uploaded file from multer-s3
+    const handoverPhoto = req.file as MulterS3File | undefined;
+    const photoUrl = handoverPhoto?.location ?? null;
 
     // 1. Validate Wave
     const wave = await PickingWave.findByPk(waveId);
-    console.log(wave);
     if (!wave) {
       return res.status(404).json({ success: false, message: "Wave not found" });
     }
 
-   if (wave.status !== "PACKED") {
-  return res
-    .status(400)
-    .json({ success: false, message: "Wave not ready for dispatch" });
-}
+    if (wave.status !== "PACKED") {
+      return res.status(400).json({
+        success: false,
+        message: "Wave not ready for dispatch",
+      });
+    }
 
+    // 2. Validate Rider
+    const rider = await Rider.findOne({
+      where: {
+        id: riderId,
+        isActive: true,
+        availabilityStatus: "AVAILABLE",
+      },
+    });
 
-// 2. Validate Rider
-const rider = await Rider.findOne({
-  where: {
-    id: riderId,
-    isActive: true,
-    availabilityStatus: "AVAILABLE", // must match Rider ENUM (uppercase)
-  },
-});
+    if (!rider) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Rider not available" });
+    }
 
-if (!rider) {
-  return res.status(400).json({ success: false, message: "Rider not available" });
-}
-
-rider.availabilityStatus = "BUSY"; // Set the rider's availability to BUSY
+    rider.availabilityStatus = "BUSY"; // Set the rider's availability to BUSY
     await rider.save();
 
     // 3. Update Wave → Dispatched
-    wave.status = "COMPLETED"; // Update to COMPLETED
+    wave.status = "COMPLETED"; // mark as completed
     wave.handoverAt = new Date();
     wave.handoverBy = staffId;
     wave.riderId = rider.id;
     wave.dispatchNotes = dispatchNotes || null;
-    if (handoverPhoto) {
-      wave.handoverPhoto = handoverPhoto.path;
+    if (photoUrl) {
+      wave.handoverPhoto = photoUrl; // store S3 URL instead of local path
     }
     await wave.save();
 
@@ -777,12 +786,12 @@ rider.availabilityStatus = "BUSY"; // Set the rider's availability to BUSY
           rating: rider.rating,
           totalDeliveries: rider.totalDeliveries,
         },
-        photo: handoverPhoto
+        photo: photoUrl
           ? {
-              filename: handoverPhoto.filename,
-              path: handoverPhoto.path,
-              mimetype: handoverPhoto.mimetype,
-              size: handoverPhoto.size,
+              url: photoUrl,
+              key: handoverPhoto?.key,
+              mimetype: handoverPhoto?.mimetype,
+              size: handoverPhoto?.size,
             }
           : null,
       },

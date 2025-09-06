@@ -7,24 +7,36 @@ import Rider from '../models/Rider';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
+import multerS3 from "multer-s3";
+import { S3Client } from "@aws-sdk/client-s3";
 
 const router = Router();
 
-// ---- Multer setup for file uploads ----
-const uploadDir = path.join(process.cwd(), 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadDir);
+// Multer setup
+const s3 = new S3Client({
+  region: "ap-south-1",
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
   },
-  filename: function (req, file, cb) {
-    cb(null, `${Date.now()}-${file.originalname}`);
-  }
 });
-const upload = multer({ storage });
+
+const BUCKET_NAME = "oms-stage-storage";
+const FOLDER_NAME = "packAndSeal"; // you can change to "handover-photos" if it's a better fit
+
+// Multer storage -> upload straight to S3
+const upload = multer({
+  storage: multerS3({
+    s3,
+    bucket: BUCKET_NAME,
+    key: (req, file, cb) => {
+      const filename = `${FOLDER_NAME}/${Date.now()}-${file.originalname}`;
+      cb(null, filename);
+    },
+  }),
+  limits: { fileSize: 50 * 1024 * 1024 }, // optional (50 MB)
+});
+
 
 // Apply authentication middleware to all routes
 router.use(authenticate);
@@ -142,19 +154,24 @@ router.post('/complete', (req, res) => {
   }
 });
 
+interface MulterS3File extends Express.Multer.File {
+  location: string; // S3 URL
+  key: string;      // Object key
+}
+
 /**
- * @route POST /api/packing/:waveId/pack-and-seal
+ * @route POST /api/handover/:waveId/pack-and-seal
  */
-router.post('/:waveId/pack-and-seal', upload.single('photo'), async (req, res) => {
+router.post("/:waveId/pack-and-seal", upload.single("photo"), async (req, res) => {
   try {
     const { waveId } = req.params;
-    const photo = req.file as Express.Multer.File | undefined;
+    const photo = req.file as MulterS3File | undefined;
 
     if (!photo) {
       return res.status(400).json({
         statusCode: 400,
         success: false,
-        error: 'photo file is required'
+        error: "photo file is required",
       });
     }
 
@@ -164,89 +181,89 @@ router.post('/:waveId/pack-and-seal', upload.single('photo'), async (req, res) =
       return res.status(404).json({
         statusCode: 404,
         success: false,
-        error: `Wave with id ${waveId} not found`
+        error: `Wave with id ${waveId} not found`,
       });
     }
 
-
     // Find minimum deliveries
-    const minDeliveries = await Rider.min('totalDeliveries', {
-      where: { isActive: true, availabilityStatus: 'AVAILABLE' }
+    const minDeliveries = await Rider.min("totalDeliveries", {
+      where: { isActive: true, availabilityStatus: "AVAILABLE" },
     });
 
     if (minDeliveries === null) {
       return res.status(404).json({
         statusCode: 404,
         success: false,
-        error: 'No eligible riders found'
+        error: "No eligible riders found",
       });
     }
 
     // Riders with minimum deliveries
     const candidates = await Rider.findAll({
-      where: { isActive: true, availabilityStatus: 'AVAILABLE', totalDeliveries: minDeliveries },
+      where: {
+        isActive: true,
+        availabilityStatus: "AVAILABLE",
+        totalDeliveries: minDeliveries,
+      },
       attributes: [
-        'id',
-        'riderCode',
-        'name',
-        'phone',
-        'email',
-        'vehicleType',
-        'vehicleNumber',
-        'availabilityStatus',
-        'rating',
-        'totalDeliveries'
-      ]
+        "id",
+        "riderCode",
+        "name",
+        "phone",
+        "email",
+        "vehicleType",
+        "vehicleNumber",
+        "availabilityStatus",
+        "rating",
+        "totalDeliveries",
+      ],
     });
 
     if (!candidates.length) {
       return res.status(404).json({
         statusCode: 404,
         success: false,
-        error: 'No eligible riders found'
+        error: "No eligible riders found",
       });
     }
 
     // Random from candidates
     const assignedRider = candidates[Math.floor(Math.random() * candidates.length)];
 
-    // ✅ Use relative URL for EC2 instead of absolute path
-    const relativePhotoPath = `/uploads/${photo.filename}`;
-
-    // Update wave → assign rider + mark as PACKED + save photo URL
+    // Update wave → assign rider + mark as PACKED + save S3 photo URL
     await wave.update({
       riderId: assignedRider.id,
-      status: 'PACKED',
-      photoPath: relativePhotoPath
+      status: "PACKED",
+      photoPath: photo.location, // store S3 URL
     });
 
     // Increment totalDeliveries for assigned rider
     await assignedRider.update({
-      totalDeliveries: assignedRider.totalDeliveries + 1
+      totalDeliveries: assignedRider.totalDeliveries + 1,
     });
 
-    // ✅ Response with URL instead of local path
+    // ✅ Response with S3 URL instead of local path
     return res.status(201).json({
       statusCode: 201,
       success: true,
-      message: 'Product packed and sealed successfully',
+      message: "Product packed and sealed successfully",
       data: {
         waveId: wave.id,
         photo: {
-          filename: photo.filename,
-          url: relativePhotoPath,
+          url: photo.location,
+          key: photo.key,
           mimetype: photo.mimetype,
-          size: photo.size
+          size: photo.size,
         },
-        deliveryPartner: assignedRider
-      }
+        deliveryPartner: assignedRider,
+      },
     });
   } catch (error) {
-    console.error('Error in pack-and-seal:', error);
+    console.error("Error in pack-and-seal:", error);
     return res.status(500).json({
       statusCode: 500,
       success: false,
-      error: 'Failed to pack and seal product'
+      error: "Failed to pack and seal product",
     });
   }
 });
