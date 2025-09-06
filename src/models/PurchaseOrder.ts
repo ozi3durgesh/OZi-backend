@@ -85,6 +85,7 @@ PurchaseOrder.init(
       type: DataTypes.ENUM('pending', 'category_head', 'admin', 'vendor', 'approved', 'rejected', 'completed'),
       defaultValue: 'pending',
     },
+
     current_approver: {
       type: DataTypes.ENUM('category_head', 'admin', 'vendor'),
       allowNull: true,

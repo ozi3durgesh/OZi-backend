@@ -3,6 +3,8 @@ import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
 import { HandoverController, dispatchWave } from '../controllers/handoverController';
 import multer from "multer";
+import multerS3 from "multer-s3";
+import { S3Client } from "@aws-sdk/client-s3";
 
 const router = Router();
 
@@ -10,12 +12,29 @@ const router = Router();
 router.use(authenticate);
 
 // Multer setup
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, "uploads/"),
-  filename: (req, file, cb) =>
-    cb(null, Date.now() + "-" + file.originalname),
+const s3 = new S3Client({
+  region: "ap-south-1",
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+  },
 });
-const upload = multer({ storage });
+
+const BUCKET_NAME = "oms-stage-storage";
+const FOLDER_NAME = "Handover"; // you can change to "handover-photos" if it's a better fit
+
+// Multer storage -> upload straight to S3
+const upload = multer({
+  storage: multerS3({
+    s3,
+    bucket: BUCKET_NAME,
+    key: (req, file, cb) => {
+      const filename = `${FOLDER_NAME}/${Date.now()}-${file.originalname}`;
+      cb(null, filename);
+    },
+  }),
+  limits: { fileSize: 50 * 1024 * 1024 }, // optional (50 MB)
+});
 
 /**
  * @route POST /api/handover/dispatch

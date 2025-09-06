@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import Vendor from '../models/vendor'; // ⬅️ make sure file is named Vendor.ts with capital V
 import { ResponseHandler } from '../middleware/responseHandler'; // ✅ adjust path if needed
+import { Op } from 'sequelize';
 
 export const createVendor = async (req: Request, res: Response) => {
   try {
@@ -71,9 +72,25 @@ export const getVendorById = async (req: Request, res: Response) => {
   }
 };
 
+// Get vendors (with optional search by vendorId, businessName, or pocName)
 export const getVendors = async (req: Request, res: Response) => {
   try {
-    const vendors = await Vendor.findAll();
+    const { search } = req.query;
+
+    let whereClause: any = {};
+
+    if (search) {
+      whereClause = {
+        [Op.or]: [
+          { vendorId: { [Op.like]: `%${search}%` } },
+          { businessName: { [Op.like]: `%${search}%` } },
+          { pocName: { [Op.like]: `%${search}%` } },
+        ],
+      };
+    }
+
+    const vendors = await Vendor.findAll({ where: whereClause });
+
     return ResponseHandler.success(res, { message: 'Vendors fetched successfully', data: vendors });
   } catch (error: any) {
     console.error(error);

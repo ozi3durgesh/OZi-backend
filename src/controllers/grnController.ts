@@ -145,7 +145,7 @@ export class GrnController {
             statusCode: 400,
             success: false,
             data: null,
-            error: `GRN already completed for PO ${input.poId} and SKU ${line.skuId}`,
+            error: `GRN already completed for   SKU ${line.skuId}`,
           });
           return;
         }
@@ -256,6 +256,22 @@ export class GrnController {
         }
       }
 
+      const allProducts = await POProduct.findAll({
+        where: { po_id: input.poId },
+        transaction: t,
+      });
+
+      const allCompleted = allProducts.every(
+        (p) => p.get('grnStatus') === 'completed'
+      );
+
+      if (allCompleted) {
+        await PurchaseOrder.update(
+          { approval_status: 'completed' },
+          { where: { id: input.poId }, transaction: t }
+        );
+      }
+
       await t.commit();
 
       const createdGrn = await GRN.findByPk(grn.id, {
@@ -336,6 +352,11 @@ export class GrnController {
       const grns = await GRN.findAll({
         where: { po_id: poId },
         include: [
+          {
+            model: PurchaseOrder,
+            as: 'PO',
+            attributes: ['id', 'po_id', 'vendor_name', 'approval_status'],
+          },
           { model: User, as: 'GrnCreatedBy', attributes: ['id', 'email'] },
           { model: User, as: 'ApprovedBy', attributes: ['id', 'email'] },
           {
@@ -475,7 +496,7 @@ export class GrnController {
           {
             model: PurchaseOrder,
             as: 'PO',
-            attributes: ['id', 'po_id', 'vendor_name'],
+            attributes: ['id', 'po_id', 'vendor_name', 'approval_status'],
             where: search ? { vendor_name: { [Op.like]: `%${search}%` } } : {},
           },
           {
