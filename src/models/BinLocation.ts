@@ -3,6 +3,7 @@ import sequelize from '../config/database';
 
 export interface BinLocationAttributes {
   id: number;
+  bin_id: string;
   bin_code: string;
   zone: string;
   aisle: string;
@@ -13,6 +14,18 @@ export interface BinLocationAttributes {
   sku_mapping: string[] | null;
   category_mapping: string[] | null;
   status: 'active' | 'inactive' | 'maintenance';
+  bin_name: string;
+  bin_type: string;
+  zone_type: string;
+  zone_name: string;
+  bin_dimensions: string;
+  preferred_product_category: string;
+  no_of_categories: number;
+  no_of_sku_uom: number;
+  no_of_items: number;
+  bin_capacity: number;
+  bin_created_by: string;
+  bin_status: string;
   created_at: Date;
   updated_at: Date;
 }
@@ -21,6 +34,7 @@ export interface BinLocationCreationAttributes extends Omit<BinLocationAttribute
 
 class BinLocation extends Model<BinLocationAttributes, BinLocationCreationAttributes> implements BinLocationAttributes {
   public id!: number;
+  public bin_id!: string;
   public bin_code!: string;
   public zone!: string;
   public aisle!: string;
@@ -31,6 +45,18 @@ class BinLocation extends Model<BinLocationAttributes, BinLocationCreationAttrib
   public sku_mapping!: string[] | null;
   public category_mapping!: string[] | null;
   public status!: 'active' | 'inactive' | 'maintenance';
+  public bin_name!: string;
+  public bin_type!: string;
+  public zone_type!: string;
+  public zone_name!: string;
+  public bin_dimensions!: string;
+  public preferred_product_category!: string;
+  public no_of_categories!: number;
+  public no_of_sku_uom!: number;
+  public no_of_items!: number;
+  public bin_capacity!: number;
+  public bin_created_by!: string;
+  public bin_status!: string;
   public created_at!: Date;
   public updated_at!: Date;
 }
@@ -41,6 +67,12 @@ BinLocation.init(
       type: DataTypes.INTEGER,
       autoIncrement: true,
       primaryKey: true,
+    },
+    bin_id: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      unique: true,
+      comment: 'Unique bin identifier',
     },
     bin_code: {
       type: DataTypes.STRING(50),
@@ -88,6 +120,71 @@ BinLocation.init(
       allowNull: false,
       defaultValue: 'active',
     },
+    bin_name: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      comment: 'Human readable bin name',
+    },
+    bin_type: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      comment: 'Type of bin (Good Bin, Bad Bin, etc.)',
+    },
+    zone_type: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      comment: 'Type of zone (Each, Bulk, etc.)',
+    },
+    zone_name: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      comment: 'Name of the zone',
+    },
+    bin_dimensions: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      comment: 'Physical dimensions of the bin',
+    },
+    preferred_product_category: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      comment: 'Preferred product category for this bin',
+    },
+    no_of_categories: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+      comment: 'Number of categories in this bin',
+    },
+    no_of_sku_uom: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+      comment: 'Number of SKU/UOM in this bin',
+    },
+    no_of_items: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+      comment: 'Number of items in this bin',
+    },
+    bin_capacity: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+      comment: 'Maximum capacity of the bin',
+    },
+    bin_created_by: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      comment: 'User who created the bin',
+    },
+    bin_status: {
+      type: DataTypes.STRING(50),
+      allowNull: false,
+      defaultValue: 'Unlocked',
+      comment: 'Current status of the bin',
+    },
     created_at: {
       type: DataTypes.DATE,
       allowNull: false,
@@ -104,10 +201,13 @@ BinLocation.init(
     tableName: 'bin_locations',
     timestamps: false,
     indexes: [
+      { fields: ['bin_id'], unique: true },
       { fields: ['bin_code'], unique: true },
       { fields: ['zone'] },
       { fields: ['aisle'] },
       { fields: ['status'] },
+      { fields: ['zone_name'] },
+      { fields: ['bin_status'] },
     ],
   }
 );

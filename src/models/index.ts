@@ -223,7 +223,7 @@ Product.hasMany(PicklistItem, {
 });
 
 // GRN associations
-GRN.belongsTo(PurchaseOrder, { foreignKey: 'po_id', as: 'PurchaseOrder' });
+GRN.belongsTo(PurchaseOrder, { foreignKey: 'po_id', as: 'PO' });
 GRN.belongsTo(User, { foreignKey: 'created_by', as: 'GrnCreatedBy' });
 GRN.belongsTo(User, { foreignKey: 'approved_by', as: 'ApprovedBy' });
 User.hasMany(GRN, { foreignKey: 'created_by', as: 'CreatedGrns' });

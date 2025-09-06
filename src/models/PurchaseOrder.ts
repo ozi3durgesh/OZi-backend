@@ -18,7 +18,14 @@ interface PurchaseOrderAttributes {
   billing_address?: string;
 
   // Approval Workflow
-  approval_status?: 'pending' | 'category_head' | 'admin' | 'vendor' | 'approved' | 'rejected';
+  approval_status?:
+    | 'pending'
+    | 'category_head'
+    | 'admin'
+    | 'vendor'
+    | 'approved'
+    | 'rejected'
+    | 'completed';
   current_approver?: 'category_head' | 'admin' | 'vendor' | null;
   rejection_reason?: string;
 
@@ -55,7 +62,13 @@ class PurchaseOrder
   declare shipping_address?: string;
   declare billing_address?: string;
 
-  declare approval_status?: 'pending' | 'category_head' | 'admin' | 'vendor' | 'approved' | 'rejected';
+  declare approval_status?:
+    | 'pending'
+    | 'category_head'
+    | 'admin'
+    | 'vendor'
+    | 'approved'
+    | 'rejected';
   declare current_approver?: 'category_head' | 'admin' | 'vendor' | null;
   declare rejection_reason?: string;
 
@@ -87,9 +100,18 @@ PurchaseOrder.init(
     billing_address: DataTypes.TEXT,
 
     approval_status: {
-      type: DataTypes.ENUM('pending', 'category_head', 'admin', 'vendor', 'approved', 'rejected'),
+      type: DataTypes.ENUM(
+        'pending',
+        'category_head',
+        'admin',
+        'vendor',
+        'approved',
+        'rejected',
+        'completed'
+      ),
       defaultValue: 'pending',
     },
+
     current_approver: {
       type: DataTypes.ENUM('category_head', 'admin', 'vendor'),
       allowNull: true,
@@ -105,7 +127,8 @@ PurchaseOrder.init(
     total_skus: DataTypes.INTEGER,
     base_price: DataTypes.DECIMAL(10, 2),
 
-    pdf_url: { // <-- Add this
+    pdf_url: {
+      // <-- Add this
       type: DataTypes.STRING,
       allowNull: true,
     },

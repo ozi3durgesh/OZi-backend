@@ -28,6 +28,7 @@
     "test-warehouse": "tsx src/script/testWarehouseModule.ts",
     "test-new-scanning": "tsx src/script/testNewScanningFlow.ts",
     "init-scanner": "tsx src/script/initScannerTables.ts",
+    "update-bin-locations": "tsx src/script/updateBinLocationsTable.ts",
     "test-scanner-lookup": "tsx src/script/testScannerLookup.ts",
     "test-ecommorder": "tsx src/script/testEcommorder.ts",
     "test-timestamp": "node test-timestamp-issue.js"

@@ -969,8 +969,9 @@ export interface GRNLineAttributes {
   sku_id: string;
   ean?: string;
   ordered_qty: number;
+  rejected_qty: number;
   received_qty: number;
-  qc_pass_qty: number;
+  qc_pass_qty?: number;
   held_qty?: number;
   rtv_qty?: number;
   qc_fail_qty: number;
@@ -1045,6 +1046,7 @@ export interface CreateGRNLineRequest {
   skuId: string;
   orderedQty: number;
   receivedQty: number;
+  rejectedQty?: number;
   qcPassQty?: number;
   qcFailQty?: number;
   varianceReason?:
