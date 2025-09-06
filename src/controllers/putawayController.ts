@@ -85,7 +85,7 @@ export class PutawayController {
         ],
         where: {
           putaway_status: {
-            [Op.in]: ['pending', 'partial'],
+            [Op.in]: ['pending', 'partial', 'completed'],
           },
         },
         order: [['created_at', 'DESC']],
@@ -107,16 +107,28 @@ export class PutawayController {
             grnDate: grn?.created_at ? grn.created_at.toLocaleDateString() : 'N/A',
             status: 'pending', // Default status, will be updated based on SKU statuses
             hasPartial: false, // Track if any SKU is partial
+            hasCompleted: false, // Track if any SKU is completed
+            hasPending: false, // Track if any SKU is pending
           });
         }
         
         const grnData = grnMap.get(grnId);
-        grnData.skuIds.add(grnLine.sku_id);
-        grnData.quantity += grnLine.qc_pass_qty; // Use qc_pass_qty for remaining quantity
         
-        // Update overall status based on individual SKU statuses
+        // Always include SKU IDs regardless of status
+        grnData.skuIds.add(grnLine.sku_id);
+        
+        // Only add to quantity for pending or partial items
+        if (grnLine.putaway_status === 'pending' || grnLine.putaway_status === 'partial') {
+          grnData.quantity += grnLine.qc_pass_qty; // Use qc_pass_qty for remaining quantity
+        }
+        
+        // Track status types
         if (grnLine.putaway_status === 'partial') {
           grnData.hasPartial = true;
+        } else if (grnLine.putaway_status === 'completed') {
+          grnData.hasCompleted = true;
+        } else if (grnLine.putaway_status === 'pending') {
+          grnData.hasPending = true;
         }
       });
 
@@ -124,10 +136,14 @@ export class PutawayController {
       grnMap.forEach((grnData) => {
         if (grnData.hasPartial) {
           grnData.status = 'partial';
+        } else if (grnData.hasCompleted && !grnData.hasPending) {
+          grnData.status = 'completed';
         } else {
           grnData.status = 'pending';
         }
-        delete grnData.hasPartial; // Remove helper property
+        delete grnData.hasPartial; // Remove helper properties
+        delete grnData.hasCompleted;
+        delete grnData.hasPending;
       });
 
       // Convert Map to Array and format the response
@@ -406,7 +422,7 @@ export class PutawayController {
   // 5. Scan SKU Product Detail API
   static async scanSkuProductDetail(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { sku_id } = req.body;
+      const { sku_id, grn_id, po_id } = req.body;
       const userId = req.user?.id;
   
       if (!userId) {
@@ -428,6 +444,16 @@ export class PutawayController {
         });
         return;
       }
+
+      if (!grn_id || !po_id) {
+        res.status(400).json({
+          statusCode: 400,
+          success: false,
+          data: null,
+          error: 'GRN ID and PO ID are required',
+        });
+        return;
+      }
   
       // Find product in product_master table
       const product = await Product.findOne({
@@ -444,10 +470,11 @@ export class PutawayController {
         return;
       }
   
-      // Check if SKU exists in any GRN line with QC passed quantity
+      // Check if SKU exists in the specific GRN line with QC passed quantity
       const grnLine = await GRNLine.findOne({
         where: {
           sku_id: sku_id,
+          grn_id: grn_id,
           qc_pass_qty: {
             [Op.gt]: 0,
           },
@@ -456,6 +483,9 @@ export class PutawayController {
           {
             model: GRN,
             as: 'Grn',
+            where: {
+              po_id: po_id,
+            },
             include: [
               {
                 model: PurchaseOrder,
