@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { Op } from 'sequelize';
+import { Op, QueryTypes } from 'sequelize';
 import sequelize from '../config/database';
 import GRN from '../models/Grn.model';
 import GRNLine from '../models/GrnLine';
@@ -386,7 +386,7 @@ export class PutawayController {
     try {
       const { sku_id } = req.body;
       const userId = req.user?.id;
-
+  
       if (!userId) {
         res.status(401).json({
           statusCode: 401,
@@ -396,7 +396,7 @@ export class PutawayController {
         });
         return;
       }
-
+  
       if (!sku_id) {
         res.status(400).json({
           statusCode: 400,
@@ -406,12 +406,12 @@ export class PutawayController {
         });
         return;
       }
-
+  
       // Find product in product_master table
       const product = await Product.findOne({
         where: { SKU: sku_id },
       });
-
+  
       if (!product) {
         res.status(404).json({
           statusCode: 404,
@@ -421,7 +421,7 @@ export class PutawayController {
         });
         return;
       }
-
+  
       // Check if SKU exists in any GRN line with QC passed quantity
       const grnLine = await GRNLine.findOne({
         where: {
@@ -444,7 +444,7 @@ export class PutawayController {
           },
         ],
       });
-
+  
       if (!grnLine) {
         res.status(404).json({
           statusCode: 404,
@@ -454,7 +454,289 @@ export class PutawayController {
         });
         return;
       }
+  
+      // Case 1: Check if SKU exists in scanner_sku table
+      let existingSkuScan: any = null;
+      try {
+        const allScannerSkus = await ScannerSku.findAll({
+          order: [['createdAt', 'DESC']],
+          limit: 100,
+        });
+  
+        existingSkuScan = allScannerSkus.find((record: any) => {
+          if (record.sku) {
+            if (Array.isArray(record.sku)) {
+              return record.sku.some((item: any) => item.skuId === sku_id);
+            } else if (typeof record.sku === 'string') {
+              try {
+                const parsedSku = JSON.parse(record.sku);
+                if (Array.isArray(parsedSku)) {
+                  return parsedSku.some((item: any) => item.skuId === sku_id);
+                }
+              } catch {
+                return record.sku === sku_id;
+              }
+            }
+          }
+          return false;
+        });
+      } catch {
+        existingSkuScan = null;
+      }
+  
+      let binLocation: any = null;
+      let binSuggested: any = null;
+      let binError: string | null = null;
+  
+      if (existingSkuScan) {
+        // Case 1: SKU found in scanner_sku, get bin location details
+        const binLocationDetailsRaw = await sequelize.query(`
+          SELECT 
+            id, bin_id, bin_code, zone, aisle, rack, shelf, 
+            capacity, current_quantity, sku_mapping, category_mapping, 
+            status, bin_name, bin_type, zone_type, zone_name, 
+            bin_dimensions, preferred_product_category, no_of_categories, 
+            no_of_sku_uom, no_of_items, bin_capacity, bin_created_by, 
+            bin_status, created_at, updated_at
+          FROM bin_locations 
+          WHERE bin_code = :binCode
+        `, {
+          replacements: { binCode: existingSkuScan.binLocationScanId },
+          type: QueryTypes.SELECT
+        });
+        
+        const binLocationDetails = binLocationDetailsRaw[0] as any;
+  
+        if (binLocationDetails) {
+          const availableCapacity = binLocationDetails.capacity - binLocationDetails.current_quantity;
+          const utilizationPercentage = Math.round((binLocationDetails.current_quantity / binLocationDetails.capacity) * 100);
+  
+          binLocation = {
+            binCode: binLocationDetails.bin_code,
+            zone: binLocationDetails.zone,
+            aisle: binLocationDetails.aisle,
+            rack: binLocationDetails.rack,
+            shelf: binLocationDetails.shelf,
+            capacity: binLocationDetails.capacity,
+            currentQuantity: binLocationDetails.current_quantity,
+            availableCapacity: availableCapacity,
+            utilizationPercentage: utilizationPercentage,
+            status: binLocationDetails.status,
+            binName: binLocationDetails.bin_name,
+            binType: binLocationDetails.bin_type,
+            zoneName: binLocationDetails.zone_name,
+            binDimensions: binLocationDetails.bin_dimensions,
+            preferredProductCategory: binLocationDetails.preferred_product_category,
+            categoryMapping: binLocationDetails.category_mapping,
+            hasCapacity: availableCapacity > 0,
+          };
+        } else {
+          binError = `Bin location '${existingSkuScan.binLocationScanId}' not found in bin_locations`;
+        }
+      } else {
+        // Case 2: SKU not found in scanner_sku, suggest bin based on category
+        const productCategory = product.Category?.toLowerCase().trim();
+        console.log('🔍 Case 2: SKU not found in scanner_sku');
+        console.log('📦 Product Category:', productCategory);
+  
+        // Error Case 1: Product category is missing
+        if (!productCategory) {
+          binError = 'Product category is missing from product_master table';
+          console.log('❌ Error: Product category is missing');
+        } else {
+          let suggestedBin: any = null;
+          let matchType = 'fallback';
+          
+          try {
+            // Get all active bins from bin_locations table using raw query to avoid model issues
+            const [allBinsRaw] = await sequelize.query(`
+              SELECT 
+                id, bin_id, bin_code, zone, aisle, rack, shelf, 
+                capacity, current_quantity, sku_mapping, category_mapping, 
+                status, bin_name, bin_type, zone_type, zone_name, 
+                bin_dimensions, preferred_product_category, no_of_categories, 
+                no_of_sku_uom, no_of_items, bin_capacity, bin_created_by, 
+                bin_status, created_at, updated_at
+              FROM bin_locations 
+              WHERE status = 'active' 
+              ORDER BY current_quantity ASC, capacity DESC 
+              LIMIT 100
+            `);
+            
+            console.log('📊 Total active bins found:', allBinsRaw.length);
 
+            // Error Case 2: No active bins found
+            if (allBinsRaw.length === 0) {
+              binError = 'No active bins found in bin_locations table';
+              console.log('❌ Error: No active bins found');
+            } else {
+              // Log first few bins for debugging
+              console.log('📋 Sample bins:', allBinsRaw.slice(0, 3).map((bin: any) => ({
+                bin_code: bin.bin_code,
+                preferred_product_category: bin.preferred_product_category,
+                category_mapping: bin.category_mapping,
+                capacity: bin.capacity,
+                current_quantity: bin.current_quantity
+              })));
+              // Priority 1: Find bin with exact preferred_product_category match
+              suggestedBin = allBinsRaw.find((bin: any) => {
+                if (bin.preferred_product_category) {
+                  const preferred = bin.preferred_product_category.toLowerCase().trim();
+                  if (preferred === productCategory) {
+                    matchType = 'exact_preferred';
+                    console.log('✅ Found exact preferred match:', bin.bin_code);
+                    return true;
+                  }
+                }
+                return false;
+              });
+
+              // Priority 2: Find bin with exact category_mapping match
+              if (!suggestedBin) {
+                suggestedBin = allBinsRaw.find((bin: any) => {
+                  if (bin.category_mapping && Array.isArray(bin.category_mapping)) {
+                    const exactMatch = bin.category_mapping.some((cat: string) =>
+                      cat.toLowerCase().trim() === productCategory
+                    );
+                    if (exactMatch) {
+                      matchType = 'exact_mapping';
+                      console.log('✅ Found exact category mapping match:', bin.bin_code);
+                      return true;
+                    }
+                  }
+                  return false;
+                });
+              }
+
+              // Priority 3: Find bin with partial category_mapping match
+              if (!suggestedBin) {
+                suggestedBin = allBinsRaw.find((bin: any) => {
+                  if (bin.category_mapping && Array.isArray(bin.category_mapping)) {
+                    const partialMatch = bin.category_mapping.some((cat: string) =>
+                      cat.toLowerCase().trim().includes(productCategory) ||
+                      productCategory.includes(cat.toLowerCase().trim())
+                    );
+                    if (partialMatch) {
+                      matchType = 'partial_mapping';
+                      console.log('✅ Found partial category mapping match:', bin.bin_code);
+                      return true;
+                    }
+                  }
+                  return false;
+                });
+              }
+
+              // Priority 4: Find any bin with available capacity
+              if (!suggestedBin) {
+                suggestedBin = allBinsRaw.find((bin: any) => {
+                  const availableCapacity = bin.capacity - bin.current_quantity;
+                  return availableCapacity > 0;
+                });
+                if (suggestedBin) {
+                  matchType = 'available_capacity';
+                  console.log('✅ Found bin with available capacity:', suggestedBin.bin_code);
+                }
+              }
+
+              // Priority 5: Use first available bin as last resort
+              if (!suggestedBin && allBinsRaw.length > 0) {
+                suggestedBin = allBinsRaw[0];
+                matchType = 'fallback';
+                console.log('⚠️ Using fallback bin:', suggestedBin.bin_code);
+              }
+
+              // Error Case 3: No suitable bins found
+              if (!suggestedBin) {
+                binError = `No suitable bins found for product category: ${productCategory}`;
+                console.log('❌ Error: No suitable bins found');
+              }
+            }
+          } catch (error: any) {
+            // Error Case 4: Database error while searching bins
+            binError = `Database error while searching bins: ${error.message || error}`;
+            console.log('❌ Database error:', error);
+          }
+  
+          // Validate suggested bin data
+          if (suggestedBin && !binError) {
+            console.log('🔍 Validating suggested bin:', {
+              bin_code: suggestedBin.bin_code,
+              capacity: suggestedBin.capacity,
+              current_quantity: suggestedBin.current_quantity,
+              status: suggestedBin.status
+            });
+            
+            // Check for invalid capacity or quantity data
+            if (!suggestedBin.capacity || 
+                suggestedBin.current_quantity === undefined || 
+                suggestedBin.current_quantity === null ||
+                suggestedBin.capacity < 0 ||
+                suggestedBin.current_quantity < 0 ||
+                suggestedBin.current_quantity > suggestedBin.capacity) {
+              binError = 'Suggested bin has invalid capacity or quantity data';
+              console.log('❌ Error: Invalid bin data - capacity:', suggestedBin.capacity, 'current_quantity:', suggestedBin.current_quantity);
+            } else {
+              const availableCapacity = suggestedBin.capacity - suggestedBin.current_quantity;
+              const utilizationPercentage = Math.round((suggestedBin.current_quantity / suggestedBin.capacity) * 100);
+              
+              console.log('✅ Creating binSuggested object with:', {
+                availableCapacity,
+                utilizationPercentage,
+                hasCapacity: availableCapacity > 0,
+                matchType
+              });
+            
+              binSuggested = {
+                binCode: suggestedBin.bin_code,
+                zone: suggestedBin.zone,
+                aisle: suggestedBin.aisle,
+                rack: suggestedBin.rack,
+                shelf: suggestedBin.shelf,
+                capacity: suggestedBin.capacity,
+                currentQuantity: suggestedBin.current_quantity,
+                availableCapacity: availableCapacity,
+                utilizationPercentage: utilizationPercentage,
+                status: suggestedBin.status,
+                binName: suggestedBin.bin_name,
+                binType: suggestedBin.bin_type,
+                zoneName: suggestedBin.zone_name,
+                binDimensions: suggestedBin.bin_dimensions,
+                preferredProductCategory: suggestedBin.preferred_product_category,
+                categoryMapping: suggestedBin.category_mapping,
+                hasCapacity: availableCapacity > 0,
+                matchType: matchType
+              };
+              
+              console.log('✅ binSuggested created successfully:', binSuggested);
+            }
+          }
+        }
+      }
+  
+      if (!binLocation && !binSuggested && !binError) {
+        binError = 'Unable to determine bin location or suggestion';
+      }
+  
+      if (binError) {
+        res.status(400).json({
+          statusCode: 400,
+          success: false,
+          data: {
+            message: 'SKU scanned but bin location error occurred',
+            skuId: sku_id,
+            grnId: grnLine.grn_id,
+            poId: (grnLine as any).Grn?.po_id || 'N/A',
+            availableQuantity: grnLine.qc_pass_qty,
+            scannedProductDetail: convertProductDetailKeys(product.dataValues),
+            vendorName: (grnLine as any).Grn?.PO?.vendor_name || '',
+            binLocation: null,
+            binSuggested: null
+          },
+          error: binError,
+        });
+        return;
+      }
+  
       res.status(200).json({
         statusCode: 200,
         success: true,
@@ -464,13 +746,15 @@ export class PutawayController {
           grnId: grnLine.grn_id,
           poId: (grnLine as any).Grn?.po_id || 'N/A',
           availableQuantity: grnLine.qc_pass_qty,
-          scannedProductDetail: convertProductDetailKeys(product.dataValues), // All product fields from product_master table
+          scannedProductDetail: convertProductDetailKeys(product.dataValues),
           vendorName: (grnLine as any).Grn?.PO?.vendor_name || '',
+          binLocation: binLocation,
+          binSuggested: binSuggested
         },
         error: null,
       });
+  
     } catch (error: any) {
-      console.error('Error scanning SKU:', error);
       res.status(500).json({
         statusCode: 500,
         success: false,
@@ -479,7 +763,7 @@ export class PutawayController {
       });
     }
   }
-
+  
   // 5. Get Scanned Product Details
   static async getScannedProductDetails(req: AuthRequest, res: Response): Promise<void> {
     try {
@@ -612,10 +896,10 @@ export class PutawayController {
           aisle: 'B1', 
           rack: 'R1',
           shelf: 'S1',
-          capacity: 100, // Default capacity
+          capacity: 100,
           current_quantity: 0,
           status: 'active',
-        });
+        } as any);
       } else if (binLocation.status !== 'active') {
         // Activate the bin if it's inactive
         await binLocation.update({ status: 'active' });
