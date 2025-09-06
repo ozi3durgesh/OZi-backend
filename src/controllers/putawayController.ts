@@ -12,6 +12,54 @@ import ScannerSku from '../models/ScannerSku';
 import ScannerBin from '../models/ScannerBin';
 import { AuthRequest } from '../types';
 
+// Helper function to convert product detail keys to camelCase
+const convertProductDetailKeys = (productData: any) => {
+  return {
+    id: productData.id,
+    cpId: productData.CPId,
+    status: productData.Status,
+    modelNum: productData.ModelNum,
+    category: productData.Category,
+    sku: productData.SKU,
+    parentSku: productData.ParentSKU,
+    isMps: productData.IS_MPS,
+    productName: productData.ProductName,
+    description: productData.Description,
+    manufacturerDescription: productData.ManufacturerDescription,
+    productTaxCode: productData.ProductTaxCode,
+    imageUrl: productData.ImageURL,
+    mrp: productData.MRP,
+    cost: productData.COST,
+    eanUpc: productData.EAN_UPC,
+    color: productData.Color,
+    size: productData.Size,
+    brand: productData.Brand,
+    weight: productData.Weight,
+    length: productData.Length,
+    height: productData.Height,
+    width: productData.Width,
+    accountingSku: productData.AccountingSKU,
+    accountingUnit: productData.AccountingUnit,
+    spThreshold: productData.SPThreshold,
+    inventoryThreshold: productData.InventoryThreshold,
+    erpSystemId: productData.ERPSystemId,
+    syncTally: productData.SyncTally,
+    shelfLife: productData.ShelfLife,
+    shelfLifePercentage: productData.ShelfLifePercentage,
+    productExpiryInDays: productData.ProductExpiryInDays,
+    reverseWeight: productData.ReverseWeight,
+    reverseLength: productData.ReverseLength,
+    reverseHeight: productData.ReverseHeight,
+    reverseWidth: productData.ReverseWidth,
+    productTaxRule: productData.ProductTaxRule,
+    cess: productData.CESS,
+    createdDate: productData.CreatedDate,
+    lastUpdatedDate: productData.LastUpdatedDate,
+    skuType: productData.SKUType,
+    materialType: productData.MaterialType,
+  };
+};
+
 export class PutawayController {
   // 1. Get GRN Putaway List with pagination
   static async getGrnPutawayList(req: AuthRequest, res: Response): Promise<void> {
@@ -52,23 +100,23 @@ export class PutawayController {
         
         if (!grnMap.has(grnId)) {
           grnMap.set(grnId, {
-            GRN: grnId,
-            'PO id': grn?.po_id || 'N/A',
-            SKU: new Set(),
-            Quantity: 0,
-            'GRN Date': grn?.created_at ? grn.created_at.toLocaleDateString() : 'N/A',
+            grn: grnId,
+            poId: grn?.po_id || 'N/A',
+            sku: new Set(),
+            quantity: 0,
+            grnDate: grn?.created_at ? grn.created_at.toLocaleDateString() : 'N/A',
           });
         }
         
         const grnData = grnMap.get(grnId);
-        grnData.SKU.add(grnLine.sku_id);
-        grnData.Quantity += grnLine.ordered_qty;
+        grnData.sku.add(grnLine.sku_id);
+        grnData.quantity += grnLine.ordered_qty;
       });
 
       // Convert Map to Array and format SKU count
       const allPutawayList = Array.from(grnMap.values()).map(grnData => ({
         ...grnData,
-        SKU: grnData.SKU.size, // Convert Set to count
+        sku: grnData.sku.size, // Convert Set to count
       }));
 
       // Apply pagination to the grouped results
@@ -148,12 +196,12 @@ export class PutawayController {
           const totalHeldQty = grnLines.reduce((sum: number, line: any) => sum + line.held_qty, 0);
           
           return {
-            GRN: grn.id,
-            'PO id': grn.po_id, // Direct from grns table
-            SKU: skuCount, // Count of unique SKUs
-            'RTV Quantity': totalRtvQty,
-            'Held Quantity': totalHeldQty,
-            'GRN Date': grn.created_at ? grn.created_at.toLocaleDateString() : 'N/A', // Created date from grns table
+            grn: grn.id,
+            poId: grn.po_id, // Direct from grns table
+            sku: skuCount, // Count of unique SKUs
+            rtvQuantity: totalRtvQty,
+            heldQuantity: totalHeldQty,
+            grnDate: grn.created_at ? grn.created_at.toLocaleDateString() : 'N/A', // Created date from grns table
           };
         })
       );
@@ -213,9 +261,9 @@ export class PutawayController {
       }
 
       const grnDetails = {
-        GRN: grn.id,
-        'Created On': grn.created_at ? grn.created_at.toLocaleDateString() : 'N/A',
-        'PO Number': grn.po_id,
+        grn: grn.id,
+        createdOn: grn.created_at ? grn.created_at.toLocaleDateString() : 'N/A',
+        poNumber: grn.po_id,
       };
 
       res.status(200).json({
@@ -315,10 +363,10 @@ export class PutawayController {
         success: true,
         data: {
           message: 'SKU scanned successfully',
-          sku_id: sku_id,
-          grn_id: grnLine.grn_id,
-          po_id: (grnLine as any).Grn?.po_id || 'N/A',
-          available_quantity: grnLine.qc_pass_qty,
+          skuId: sku_id,
+          grnId: grnLine.grn_id,
+          poId: (grnLine as any).Grn?.po_id || 'N/A',
+          availableQuantity: grnLine.qc_pass_qty,
         },
         error: null,
       });
@@ -412,12 +460,12 @@ export class PutawayController {
         success: true,
         data: {
           message: 'SKU scanned successfully',
-          sku_id: sku_id,
-          grn_id: grnLine.grn_id,
-          po_id: (grnLine as any).Grn?.po_id || 'N/A',
-          available_quantity: grnLine.qc_pass_qty,
-          'Scanned Product detail': product.dataValues, // All product fields from product_master table
-          'Vendor Name': (grnLine as any).Grn?.PO?.vendor_name || '',
+          skuId: sku_id,
+          grnId: grnLine.grn_id,
+          poId: (grnLine as any).Grn?.po_id || 'N/A',
+          availableQuantity: grnLine.qc_pass_qty,
+          scannedProductDetail: convertProductDetailKeys(product.dataValues), // All product fields from product_master table
+          vendorName: (grnLine as any).Grn?.PO?.vendor_name || '',
         },
         error: null,
       });
@@ -501,11 +549,11 @@ export class PutawayController {
       }
 
       const productDetails = {
-        'Scanned Product detail': product.dataValues, // Return all product fields from product_master table
-        'PO ID': (grn as any).PO?.po_id || '',
-        GRN: grn.id,
-        'Vendor Name': (grn as any).PO?.vendor_name || '',
-        'Available Quantity': (grn as any).Line?.[0]?.qc_pass_qty || 0,
+        scannedProductDetail: convertProductDetailKeys(product.dataValues), // Return all product fields from product_master table
+        poId: (grn as any).PO?.po_id || '',
+        grn: grn.id,
+        vendorName: (grn as any).PO?.vendor_name || '',
+        availableQuantity: (grn as any).Line?.[0]?.qc_pass_qty || 0,
       };
 
       res.status(200).json({
@@ -737,8 +785,8 @@ export class PutawayController {
           success: true,
           data: {
             message: 'Putaway confirmed successfully',
-            putaway_task_id: putawayTask.id,
-            bin_location: bin_location,
+            putawayTaskId: putawayTask.id,
+            binLocation: bin_location,
             quantity: quantity,
           },
           error: null,
@@ -801,13 +849,13 @@ export class PutawayController {
       });
 
       const suggestions = binSuggestions.map((bin: any) => ({
-        bin_code: bin.bin_code,
+        binCode: bin.bin_code,
         zone: bin.zone,
         aisle: bin.aisle,
         rack: bin.rack,
         shelf: bin.shelf,
-        available_capacity: bin.capacity - bin.current_quantity,
-        utilization_percentage: Math.round((bin.current_quantity / bin.capacity) * 100),
+        availableCapacity: bin.capacity - bin.current_quantity,
+        utilizationPercentage: Math.round((bin.current_quantity / bin.capacity) * 100),
       }));
 
       res.status(200).json({
@@ -873,16 +921,16 @@ export class PutawayController {
       });
 
       const tasks = rows.map((task: any) => ({
-        task_id: task.id,
-        grn_id: task.grn_id,
-        sku_id: task.sku_id,
+        taskId: task.id,
+        grnId: task.grn_id,
+        skuId: task.sku_id,
         quantity: task.quantity,
-        scanned_quantity: task.scanned_quantity,
+        scannedQuantity: task.scanned_quantity,
         status: task.status,
-        bin_location: task.bin_location,
-        po_id: task.GRN?.PO?.po_id,
-        vendor_name: task.GRN?.PO?.vendor_name,
-        created_at: task.created_at,
+        binLocation: task.bin_location,
+        poId: task.GRN?.PO?.po_id,
+        vendorName: task.GRN?.PO?.vendor_name,
+        createdAt: task.created_at,
       }));
 
       res.status(200).json({
@@ -958,9 +1006,9 @@ export class PutawayController {
           grnLinesWithQc,
           sampleGrn: sampleGrn ? {
             id: sampleGrn.get('id'),
-            po_id: sampleGrn.get('po_id'),
+            poId: sampleGrn.get('po_id'),
             status: sampleGrn.get('status'),
-            created_at: sampleGrn.get('created_at'),
+            createdAt: sampleGrn.get('created_at'),
             purchaseOrder: (sampleGrn as any).PO
           } : null
         },
