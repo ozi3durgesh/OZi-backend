@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import Product from '../models/productModel';
 import { ResponseHandler } from '../middleware/responseHandler';  // ✅ adjust path if needed
-
+import { Op } from 'sequelize';
 // Create a new product
 export const createProduct = async (req: Request, res: Response) => {
   try {
@@ -101,14 +101,27 @@ export const getProductBySKU = async (req: Request, res: Response) => {
 };
 
 // Get list of products with pagination
+
+// Get list of products with pagination + search
 export const getProducts = async (req: Request, res: Response) => {
   try {
-    const { page = 1, limit = 20, status } = req.query;
+    const { page = 1, limit = 20, status, search } = req.query;
     const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
 
     const whereClause: any = {};
+
+    // ✅ Optional filter by status
     if (status) {
-      whereClause.Status = status; // ✅ Optional filter by status
+      whereClause.Status = status;
+    }
+
+    // ✅ Optional search filter (SKU, ProductName, ModelNum)
+    if (search) {
+      whereClause[Op.or] = [
+        { SKU: { [Op.like]: `%${search}%` } },
+        { ProductName: { [Op.like]: `%${search}%` } },
+        { ModelNum: { [Op.like]: `%${search}%` } },
+      ];
     }
 
     const { count, rows } = await Product.findAndCountAll({
