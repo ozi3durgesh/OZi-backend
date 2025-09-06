@@ -19,16 +19,19 @@ router.get('/grn/:id', PutawayController.getGrnDetailsById);
 // 4. Scan SKU API (POST)
 router.post('/scan-sku', PutawayController.scanSku);
 
-// 5. Get Scanned Product Details (GET)
+// 5. Scan SKU Product Detail API (POST)
+router.post('/scan-sku-product-detail', PutawayController.scanSkuProductDetail);
+
+// 6. Get Scanned Product Details (GET)
 router.get('/product-details', PutawayController.getScannedProductDetails);
 
-// 6. Confirm Putaway (POST/PUT)
+// 7. Confirm Putaway (POST/PUT)
 router.post('/confirm', PutawayController.confirmPutaway);
 
-// 7. Get Bin Suggestions (GET)
+// 8. Get Bin Suggestions (GET)
 router.get('/bin-suggestions', PutawayController.getBinSuggestions);
 
-// 8. Get Putaway Tasks by User (GET with pagination)
+// 9. Get Putaway Tasks by User (GET with pagination)
 router.get('/tasks', PutawayController.getPutawayTasksByUser);
 
 // Debug endpoint
