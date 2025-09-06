@@ -91,7 +91,7 @@ export class PutawayController {
         order: [['created_at', 'DESC']],
       });
 
-      // Group GRN lines by GRN ID to get unique GRNs
+      // Group GRN lines by GRN ID to get unique GRNs with detailed SKU information
       const grnMap = new Map();
       
       allGrnLines.forEach((grnLine: any) => {
@@ -102,21 +102,27 @@ export class PutawayController {
           grnMap.set(grnId, {
             grn: grnId,
             poId: grn?.po_id || 'N/A',
-            sku: new Set(),
+            skuIds: new Set(), // Store individual SKU IDs
             quantity: 0,
             grnDate: grn?.created_at ? grn.created_at.toLocaleDateString() : 'N/A',
+            status: grn?.status || 'pending', // Add GRN status
           });
         }
         
         const grnData = grnMap.get(grnId);
-        grnData.sku.add(grnLine.sku_id);
+        grnData.skuIds.add(grnLine.sku_id);
         grnData.quantity += grnLine.ordered_qty;
       });
 
-      // Convert Map to Array and format SKU count
+      // Convert Map to Array and format the response
       const allPutawayList = Array.from(grnMap.values()).map(grnData => ({
-        ...grnData,
-        sku: grnData.sku.size, // Convert Set to count
+        grn: grnData.grn,
+        poId: grnData.poId,
+        sku: grnData.skuIds.size, // Count of unique SKUs
+        sku_id: Array.from(grnData.skuIds), // Array of SKU IDs
+        quantity: grnData.quantity,
+        grnDate: grnData.grnDate,
+        status: grnData.status, // GRN status
       }));
 
       // Apply pagination to the grouped results
@@ -741,8 +747,9 @@ export class PutawayController {
         statusCode: 200,
         success: true,
         data: {
-          message: 'SKU scanned successfully',
+          message: 'SKU scanned successfully and stored in scanned_sku table',
           skuId: sku_id,
+          skuScannedId: sku_id, // This is what gets stored in scanned_sku table
           grnId: grnLine.grn_id,
           poId: (grnLine as any).Grn?.po_id || 'N/A',
           availableQuantity: grnLine.qc_pass_qty,
@@ -883,24 +890,22 @@ export class PutawayController {
         return;
       }
 
-      // Validate bin location or create if doesn't exist
-      let binLocation = await BinLocation.findOne({
+      // Validate bin location
+      const binLocation = await BinLocation.findOne({
         where: { bin_code: bin_location },
       });
 
       if (!binLocation) {
-        // Create new bin location if it doesn't exist
-        binLocation = await BinLocation.create({
-          bin_code: bin_location,
-          zone: 'A1',
-          aisle: 'B1', 
-          rack: 'R1',
-          shelf: 'S1',
-          capacity: 100,
-          current_quantity: 0,
-          status: 'active',
-        } as any);
-      } else if (binLocation.status !== 'active') {
+        res.status(400).json({
+          statusCode: 400,
+          success: false,
+          data: null,
+          error: 'Invalid bin location',
+        });
+        return;
+      }
+
+      if (binLocation.status !== 'active') {
         // Activate the bin if it's inactive
         await binLocation.update({ status: 'active' });
       }
@@ -941,298 +946,90 @@ export class PutawayController {
         return;
       }
 
-      // Check if SKU is already scanned and placed in a different bin
-      const existingSkuScan = await ScannerSku.findOne({
-        where: sequelize.literal(`JSON_CONTAINS(sku, JSON_OBJECT('skuId', '${sku_id}'))`),
-        order: [['created_at', 'DESC']]
-      });
-
-      if (existingSkuScan && existingSkuScan.binLocationScanId !== bin_location) {
-        res.status(400).json({
-          statusCode: 400,
-          success: false,
-          data: null,
-          error: `SKU ${sku_id} is already placed in bin ${existingSkuScan.binLocationScanId}. Cannot place in different bin ${bin_location}`,
-        });
-        return;
-      }
-
-      // Check if bin already contains different SKUs
-      const existingBinScan = await ScannerBin.findOne({
-        where: { binLocationScanId: bin_location }
-      });
-
-      if (existingBinScan && existingBinScan.sku && existingBinScan.sku.length > 0) {
-        const binSkus = existingBinScan.sku;
-        // Check if SKU already exists in this bin
-        const skuExists = binSkus.includes(sku_id);
-        
-        if (!skuExists) {
-          res.status(400).json({
-            statusCode: 400,
-            success: false,
-            data: null,
-            error: `Bin ${bin_location} already contains different SKUs: ${binSkus.join(', ')}. Cannot place SKU ${sku_id} in this bin`,
-          });
-          return;
-        }
-      }
-
-      // Start transaction
+      // Start transaction for data consistency
       const transaction = await sequelize.transaction();
 
       try {
-        // Create or update putaway task
-        const [putawayTask, created] = await PutawayTask.findOrCreate({
-          where: {
-            grn_id: grn_id,
-            grn_line_id: grnLine.id,
-            sku_id: sku_id,
+        // Update GRN line - reduce the QC passed quantity (this represents available quantity for putaway)
+        await grnLine.update(
+          { 
+            qc_pass_qty: grnLine.qc_pass_qty - quantity,
+            line_status: grnLine.qc_pass_qty - quantity === 0 ? 'completed' : 'partial'
           },
-          defaults: {
-            grn_id: grn_id,
-            grn_line_id: grnLine.id,
-            sku_id: sku_id,
-            quantity: quantity,
-            status: 'completed',
-            assigned_to: userId,
-            bin_location: bin_location,
-            scanned_quantity: quantity,
-            completed_at: new Date(),
-            remarks: remarks,
-          },
-          transaction,
-        });
+          { transaction }
+        );
 
-        if (!created) {
-          await putawayTask.update({
-            scanned_quantity: putawayTask.scanned_quantity + quantity,
-            bin_location: bin_location,
-            status: putawayTask.scanned_quantity + quantity >= putawayTask.quantity ? 'completed' : 'in-progress',
-            completed_at: putawayTask.scanned_quantity + quantity >= putawayTask.quantity ? new Date() : null,
-            remarks: remarks,
-          }, { transaction });
-        }
+        // Update bin location current quantity
+        await binLocation.update(
+          { current_quantity: binLocation.current_quantity + quantity },
+          { transaction }
+        );
 
-        // Update bin location quantity
-        await binLocation.update({
-          current_quantity: binLocation.current_quantity + quantity,
-        }, { transaction });
-
-        // Update scanner_sku table
-        await ScannerSku.create({
-          skuScanId: `${sku_id}_${Date.now()}`,
-          sku: [{ skuId: sku_id, quantity: quantity }],
-          binLocationScanId: bin_location,
-        }, { transaction });
-
-        // Update scanner_bin table
-        const existingBin = await ScannerBin.findOne({
+        // Update or create ScannerBin entry
+        let scannerBin = await ScannerBin.findOne({
           where: { binLocationScanId: bin_location },
+          transaction
         });
 
-        if (existingBin) {
-          const currentSkus = existingBin.sku || [];
-          // Check if SKU already exists in this bin
-          const skuExists = currentSkus.includes(sku_id);
-          
-          if (!skuExists) {
-            // Add SKU to bin
-            currentSkus.push(sku_id);
-            await existingBin.update({
-              sku: currentSkus,
-            }, { transaction });
+        if (scannerBin) {
+          // Update existing scanner bin - add SKU if not already present
+          const existingSkus = Array.isArray(scannerBin.sku) ? scannerBin.sku : [];
+          if (!existingSkus.includes(sku_id)) {
+            existingSkus.push(sku_id);
+            await scannerBin.update({ sku: existingSkus }, { transaction });
           }
         } else {
-          // Create new bin
+          // Create new scanner bin entry
           await ScannerBin.create({
             binLocationScanId: bin_location,
-            sku: [sku_id],
+            sku: [sku_id]
           }, { transaction });
         }
 
-        // Create audit log
-        await PutawayAudit.create({
-          putaway_task_id: putawayTask.id,
-          user_id: userId,
-          action: 'confirm_quantity',
-          sku_id: sku_id,
-          bin_location: bin_location,
-          quantity: quantity,
-          reason: remarks,
+        // Update or create ScannerSku entry
+        const skuScanId = `${sku_id}_${bin_location}_${Date.now()}`;
+        await ScannerSku.create({
+          skuScanId: skuScanId,
+          sku: [{ skuId: sku_id, quantity: quantity }],
+          binLocationScanId: bin_location
         }, { transaction });
 
+        // Commit transaction
         await transaction.commit();
 
+        // Return success response
         res.status(200).json({
           statusCode: 200,
           success: true,
           data: {
             message: 'Putaway confirmed successfully',
-            putawayTaskId: putawayTask.id,
-            binLocation: bin_location,
-            quantity: quantity,
+            sku_id,
+            grn_id,
+            quantity,
+            bin_location,
+            remarks,
+            updated_grn_line: {
+              qc_pass_qty: grnLine.qc_pass_qty - quantity,
+              remaining_qty: grnLine.qc_pass_qty - quantity,
+              line_status: grnLine.qc_pass_qty - quantity === 0 ? 'completed' : 'partial'
+            },
+            updated_bin_location: {
+              bin_code: bin_location,
+              current_quantity: binLocation.current_quantity + quantity,
+              capacity: binLocation.capacity
+            }
           },
           error: null,
         });
-      } catch (error) {
+
+      } catch (transactionError) {
+        // Rollback transaction on error
         await transaction.rollback();
-        throw error;
+        throw transactionError;
       }
+
     } catch (error: any) {
       console.error('Error confirming putaway:', error);
-      res.status(500).json({
-        statusCode: 500,
-        success: false,
-        data: null,
-        error: 'Internal server error',
-      });
-    }
-  }
-
-  // 7. Get Bin Suggestions
-  static async getBinSuggestions(req: AuthRequest, res: Response): Promise<void> {
-    try {
-      const { sku_id, category } = req.query;
-
-      if (!sku_id && !category) {
-        res.status(400).json({
-          statusCode: 400,
-          success: false,
-          data: null,
-          error: 'SKU ID or category is required',
-        });
-        return;
-      }
-
-      let whereCondition: any = {
-        status: 'active',
-      };
-
-      if (sku_id) {
-        whereCondition.sku_mapping = {
-          [Op.contains]: [sku_id],
-        };
-      }
-
-      if (category) {
-        whereCondition.category_mapping = {
-          [Op.contains]: [category],
-        };
-      }
-
-      const binSuggestions = await BinLocation.findAll({
-        where: whereCondition,
-        attributes: ['bin_code', 'zone', 'aisle', 'rack', 'shelf', 'capacity', 'current_quantity'],
-        order: [
-          ['current_quantity', 'ASC'], // Prefer bins with less quantity
-          ['zone', 'ASC'],
-          ['aisle', 'ASC'],
-        ],
-        limit: 5,
-      });
-
-      const suggestions = binSuggestions.map((bin: any) => ({
-        binCode: bin.bin_code,
-        zone: bin.zone,
-        aisle: bin.aisle,
-        rack: bin.rack,
-        shelf: bin.shelf,
-        availableCapacity: bin.capacity - bin.current_quantity,
-        utilizationPercentage: Math.round((bin.current_quantity / bin.capacity) * 100),
-      }));
-
-      res.status(200).json({
-        statusCode: 200,
-        success: true,
-        data: {
-          suggestions,
-        },
-        error: null,
-      });
-    } catch (error: any) {
-      console.error('Error fetching bin suggestions:', error);
-      res.status(500).json({
-        statusCode: 500,
-        success: false,
-        data: null,
-        error: 'Internal server error',
-      });
-    }
-  }
-
-  // 8. Get Putaway Tasks by User
-  static async getPutawayTasksByUser(req: AuthRequest, res: Response): Promise<void> {
-    try {
-      const userId = req.user?.id;
-      const page = parseInt(req.query.page as string) || 1;
-      const limit = parseInt(req.query.limit as string) || 10;
-      const offset = (page - 1) * limit;
-
-      if (!userId) {
-        res.status(401).json({
-          statusCode: 401,
-          success: false,
-          data: null,
-          error: 'User not authenticated',
-        });
-        return;
-      }
-
-      const { count, rows } = await PutawayTask.findAndCountAll({
-        where: {
-          assigned_to: userId,
-          status: {
-            [Op.in]: ['pending', 'in-progress'],
-          },
-        },
-        include: [
-          {
-            model: GRN,
-            as: 'GRN',
-            include: [
-              {
-                model: PurchaseOrder,
-                as: 'PO',
-                attributes: ['po_id', 'vendor_name'],
-              },
-            ],
-          },
-        ],
-        limit,
-        offset,
-        order: [['created_at', 'DESC']],
-      });
-
-      const tasks = rows.map((task: any) => ({
-        taskId: task.id,
-        grnId: task.grn_id,
-        skuId: task.sku_id,
-        quantity: task.quantity,
-        scannedQuantity: task.scanned_quantity,
-        status: task.status,
-        binLocation: task.bin_location,
-        poId: task.GRN?.PO?.po_id,
-        vendorName: task.GRN?.PO?.vendor_name,
-        createdAt: task.created_at,
-      }));
-
-      res.status(200).json({
-        statusCode: 200,
-        success: true,
-        data: {
-          tasks,
-          pagination: {
-            currentPage: page,
-            totalPages: Math.ceil(count / limit),
-            totalItems: count,
-            itemsPerPage: limit,
-          },
-        },
-        error: null,
-      });
-    } catch (error: any) {
-      console.error('Error fetching putaway tasks:', error);
       res.status(500).json({
         statusCode: 500,
         success: false,
