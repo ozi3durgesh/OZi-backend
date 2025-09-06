@@ -68,7 +68,7 @@ export class PutawayController {
       const limit = parseInt(req.query.limit as string) || 10;
       const offset = (page - 1) * limit;
 
-      // First, get all GRN lines with the required line_status
+      // First, get all GRN lines with the required putaway_status
       const allGrnLines = await GRNLine.findAll({
         include: [
           {
@@ -84,8 +84,8 @@ export class PutawayController {
           },
         ],
         where: {
-          line_status: {
-            [Op.in]: ['completed', 'pending', 'partial'],
+          putaway_status: {
+            [Op.in]: ['pending', 'partial'],
           },
         },
         order: [['created_at', 'DESC']],
@@ -105,13 +105,29 @@ export class PutawayController {
             skuIds: new Set(), // Store individual SKU IDs
             quantity: 0,
             grnDate: grn?.created_at ? grn.created_at.toLocaleDateString() : 'N/A',
-            status: grn?.status || 'pending', // Add GRN status
+            status: 'pending', // Default status, will be updated based on SKU statuses
+            hasPartial: false, // Track if any SKU is partial
           });
         }
         
         const grnData = grnMap.get(grnId);
         grnData.skuIds.add(grnLine.sku_id);
-        grnData.quantity += grnLine.ordered_qty;
+        grnData.quantity += grnLine.qc_pass_qty; // Use qc_pass_qty for remaining quantity
+        
+        // Update overall status based on individual SKU statuses
+        if (grnLine.putaway_status === 'partial') {
+          grnData.hasPartial = true;
+        }
+      });
+
+      // Set the overall status for each GRN
+      grnMap.forEach((grnData) => {
+        if (grnData.hasPartial) {
+          grnData.status = 'partial';
+        } else {
+          grnData.status = 'pending';
+        }
+        delete grnData.hasPartial; // Remove helper property
       });
 
       // Convert Map to Array and format the response
@@ -954,7 +970,7 @@ export class PutawayController {
         await grnLine.update(
           { 
             qc_pass_qty: grnLine.qc_pass_qty - quantity,
-            line_status: grnLine.qc_pass_qty - quantity === 0 ? 'completed' : 'partial'
+            putaway_status: grnLine.qc_pass_qty - quantity === 0 ? 'completed' : 'partial'
           },
           { transaction }
         );
@@ -1011,7 +1027,7 @@ export class PutawayController {
             updated_grn_line: {
               qc_pass_qty: grnLine.qc_pass_qty - quantity,
               remaining_qty: grnLine.qc_pass_qty - quantity,
-              line_status: grnLine.qc_pass_qty - quantity === 0 ? 'completed' : 'partial'
+              putaway_status: grnLine.qc_pass_qty - quantity === 0 ? 'completed' : 'partial'
             },
             updated_bin_location: {
               bin_code: bin_location,
