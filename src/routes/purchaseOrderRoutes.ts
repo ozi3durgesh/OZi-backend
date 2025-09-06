@@ -1,12 +1,31 @@
-import { Router } from 'express';
-import { createPurchaseOrder, approvePO, getAllPOs, getPOById } from '../controllers/purchaseOrderController';
+import { Router } from "express";
+import {
+  createPurchaseOrder,
+  approvePO,
+  getAllPOs,
+  getPOById,
+  getPOByToken
+} from "../controllers/purchaseOrderController";
 
 const router = Router();
 
-router.post('/', createPurchaseOrder);       // Create PO
-router.put('/:id/approve', approvePO);       // Approve/Reject via API
-router.get('/:id/approve', approvePO);       // Approve/Reject via Email link
-router.get('/', getAllPOs);                  // Get all POs
-router.get('/:id', getPOById);               // Get PO by ID
+/**
+ * Routes
+ */
+
+// Create a new Purchase Order
+router.post("/", createPurchaseOrder);
+
+// Approve / Reject PO (category_head → admin only)
+router.post("/:id/approve", approvePO);
+
+// Get all POs with pagination + optional status filter
+router.get("/", getAllPOs);
+
+// Get PO by ID
+router.get("/:id", getPOById);
+
+// Get PO by token (for frontend approval link)
+router.get("/approval/:token", getPOByToken);
 
 export default router;

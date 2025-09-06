@@ -4,21 +4,9 @@ import PurchaseOrder from '../models/PurchaseOrder';
 import POProduct from '../models/POProduct';
 import { ResponseHandler } from '../middleware/responseHandler';
 import dotenv from "dotenv";
-import PDFDocument from "pdfkit";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import crypto from "crypto";
 
 dotenv.config();
-
-// AWS S3 Client
-const s3 = new S3Client({
-  region: "ap-south-1",
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-  },
-});
-const BUCKET_NAME = "oms-stage-storage";
-const FOLDER_NAME = "po-approval-pdf";
 
 // Nodemailer transporter
 const transporter = nodemailer.createTransport({
@@ -28,121 +16,63 @@ const transporter = nodemailer.createTransport({
 
 // Approval Emails
 const approvalEmails: Record<string, string> = {
-  category_head: 'ankit.gupta@ozi.in',
-  admin: 'ozipurchaseorders@gmail.com',
-  vendor: 'ankit.gupta@ozi.in'
+  category_head: 'ozipurchaseorders@gmail.com',
+  admin: 'ankit.gupta@ozi.in',
+  vendor: 'ozipurchaseorders@gmail.com'
 };
 
-// Utility to calculate total
-function calculateTotalAmount(products: any[]) {
-  return products.reduce((sum, prod) => sum + prod.amount, 0);
+/**
+ * Token Utilities
+ */
+function generateApprovalToken(poId: number, role: string, expiresInMinutes = 60) {
+  const payload = {
+    po_id: poId,
+    role,
+    exp: Date.now() + expiresInMinutes * 60 * 1000
+  };
+  const stringData = JSON.stringify(payload);
+
+  const cipher = crypto.createCipheriv(
+    "aes-256-cbc",
+    Buffer.from(process.env.TOKEN_SECRET!, "hex"),
+    Buffer.alloc(16, 0) // static IV for simplicity
+  );
+  let encrypted = cipher.update(stringData, "utf8", "base64");
+  encrypted += cipher.final("base64");
+  return encrypted;
 }
 
-// Generate PDF in memory
-async function generatePOPdf(po: any, products: any[]): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    try {
-      const doc = new PDFDocument({ margin: 40 });
-      const chunks: any[] = [];
-
-      doc.on("data", (chunk) => chunks.push(chunk));
-      doc.on("end", () => resolve(Buffer.concat(chunks)));
-      doc.on("error", reject);
-
-      doc.fontSize(18).text("PURCHASE ORDER", { align: "center", underline: true });
-      doc.moveDown();
-
-      doc.fontSize(12).text(`PO No: ${po.po_id ?? 'N/A'}`);
-      doc.text(`PO Date: ${po.purchase_date ?? 'N/A'}`);
-      doc.moveDown();
-
-      doc.font("Helvetica-Bold").text("Vendor Details:");
-      doc.font("Helvetica").text(`Vendor: ${po.vendor_name ?? 'N/A'}`);
-      doc.text(`Vendor Tax ID: ${po.vendor_tax_id ?? 'N/A'}`);
-      doc.text(`POC: ${(po.poc_name ?? 'N/A')} (${po.poc_phone ?? 'N/A'})`);
-      doc.moveDown();
-
-      doc.font("Helvetica-Bold").text("Order Details:");
-      doc.font("Helvetica").text(`Payment Term: ${po.payment_term ?? 'N/A'}`);
-      doc.text(`Payment Mode: ${po.payment_mode ?? 'N/A'}`);
-      doc.text(`Expected Delivery: ${po.expected_delivery_date ?? 'N/A'}`);
-      doc.moveDown();
-
-      doc.font("Helvetica-Bold");
-      doc.text("Product", 50, doc.y, { continued: true });
-      doc.text("SKU", 200, doc.y, { continued: true });
-      doc.text("Units", 280, doc.y, { continued: true });
-      doc.text("MRP", 340, doc.y, { continued: true });
-      doc.text("Amount", 420);
-      doc.moveDown();
-      doc.font("Helvetica");
-
-      products.forEach((p: any) => {
-        const productName = p.product ?? 'N/A';
-        const skuId = p.sku_id ?? 'N/A';
-        const units = p.units != null ? p.units.toString() : '0';
-        const mrp = p.mrp != null ? `₹${p.mrp}` : '₹0';
-        const amount = p.amount != null ? `₹${p.amount}` : '₹0';
-
-        doc.text(productName, 50, doc.y, { continued: true });
-        doc.text(skuId, 200, doc.y, { continued: true });
-        doc.text(units, 280, doc.y, { continued: true });
-        doc.text(mrp, 340, doc.y, { continued: true });
-        doc.text(amount, 420);
-      });
-
-      doc.moveDown();
-
-      doc.font("Helvetica-Bold");
-      doc.text(`TOTAL UNITS: ${po.total_units ?? 0}`);
-      doc.text(`TOTAL SKUS: ${po.total_skus ?? 0}`);
-      doc.text(`BASE PRICE: ₹${Number(po.base_price ?? 0).toFixed(2)}`);
-      doc.text(`TOTAL AMOUNT: ₹${Number(po.total_amount ?? 0).toFixed(2)}`);
-      doc.moveDown();
-
-      doc.text("For Ozi Technologies Pvt Ltd", { align: "right" });
-      doc.text("Authorised Signatory", { align: "right" });
-
-      doc.end();
-    } catch (err) {
-      reject(err);
-    }
-  });
+function decryptApprovalToken(token: string) {
+  const decipher = crypto.createDecipheriv(
+    "aes-256-cbc",
+    Buffer.from(process.env.TOKEN_SECRET!, "hex"),
+    Buffer.alloc(16, 0)
+  );
+  let decrypted = decipher.update(token, "base64", "utf8");
+  decrypted += decipher.final("utf8");
+  return JSON.parse(decrypted);
 }
 
-// Upload PDF to S3 inside folder
-async function uploadPdfToS3(buffer: Buffer, fileName: string) {
-  const key = `${FOLDER_NAME}/${fileName}`;
-
-  const command = new PutObjectCommand({
-    Bucket: BUCKET_NAME,
-    Key: key,
-    Body: buffer,
-    ContentType: "application/pdf",
-  });
-
-  await s3.send(command);
-
-  return `https://${BUCKET_NAME}.s3.ap-south-1.amazonaws.com/${key}`;
-}
-
-// Send Approval Email
-async function sendApprovalEmail(po: any, role: 'category_head' | 'admin' | 'vendor', pdfBuffer?: Buffer, s3Url?: string) {
+/**
+ * Send Approval Email
+ */
+async function sendApprovalEmail(po: any, role: 'category_head' | 'admin' | 'vendor') {
   let productLines = '';
   for (const p of po.products ?? []) {
     productLines += `${p.product} | SKU: ${p.sku_id} | Units: ${p.units} | MRP: ₹${p.mrp} | Amount: ₹${p.amount}\n`;
   }
 
-  const approveUrl = `${process.env.APP_BASE_URL}/api/purchase-orders/${po.id}/approve?role=${role}&action=approve`;
-  const rejectUrl = `${process.env.APP_BASE_URL}/api/purchase-orders/${po.id}/approve?role=${role}&action=reject`;
+  let approvalLink = "";
+  if (role !== "vendor") {
+    const token = generateApprovalToken(po.id, role, 60); // 1 hour expiry
+    approvalLink = `${process.env.APP_BASE_URL_FRONTEND}/po-approval/${encodeURIComponent(token)}`;
+  }
 
   const mailOptions: any = {
     from: process.env.EMAIL_USER,
     to: approvalEmails[role],
-    subject: `PO ${po.po_id} - Approval Request`,
+    subject: `PO ${po.po_id} - ${role === "vendor" ? "Purchase Order" : "Approval Request"}`,
     text: `Dear ${role.replace('_', ' ')},
-
-Please review the Purchase Order and approve/reject it.
 
 Vendor: ${po.vendor_name}
 PO Amount: ₹${po.total_amount}
@@ -151,35 +81,26 @@ PO ID: ${po.po_id}
 Products:
 ${productLines}
 
-Approve: ${approveUrl}
-Reject: ${rejectUrl}
-
-PDF Link: ${s3Url || 'Attached'}
+${role !== "vendor" ? `Approval Link: ${approvalLink}` : "Please find the attached Purchase Order."}
 
 Thanks,
-Ozi Technologies`,
+Ozi Technologies`
   };
 
-  if (pdfBuffer) {
-    mailOptions.attachments = [{
-      filename: `PO_${po.po_id}.pdf`,
-      content: pdfBuffer,
-      contentType: "application/pdf"
-    }];
-  }
-
   await transporter.sendMail(mailOptions);
-  console.log(`Approval email sent to ${role}: ${approvalEmails[role]}`);
+  console.log(`Email sent to ${role}: ${approvalEmails[role]}`);
 }
 
-// Create Purchase Order
+/**
+ * Create Purchase Order
+ */
 export const createPurchaseOrder = async (req: Request, res: Response) => {
   const { vendor_id, vendor_name, poc_name, poc_phone, vendor_tax_id,
     payment_term, payment_mode, purchase_date, expected_delivery_date,
     shipping_address, billing_address, products } = req.body;
 
   try {
-    const totalAmount = calculateTotalAmount(products);
+    const totalAmount = products.reduce((sum: number, prod: any) => sum + prod.amount, 0);
     const totalUnits = products.reduce((sum: number, prod: any) => sum + prod.units, 0);
     const totalSkus = products.length;
     const base_price = products.reduce(
@@ -232,18 +153,11 @@ export const createPurchaseOrder = async (req: Request, res: Response) => {
     });
 
     if (poWithProducts) {
-      const pdfBuffer = await generatePOPdf(poWithProducts, poWithProducts.products ?? []);
-      const s3Url = await uploadPdfToS3(pdfBuffer, `PO_${poWithProducts.po_id}.pdf`);
+      // Send to category head first
+      await sendApprovalEmail(poWithProducts, 'category_head');
 
-      // Save S3 URL in DB
-      poWithProducts.pdf_url = s3Url;
-      await poWithProducts.save();
-
-      // Send to category head
-      await sendApprovalEmail(poWithProducts, 'category_head', pdfBuffer, s3Url);
-
-      return ResponseHandler.success(res, { 
-        PO: { message: 'PO created, PDF uploaded to S3', po_id: newPo.po_id, pdf_url: s3Url } 
+      return ResponseHandler.success(res, {
+        PO: { message: 'PO created, approval link sent to category head', po_id: newPo.po_id }
       }, 201);
     }
 
@@ -254,13 +168,15 @@ export const createPurchaseOrder = async (req: Request, res: Response) => {
   }
 };
 
-// Approve / Reject PO
+/**
+ * Approve / Reject PO
+ */
 export const approvePO = async (req: Request, res: Response) => {
-  const role = (req.body.role || req.query.role) as 'category_head' | 'admin' | 'vendor';
+  const role = (req.body.role || req.query.role) as 'category_head' | 'admin';
   const action = (req.body.action || req.query.action) as 'approve' | 'reject';
   const reason = (req.body.reason || req.query.reason) as string;
 
-  if (!['category_head', 'admin', 'vendor'].includes(role)) {
+  if (!['category_head', 'admin'].includes(role)) {
     return ResponseHandler.error(res, 'Invalid role', 400);
   }
 
@@ -275,19 +191,24 @@ export const approvePO = async (req: Request, res: Response) => {
       (po as any).rejection_reason = reason || `${role} rejected the PO`;
       po.current_approver = null;
       await po.save();
-      return ResponseHandler.success(res, { PO: { message: `PO rejected by ${role}`, po_id: po.po_id, pdf_url: po.pdf_url } }, 200);
+      return ResponseHandler.success(res, {
+        PO: { message: `PO rejected by ${role}`, po_id: po.po_id }
+      }, 200);
     }
 
     if (action === 'approve') {
-      let nextRole: 'admin' | 'vendor' | null = null;
+      let nextRole: 'admin' | null = null;
 
       if (role === 'category_head') nextRole = 'admin';
-      else if (role === 'admin') nextRole = 'vendor';
-      else if (role === 'vendor') {
+      else if (role === 'admin') {
+        // Send to vendor (no approval required)
+        await sendApprovalEmail(po, 'vendor');
         po.approval_status = 'approved';
         po.current_approver = null;
         await po.save();
-        return ResponseHandler.success(res, { PO: { message: `PO fully approved`, po_id: po.po_id, pdf_url: po.pdf_url } }, 200);
+        return ResponseHandler.success(res, {
+          PO: { message: `PO fully approved`, po_id: po.po_id }
+        }, 200);
       }
 
       po.approval_status = role;
@@ -295,14 +216,12 @@ export const approvePO = async (req: Request, res: Response) => {
       await po.save();
 
       if (nextRole) {
-        const pdfBuffer = await generatePOPdf(po, po.products ?? []);
-        const s3Url = await uploadPdfToS3(pdfBuffer, `PO_${po.po_id}.pdf`);
-        po.pdf_url = s3Url;
-        await po.save();
-        await sendApprovalEmail(po, nextRole, pdfBuffer, s3Url);
+        await sendApprovalEmail(po, nextRole);
       }
 
-      return ResponseHandler.success(res, { PO: { message: `PO approved by ${role}`, po_id: po.po_id, pdf_url: po.pdf_url } }, 200);
+      return ResponseHandler.success(res, {
+        PO: { message: `PO approved by ${role}`, po_id: po.po_id }
+      }, 200);
     }
 
     return ResponseHandler.error(res, 'Invalid action', 400);
@@ -311,7 +230,9 @@ export const approvePO = async (req: Request, res: Response) => {
   }
 };
 
-// Get All POs
+/**
+ * Get All POs
+ */
 export const getAllPOs = async (req: Request, res: Response) => {
   try {
     const { page = "1", limit = "20", status } = req.query;
@@ -330,13 +251,8 @@ export const getAllPOs = async (req: Request, res: Response) => {
       order: [['id', 'DESC']]
     });
 
-    const responsePOs = rows.map(po => ({
-      ...po.toJSON(),
-      pdf_url: po.pdf_url
-    }));
-
     return ResponseHandler.success(res, {
-      PO: responsePOs,
+      PO: rows,
       pagination: { total: count, page: pageNum, pages: Math.ceil(count / limitNum), limit: limitNum }
     });
   } catch (error: any) {
@@ -344,7 +260,9 @@ export const getAllPOs = async (req: Request, res: Response) => {
   }
 };
 
-// Get PO by ID
+/**
+ * Get PO by ID
+ */
 export const getPOById = async (req: Request, res: Response) => {
   try {
     const po = await PurchaseOrder.findByPk(req.params.id, {
@@ -352,8 +270,31 @@ export const getPOById = async (req: Request, res: Response) => {
     });
     if (!po) return ResponseHandler.error(res, 'PO not found', 404);
 
-    return ResponseHandler.success(res, { PO: { ...po.toJSON(), pdf_url: po.pdf_url } }, 200);
+    return ResponseHandler.success(res, { PO: po }, 200);
   } catch (error: any) {
-    return ResponseHandler.error(res, error.message || 'Error fetching POs', 500);
+    return ResponseHandler.error(res, error.message || 'Error fetching PO', 500);
+  }
+};
+
+/**
+ * Decode approval token (for frontend)
+ */
+export const getPOByToken = async (req: Request, res: Response) => {
+  try {
+    const { token } = req.params;
+    const payload = decryptApprovalToken(token);
+
+    if (Date.now() > payload.exp) {
+      return ResponseHandler.error(res, 'Token expired', 400);
+    }
+
+    const po = await PurchaseOrder.findByPk(payload.po_id, {
+      include: [{ model: POProduct, as: 'products' }]
+    });
+    if (!po) return ResponseHandler.error(res, 'PO not found', 404);
+
+    return ResponseHandler.success(res, { PO: po, role: payload.role }, 200);
+  } catch (error: any) {
+    return ResponseHandler.error(res, error.message || 'Invalid token', 400);
   }
 };

@@ -17,30 +17,25 @@ interface PurchaseOrderAttributes {
   shipping_address?: string;
   billing_address?: string;
 
-  // Approval Workflow
-  approval_status?: 'pending' | 'category_head' | 'admin' | 'vendor' | 'approved' | 'rejected';
+  approval_status?: 'pending' | 'category_head' | 'admin' | 'vendor' | 'approved' | 'rejected' | 'completed';
   current_approver?: 'category_head' | 'admin' | 'vendor' | null;
   rejection_reason?: string;
 
-  // Totals
   total_amount?: number;
   total_units?: number;
   total_skus?: number;
   base_price?: number;
 
-  // PDF URL
-  pdf_url?: string; // <-- Add this
+  pdf_url?: string;
+  token?: string;  // Add token here
 }
 
 type PurchaseOrderCreationAttributes = Optional<
   PurchaseOrderAttributes,
-  'id' | 'approval_status' | 'current_approver' | 'rejection_reason' | 'pdf_url'
+  'id' | 'approval_status' | 'current_approver' | 'rejection_reason' | 'pdf_url' | 'token'
 >;
 
-class PurchaseOrder
-  extends Model<PurchaseOrderAttributes, PurchaseOrderCreationAttributes>
-  implements PurchaseOrderAttributes
-{
+class PurchaseOrder extends Model<PurchaseOrderAttributes, PurchaseOrderCreationAttributes> implements PurchaseOrderAttributes {
   declare id: number;
   declare po_id: string;
   declare vendor_id?: string;
@@ -55,7 +50,7 @@ class PurchaseOrder
   declare shipping_address?: string;
   declare billing_address?: string;
 
-  declare approval_status?: 'pending' | 'category_head' | 'admin' | 'vendor' | 'approved' | 'rejected';
+  declare approval_status?: 'pending' | 'category_head' | 'admin' | 'vendor' | 'approved' | 'rejected' | 'completed';
   declare current_approver?: 'category_head' | 'admin' | 'vendor' | null;
   declare rejection_reason?: string;
 
@@ -64,9 +59,9 @@ class PurchaseOrder
   declare total_skus?: number;
   declare base_price?: number;
 
-  declare pdf_url?: string; // <-- Add this
+  declare pdf_url?: string;
+  declare token?: string;  // Add token here
 
-  // 👇 Add this so TS knows about association
   declare products?: POProduct[];
 }
 
@@ -87,7 +82,7 @@ PurchaseOrder.init(
     billing_address: DataTypes.TEXT,
 
     approval_status: {
-      type: DataTypes.ENUM('pending', 'category_head', 'admin', 'vendor', 'approved', 'rejected'),
+      type: DataTypes.ENUM('pending', 'category_head', 'admin', 'vendor', 'approved', 'rejected', 'completed'),
       defaultValue: 'pending',
     },
     current_approver: {
@@ -95,20 +90,13 @@ PurchaseOrder.init(
       allowNull: true,
       defaultValue: 'category_head',
     },
-    rejection_reason: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
-
+    rejection_reason: DataTypes.STRING,
     total_amount: DataTypes.DECIMAL(10, 2),
     total_units: DataTypes.INTEGER,
     total_skus: DataTypes.INTEGER,
     base_price: DataTypes.DECIMAL(10, 2),
-
-    pdf_url: { // <-- Add this
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
+    pdf_url: { type: DataTypes.STRING, allowNull: true },
+    token: { type: DataTypes.STRING, allowNull: true },  // Add token here
   },
   {
     sequelize,
