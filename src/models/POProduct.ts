@@ -1,6 +1,7 @@
 import { DataTypes, Model, Optional } from 'sequelize';
 import sequelize from '../config/database';
 import PurchaseOrder from './PurchaseOrder';
+import Product from './productModel';
 
 interface POProductAttributes {
   id: number;
@@ -77,5 +78,16 @@ POProduct.init(
 
 PurchaseOrder.hasMany(POProduct, { foreignKey: 'po_id', as: 'products' });
 POProduct.belongsTo(PurchaseOrder, { foreignKey: 'po_id', as: 'purchaseOrder' });
+
+POProduct.belongsTo(Product, {
+  foreignKey: "sku_id",
+  targetKey: "SKU",
+  as: "productInfo",   
+});
+Product.hasMany(POProduct, {
+  foreignKey: "sku_id",
+  sourceKey: "SKU",
+  as: "poProducts",   
+});
 
 export default POProduct;

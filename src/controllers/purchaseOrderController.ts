@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import nodemailer from 'nodemailer';
 import PurchaseOrder from '../models/PurchaseOrder';
 import POProduct from '../models/POProduct';
+import Product from '../models/productModel';
 import { ResponseHandler } from '../middleware/responseHandler';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
@@ -298,12 +299,34 @@ export const getAllPOs = async (req: Request,res: Response)=>{
     if(status) whereClause.approval_status=status;
 
     const { count, rows } = await PurchaseOrder.findAndCountAll({
-      where: whereClause,
-      include:[{model: POProduct, as:'products'}],
-      limit:limitNum,
-      offset,
-      order:[['id','DESC']]
-    });
+  where: whereClause,
+  include: [
+    {
+      model: POProduct,
+      as: "products",
+      include: [
+        {
+          model: Product,
+          as: "productInfo",   // 👈 updated alias
+          attributes: ["EAN_UPC"],
+        },
+      ],
+    },
+  ],
+  limit: limitNum,
+  offset,
+  order: [["id", "DESC"]],
+});
+
+// flatten EAN_UPC into products
+const data = rows.map((po) => ({
+  ...po.toJSON(),
+  products: (po.products ?? []).map((p: any) => ({
+  ...p.toJSON(),
+  EAN_UPC: p.productInfo?.EAN_UPC || null,
+  productInfo: undefined,
+  })),
+}));
 
     return ResponseHandler.success(res,{
       PO:rows,
