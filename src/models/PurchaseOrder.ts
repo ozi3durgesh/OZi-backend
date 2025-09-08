@@ -36,9 +36,13 @@ interface PurchaseOrderAttributes {
   products?: POProduct[];
 }
 
-type PurchaseOrderCreationAttributes = Optional<PurchaseOrderAttributes, 'id' | 'approval_status' | 'current_approver' | 'rejection_reason' | 'pdf_url' | 'token' | 'pi_number' | 'pi_url' | 'final_delivery_date'>;
+type PurchaseOrderCreationAttributes = Optional<
+  PurchaseOrderAttributes,
+  'id' | 'approval_status' | 'current_approver' | 'rejection_reason' | 'pdf_url' | 'token' | 'pi_number' | 'pi_url' | 'final_delivery_date'
+>;
 
-class PurchaseOrder extends Model<PurchaseOrderAttributes, PurchaseOrderCreationAttributes> implements PurchaseOrderAttributes {
+class PurchaseOrder extends Model<PurchaseOrderAttributes, PurchaseOrderCreationAttributes>
+  implements PurchaseOrderAttributes {
   declare id: number;
   declare po_id: string;
   declare vendor_id?: string;

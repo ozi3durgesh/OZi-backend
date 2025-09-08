@@ -51,7 +51,7 @@ function decryptApprovalToken(token: string) {
 async function sendApprovalEmail(po: any, role: 'category_head' | 'admin' | 'creator') {
   let productLines = '';
   for (const p of po.products ?? []) {
-    productLines += `${p.product} | SKU: ${p.sku_id} | Units: ${p.units} | MRP: ₹${p.mrp} | Amount: ₹${p.amount}\n`;
+    productLines += `${p.product} | SKU: ${p.sku_id} | Units: ${p.units} | MRP: ₹${p.mrp} | SP: ₹${p.sp} | Amount: ₹${p.amount}\n`;
   }
 
   let approvalLink = '';
@@ -87,36 +87,31 @@ Ozi Technologies`
 export const createPurchaseOrder = async (req: Request, res: Response) => {
   const { draft = true, vendor_id, vendor_name, poc_name, poc_phone, vendor_tax_id,
     payment_term, payment_mode, purchase_date, expected_delivery_date,
-    shipping_address, billing_address, products } = req.body;
+    shipping_address, billing_address, products,
+    total_amount, total_units, total_skus, base_price } = req.body;
 
   try {
-    const totalAmount = products.reduce((sum: number, p: any) => sum + p.amount, 0);
-    const totalUnits = products.reduce((sum: number, p: any) => sum + p.units, 0);
-    const totalSkus = products.length;
-    const base_price = products.reduce((sum: number, p: any) => sum + p.mrp * p.units / (1 + parseFloat(p.total_gst)), 0);
-
-    let latestPo = await PurchaseOrder.findOne({ order: [['id','DESC']], attributes: ['po_id'] });
-    let lastPoNumber = 0;
-    if (latestPo) lastPoNumber = parseInt(latestPo.po_id.replace('OZIPO',''),10)||0;
-    let nextPoId = `OZIPO${lastPoNumber+1}`;
-    while(await PurchaseOrder.findOne({ where: { po_id: nextPoId } })) {
-      lastPoNumber++;
-      nextPoId = `OZIPO${lastPoNumber+1}`;
+    // Generate PO ID robustly
+    let nextPoId = 'OZIPO1';
+    const latestPo = await PurchaseOrder.findOne({ order: [['id','DESC']] });
+    if (latestPo && latestPo.po_id) {
+      const lastPoNumber = parseInt(latestPo.po_id.replace('OZIPO','')) || 0;
+      nextPoId = `OZIPO${lastPoNumber + 1}`;
     }
+
+    console.log('Creating PO with po_id:', nextPoId);
 
     const newPo = await PurchaseOrder.create({
       po_id: nextPoId,
       vendor_id, vendor_name, poc_name, poc_phone, vendor_tax_id,
       payment_term, payment_mode, purchase_date, expected_delivery_date,
       shipping_address, billing_address,
-      total_amount: totalAmount,
-      total_units: totalUnits,
-      total_skus: totalSkus,
-      base_price,
+      total_amount, total_units, total_skus, base_price,
       approval_status: draft ? 'draft' : 'pending',
       current_approver: draft ? null : 'category_head'
     });
 
+    // Prepare product records
     const productRecords = products.map((p: any) => ({
       po_id: newPo.id,
       product: p.product,
@@ -124,11 +119,18 @@ export const createPurchaseOrder = async (req: Request, res: Response) => {
       item_code: p.item_code,
       units: p.units,
       mrp: p.mrp,
+      sp: p.sp,
       margin: p.margin,
+      rlp: p.rlp,
       rlp_w_o_tax: p.rlp_w_o_tax,
+      tax_type: p.tax_type,
+      gst1: p.gst1,
+      gst2: p.gst2,
       total_gst: p.total_gst,
+      tax_amount: p.tax_amount,
       amount: p.amount
     }));
+
     await POProduct.bulkCreate(productRecords);
 
     const poWithProducts = await PurchaseOrder.findByPk(newPo.id, { include: [{ model: POProduct, as: 'products' }] });
@@ -150,14 +152,14 @@ export const createPurchaseOrder = async (req: Request, res: Response) => {
 /** Update Draft PO */
 export const updateDraftPO = async (req: Request, res: Response) => {
   const poId = req.params.id;
-  const { vendor_name, products, ...rest } = req.body;
+  const { products, ...poData } = req.body;
 
   try {
     const po = await PurchaseOrder.findByPk(poId, { include: [{ model: POProduct, as: 'products' }] });
     if (!po) return ResponseHandler.error(res, 'PO not found', 404);
     if (po.approval_status !== 'draft') return ResponseHandler.error(res, 'Only draft POs can be updated', 400);
 
-    await po.update({ vendor_name, ...rest });
+    await po.update(poData);
 
     if (products) {
       await POProduct.destroy({ where: { po_id: po.id } });
@@ -168,9 +170,15 @@ export const updateDraftPO = async (req: Request, res: Response) => {
         item_code: p.item_code,
         units: p.units,
         mrp: p.mrp,
+        sp: p.sp,
         margin: p.margin,
+        rlp: p.rlp,
         rlp_w_o_tax: p.rlp_w_o_tax,
+        tax_type: p.tax_type,
+        gst1: p.gst1,
+        gst2: p.gst2,
         total_gst: p.total_gst,
+        tax_amount: p.tax_amount,
         amount: p.amount
       }));
       await POProduct.bulkCreate(productRecords);
@@ -199,12 +207,11 @@ export const submitDraftPO = async (req: Request, res: Response) => {
 
     return ResponseHandler.success(res, { PO: { message: 'PO submitted for approval', po_id: po.po_id } }, 200);
 
-  } catch (error: any) {
+  } catch(error:any){
     return ResponseHandler.error(res, error.message || 'Error submitting PO', 500);
   }
 };
 
-/** Approve / Reject PO */
 /** Approve / Reject PO */
 export const approvePO = async (req: Request, res: Response) => {
   const role = (req.body.role || req.query.role) as 'category_head'|'admin';
@@ -261,7 +268,6 @@ export const savePI = async (req: Request, res: Response) => {
     const po = await PurchaseOrder.findByPk(poId);
     if (!po) return ResponseHandler.error(res,'PO not found',404);
 
-    // Creator can only save when current approver is 'creator'
     if (po.current_approver !== 'creator') {
       return ResponseHandler.error(res,'PI can only be saved when Creator is responsible',400);
     }
@@ -269,7 +275,7 @@ export const savePI = async (req: Request, res: Response) => {
     po.pi_number = pi_number;
     po.pi_url = pi_url;
     po.final_delivery_date = final_delivery_date;
-    po.approval_status = 'approved'; // Final step
+    po.approval_status = 'approved';
     po.current_approver = null;
     await po.save();
 
@@ -279,7 +285,6 @@ export const savePI = async (req: Request, res: Response) => {
     return ResponseHandler.error(res,error.message||'Error saving PI',500);
   }
 };
-
 
 /** Get All POs */
 export const getAllPOs = async (req: Request,res: Response)=>{
