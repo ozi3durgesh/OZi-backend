@@ -1,7 +1,10 @@
 import { Router } from "express";
 import {
-  createPurchaseOrder,
+  createPurchaseOrder, // handles draft or final creation
+  updateDraftPO,       // update draft PO
+  submitDraftPO,       // submit draft PO
   approvePO,
+  savePI,              // save PI and delivery date
   getAllPOs,
   getPOById,
   getPOByToken
@@ -13,13 +16,22 @@ const router = Router();
  * Routes
  */
 
-// Create a new Purchase Order
+// Create a new Purchase Order (draft or final)
 router.post("/", createPurchaseOrder);
 
-// Approve / Reject PO (category_head → admin only)
+// Update a draft PO
+router.put("/:id/draft", updateDraftPO);
+
+// Submit a draft PO
+router.post("/:id/submit", submitDraftPO);
+
+// Approve / Reject PO (category_head → admin → creator)
 router.post("/:id/approve", approvePO);
 
-// Get all POs with pagination + optional status filter
+// Save PI & final delivery (creator)
+router.post("/:id/pi", savePI);
+
+// Get all POs
 router.get("/", getAllPOs);
 
 // Get PO by ID

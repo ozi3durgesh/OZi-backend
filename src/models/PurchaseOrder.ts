@@ -17,8 +17,8 @@ interface PurchaseOrderAttributes {
   shipping_address?: string;
   billing_address?: string;
 
-  approval_status?: 'pending' | 'category_head' | 'admin' | 'vendor' | 'approved' | 'rejected' | 'completed';
-  current_approver?: 'category_head' | 'admin' | 'vendor' | null;
+  approval_status?: 'draft'|'pending'|'category_head'|'admin'|'creator'|'approved'|'rejected'|'completed';
+  current_approver?: 'category_head'|'admin'|'creator'|null;
   rejection_reason?: string;
 
   total_amount?: number;
@@ -27,13 +27,16 @@ interface PurchaseOrderAttributes {
   base_price?: number;
 
   pdf_url?: string;
-  token?: string;  // Add token here
+  token?: string;
+
+  pi_number?: string;
+  pi_url?: string;
+  final_delivery_date?: Date;
+
+  products?: POProduct[];
 }
 
-type PurchaseOrderCreationAttributes = Optional<
-  PurchaseOrderAttributes,
-  'id' | 'approval_status' | 'current_approver' | 'rejection_reason' | 'pdf_url' | 'token'
->;
+type PurchaseOrderCreationAttributes = Optional<PurchaseOrderAttributes, 'id' | 'approval_status' | 'current_approver' | 'rejection_reason' | 'pdf_url' | 'token' | 'pi_number' | 'pi_url' | 'final_delivery_date'>;
 
 class PurchaseOrder extends Model<PurchaseOrderAttributes, PurchaseOrderCreationAttributes> implements PurchaseOrderAttributes {
   declare id: number;
@@ -50,8 +53,8 @@ class PurchaseOrder extends Model<PurchaseOrderAttributes, PurchaseOrderCreation
   declare shipping_address?: string;
   declare billing_address?: string;
 
-  declare approval_status?: 'pending' | 'category_head' | 'admin' | 'vendor' | 'approved' | 'rejected' | 'completed';
-  declare current_approver?: 'category_head' | 'admin' | 'vendor' | null;
+  declare approval_status?: 'draft'|'pending'|'category_head'|'admin'|'creator'|'approved'|'rejected'|'completed';
+  declare current_approver?: 'category_head'|'admin'|'creator'|null;
   declare rejection_reason?: string;
 
   declare total_amount?: number;
@@ -60,50 +63,49 @@ class PurchaseOrder extends Model<PurchaseOrderAttributes, PurchaseOrderCreation
   declare base_price?: number;
 
   declare pdf_url?: string;
-  declare token?: string;  // Add token here
+  declare token?: string;
+
+  declare pi_number?: string;
+  declare pi_url?: string;
+  declare final_delivery_date?: Date;
 
   declare products?: POProduct[];
 }
 
-PurchaseOrder.init(
-  {
-    id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
-    po_id: { type: DataTypes.STRING, allowNull: false, unique: true },
-    vendor_id: DataTypes.STRING,
-    vendor_name: DataTypes.STRING,
-    poc_name: DataTypes.STRING,
-    poc_phone: DataTypes.STRING,
-    vendor_tax_id: DataTypes.STRING,
-    payment_term: DataTypes.STRING,
-    payment_mode: DataTypes.STRING,
-    purchase_date: DataTypes.DATE,
-    expected_delivery_date: DataTypes.DATE,
-    shipping_address: DataTypes.TEXT,
-    billing_address: DataTypes.TEXT,
+PurchaseOrder.init({
+  id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+  po_id: { type: DataTypes.STRING, allowNull: false, unique: true },
+  vendor_id: DataTypes.STRING,
+  vendor_name: DataTypes.STRING,
+  poc_name: DataTypes.STRING,
+  poc_phone: DataTypes.STRING,
+  vendor_tax_id: DataTypes.STRING,
+  payment_term: DataTypes.STRING,
+  payment_mode: DataTypes.STRING,
+  purchase_date: DataTypes.DATE,
+  expected_delivery_date: DataTypes.DATE,
+  shipping_address: DataTypes.TEXT,
+  billing_address: DataTypes.TEXT,
 
-    approval_status: {
-      type: DataTypes.ENUM('pending', 'category_head', 'admin', 'vendor', 'approved', 'rejected', 'completed'),
-      defaultValue: 'pending',
-    },
+  approval_status: { type: DataTypes.ENUM('draft','pending','category_head','admin','creator','approved','rejected','completed'), defaultValue: 'draft' },
+  current_approver: { type: DataTypes.ENUM('category_head','admin','creator'), allowNull: true, defaultValue: null },
+  rejection_reason: DataTypes.TEXT,
 
-    current_approver: {
-      type: DataTypes.ENUM('category_head', 'admin', 'vendor'),
-      allowNull: true,
-      defaultValue: 'category_head',
-    },
-    rejection_reason: DataTypes.STRING,
-    total_amount: DataTypes.DECIMAL(10, 2),
-    total_units: DataTypes.INTEGER,
-    total_skus: DataTypes.INTEGER,
-    base_price: DataTypes.DECIMAL(10, 2),
-    pdf_url: { type: DataTypes.STRING, allowNull: true },
-    token: { type: DataTypes.STRING, allowNull: true },  // Add token here
-  },
-  {
-    sequelize,
-    tableName: 'purchase_orders',
-    timestamps: false,
-  }
-);
+  total_amount: DataTypes.DECIMAL(10,2),
+  total_units: DataTypes.INTEGER,
+  total_skus: DataTypes.INTEGER,
+  base_price: DataTypes.DECIMAL(10,2),
+
+  pdf_url: { type: DataTypes.STRING },
+  token: { type: DataTypes.STRING },
+
+  pi_number: { type: DataTypes.STRING },
+  pi_url: { type: DataTypes.STRING },
+  final_delivery_date: { type: DataTypes.DATE }
+}, {
+  sequelize,
+  tableName: 'purchase_orders',
+  timestamps: false
+});
 
 export default PurchaseOrder;
