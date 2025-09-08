@@ -19,6 +19,7 @@ class GRNLine
   declare rtv_qty: number;
   declare held_qty: number;
   declare line_status: string;
+  declare putaway_status: string;
   declare variance_reason: any | null;
   declare remarks: string | null;
   // public expected_date!: Date;
@@ -84,6 +85,11 @@ GRNLine.init(
     },
     line_status: {
       type: DataTypes.ENUM('completed', 'partial', 'pending'),
+      allowNull: false,
+      defaultValue: 'pending',
+    },
+    putaway_status: {
+      type: DataTypes.STRING(50),
       allowNull: false,
       defaultValue: 'pending',
     },

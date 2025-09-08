@@ -28,12 +28,6 @@ router.get('/product-details', PutawayController.getScannedProductDetails);
 // 7. Confirm Putaway (POST/PUT)
 router.post('/confirm', PutawayController.confirmPutaway);
 
-// 8. Get Bin Suggestions (GET)
-router.get('/bin-suggestions', PutawayController.getBinSuggestions);
-
-// 9. Get Putaway Tasks by User (GET with pagination)
-router.get('/tasks', PutawayController.getPutawayTasksByUser);
-
 // Debug endpoint
 router.get('/debug', PutawayController.debugDatabase);
 

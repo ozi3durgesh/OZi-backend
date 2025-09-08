@@ -977,6 +977,7 @@ export interface GRNLineAttributes {
   qc_fail_qty: number;
   variance_reason?: string;
   line_status: string;
+  putaway_status?: string;
   remarks?: string | null;
   expected_date?: Date;
   received_date?: Date;
