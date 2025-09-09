@@ -7,7 +7,6 @@ import GRNLine from '../models/GrnLine';
 export class GrnBatchController {
   static async createGrnBatch(req: Request, res: Response) {
     const data: CreateGRNBatchRequest = req.body;
-    console.log({ data });
     const existingGRNBatch = await GRNBatch.findOne({
       where: { grn_line_id: data.grnLineId, batch_no: data.batchNo },
     });

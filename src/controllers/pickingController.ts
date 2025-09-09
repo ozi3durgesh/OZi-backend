@@ -74,18 +74,13 @@ export class PickingController {
         
         // Calculate total items for this single order
         let totalItems = 0;
-        console.log(`Order ${orderData.order_id} cart data:`, JSON.stringify(orderData.cart));
         if (orderData.cart && Array.isArray(orderData.cart)) {
           // Count the actual number of items in the cart, not the price amounts
           // If cart items have quantity field, sum those; otherwise count by array length
           totalItems = orderData.cart.reduce((sum: number, item: any) => {
             return sum + (item.quantity || 1);
           }, 0);
-        } else {
-          console.warn(`Order ${orderData.id} has invalid cart data:`, orderData.cart);
         }
-        
-        console.log(`Wave ${waveNumber}: 1 order (${orderData.order_id}), ${totalItems} total items`);
         
         const wave = await PickingWave.create({
           waveNumber,
@@ -106,21 +101,15 @@ export class PickingController {
         let createdItems = 0;
         
         if (orderData.cart && Array.isArray(orderData.cart)) {
-          console.log(`Cart is array with ${orderData.cart.length} items`);
           
           for (let i = 0; i < orderData.cart.length; i++) {
             const item = orderData.cart[i];
-            console.log(`\n--- Processing cart item ${i + 1} ---`);
-            console.log(`Item data:`, JSON.stringify(item, null, 2));
-            console.log(`Item type:`, typeof item);
-            console.log(`Item keys:`, Object.keys(item));
             
             // More flexible validation - check for sku and either amount or quantity
             if (item && item.sku !== undefined && item.sku !== null) {
               // For cart items with amount but no quantity, use amount as quantity
               // This handles the case where cart items have {sku: 123, amount: 25.99}
               const quantity = item.quantity || (item.amount ? 1 : 1);
-              console.log(`✓ Valid item - SKU: ${item.sku}, quantity: ${quantity}, amount: ${item.amount}`);
               
               try {
                 // Find the SKU in ScannerSku table to get bin location
@@ -129,7 +118,6 @@ export class PickingController {
                 });
 
                 if (!scannerSku) {
-                  console.error(`✗ SKU ${item.sku} not found in ScannerSku table`);
                   throw new Error(`SKU ${item.sku} not found in scanner system. Please ensure the SKU is properly scanned and registered.`);
                 }
 
@@ -141,7 +129,6 @@ export class PickingController {
                 });
 
                 if (!scannerBin) {
-                  console.error(`✗ Bin location not found for SKU ${item.sku} with binLocationScanId: ${scannerSku.binLocationScanId}`);
                   throw new Error(`Bin location not found for SKU ${item.sku}. Please ensure the bin location is properly scanned and registered.`);
                 }
 
@@ -160,30 +147,17 @@ export class PickingController {
                   expiryDate: fefoRequired ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : undefined
                 } as any);
                 
-                console.log(`✓ Successfully created picklist item with ID: ${picklistItem.id}`);
                 createdItems++;
                 actualTotalItems += quantity;
                 
               } catch (createError) {
-                console.error(`✗ Error creating picklist item:`, createError);
-                console.error(`Error details:`, createError instanceof Error ? createError.message : String(createError));
+                console.error(`Error creating picklist item:`, createError);
               }
             } else {
-              console.warn(`✗ Skipping cart item without SKU:`, JSON.stringify(item));
-              console.warn(`Item.sku value:`, item?.sku);
-              console.warn(`Item.sku type:`, typeof item?.sku);
             }
           }
         } else {
-          console.warn(`✗ Order ${orderData.order_id} has invalid cart data:`, orderData.cart);
-          console.warn(`Cart type:`, typeof orderData.cart);
-          console.warn(`Cart is array:`, Array.isArray(orderData.cart));
         }
-        
-        console.log(`\n=== Summary for wave ${wave.id} ===`);
-        console.log(`Expected total items: ${totalItems}`);
-        console.log(`Actual created items: ${createdItems}`);
-        console.log(`Actual total quantity: ${actualTotalItems}`);
         
         // Update wave with actual counts
         await wave.update({

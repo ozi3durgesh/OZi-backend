@@ -8,7 +8,6 @@ import { CartItem } from '../types';
 import sequelize from '../config/database';
 import { generateSimpleOrderId } from '../utils/orderIdGenerator';
 
-import { OrderTransactionService, OrderTransactionData } from '../services/OrderTransactionService';
 
 interface AuthRequest extends Request {
   user?: {
@@ -665,8 +664,7 @@ export class OrderController {
       if (!userId) {
         // For testing without authentication, use a default user ID
         // In production, this should be removed and proper authentication enforced
-        console.log('No user ID provided, using default user ID for testing');
-        // You can set this to any existing user ID in your database
+        // Using default user ID for testing
         // For now, let's use 1 as default (the admin user that exists)
         req.user = { id: 1, email: 'admin@company.com' };
       }
@@ -710,16 +708,9 @@ export class OrderController {
 
       // CART VALIDATION
       // Basic cart validation without product lookup
-      console.log('Validating cart items...');
-      
       if (!orderData.cart || orderData.cart.length === 0) {
         return ResponseHandler.error(res, 'Cart cannot be empty', 400);
       }
-
-      // Log cart validation
-      console.log('Cart validation completed successfully');
-      console.log('Cart items:', orderData.cart.length);
-      console.log('Order amount:', orderData.order_amount);
 
       // Validate order type specific requirements
       if (orderData.order_type === 'delivery' || orderData.order_type === 'parcel') {
@@ -794,15 +785,17 @@ export class OrderController {
         }
       }
 
-      // Prepare data for transaction service
-      const transactionData: OrderTransactionData = {
+      // Create order directly
+      const orderId = await generateSimpleOrderId();
+      const order = await Order.create({
+        order_id: orderId,
         user_id: finalUserId,
         store_id: orderData.store_id,
         order_amount: finalOrderAmount,
         tax_amount: taxAmount,
         payment_method: orderData.payment_method,
         delivery_address: orderData.address,
-        cart: orderData.cart,
+        cart: JSON.stringify(orderData.cart),
         coupon_code: orderData.coupon_code,
         partial_payment: Boolean(orderData.partial_payment) || false,
         is_buy_now: Boolean(orderData.is_buy_now) || false,
@@ -816,15 +809,16 @@ export class OrderController {
         coupon_discount_amount: couponDiscountAmount,
         coupon_discount_title: orderData.coupon_discount_title,
         discount_amount: discountAmount,
+        created_at: Math.floor(Date.now() / 1000),
+        updated_at: Math.floor(Date.now() / 1000),
+      });
+
+      const transactionResult = {
+        success: true,
+        orderId: order.order_id,
+        internalId: order.id,
+        order: order
       };
-
-      // Execute comprehensive transaction
-      console.log('Executing order placement transaction...');
-      const transactionResult = await OrderTransactionService.executeOrderTransaction(transactionData);
-
-      if (!transactionResult.success) {
-        return ResponseHandler.error(res, transactionResult.error || 'Order placement failed', 400);
-      }
 
       // Prepare response to match production format exactly
       const response = {
@@ -1112,7 +1106,6 @@ export class OrderController {
     try {
       const { order_id } = req.query;
 
-      console.log('Track order request:', { order_id, type: typeof order_id });
 
       if (!order_id) {
         return ResponseHandler.error(res, 'Order ID is required', 400);
@@ -1122,24 +1115,18 @@ export class OrderController {
       let whereClause: any = {};
       if (order_id.toString().startsWith('ozi')) {
         whereClause.order_id = order_id;
-        console.log('Using order_id field:', order_id);
       } else if (!isNaN(parseInt(order_id.toString()))) {
         whereClause.id = parseInt(order_id.toString());
-        console.log('Using id field:', parseInt(order_id.toString()));
       } else {
-        console.log('Invalid order ID format:', order_id);
         return ResponseHandler.error(res, 'Invalid order ID format', 400);
       }
 
-      console.log('Where clause:', whereClause);
 
       const order = await Order.findOne({ where: whereClause });
       if (!order) {
-        console.log('Order not found with where clause:', whereClause);
         return ResponseHandler.error(res, 'Order not found', 404);
       }
 
-      console.log('Order found:', order);
 
       return ResponseHandler.success(res, {
         order_id: (order as any).order_id,
@@ -1213,7 +1200,6 @@ export class OrderController {
     try {
       const { order_id } = req.query;
 
-      console.log('Debug track order request:', { order_id, type: typeof order_id });
 
       if (!order_id) {
         return ResponseHandler.error(res, 'Order ID is required', 400);
@@ -1223,24 +1209,18 @@ export class OrderController {
       let whereClause: any = {};
       if (order_id.toString().startsWith('ozi')) {
         whereClause.order_id = order_id;
-        console.log('Using order_id field:', order_id);
       } else if (!isNaN(parseInt(order_id.toString()))) {
         whereClause.id = parseInt(order_id.toString());
-        console.log('Using id field:', parseInt(order_id.toString()));
       } else {
-        console.log('Invalid order ID format:', order_id);
         return ResponseHandler.error(res, 'Invalid order ID format', 400);
       }
 
-      console.log('Where clause:', whereClause);
 
       const order = await Order.findOne({ where: whereClause });
       if (!order) {
-        console.log('Order not found with where clause:', whereClause);
         return ResponseHandler.error(res, 'Order not found', 404);
       }
 
-      console.log('Order found:', order);
 
       return ResponseHandler.success(res, {
         debug: true,

@@ -3,7 +3,6 @@ import { ResponseHandler } from '../middleware/responseHandler';
 import { Helpers } from '../utils/Helpers';
 import Order from '../models/Order';
 import EcomLog from '../models/EcomLog';
-import OrderDetails from '../models/OrderDetails';
 import { OrderAttributes } from '../types';
 
 interface AuthRequest extends Request {
@@ -30,13 +29,7 @@ export class EasyEcomWebhookController {
           order_status: ['pending', 'confirmed', 'processing'],
           // Add any other conditions you need
         },
-        include: [
-          {
-            model: OrderDetails,
-            as: 'orderDetails',
-            required: false,
-          }
-        ],
+        include: [],
         order: [['created_at', 'DESC']],
         limit: 100, // Process in batches
       });
@@ -53,7 +46,6 @@ export class EasyEcomWebhookController {
       for (const order of orders) {
         try {
           const orderData = order.get({ plain: true }) as OrderAttributes;
-          console.log(`Processing order ${orderData.id} through Ecommorder...`);
           
           const result = await Helpers.Ecommorder(orderData);
           results.push({
@@ -62,7 +54,6 @@ export class EasyEcomWebhookController {
             result
           });
           
-          console.log(`Order ${orderData.id} processed successfully`);
         } catch (error: any) {
           const orderData = order.get({ plain: true }) as OrderAttributes;
           console.error(`Error processing order ${orderData.id}:`, error);
@@ -187,22 +178,13 @@ export class EasyEcomWebhookController {
     try {
       const { orderId } = req.params;
       
-      const order = await Order.findByPk(orderId, {
-        include: [
-          {
-            model: OrderDetails,
-            as: 'orderDetails',
-            required: false,
-          }
-        ]
-      });
+      const order = await Order.findByPk(orderId);
       
       if (!order) {
         ResponseHandler.error(res, 'Order not found', 404);
         return;
       }
 
-      console.log(`Retrying failed order ${orderId} through Ecommorder...`);
       
       const orderData = order.get({ plain: true }) as OrderAttributes;
       const result = await Helpers.Ecommorder(orderData);
@@ -234,7 +216,6 @@ export class EasyEcomWebhookController {
         return;
       }
 
-      console.log('🔄 PHP Integration called with order:', order.id);
       
       // Call the same Ecommorder function that matches PHP 100%
       const result = await Helpers.Ecommorder(order);
@@ -265,7 +246,6 @@ export class EasyEcomWebhookController {
         return;
       }
 
-      console.log('📝 Direct logging called for order:', order.id);
       
       // Create EcomLog entry immediately
       const ecomLog = await EcomLog.create({
@@ -288,7 +268,6 @@ export class EasyEcomWebhookController {
       });
       
       const logData = ecomLog.get({ plain: true }) as any;
-      console.log('✅ EcomLog created successfully:', logData);
       
       ResponseHandler.success(res, {
         message: 'Order logged successfully in Node.js database',
@@ -316,7 +295,6 @@ export class EasyEcomWebhookController {
    */
   public static async testEcomLog(req: Request, res: Response): Promise<void> {
     try {
-      console.log('🧪 Testing EcomLog functionality...');
       
       // Test creating a log entry
       const testLog = await EcomLog.create({
@@ -328,7 +306,6 @@ export class EasyEcomWebhookController {
       });
       
       const logData = testLog.get({ plain: true }) as any;
-      console.log('✅ Test EcomLog created:', logData);
       
       // Get all logs to verify
       const allLogs = await EcomLog.findAll({
@@ -365,7 +342,6 @@ export class EasyEcomWebhookController {
    */
   public static async testTimestampParsing(req: Request, res: Response): Promise<void> {
     try {
-      console.log('🧪 Testing timestamp parsing...');
       
       const testTimestamps = [
         '2025-08-30 16:24:03',

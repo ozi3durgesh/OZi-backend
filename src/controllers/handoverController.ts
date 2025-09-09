@@ -1,6 +1,6 @@
 // controllers/handoverController.ts
 import { Request, Response } from 'express';
-import { Handover, PackingJob, Rider, User, PackingEvent, LMSShipment, PickingWave } from '../models';
+import { Handover, PackingJob, Rider, User, PackingEvent, PickingWave } from '../models';
 import { LMSIntegration } from '../utils/lmsIntegration';
 import { 
   AssignRiderRequest, 
@@ -384,7 +384,6 @@ export class HandoverController {
           { model: PackingJob, as: 'Job' },
           { model: Rider, as: 'Rider' },
           { model: User, as: 'CancelledBy' },
-          { model: LMSShipment, as: 'LMSShipments' },
         ]
       });
 
@@ -527,14 +526,7 @@ export class HandoverController {
           manifestNumber: shipmentData.manifestNumber,
         });
 
-        // Create LMS shipment record
-        await LMSShipment.create({
-          handoverId: handover.id,
-          lmsReference: lmsResponse.lmsReference || '',
-          status: 'CREATED',
-          lmsResponse: lmsResponse.data,
-          retryCount: 0,
-        });
+        // LMS shipment record creation removed
 
         return { success: true };
       } else {

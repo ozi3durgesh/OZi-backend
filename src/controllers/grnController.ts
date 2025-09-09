@@ -180,7 +180,6 @@ export class GrnController {
           });
           return;
         }
-        console.log(line.rejectedQty, line.remarks);
         if (
           line.rejectedQty > 0 &&
           (line.remarks === undefined || line.remarks?.trim() === '')
@@ -322,7 +321,6 @@ export class GrnController {
   //     const grlLines = await GRNLine.findAll({
   //       where: { grn_id: grn.id },
   //     });
-  //     console.log({ grlLines });
   //     const batches = await GRNBatch.findAll({
   //       where: { grn_line_id: grlLines.map((line) => line.id) },
   //     });

@@ -15,7 +15,6 @@ import packingRoutes from './routes/packingRoutes';
 import handoverRoutes from './routes/handoverRoutes';
 import warehouseRoutes from './routes/warehouseRoutes';
 import grnRoutes from './routes/grnRoutes';
-import paymentRoutes from './routes/paymentRoutes';
 import easyEcomWebhookRoutes from './routes/easyEcomWebhookRoutes';
 import { errorHandler } from './middleware/errorHandler';
 import vendorRoutes from './routes/vendorRoutes';
@@ -68,8 +67,6 @@ app.use('/api/v1/customer/order', orderRoutes);
 // Ecommerce integration routes
 app.use('/api/ecommerce', easyEcomWebhookRoutes);
 
-// Payment routes
-app.use('/payment', paymentRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

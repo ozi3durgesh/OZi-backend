@@ -5,8 +5,6 @@ import GRN from '../models/Grn.model';
 import GRNLine from '../models/GrnLine';
 import PurchaseOrder from '../models/PurchaseOrder';
 import Product from '../models/productModel';
-import PutawayTask from '../models/PutawayTask';
-import PutawayAudit from '../models/PutawayAudit';
 import BinLocation from '../models/BinLocation';
 import ScannerSku from '../models/ScannerSku';
 import ScannerBin from '../models/ScannerBin';
@@ -596,13 +594,10 @@ export class PutawayController {
       } else {
         // Case 2: SKU not found in scanner_sku, suggest bin based on category
         const productCategory = product.Category?.toLowerCase().trim();
-        console.log('🔍 Case 2: SKU not found in scanner_sku');
-        console.log('📦 Product Category:', productCategory);
   
         // Error Case 1: Product category is missing
         if (!productCategory) {
           binError = 'Product category is missing from product_master table';
-          console.log('❌ Error: Product category is missing');
         } else {
           let suggestedBin: any = null;
           let matchType = 'fallback';
@@ -623,28 +618,17 @@ export class PutawayController {
               LIMIT 100
             `);
             
-            console.log('📊 Total active bins found:', allBinsRaw.length);
 
             // Error Case 2: No active bins found
             if (allBinsRaw.length === 0) {
               binError = 'No active bins found in bin_locations table';
-              console.log('❌ Error: No active bins found');
             } else {
-              // Log first few bins for debugging
-              console.log('📋 Sample bins:', allBinsRaw.slice(0, 3).map((bin: any) => ({
-                bin_code: bin.bin_code,
-                preferred_product_category: bin.preferred_product_category,
-                category_mapping: bin.category_mapping,
-                capacity: bin.capacity,
-                current_quantity: bin.current_quantity
-              })));
               // Priority 1: Find bin with exact preferred_product_category match
               suggestedBin = allBinsRaw.find((bin: any) => {
                 if (bin.preferred_product_category) {
                   const preferred = bin.preferred_product_category.toLowerCase().trim();
                   if (preferred === productCategory) {
                     matchType = 'exact_preferred';
-                    console.log('✅ Found exact preferred match:', bin.bin_code);
                     return true;
                   }
                 }
@@ -660,7 +644,6 @@ export class PutawayController {
                     );
                     if (exactMatch) {
                       matchType = 'exact_mapping';
-                      console.log('✅ Found exact category mapping match:', bin.bin_code);
                       return true;
                     }
                   }
@@ -678,7 +661,6 @@ export class PutawayController {
                     );
                     if (partialMatch) {
                       matchType = 'partial_mapping';
-                      console.log('✅ Found partial category mapping match:', bin.bin_code);
                       return true;
                     }
                   }
@@ -694,7 +676,6 @@ export class PutawayController {
                 });
                 if (suggestedBin) {
                   matchType = 'available_capacity';
-                  console.log('✅ Found bin with available capacity:', suggestedBin.bin_code);
                 }
               }
 
@@ -702,29 +683,20 @@ export class PutawayController {
               if (!suggestedBin && allBinsRaw.length > 0) {
                 suggestedBin = allBinsRaw[0];
                 matchType = 'fallback';
-                console.log('⚠️ Using fallback bin:', suggestedBin.bin_code);
               }
 
               // Error Case 3: No suitable bins found
               if (!suggestedBin) {
                 binError = `No suitable bins found for product category: ${productCategory}`;
-                console.log('❌ Error: No suitable bins found');
               }
             }
           } catch (error: any) {
             // Error Case 4: Database error while searching bins
             binError = `Database error while searching bins: ${error.message || error}`;
-            console.log('❌ Database error:', error);
           }
   
           // Validate suggested bin data
           if (suggestedBin && !binError) {
-            console.log('🔍 Validating suggested bin:', {
-              bin_code: suggestedBin.bin_code,
-              capacity: suggestedBin.capacity,
-              current_quantity: suggestedBin.current_quantity,
-              status: suggestedBin.status
-            });
             
             // Check for invalid capacity or quantity data
             if (!suggestedBin.capacity || 
@@ -734,17 +706,10 @@ export class PutawayController {
                 suggestedBin.current_quantity < 0 ||
                 suggestedBin.current_quantity > suggestedBin.capacity) {
               binError = 'Suggested bin has invalid capacity or quantity data';
-              console.log('❌ Error: Invalid bin data - capacity:', suggestedBin.capacity, 'current_quantity:', suggestedBin.current_quantity);
             } else {
               const availableCapacity = suggestedBin.capacity - suggestedBin.current_quantity;
               const utilizationPercentage = Math.round((suggestedBin.current_quantity / suggestedBin.capacity) * 100);
               
-              console.log('✅ Creating binSuggested object with:', {
-                availableCapacity,
-                utilizationPercentage,
-                hasCapacity: availableCapacity > 0,
-                matchType
-              });
             
               binSuggested = {
                 binCode: suggestedBin.bin_code,
@@ -767,7 +732,6 @@ export class PutawayController {
                 matchType: matchType
               };
               
-              console.log('✅ binSuggested created successfully:', binSuggested);
             }
           }
         }
@@ -1004,11 +968,22 @@ export class PutawayController {
       const transaction = await sequelize.transaction();
 
       try {
+        // Calculate new remaining quantity
+        const newRemainingQty = grnLine.qc_pass_qty - quantity;
+        
+        // Determine status based on remaining quantity
+        let putawayStatus: string;
+        if (newRemainingQty <= 0) {
+          putawayStatus = 'completed';
+        } else {
+          putawayStatus = 'partial';
+        }
+
         // Update GRN line - reduce the QC passed quantity (this represents available quantity for putaway)
         await grnLine.update(
           { 
-            qc_pass_qty: grnLine.qc_pass_qty - quantity,
-            putaway_status: grnLine.qc_pass_qty - quantity === 0 ? 'completed' : 'partial'
+            qc_pass_qty: newRemainingQty,
+            putaway_status: putawayStatus
           },
           { transaction }
         );
@@ -1062,10 +1037,11 @@ export class PutawayController {
             quantity,
             bin_location,
             remarks,
+            status: putawayStatus, // Overall status based on remaining quantity
             updated_grn_line: {
-              qc_pass_qty: grnLine.qc_pass_qty - quantity,
-              remaining_qty: grnLine.qc_pass_qty - quantity,
-              putaway_status: grnLine.qc_pass_qty - quantity === 0 ? 'completed' : 'partial'
+              qc_pass_qty: newRemainingQty,
+              remaining_qty: newRemainingQty, // Remaining quantity for this SKU
+              putaway_status: putawayStatus
             },
             updated_bin_location: {
               bin_code: bin_location,
