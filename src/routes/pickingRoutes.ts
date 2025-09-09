@@ -48,6 +48,12 @@ router.get('/:waveId/items',
   PickingController.getPicklistItems
 );
 
+router.post('/:waveId/items/create', 
+  authenticate, 
+  hasPermission('picking:assign_manage'), 
+  PickingController.createPicklistItems
+);
+
 router.post('/:waveId/scan', 
   authenticate, 
   hasPermission('picking:execute'), 

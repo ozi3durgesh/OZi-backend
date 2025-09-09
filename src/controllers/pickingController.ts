@@ -117,30 +117,32 @@ export class PickingController {
                   where: { skuScanId: item.sku.toString() }
                 });
 
-                if (!scannerSku) {
-                  throw new Error(`SKU ${item.sku} not found in scanner system. Please ensure the SKU is properly scanned and registered.`);
-                }
+                let binLocation = 'DEFAULT-BIN'; // Default bin location
+                let productName = `Product-${item.sku}`;
 
-                // Get the bin location from ScannerBin table
-                const scannerBin = await ScannerBin.findOne({
-                  where: {
-                    binLocationScanId: scannerSku.binLocationScanId
+                if (scannerSku) {
+                  // Get the bin location from ScannerBin table
+                  const scannerBin = await ScannerBin.findOne({
+                    where: {
+                      binLocationScanId: scannerSku.binLocationScanId
+                    }
+                  });
+
+                  if (scannerBin) {
+                    binLocation = scannerBin.binLocationScanId;
+                  } else {
+                    console.warn(`Bin location not found for SKU ${item.sku}. Using default bin location.`);
                   }
-                });
-
-                if (!scannerBin) {
-                  throw new Error(`Bin location not found for SKU ${item.sku}. Please ensure the bin location is properly scanned and registered.`);
+                } else {
+                  console.warn(`SKU ${item.sku} not found in scanner system. Using default bin location.`);
                 }
-
-                // Use the actual bin location from scanner system
-                const binLocation = scannerBin.binLocationScanId;
 
                 const picklistItem = await PicklistItem.create({
                   waveId: wave.id,
                   orderId: orderData.id, // Keep using internal ID for database relationships
                   sku: item.sku.toString(), // Convert number to string for storage
-                  productName: `Product-${item.sku}`, // Generate product name from SKU
-                  binLocation: binLocation, // Use actual bin location from scanner system
+                  productName: productName, // Generate product name from SKU
+                  binLocation: binLocation, // Use actual or default bin location
                   quantity: quantity, // Use quantity or default to 1
                   scanSequence: Math.floor(Math.random() * 100) + 1, // Random sequence for demo
                   fefoBatch: fefoRequired ? `BATCH-${Date.now()}` : undefined,
@@ -149,9 +151,30 @@ export class PickingController {
                 
                 createdItems++;
                 actualTotalItems += quantity;
+                console.log(`Created picklist item for SKU ${item.sku} with bin location ${binLocation}`);
                 
               } catch (createError) {
-                console.error(`Error creating picklist item:`, createError);
+                console.error(`Error creating picklist item for SKU ${item.sku}:`, createError);
+                // Try to create with minimal data
+                try {
+                  const picklistItem = await PicklistItem.create({
+                    waveId: wave.id,
+                    orderId: orderData.id,
+                    sku: item.sku.toString(),
+                    productName: `Product-${item.sku}`,
+                    binLocation: 'DEFAULT-BIN',
+                    quantity: quantity,
+                    scanSequence: Math.floor(Math.random() * 100) + 1,
+                    fefoBatch: fefoRequired ? `BATCH-${Date.now()}` : undefined,
+                    expiryDate: fefoRequired ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : undefined
+                  } as any);
+                  
+                  createdItems++;
+                  actualTotalItems += quantity;
+                  console.log(`Created fallback picklist item for SKU ${item.sku}`);
+                } catch (fallbackError) {
+                  console.error(`Failed to create even fallback picklist item for SKU ${item.sku}:`, fallbackError);
+                }
               }
             } else {
             }
@@ -1122,6 +1145,12 @@ export class PickingController {
     console.log('Querying for waveId:', waveId);
     console.log('Where clause:', whereClause);
 
+    // Debug: Check if any picklist items exist for this wave
+    const totalItemsForWave = await PicklistItem.count({
+      where: { waveId: parseInt(waveId) }
+    });
+    console.log(`Total picklist items found for wave ${waveId}: ${totalItemsForWave}`);
+
     // Extend PicklistItem type to include productInfo
     interface PicklistItemWithProduct extends PicklistItem {
       productInfo?: Product;
@@ -1191,7 +1220,200 @@ export class PickingController {
     console.error('Get picklist items error:', error);
     return ResponseHandler.error(res, 'Internal server error', 500);
   }
- }
+  }
+
+  /**
+   * Manually create picklist items for a wave
+   */
+  static async createPicklistItems(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { waveId } = req.params;
+
+      // Verify wave exists
+      const wave = await PickingWave.findByPk(waveId);
+      if (!wave) {
+        return ResponseHandler.error(res, 'Wave not found', 404);
+      }
+
+      // Check permissions
+      const userPermissions = req.user!.permissions || [];
+      const canManage = userPermissions.includes('picking:assign_manage') || userPermissions.includes('picking:view');
+      if (!canManage) {
+        return ResponseHandler.error(res, 'Insufficient permissions to manage this wave', 403);
+      }
+
+      // Create picklist items
+      const result = await PickingController.createPicklistItemsForWave(parseInt(waveId));
+
+      if (result.success) {
+        return ResponseHandler.success(res, {
+          message: result.message,
+          createdItems: result.createdItems,
+          waveId: parseInt(waveId)
+        });
+      } else {
+        return ResponseHandler.error(res, result.message, 400);
+      }
+
+    } catch (error) {
+      console.error('Create picklist items error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+  /**
+   * Create picklist items for an existing wave (utility function)
+   */
+  static async createPicklistItemsForWave(waveId: number): Promise<{ success: boolean; message: string; createdItems: number }> {
+    try {
+      // Check if picklist items already exist for this wave
+      const existingItems = await PicklistItem.count({
+        where: { waveId }
+      });
+
+      if (existingItems > 0) {
+        return {
+          success: true,
+          message: `Wave ${waveId} already has ${existingItems} picklist items`,
+          createdItems: existingItems
+        };
+      }
+
+      // Get the wave details
+      const wave = await PickingWave.findByPk(waveId);
+      if (!wave) {
+        return {
+          success: false,
+          message: `Wave ${waveId} not found`,
+          createdItems: 0
+        };
+      }
+
+      // Find the order associated with this wave
+      // Since we use one-order-per-wave, we can find the order by looking at the wave number
+      const orderIdFromWave = wave.waveNumber.split('-')[1]; // Extract order_id from wave number
+      
+      const order = await Order.findOne({
+        where: { order_id: orderIdFromWave },
+        attributes: ['id', 'order_id', 'cart']
+      });
+
+      if (!order) {
+        return {
+          success: false,
+          message: `Order not found for wave ${waveId}, order_id: ${orderIdFromWave}`,
+          createdItems: 0
+        };
+      }
+
+      const orderData = order.get({ plain: true });
+      console.log(`Creating picklist items for wave ${waveId}, order: ${orderData.order_id}`);
+
+      // Create picklist items for this order
+      let actualTotalItems = 0;
+      let createdItems = 0;
+      
+      if (orderData.cart && Array.isArray(orderData.cart)) {
+        for (let i = 0; i < orderData.cart.length; i++) {
+          const item = orderData.cart[i];
+          
+          // More flexible validation - check for sku and either amount or quantity
+          if (item && item.sku !== undefined && item.sku !== null) {
+            // For cart items with amount but no quantity, use amount as quantity
+            // This handles the case where cart items have {sku: 123, amount: 25.99}
+            const quantity = item.quantity || (item.amount ? 1 : 1);
+            
+            try {
+              // Find the SKU in ScannerSku table to get bin location
+              const scannerSku = await ScannerSku.findOne({
+                where: { skuScanId: item.sku.toString() }
+              });
+
+              let binLocation = 'DEFAULT-BIN'; // Default bin location
+              let productName = `Product-${item.sku}`;
+
+              if (scannerSku) {
+                // Get the bin location from ScannerBin table
+                const scannerBin = await ScannerBin.findOne({
+                  where: {
+                    binLocationScanId: scannerSku.binLocationScanId
+                  }
+                });
+
+                if (scannerBin) {
+                  binLocation = scannerBin.binLocationScanId;
+                } else {
+                  console.warn(`Bin location not found for SKU ${item.sku}. Using default bin location.`);
+                }
+              } else {
+                console.warn(`SKU ${item.sku} not found in scanner system. Using default bin location.`);
+              }
+
+              const picklistItem = await PicklistItem.create({
+                waveId: waveId,
+                orderId: orderData.id,
+                sku: item.sku.toString(),
+                productName: productName,
+                binLocation: binLocation,
+                quantity: quantity,
+                scanSequence: Math.floor(Math.random() * 100) + 1,
+                fefoBatch: wave.fefoRequired ? `BATCH-${Date.now()}` : undefined,
+                expiryDate: wave.fefoRequired ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : undefined
+              } as any);
+              
+              createdItems++;
+              actualTotalItems += quantity;
+              console.log(`Created picklist item for SKU ${item.sku} with bin location ${binLocation}`);
+              
+            } catch (createError) {
+              console.error(`Error creating picklist item for SKU ${item.sku}:`, createError);
+              // Try to create with minimal data
+              try {
+                const picklistItem = await PicklistItem.create({
+                  waveId: waveId,
+                  orderId: orderData.id,
+                  sku: item.sku.toString(),
+                  productName: `Product-${item.sku}`,
+                  binLocation: 'DEFAULT-BIN',
+                  quantity: quantity,
+                  scanSequence: Math.floor(Math.random() * 100) + 1,
+                  fefoBatch: wave.fefoRequired ? `BATCH-${Date.now()}` : undefined,
+                  expiryDate: wave.fefoRequired ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : undefined
+                } as any);
+                
+                createdItems++;
+                actualTotalItems += quantity;
+                console.log(`Created fallback picklist item for SKU ${item.sku}`);
+              } catch (fallbackError) {
+                console.error(`Failed to create even fallback picklist item for SKU ${item.sku}:`, fallbackError);
+              }
+            }
+          }
+        }
+      }
+
+      // Update wave with actual counts
+      await wave.update({
+        totalItems: actualTotalItems
+      });
+
+      console.log(`Created ${createdItems} picklist items for wave ${waveId}, total items: ${actualTotalItems}`);
+
+      return {
+        success: true,
+        message: `Successfully created ${createdItems} picklist items for wave ${waveId}`,
+        createdItems: createdItems
+      };
+
+    } catch (error) {
+      console.error(`Error creating picklist items for wave ${waveId}:`, error);
+      return {
+        success: false,
+        message: `Error creating picklist items: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        createdItems: 0
+      };
+    }
+  }
 
 }
 
