@@ -29,6 +29,7 @@ interface CreateFullGRNInput {
     heldQty?: number;
     rtvQty?: number;
     lineStatus?: string;
+
     batches?: {
       batchNo: string;
       expiry: Date;
@@ -36,6 +37,8 @@ interface CreateFullGRNInput {
       photos?: { url: string; reason?: string }[];
     }[];
   }[];
+  closeReason?: string;
+  status?: 'partial' | 'completed' | 'closed' | 'pending-qc' | 'rtv-initiated';
 }
 
 export class GrnController {
@@ -115,7 +118,8 @@ export class GrnController {
       const grn = await GRN.create(
         {
           po_id: input.poId,
-          status: 'pending-qc',
+          status: input.status || 'partial',
+          closeReason: input.closeReason || null,
           created_by: userId,
           created_at: new Date(),
           updated_at: new Date(),
@@ -199,6 +203,7 @@ export class GrnController {
             sku_id: line.skuId,
             ordered_qty: line.orderedQty,
             received_qty: line.receivedQty,
+            pending_qty: line.orderedQty - newTotalReceived,
             rejected_qty: line.rejectedQty || 0,
             qc_pass_qty: line.qcPassQty ?? line.receivedQty,
             qc_fail_qty: line.rejectedQty ?? 0,

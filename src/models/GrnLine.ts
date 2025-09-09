@@ -13,6 +13,7 @@ class GRNLine
   declare ean: string;
   declare ordered_qty: number;
   declare received_qty: number;
+  declare pending_qty: number;
   declare rejected_qty: number;
   declare qc_pass_qty: number;
   declare qc_fail_qty: number;
@@ -57,7 +58,11 @@ GRNLine.init(
       type: DataTypes.INTEGER,
       allowNull: false,
     },
-
+    pending_qty: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 0,
+    },
     rejected_qty: {
       type: DataTypes.INTEGER,
       allowNull: true,
@@ -83,6 +88,7 @@ GRNLine.init(
       allowNull: true,
       defaultValue: 0,
     },
+
     line_status: {
       type: DataTypes.ENUM('completed', 'partial', 'pending'),
       allowNull: false,

@@ -418,7 +418,6 @@ export interface PackingJobCreationAttributes {
   handoverAt?: Date;
 }
 
-
 export interface PhotoEvidenceAttributes {
   id: number;
   jobId: number;
@@ -546,7 +545,6 @@ export interface HandoverCreationAttributes {
   lmsLastSyncAt?: Date;
   lmsErrorMessage?: string;
 }
-
 
 export interface PackingEventAttributes {
   id: number;
@@ -930,6 +928,7 @@ export interface GRNLineAttributes {
   ordered_qty: number;
   rejected_qty: number;
   received_qty: number;
+  pending_qty: number;
   qc_pass_qty?: number;
   held_qty?: number;
   rtv_qty?: number;

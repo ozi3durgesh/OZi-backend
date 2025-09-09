@@ -47,6 +47,7 @@ GRN.init(
       type: DataTypes.STRING(255),
       allowNull: true,
     },
+
     // expected_date: {
     //   type: DataTypes.DATE,
     //   allowNull: false,
