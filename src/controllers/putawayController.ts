@@ -72,11 +72,11 @@ export class PutawayController {
         include: [
           {
             model: GRN,
-            as: 'Grn',
+            as: 'GrnId',
             include: [
               {
                 model: PurchaseOrder,
-                as: 'PO',
+                as: 'PurchaseOrder',
                 attributes: ['id', 'po_id', 'vendor_name'],
               },
             ],
@@ -97,7 +97,7 @@ export class PutawayController {
       
       allGrnLines.forEach((grnLine: any) => {
         const grnId = grnLine.grn_id;
-        const grn = grnLine.Grn;
+        const grn = grnLine.GrnId;
         
         if (!grnMap.has(grnId)) {
           grnMap.set(grnId, {
@@ -204,7 +204,7 @@ export class PutawayController {
         include: [
           {
             model: PurchaseOrder,
-            as: 'PO',
+            as: 'PurchaseOrder',
             attributes: ['id', 'po_id', 'vendor_name'],
           },
         ],
@@ -860,9 +860,9 @@ export class PutawayController {
 
       const productDetails = {
         scannedProductDetail: convertProductDetailKeys(product.dataValues), // Return all product fields from product_master table
-        poId: (grn as any).PO?.po_id || '',
+        poId: (grn as any).PurchaseOrder?.po_id || '',
         grn: grn.id,
-        vendorName: (grn as any).PO?.vendor_name || '',
+        vendorName: (grn as any).PurchaseOrder?.vendor_name || '',
         availableQuantity: (grn as any).Line?.[0]?.qc_pass_qty || 0,
       };
 
