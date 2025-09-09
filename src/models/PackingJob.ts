@@ -3,7 +3,6 @@ import { DataTypes, Model } from 'sequelize';
 import sequelize from '../config/database';
 import { PackingJobAttributes, PackingJobCreationAttributes } from '../types';
 import User from './User';
-import PackingItem from './PackingItem';
 
 class PackingJob extends Model<PackingJobAttributes, PackingJobCreationAttributes> implements PackingJobAttributes {
   declare id: number;

@@ -10,9 +10,7 @@ import PickingWave from './PickingWave';
 import PicklistItem from './PicklistItem';
 import PickingException from './PickingException';
 import PackingJob from './PackingJob';
-import PackingItem from './PackingItem';
 import Handover from './Handover';
-import LMSShipment from './LMSShipment';
 import PackingEvent from './PackingEvent';
 import Warehouse from './Warehouse';
 import WarehouseZone from './WarehouseZone';
@@ -20,19 +18,12 @@ import WarehouseStaffAssignment from './WarehouseStaffAssignment';
 import Rider from './Rider';
 import ScannerBin from './ScannerBin';
 import ScannerSku from './ScannerSku';
-import PaymentRequest from './PaymentRequest';
-import PutawayTask from './PutawayTask';
-import PutawayAudit from './PutawayAudit';
 import BinLocation from './BinLocation';
 import GRN from './Grn.model';
 import GRNLine from './GrnLine';
 import GRNBatch from './GrnBatch';
 import GRNPhoto from './GrnPhoto';
 import PurchaseOrder from './PurchaseOrder';
-import OrderPayment from './OrderPayment';
-import OrderTransaction from './OrderTransaction';
-import OrderDetails from './OrderDetails';
-import Item from './Item';
 import EcomLog from './EcomLog';
 import Product from './productModel';
 
@@ -117,11 +108,6 @@ PackingJob.belongsTo(PickingWave, { foreignKey: 'waveId', as: 'Wave' });
 PackingJob.belongsTo(User, { foreignKey: 'packerId', as: 'Packer' });
 User.hasMany(PackingJob, { foreignKey: 'packerId', as: 'PackingJobs' });
 
-PackingJob.hasMany(PackingItem, { foreignKey: 'jobId', as: 'PackingItems' });
-PackingItem.belongsTo(PackingJob, { foreignKey: 'jobId', as: 'Job' });
-
-PackingItem.belongsTo(Order, { foreignKey: 'orderId', as: 'Order' });
-Order.hasMany(PackingItem, { foreignKey: 'orderId', as: 'PackingItems' });
 
 PackingJob.hasOne(Handover, { foreignKey: 'jobId', as: 'Handover' });
 Handover.belongsTo(PackingJob, { foreignKey: 'jobId', as: 'Job' });
@@ -135,8 +121,6 @@ User.hasMany(Handover, {
   as: 'CancelledHandovers',
 });
 
-Handover.hasMany(LMSShipment, { foreignKey: 'handoverId', as: 'LMSShips' });
-LMSShipment.belongsTo(Handover, { foreignKey: 'handoverId', as: 'Handover' });
 
 PackingJob.hasMany(PackingEvent, { foreignKey: 'jobId', as: 'Events' });
 PackingEvent.belongsTo(PackingJob, { foreignKey: 'jobId', as: 'Job' });
@@ -174,25 +158,6 @@ User.hasMany(WarehouseStaffAssignment, {
   as: 'StaffAssignments',
 });
 
-// Payment associations
-Order.hasMany(PaymentRequest, {
-  foreignKey: 'order_id',
-  as: 'PaymentRequests',
-});
-PaymentRequest.belongsTo(Order, { foreignKey: 'order_id', as: 'Order' });
-
-Order.hasMany(OrderPayment, { foreignKey: 'order_id', as: 'OrderPayments' });
-OrderPayment.belongsTo(Order, { foreignKey: 'order_id', as: 'Order' });
-
-Order.hasMany(OrderTransaction, {
-  foreignKey: 'order_id',
-  as: 'OrderTransactions',
-});
-OrderTransaction.belongsTo(Order, { foreignKey: 'order_id', as: 'Order' });
-
-// Ecommerce associations
-Order.hasMany(OrderDetails, { foreignKey: 'order_id', as: 'orderDetails' });
-OrderDetails.belongsTo(Order, { foreignKey: 'order_id', as: 'order' });
 
 Order.hasMany(EcomLog, { foreignKey: 'order_id', as: 'ecomLogs' });
 EcomLog.belongsTo(Order, { foreignKey: 'order_id', as: 'order' });
@@ -245,24 +210,6 @@ GRNPhoto.belongsTo(GRNLine, { foreignKey: 'grn_line_id', as: 'Line' });
 GRNBatch.hasMany(GRNPhoto, { foreignKey: 'grn_batch_id', as: 'Photos' });
 GRNPhoto.belongsTo(GRNBatch, { foreignKey: 'grn_batch_id', as: 'Batch' });
 
-// Putaway associations
-PutawayTask.belongsTo(User, {
-  foreignKey: 'assigned_to',
-  as: 'PutawayAssignedTo',
-});
-User.hasMany(PutawayTask, { foreignKey: 'assigned_to', as: 'PutawayTasks' });
-
-PutawayAudit.belongsTo(PutawayTask, {
-  foreignKey: 'putaway_task_id',
-  as: 'PutawayTask',
-});
-PutawayTask.hasMany(PutawayAudit, {
-  foreignKey: 'putaway_task_id',
-  as: 'AuditLogs',
-});
-
-PutawayAudit.belongsTo(User, { foreignKey: 'user_id', as: 'PutawayAuditUser' });
-User.hasMany(PutawayAudit, { foreignKey: 'user_id', as: 'PutawayAudits' });
 
 export {
   User,
@@ -276,9 +223,7 @@ export {
   PicklistItem,
   PickingException,
   PackingJob,
-  PackingItem,
   Handover,
-  LMSShipment,
   PackingEvent,
   Warehouse,
   WarehouseZone,
@@ -286,15 +231,8 @@ export {
   Rider,
   ScannerBin,
   ScannerSku,
-  PaymentRequest,
-  OrderPayment,
-  OrderTransaction,
-  OrderDetails,
-  Item,
   EcomLog,
   Product,
-  PutawayTask,
-  PutawayAudit,
   BinLocation,
   GRN,
   GRNLine,

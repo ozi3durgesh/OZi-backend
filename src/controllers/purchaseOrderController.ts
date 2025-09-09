@@ -169,7 +169,6 @@ Ozi Technologies`,
   }
 
   await transporter.sendMail(mailOptions);
-  console.log(`Approval email sent to ${role}: ${approvalEmails[role]}`);
 }
 
 // Create Purchase Order

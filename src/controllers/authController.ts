@@ -69,7 +69,6 @@ export class AuthController {
       ) {
         if (isFirstUser) {
           // First user can become admin without secret
-          console.log('First user registration - creating admin account');
         } else {
           // Subsequent admin registrations require admin secret
           const expectedAdminSecret = process.env.ADMIN_REGISTRATION_SECRET;

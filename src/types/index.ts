@@ -418,28 +418,6 @@ export interface PackingJobCreationAttributes {
   handoverAt?: Date;
 }
 
-export interface PackingItemAttributes {
-  id: number;
-  jobId: number;
-  orderId: number;
-  sku: string;
-  quantity: number;
-  pickedQuantity: number;
-  packedQuantity: number;
-  verifiedQuantity: number;
-  status: 'PENDING' | 'PACKING' | 'VERIFIED' | 'COMPLETED';
-  verificationNotes?: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface PackingItemCreationAttributes {
-  jobId: number;
-  orderId: number;
-  sku: string;
-  quantity: number;
-  pickedQuantity: number;
-}
 
 export interface PhotoEvidenceAttributes {
   id: number;
@@ -569,25 +547,6 @@ export interface HandoverCreationAttributes {
   lmsErrorMessage?: string;
 }
 
-export interface LMSShipmentAttributes {
-  id: number;
-  handoverId: number;
-  lmsReference: string;
-  status: 'PENDING' | 'CREATED' | 'MANIFESTED' | 'IN_TRANSIT' | 'DELIVERED';
-  lmsResponse: any;
-  retryCount: number;
-  lastRetryAt?: Date;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface LMSShipmentCreationAttributes {
-  handoverId: number;
-  lmsReference: string;
-  status?: 'PENDING' | 'CREATED' | 'MANIFESTED' | 'IN_TRANSIT' | 'DELIVERED';
-  lmsResponse: any;
-  retryCount?: number;
-}
 
 export interface PackingEventAttributes {
   id: number;
