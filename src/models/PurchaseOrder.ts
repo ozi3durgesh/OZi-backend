@@ -26,19 +26,18 @@ interface PurchaseOrderAttributes {
   total_skus?: number;
   base_price?: number;
 
-  pdf_url?: string;
-  token?: string;
-
-  pi_number?: string;
-  pi_url?: string;
-  final_delivery_date?: Date;
+  // pdf_url?: string; // Commented out - column doesn't exist in DB
+  // token?: string; // Commented out - column doesn't exist in DB
+  // pi_number?: string; // Commented out - column doesn't exist in DB
+  // pi_url?: string; // Commented out - column doesn't exist in DB
+  // final_delivery_date?: Date; // Commented out - column doesn't exist in DB
 
   products?: POProduct[];
 }
 
 type PurchaseOrderCreationAttributes = Optional<
   PurchaseOrderAttributes,
-  'id' | 'approval_status' | 'current_approver' | 'rejection_reason' | 'pdf_url' | 'token' | 'pi_number' | 'pi_url' | 'final_delivery_date'
+  'id' | 'approval_status' | 'current_approver' | 'rejection_reason'
 >;
 
 class PurchaseOrder extends Model<PurchaseOrderAttributes, PurchaseOrderCreationAttributes>
@@ -66,12 +65,11 @@ class PurchaseOrder extends Model<PurchaseOrderAttributes, PurchaseOrderCreation
   declare total_skus?: number;
   declare base_price?: number;
 
-  declare pdf_url?: string;
-  declare token?: string;
-
-  declare pi_number?: string;
-  declare pi_url?: string;
-  declare final_delivery_date?: Date;
+  // declare pdf_url?: string; // Commented out - column doesn't exist in DB
+  // declare token?: string; // Commented out - column doesn't exist in DB
+  // declare pi_number?: string; // Commented out - column doesn't exist in DB
+  // declare pi_url?: string; // Commented out - column doesn't exist in DB
+  // declare final_delivery_date?: Date; // Commented out - column doesn't exist in DB
 
   declare products?: POProduct[];
 }
@@ -100,12 +98,11 @@ PurchaseOrder.init({
   total_skus: DataTypes.INTEGER,
   base_price: DataTypes.DECIMAL(10,2),
 
-  pdf_url: { type: DataTypes.STRING },
-  token: { type: DataTypes.STRING },
-
-  pi_number: { type: DataTypes.STRING },
-  pi_url: { type: DataTypes.STRING },
-  final_delivery_date: { type: DataTypes.DATE }
+  // pdf_url: { type: DataTypes.STRING }, // Commented out - column doesn't exist in DB
+  // token: { type: DataTypes.STRING }, // Commented out - column doesn't exist in DB
+  // pi_number: { type: DataTypes.STRING }, // Commented out - column doesn't exist in DB
+  // pi_url: { type: DataTypes.STRING }, // Commented out - column doesn't exist in DB
+  // final_delivery_date: { type: DataTypes.DATE } // Commented out - column doesn't exist in DB
 }, {
   sequelize,
   tableName: 'purchase_orders',

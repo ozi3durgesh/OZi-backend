@@ -273,9 +273,9 @@ export const savePI = async (req: Request, res: Response) => {
       return ResponseHandler.error(res,'PI can only be saved when Creator is responsible',400);
     }
 
-    po.pi_number = pi_number;
-    po.pi_url = pi_url;
-    po.final_delivery_date = final_delivery_date;
+    // po.pi_number = pi_number; // Commented out - column doesn't exist in DB
+    // po.pi_url = pi_url; // Commented out - column doesn't exist in DB
+    // po.final_delivery_date = final_delivery_date; // Commented out - column doesn't exist in DB
     po.approval_status = 'approved';
     po.current_approver = null;
     await po.save();

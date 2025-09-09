@@ -795,11 +795,11 @@ export class OrderController {
         tax_amount: taxAmount,
         payment_method: orderData.payment_method,
         delivery_address: orderData.address,
-        cart: JSON.stringify(orderData.cart),
+        cart: orderData.cart,
         coupon_code: orderData.coupon_code,
-        partial_payment: Boolean(orderData.partial_payment) || false,
-        is_buy_now: Boolean(orderData.is_buy_now) || false,
-        create_new_user: Boolean(orderData.create_new_user) || false,
+        partial_payment: orderData.partial_payment ? 1 : 0,
+        is_buy_now: orderData.is_buy_now ? 1 : 0,
+        create_new_user: orderData.create_new_user ? 1 : 0,
         password: orderData.password,
         order_type: orderData.order_type,
         latitude: orderData.latitude,
@@ -815,8 +815,8 @@ export class OrderController {
 
       const transactionResult = {
         success: true,
-        orderId: order.order_id,
-        internalId: order.id,
+        orderId: order.getDataValue('order_id'),
+        internalId: order.getDataValue('id'),
         order: order
       };
 
