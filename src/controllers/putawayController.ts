@@ -76,7 +76,7 @@ export class PutawayController {
             include: [
               {
                 model: PurchaseOrder,
-                as: 'PurchaseOrder',
+                as: 'PO',
                 attributes: ['id', 'po_id', 'vendor_name'],
               },
             ],
@@ -204,7 +204,7 @@ export class PutawayController {
         include: [
           {
             model: PurchaseOrder,
-            as: 'PurchaseOrder',
+            as: 'PO',
             attributes: ['id', 'po_id', 'vendor_name'],
           },
         ],
@@ -495,7 +495,7 @@ export class PutawayController {
             include: [
               {
                 model: PurchaseOrder,
-                as: 'PurchaseOrder',
+                as: 'PO',
                 attributes: ['po_id', 'vendor_name'],
               },
             ],
@@ -752,7 +752,7 @@ export class PutawayController {
             poId: (grnLine as any).GrnId?.po_id || 'N/A',
             availableQuantity: grnLine.qc_pass_qty,
             scannedProductDetail: convertProductDetailKeys(product.dataValues),
-            vendorName: (grnLine as any).GrnId?.PurchaseOrder?.vendor_name || '',
+            vendorName: (grnLine as any).GrnId?.PO?.vendor_name || '',
             binLocation: null,
             binSuggested: null
           },
@@ -772,7 +772,7 @@ export class PutawayController {
           poId: (grnLine as any).GrnId?.po_id || 'N/A',
           availableQuantity: grnLine.qc_pass_qty,
           scannedProductDetail: convertProductDetailKeys(product.dataValues),
-          vendorName: (grnLine as any).GrnId?.PurchaseOrder?.vendor_name || '',
+          vendorName: (grnLine as any).GrnId?.PO?.vendor_name || '',
           binLocation: binLocation,
           binSuggested: binSuggested
         },
@@ -860,9 +860,9 @@ export class PutawayController {
 
       const productDetails = {
         scannedProductDetail: convertProductDetailKeys(product.dataValues), // Return all product fields from product_master table
-        poId: (grn as any).PurchaseOrder?.po_id || '',
+        poId: (grn as any).PO?.po_id || '',
         grn: grn.id,
-        vendorName: (grn as any).PurchaseOrder?.vendor_name || '',
+        vendorName: (grn as any).PO?.vendor_name || '',
         availableQuantity: (grn as any).Line?.[0]?.qc_pass_qty || 0,
       };
 
