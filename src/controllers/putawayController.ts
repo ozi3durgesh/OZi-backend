@@ -409,7 +409,7 @@ export class PutawayController {
           message: 'SKU scanned successfully',
           skuId: sku_id,
           grnId: grnLine.grn_id,
-          poId: (grnLine as any).Grn?.po_id || 'N/A',
+          poId: (grnLine as any).GrnId?.po_id || 'N/A',
           availableQuantity: grnLine.qc_pass_qty,
         },
         error: null,
@@ -488,14 +488,14 @@ export class PutawayController {
         include: [
           {
             model: GRN,
-            as: 'Grn',
+            as: 'GrnId',
             where: {
               po_id: po_id,
             },
             include: [
               {
                 model: PurchaseOrder,
-                as: 'PO',
+                as: 'PurchaseOrder',
                 attributes: ['po_id', 'vendor_name'],
               },
             ],
@@ -749,10 +749,10 @@ export class PutawayController {
             message: 'SKU scanned but bin location error occurred',
             skuId: sku_id,
             grnId: grnLine.grn_id,
-            poId: (grnLine as any).Grn?.po_id || 'N/A',
+            poId: (grnLine as any).GrnId?.po_id || 'N/A',
             availableQuantity: grnLine.qc_pass_qty,
             scannedProductDetail: convertProductDetailKeys(product.dataValues),
-            vendorName: (grnLine as any).Grn?.PO?.vendor_name || '',
+            vendorName: (grnLine as any).GrnId?.PurchaseOrder?.vendor_name || '',
             binLocation: null,
             binSuggested: null
           },
@@ -769,10 +769,10 @@ export class PutawayController {
           skuId: sku_id,
           skuScannedId: sku_id, // This is what gets stored in scanned_sku table
           grnId: grnLine.grn_id,
-          poId: (grnLine as any).Grn?.po_id || 'N/A',
+          poId: (grnLine as any).GrnId?.po_id || 'N/A',
           availableQuantity: grnLine.qc_pass_qty,
           scannedProductDetail: convertProductDetailKeys(product.dataValues),
-          vendorName: (grnLine as any).Grn?.PO?.vendor_name || '',
+          vendorName: (grnLine as any).GrnId?.PurchaseOrder?.vendor_name || '',
           binLocation: binLocation,
           binSuggested: binSuggested
         },
@@ -780,6 +780,7 @@ export class PutawayController {
       });
   
     } catch (error: any) {
+      console.error('Error in scanSkuProductDetail:', error);
       res.status(500).json({
         statusCode: 500,
         success: false,
