@@ -89,13 +89,20 @@ export class GrnLineController {
             );
 
             if (batch.photos && batch.photos.length > 0) {
+              // Get GRN and PO information
+              const grn = await GRN.findByPk(data.grnId, { transaction: t });
+              if (!grn) {
+                throw new Error('GRN not found');
+              }
+              
               for (const photo of batch.photos) {
                 await GRNPhoto.create(
                   {
-                    grn_line_id: grnLine.id,
-                    grn_batch_id: grnBatch.id,
+                    sku_id: line.skuId,
+                    grn_id: data.grnId,
+                    po_id: grn.po_id,
                     url: photo.url,
-                    reason: photo.reason ?? 'general',
+                    reason: photo.reason ?? 'batch-photo',
                   },
                   { transaction: t }
                 );
@@ -276,7 +283,7 @@ export class GrnLineController {
           transaction: t,
         });
         await GRNPhoto.destroy({
-          where: { grn_line_id: grnLineId },
+          where: { grn_id: existingLine.grn_id },
           transaction: t,
         });
 
@@ -292,13 +299,20 @@ export class GrnLineController {
           );
 
           if (batch.photos && batch.photos.length > 0) {
+            // Get GRN information to get PO ID
+            const grn = await GRN.findByPk(existingLine.grn_id, { transaction: t });
+            if (!grn) {
+              throw new Error('GRN not found');
+            }
+            
             for (const photo of batch.photos) {
               await GRNPhoto.create(
                 {
-                  grn_line_id: existingLine.id,
-                  grn_batch_id: grnBatch.id,
+                  sku_id: existingLine.sku_id,
+                  grn_id: existingLine.grn_id,
+                  po_id: grn.po_id,
                   url: photo.url,
-                  reason: photo.reason ?? 'general',
+                  reason: photo.reason ?? 'batch-photo',
                 },
                 { transaction: t }
               );
@@ -348,7 +362,7 @@ export class GrnLineController {
       }
 
       // Delete related photos first
-      await GRNPhoto.destroy({ where: { grn_line_id: id }, transaction: t });
+      await GRNPhoto.destroy({ where: { grn_id: existingLine.grn_id }, transaction: t });
 
       // Delete related batches
       await GRNBatch.destroy({ where: { grn_line_id: id }, transaction: t });

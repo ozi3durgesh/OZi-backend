@@ -962,10 +962,13 @@ export type GRNBatchCreationAttributes = Omit<GRNBatchAttributes, 'id'>;
 
 export interface GRNPhotoAttributes {
   id: number;
-  grn_line_id: number;
+  sku_id: string;
+  grn_id: number;
+  po_id: number;
   url: string;
-  grn_batch_id: number;
   reason?: string;
+  created_at?: Date;
+  updated_at?: Date;
 }
 
 export type GRNPhotoCreationAttributes = Omit<GRNPhotoAttributes, 'id'>;
@@ -980,6 +983,31 @@ export interface GRNRequest {
     | 'pending-qc'
     | 'variance-review'
     | 'rtv-initiated';
+}
+
+// New interface for modified GRN create flow with SKU-level photos
+export interface CreateFullGRNInput {
+  poId: number;
+  lines: {
+    skuId: string;
+    orderedQty: number;
+    receivedQty: number;
+    rejectedQty: number;
+    qcPassQty?: number;
+    remarks?: string;
+    heldQty?: number;
+    rtvQty?: number;
+    lineStatus?: string;
+    // SKU-level photo (single base64 string)
+    photos?: string; // Single base64 encoded image
+    batches?: {
+      batchNo: string;
+      expiry: Date;
+      qty: number;
+    }[];
+  }[];
+  closeReason?: string;
+  status?: 'partial' | 'completed' | 'closed' | 'pending-qc' | 'rtv-initiated';
 }
 export interface scanItemRequest {
   grnId: number;

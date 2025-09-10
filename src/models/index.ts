@@ -207,11 +207,11 @@ GRNLine.hasMany(GRNBatch, { foreignKey: 'grn_line_id', as: 'Batches' });
 GRNBatch.belongsTo(GRNLine, { foreignKey: 'grn_line_id', as: 'Line' });
 
 // GRN Photo associations
-GRNLine.hasMany(GRNPhoto, { foreignKey: 'grn_line_id', as: 'Photos' });
-GRNPhoto.belongsTo(GRNLine, { foreignKey: 'grn_line_id', as: 'Line' });
+GRN.hasMany(GRNPhoto, { foreignKey: 'grn_id', as: 'Photos' });
+GRNPhoto.belongsTo(GRN, { foreignKey: 'grn_id', as: 'GRN' });
 
-GRNBatch.hasMany(GRNPhoto, { foreignKey: 'grn_batch_id', as: 'Photos' });
-GRNPhoto.belongsTo(GRNBatch, { foreignKey: 'grn_batch_id', as: 'Batch' });
+PurchaseOrder.hasMany(GRNPhoto, { foreignKey: 'po_id', as: 'Photos' });
+GRNPhoto.belongsTo(PurchaseOrder, { foreignKey: 'po_id', as: 'PurchaseOrder' });
 
 export {
   User,

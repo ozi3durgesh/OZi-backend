@@ -11,35 +11,13 @@ import {
   CreateGRNPhotoRequest,
   GRNFilters,
   GRNRequest,
+  CreateFullGRNInput,
 } from '../types';
 import { Op } from 'sequelize';
 import PurchaseOrder from '../models/PurchaseOrder';
 import POProduct from '../models/POProduct';
 import { rejects } from 'assert';
-interface CreateFullGRNInput {
-  poId: number;
-  lines: {
-    skuId: string;
-    orderedQty: number;
-    receivedQty: number;
-    rejectedQty: number;
-    ean?: string;
-    qcPassQty?: number;
-    remarks?: string;
-    heldQty?: number;
-    rtvQty?: number;
-    lineStatus?: string;
-
-    batches?: {
-      batchNo: string;
-      expiry: Date;
-      qty: number;
-      photos?: { url: string; reason?: string }[];
-    }[];
-  }[];
-  closeReason?: string;
-  status?: 'partial' | 'completed' | 'closed' | 'pending-qc' | 'rtv-initiated';
-}
+import { S3Service } from '../services/s3Service';
 
 export class GrnController {
   static async createGrn(req: AuthRequest, res: Response): Promise<void> {
@@ -149,10 +127,11 @@ export class GrnController {
             statusCode: 400,
             success: false,
             data: null,
-            error: `GRN already completed for   SKU ${line.skuId}`,
+            error: `GRN already completed for SKU ${line.skuId}`,
           });
           return;
         }
+
         const [result] = await sequelize.query(
           `
           SELECT COALESCE(SUM(gl.received_qty), 0) as totalReceived
@@ -168,10 +147,8 @@ export class GrnController {
         );
 
         const receivedSoFar = Number((result as any).totalReceived || 0);
-
         const newTotalReceived = receivedSoFar + (line.receivedQty || 0);
         const totalRejected = line.rejectedQty || 0;
-
         const maxReceivable = line.orderedQty - totalRejected;
 
         if (newTotalReceived > maxReceivable) {
@@ -184,6 +161,7 @@ export class GrnController {
           });
           return;
         }
+
         if (
           line.rejectedQty > 0 &&
           (line.remarks === undefined || line.remarks?.trim() === '')
@@ -197,6 +175,21 @@ export class GrnController {
           });
           return;
         }
+
+        // Validate base64 image if provided
+        if (line.photos) {
+          if (!S3Service.validateBase64Image(line.photos)) {
+            await t.rollback();
+            res.status(400).json({
+              statusCode: 400,
+              success: false,
+              data: null,
+              error: `Invalid base64 image format for SKU ${line.skuId}`,
+            });
+            return;
+          }
+        }
+
         const grnLine = await GRNLine.create(
           {
             grn_id: grn.id,
@@ -219,6 +212,38 @@ export class GrnController {
           { transaction: t }
         );
 
+        // Upload SKU-level photo to S3 and create GRNPhoto record
+        if (line.photos) {
+          try {
+            const uploadedPhotoUrl = await S3Service.uploadSkuBase64Image(
+              line.photos,
+              line.skuId
+            );
+
+            // Create GRNPhoto record for the uploaded image
+            await GRNPhoto.create(
+              {
+                sku_id: line.skuId,
+                grn_id: grn.id,
+                po_id: input.poId,
+                url: uploadedPhotoUrl,
+                reason: 'sku-level-photo',
+              },
+              { transaction: t }
+            );
+          } catch (s3Error) {
+            await t.rollback();
+            console.error('S3 upload error:', s3Error);
+            res.status(500).json({
+              statusCode: 500,
+              success: false,
+              data: null,
+              error: `Failed to upload image for SKU ${line.skuId}: ${s3Error}`,
+            });
+            return;
+          }
+        }
+
         await POProduct.update(
           {
             grnStatus:
@@ -227,14 +252,15 @@ export class GrnController {
                 : newTotalReceived < line.orderedQty
                   ? 'partial'
                   : 'completed',
-                   pending_qty: line.orderedQty - newTotalReceived,
+            pending_qty: line.orderedQty - newTotalReceived,
           },
           { where: { po_id: input.poId, sku_id: line.skuId }, transaction: t }
         );
 
+        // Handle batches (without photos since they're now at SKU level)
         if (line.batches && line.batches.length > 0) {
           for (const batch of line.batches) {
-            const grnBatch = await GRNBatch.create(
+            await GRNBatch.create(
               {
                 grn_line_id: grnLine.id,
                 batch_no: batch.batchNo,
@@ -243,20 +269,6 @@ export class GrnController {
               },
               { transaction: t }
             );
-
-            if (batch.photos && batch.photos.length > 0) {
-              for (const photo of batch.photos) {
-                await GRNPhoto.create(
-                  {
-                    grn_line_id: grnLine.id,
-                    grn_batch_id: grnBatch.id,
-                    url: photo.url,
-                    reason: photo.reason ?? 'general',
-                  },
-                  { transaction: t }
-                );
-              }
-            }
           }
         }
       }
@@ -370,15 +382,13 @@ export class GrnController {
               {
                 model: GRNBatch,
                 as: 'Batches',
-                include: [
-                  {
-                    model: GRNPhoto,
-                    as: 'Photos',
-                    attributes: ['id', 'url', 'reason'],
-                  },
-                ],
               },
             ],
+          },
+          {
+            model: GRNPhoto,
+            as: 'Photos',
+            attributes: ['id', 'sku_id', 'url', 'reason', 'created_at'],
           },
         ],
         order: [
@@ -390,13 +400,7 @@ export class GrnController {
             'id',
             'ASC',
           ],
-          [
-            { model: GRNLine, as: 'Line' },
-            { model: GRNBatch, as: 'Batches' },
-            { model: GRNPhoto, as: 'Photos' },
-            'id',
-            'ASC',
-          ],
+          [{ model: GRNPhoto, as: 'Photos' }, 'created_at', 'DESC'],
         ],
       });
 

@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import GRNPhoto from '../models/GrnPhoto';
+import GRNLine from '../models/GrnLine';
+import GRN from '../models/Grn.model';
 export interface CreateGRNPhotoRequest {
   grnLineId: number;
   grnBatchId?: number;
@@ -13,10 +15,28 @@ export class GrnPhotoController {
       const { grnLineId, grnBatchId, photos, reason } = req.body;
       const created: any = [];
 
+      // Get GRN Line and GRN information
+      const grnLine = await GRNLine.findByPk(grnLineId);
+      if (!grnLine) {
+        return res.status(404).json({
+          success: false,
+          message: 'GRN Line not found',
+        });
+      }
+
+      const grn = await GRN.findByPk(grnLine.grn_id);
+      if (!grn) {
+        return res.status(404).json({
+          success: false,
+          message: 'GRN not found',
+        });
+      }
+
       for (const url of photos) {
         const photo = await GRNPhoto.create({
-          grn_line_id: grnLineId,
-          grn_batch_id: grnBatchId,
+          sku_id: grnLine.sku_id,
+          grn_id: grnLine.grn_id,
+          po_id: grn.po_id,
           url,
           reason: reason ?? 'general',
         });
@@ -63,9 +83,21 @@ export class GrnPhotoController {
   static async getGrnPhotoByLineId(req: Request, res: Response) {
     try {
       const { id } = req.params;
+      
+      // Get the GRN Line to find the GRN ID
+      const grnLine = await GRNLine.findByPk(id);
+      if (!grnLine) {
+        return res.status(404).json({
+          statusCode: 404,
+          success: false,
+          data: null,
+          error: 'GRN Line not found',
+        });
+      }
+      
       const photos = await GRNPhoto.findAll({
         where: {
-          grn_line_id: id,
+          grn_id: grnLine.grn_id,
         },
       });
 
