@@ -227,6 +227,7 @@ export class GrnController {
                 : newTotalReceived < line.orderedQty
                   ? 'partial'
                   : 'completed',
+                   pending_qty: line.orderedQty - newTotalReceived,
           },
           { where: { po_id: input.poId, sku_id: line.skuId }, transaction: t }
         );
