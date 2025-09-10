@@ -718,10 +718,6 @@ export class PickingController {
         return ResponseHandler.error(res, 'You are not assigned to this wave', 403);
       }
 
-      // Check if scannedId and skuID match
-      if (scannedId !== skuID) {
-        return ResponseHandler.error(res, 'Scanned ID and SKU ID do not match', 400);
-      }
 
       // Find SKU scan in scanner_sku table
       const scannerSku = await ScannerSku.findOne({
