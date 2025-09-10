@@ -1,7 +1,7 @@
 // middleware/auth.ts
 import { Request, Response, NextFunction } from 'express';
 import { JwtUtils } from '../utils/jwt';
-import { User } from '../models';
+import { User, TokenBlacklist } from '../models';
 import { ResponseHandler } from './responseHandler';
 
 // Extend Request interface to include user
@@ -23,6 +23,16 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
     }
 
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+    
+    // Check if token is blacklisted
+    const blacklistedToken = await TokenBlacklist.findOne({
+      where: { token }
+    });
+
+    if (blacklistedToken) {
+      ResponseHandler.error(res, 'Token has been revoked', 401);
+      return;
+    }
     
     const payload = JwtUtils.verifyAccessToken(token);
     

@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import { User, Role } from '../models';
+import { User, Role, TokenBlacklist } from '../models';
 import { JwtUtils } from '../utils/jwt';
 import { ValidationUtils } from '../utils/validation';
 import { ResponseHandler } from '../middleware/responseHandler';
@@ -336,5 +336,113 @@ export class AuthController {
   static async isAdminRole(roleId: number): Promise<boolean> {
     const role = await Role.findByPk(roleId);
     return role?.name === 'admin';
+  }
+
+  static async logout(req: any, res: Response): Promise<Response> {
+    try {
+      const { refreshToken } = req.body;
+      const accessToken = req.headers.authorization?.substring(7); // Remove 'Bearer ' prefix
+
+      if (!accessToken) {
+        return ResponseHandler.error(res, 'Access token is required', 400);
+      }
+
+      // Verify the access token to get user information
+      let payload;
+      try {
+        payload = JwtUtils.verifyAccessToken(accessToken);
+      } catch (error) {
+        return ResponseHandler.error(res, 'Invalid access token', 401);
+      }
+
+      const userId = payload.userId;
+
+      // Add access token to blacklist
+      await TokenBlacklist.create({
+        token: accessToken,
+        userId: userId,
+        tokenType: 'access',
+        expiresAt: payload.exp ? new Date(payload.exp * 1000) : new Date(Date.now() + 15 * 60 * 1000), // Default to 15 minutes if exp not available
+      });
+
+      // If refresh token is provided, add it to blacklist as well
+      if (refreshToken) {
+        try {
+          const refreshPayload = JwtUtils.verifyRefreshToken(refreshToken);
+          await TokenBlacklist.create({
+            token: refreshToken,
+            userId: userId,
+            tokenType: 'refresh',
+            expiresAt: refreshPayload.exp ? new Date(refreshPayload.exp * 1000) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Default to 7 days if exp not available
+          });
+        } catch (error) {
+          // If refresh token is invalid, we still proceed with logout
+          console.warn('Invalid refresh token during logout:', error);
+        }
+      }
+
+      return ResponseHandler.success(res, {
+        message: 'Successfully logged out',
+        loggedOutAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+  static async logoutAll(req: any, res: Response): Promise<Response> {
+    try {
+      const accessToken = req.headers.authorization?.substring(7); // Remove 'Bearer ' prefix
+
+      if (!accessToken) {
+        return ResponseHandler.error(res, 'Access token is required', 400);
+      }
+
+      // Verify the access token to get user information
+      let payload;
+      try {
+        payload = JwtUtils.verifyAccessToken(accessToken);
+      } catch (error) {
+        return ResponseHandler.error(res, 'Invalid access token', 401);
+      }
+
+      const userId = payload.userId;
+
+      // Add current access token to blacklist
+      await TokenBlacklist.create({
+        token: accessToken,
+        userId: userId,
+        tokenType: 'access',
+        expiresAt: payload.exp ? new Date(payload.exp * 1000) : new Date(Date.now() + 15 * 60 * 1000), // Default to 15 minutes if exp not available
+      });
+
+      // Blacklist all existing tokens for this user (both access and refresh)
+      // This is a more aggressive logout that invalidates all sessions
+      const userTokens = await TokenBlacklist.findAll({
+        where: { userId },
+      });
+
+      // Add all existing tokens to blacklist if not already there
+      for (const tokenRecord of userTokens) {
+        if (tokenRecord.token !== accessToken) {
+          await TokenBlacklist.create({
+            token: tokenRecord.token,
+            userId: userId,
+            tokenType: tokenRecord.tokenType,
+            expiresAt: tokenRecord.expiresAt,
+          });
+        }
+      }
+
+      return ResponseHandler.success(res, {
+        message: 'Successfully logged out from all devices',
+        loggedOutAt: new Date().toISOString(),
+        userId: userId,
+      });
+    } catch (error) {
+      console.error('Logout all error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
   }
 }

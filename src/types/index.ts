@@ -38,6 +38,8 @@ export interface JwtPayload {
   email: string;
   role: string;
   permissions: string[];
+  exp?: number; // JWT expiration timestamp
+  iat?: number; // JWT issued at timestamp
 }
 
 // types.ts

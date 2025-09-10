@@ -28,6 +28,7 @@ import EcomLog from './EcomLog';
 import Product from './productModel';
 import ProductMaster from './productModel';
 import POProduct from './POProduct';
+import TokenBlacklist from './TokenBlacklist';
 
 // Set up associations
 Coupon.hasMany(CouponTranslation, {
@@ -241,4 +242,5 @@ export {
   GRNPhoto,
   PurchaseOrder,
   POProduct,
+  TokenBlacklist,
 };
