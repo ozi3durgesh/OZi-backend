@@ -10,8 +10,9 @@ interface POProductAttributes {
   sku_id: string;
   item_code: string;
   units: number;
+  pending_qty: number;
   mrp: number;
-  sp: number;              // Selling Price
+  sp: number;
   margin: string;
   rlp_w_o_tax: number;
   rlp: number;
@@ -26,8 +27,10 @@ interface POProductAttributes {
 
 type POProductCreationAttributes = Optional<POProductAttributes, 'id'>;
 
-class POProduct extends Model<POProductAttributes, POProductCreationAttributes>
-  implements POProductAttributes {
+class POProduct
+  extends Model<POProductAttributes, POProductCreationAttributes>
+  implements POProductAttributes
+{
   public id!: number;
   public po_id!: number;
   public product!: string;
@@ -46,6 +49,7 @@ class POProduct extends Model<POProductAttributes, POProductCreationAttributes>
   public tax_amount?: number;
   public amount!: number;
   public grnStatus!: string;
+  declare pending_qty: number;
 }
 
 POProduct.init(
@@ -56,6 +60,11 @@ POProduct.init(
     sku_id: DataTypes.STRING,
     item_code: DataTypes.STRING,
     units: DataTypes.INTEGER,
+    pending_qty: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 0,
+    },
     mrp: DataTypes.DECIMAL(10, 2),
     sp: DataTypes.DECIMAL(10, 2),
     margin: DataTypes.STRING,
@@ -67,27 +76,30 @@ POProduct.init(
     total_gst: DataTypes.DECIMAL(5, 2),
     tax_amount: DataTypes.DECIMAL(10, 2),
     amount: DataTypes.DECIMAL(10, 2),
-    grnStatus: { type: DataTypes.STRING, defaultValue: 'pending' }
+    grnStatus: { type: DataTypes.STRING, defaultValue: 'pending' },
   },
   {
     sequelize,
     tableName: 'po_products',
-    timestamps: false
+    timestamps: false,
   }
 );
 
 PurchaseOrder.hasMany(POProduct, { foreignKey: 'po_id', as: 'products' });
-POProduct.belongsTo(PurchaseOrder, { foreignKey: 'po_id', as: 'purchaseOrder' });
+POProduct.belongsTo(PurchaseOrder, {
+  foreignKey: 'po_id',
+  as: 'purchaseOrder',
+});
 
 POProduct.belongsTo(Product, {
-  foreignKey: "sku_id",
-  targetKey: "SKU",
-  as: "productInfo",   
+  foreignKey: 'sku_id',
+  targetKey: 'SKU',
+  as: 'productInfo',
 });
 Product.hasMany(POProduct, {
-  foreignKey: "sku_id",
-  sourceKey: "SKU",
-  as: "poProducts",   
+  foreignKey: 'sku_id',
+  sourceKey: 'SKU',
+  as: 'poProducts',
 });
 
 export default POProduct;
