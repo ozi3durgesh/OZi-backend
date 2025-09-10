@@ -6,6 +6,8 @@ import Product from '../models/productModel';
 import { ResponseHandler } from '../middleware/responseHandler';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
+import multer from "multer";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
 dotenv.config();
 
@@ -21,6 +23,17 @@ const approvalEmails: Record<string, string> = {
   admin: 'ankit.gupta@ozi.in',
   creator: 'ozipurchaseorders@gmail.com'
 };
+
+const upload = multer({ storage: multer.memoryStorage() });
+
+// AWS S3 Client
+const s3 = new S3Client({
+  region: process.env.AWS_REGION || "ap-south-1", // change if needed
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+  },
+});
 
 /** Token Utilities */
 function generateApprovalToken(poId: number, role: string, expiresInMinutes = 60) {
@@ -265,29 +278,68 @@ export const approvePO = async (req: Request, res: Response) => {
 /** Save PI / Final Delivery (Creator action) */
 export const savePI = async (req: Request, res: Response) => {
   const poId = req.params.id;
-  const { pi_number, pi_url, final_delivery_date } = req.body;
+  const { final_delivery_date } = req.body;
 
   try {
     const po = await PurchaseOrder.findByPk(poId);
-    if (!po) return ResponseHandler.error(res,'PO not found',404);
+    if (!po) return ResponseHandler.error(res, "PO not found", 404);
 
-    if (po.current_approver !== 'creator') {
-      return ResponseHandler.error(res,'PI can only be saved when Creator is responsible',400);
+    if (po.current_approver !== "creator") {
+      return ResponseHandler.error(
+        res,
+        "PI can only be saved when Creator is responsible",
+        400
+      );
     }
 
-    // po.pi_number = pi_number; // Commented out - column doesn't exist in DB
-    // po.pi_url = pi_url; // Commented out - column doesn't exist in DB
-    // po.final_delivery_date = final_delivery_date; // Commented out - column doesn't exist in DB
-    po.approval_status = 'approved';
+    // ✅ Upload PI File to S3 if provided
+    let s3Url: string | null = null;
+    if (req.file) {
+      const ext = req.file.originalname.split(".").pop();
+      const fileName = `po-invoice/${po.po_id}_${Date.now()}.${ext}`;
+
+      const uploadParams = {
+        Bucket: "oms-stage-storage",
+        Key: fileName,
+        Body: req.file.buffer,
+        ContentType: req.file.mimetype,
+      };
+
+      await s3.send(new PutObjectCommand(uploadParams));
+
+      s3Url = `https://${uploadParams.Bucket}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
+
+      // Save S3 link in DB
+      po.set("pi_url", s3Url);
+    }
+
+    if (final_delivery_date) {
+      po.set("final_delivery_date", final_delivery_date);
+    }
+
+    po.approval_status = "approved";
     po.current_approver = null;
     await po.save();
 
-    return ResponseHandler.success(res,{PO:{message:'PI & Delivery details saved, PO completed', po_id: po.po_id}},200);
-
-  } catch(error:any){
-    return ResponseHandler.error(res,error.message||'Error saving PI',500);
+    return ResponseHandler.success(
+      res,
+      {
+        PO: {
+          message: "PI & Delivery details saved, PO completed",
+          po_id: po.po_id,
+          pi_url: s3Url,
+        },
+      },
+      200
+    );
+  } catch (error: any) {
+    return ResponseHandler.error(res, error.message || "Error saving PI", 500);
   }
 };
+
+// ⚡ Export Multer middleware (to be used in route)
+export const uploadPIFile = upload.single("pi_file");
+
 
 /** Get All POs */
 export const getAllPOs = async (req: Request, res: Response) => {

@@ -4,7 +4,8 @@ import {
   updateDraftPO,       // update draft PO
   submitDraftPO,       // submit draft PO
   approvePO,
-  savePI,              // save PI and delivery date
+  savePI,
+  uploadPIFile,              // save PI and delivery date
   getAllPOs,
   getPOById,
   getPOByToken
@@ -29,7 +30,8 @@ router.post("/:id/submit", submitDraftPO);
 router.post("/:id/approve", approvePO);
 
 // Save PI & final delivery (creator)
-router.post("/:id/pi", savePI);
+router.put("/:id/save-pi", uploadPIFile, savePI);
+
 
 // Get all POs
 router.get("/", getAllPOs);
