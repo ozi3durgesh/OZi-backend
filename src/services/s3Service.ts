@@ -1,5 +1,6 @@
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { v4 as uuidv4 } from 'uuid';
+import multer from 'multer';
 
 const s3Client = new S3Client({
   region: 'ap-south-1', // Mumbai region
@@ -12,6 +13,22 @@ const s3Client = new S3Client({
 export class S3Service {
   private static readonly BUCKET_NAME = 'oms-stage-storage';
   private static readonly REGION = 'ap-south-1';
+
+  // Multer configuration for FormData uploads
+  static readonly upload = multer({ 
+    storage: multer.memoryStorage(),
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB limit
+    },
+    fileFilter: (req, file, cb) => {
+      // Accept only image files
+      if (file.mimetype.startsWith('image/')) {
+        cb(null, true);
+      } else {
+        cb(new Error('Only image files are allowed') as any, false);
+      }
+    }
+  });
 
   /**
    * Upload base64 image to S3
@@ -129,6 +146,80 @@ export class S3Service {
     };
     
     return contentTypes[extension.toLowerCase()] || 'image/jpeg';
+  }
+
+  /**
+   * Upload FormData file to S3
+   * @param file - Multer file object from FormData
+   * @param skuId - SKU ID for folder organization
+   * @param fileName - Optional custom filename
+   * @returns Promise<string> - S3 URL of uploaded image
+   */
+  static async uploadFormDataImage(
+    file: Express.Multer.File,
+    skuId: string,
+    fileName?: string
+  ): Promise<string> {
+    try {
+      if (!file) {
+        throw new Error('No file provided');
+      }
+
+      // Get file extension from original filename
+      const extension = file.originalname.split('.').pop() || 'jpg';
+      
+      // Generate unique filename
+      const uniqueFileName = fileName ? 
+        `${fileName}_${uuidv4()}.${extension}` : 
+        `${uuidv4()}.${extension}`;
+      
+      // Create S3 key (path) - upload to grn-sku-rejection folder
+      const key = `grn-sku-rejection/${skuId}/${uniqueFileName}`;
+      
+      // Upload to S3
+      const command = new PutObjectCommand({
+        Bucket: this.BUCKET_NAME,
+        Key: key,
+        Body: file.buffer,
+        ContentType: file.mimetype,
+        // ACL removed - bucket doesn't allow ACLs
+      });
+      
+      await s3Client.send(command);
+      
+      // Return the public URL
+      return `https://${this.BUCKET_NAME}.s3.${this.REGION}.amazonaws.com/${key}`;
+      
+    } catch (error) {
+      console.error('Error uploading FormData image to S3:', error);
+      throw new Error(`Failed to upload image to S3: ${error}`);
+    }
+  }
+
+  /**
+   * Upload multiple FormData files to S3
+   * @param files - Array of Multer file objects
+   * @param skuId - SKU ID for folder organization
+   * @returns Promise<string[]> - Array of S3 URLs
+   */
+  static async uploadMultipleFormDataImages(
+    files: Express.Multer.File[],
+    skuId: string
+  ): Promise<string[]> {
+    try {
+      if (!files || files.length === 0) {
+        throw new Error('No files provided');
+      }
+
+      const uploadPromises = files.map((file, index) => 
+        this.uploadFormDataImage(file, skuId, `${skuId}_${index + 1}`)
+      );
+      
+      return await Promise.all(uploadPromises);
+    } catch (error) {
+      console.error('Error uploading multiple FormData images to S3:', error);
+      throw new Error(`Failed to upload images to S3: ${error}`);
+    }
   }
 
   /**

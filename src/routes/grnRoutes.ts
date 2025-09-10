@@ -4,6 +4,7 @@ import { GrnController } from '../controllers/grnController';
 import { GrnLineController } from '../controllers/grnLineController';
 import { GrnBatchController } from '../controllers/grnBatchController';
 import { GrnPhotoController } from '../controllers/grnPhotoController';
+import { S3Service } from '../services/s3Service';
 
 const router = Router();
 
@@ -42,6 +43,7 @@ router.put('/batch/:id', GrnBatchController.updateGrnBatch);
 router.delete('/batch/:id', GrnBatchController.deleteGrnBatch);
 
 router.post('/photo/', GrnPhotoController.createGRNPhotos);
+router.post('/photo/upload', S3Service.upload.array('photos', 10), GrnPhotoController.uploadGRNPhotos);
 router.get('/photo/line/:id', GrnPhotoController.getGrnPhotoByLineId);
 router.get('/photo/:id', GrnPhotoController.getGrnPhotoById);
 router.delete('/photo/:id', GrnPhotoController.deleteGrnPhoto);
