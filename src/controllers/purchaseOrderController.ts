@@ -290,54 +290,61 @@ export const savePI = async (req: Request, res: Response) => {
 };
 
 /** Get All POs */
-export const getAllPOs = async (req: Request,res: Response)=>{
-  try{
-    const { page="1", limit="20", status } = req.query;
-    const pageNum=parseInt(String(page),10);
-    const limitNum=parseInt(String(limit),10);
-    const offset=(pageNum-1)*limitNum;
+export const getAllPOs = async (req: Request, res: Response) => {
+  try {
+    const { page = "1", limit = "20", status } = req.query;
+    const pageNum = parseInt(String(page), 10);
+    const limitNum = parseInt(String(limit), 10);
+    const offset = (pageNum - 1) * limitNum;
 
-    const whereClause:any={};
-    if(status) whereClause.approval_status=status;
+    const whereClause: any = {};
+    if (status) whereClause.approval_status = status;
 
     const { count, rows } = await PurchaseOrder.findAndCountAll({
-  where: whereClause,
-  include: [
-    {
-      model: POProduct,
-      as: "products",
+      where: whereClause,
       include: [
         {
-          model: Product,
-          as: "productInfo",   // 👈 updated alias
-          attributes: ["EAN_UPC"],
+          model: POProduct,
+          as: "products",
+          include: [
+            {
+              model: Product,
+              as: "productInfo",
+              attributes: ["EAN_UPC", "ImageURL"], 
+            },
+          ],
         },
       ],
-    },
-  ],
-  limit: limitNum,
-  offset,
-  order: [["id", "DESC"]],
-});
-
-// flatten EAN_UPC into products
-const data = rows.map((po) => ({
-  ...po.toJSON(),
-  products: (po.products ?? []).map((p: any) => ({
-  ...p.toJSON(),
-  EAN_UPC: p.productInfo?.EAN_UPC || null,
-  productInfo: undefined,
-  })),
-}));
-
-    return ResponseHandler.success(res,{
-      PO:rows,
-      pagination:{total:count, page:pageNum, pages:Math.ceil(count/limitNum), limit:limitNum}
+      limit: limitNum,
+      offset,
+      order: [["id", "DESC"]],
     });
-  }catch(error:any){
-    return ResponseHandler.error(res,error.message||'Error fetching POs',500);
+
+    // flatten EAN_UPC and ImageURL into products
+    const data = rows.map((po) => ({
+      ...po.toJSON(),
+      products: (po.products ?? []).map((p: any) => ({
+        ...p.toJSON(),
+        EAN_UPC: p.productInfo?.EAN_UPC || null,
+        ImageURL: p.productInfo?.ImageURL || null, // 👈 added flattening
+        productInfo: undefined,
+      })),
+    }));
+
+    return ResponseHandler.success(res, {
+      PO: data, 
+      pagination: {
+        total: count,
+        page: pageNum,
+        pages: Math.ceil(count / limitNum),
+        limit: limitNum,
+      },
+    });
+  } catch (error: any) {
+    return ResponseHandler.error(res, error.message || "Error fetching POs", 500);
   }
 };
+
 
 /** Get PO by ID */
 export const getPOById = async (req: Request,res: Response)=>{
