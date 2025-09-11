@@ -76,12 +76,63 @@ interface CreateOrderPayload {
 }
 
 export class Helpers {
-  /**
-   * Process an order for ecommerce integration
-   * This function matches the PHP implementation 100%
-   * @param order - The order object to process
-   * @returns Promise with the result
-   */
+
+  public static async generatePicklist(orderId: string, numericOrderId: number): Promise<any> {
+    try {
+      const picklistUrl = 'http://13.232.150.239/api/picklist/generate';
+      const authToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjIsImVtYWlsIjoiYWRtaW5AY29tcGFueS5jb20iLCJyb2xlIjoiYWRtaW4iLCJwZXJtaXNzaW9ucyI6WyJ1c2Vyc19yb2xlczptYW5hZ2UiLCJzaXRlczpjcmVhdGVfY29uZmlnIiwic2l0ZXM6dmlldyIsInNpdGVzOnZpZXdfb3duIiwib3JkZXJzOnZpZXdfYWxsIiwib3JkZXJzOnZpZXdfd2giLCJvcmRlcnM6dmlld19zdG9yZSIsIm9yZGVyczp2aWV3X3Rhc2siLCJwaWNraW5nOnZpZXciLCJwaWNraW5nOmFzc2lnbl9tYW5hZ2UiLCJwaWNraW5nOmV4ZWN1dGUiLCJpbmJvdW5kOnZpZXciLCJpbmJvdW5kOmFwcHJvdmVfdmFyaWFuY2VzIiwiaW5ib3VuZDpleGVjdXRlIiwicHV0YXdheTp2aWV3IiwicHV0YXdheTptYW5hZ2UiLCJwdXRhd2F5OmV4ZWN1dGUiLCJpbnZlbnRvcnk6YXBwcm92ZSIsImludmVudG9yeTpyYWlzZSIsImN5Y2xlX2NvdW50OnZpZXciLCJjeWNsZV9jb3VudDpzY2hlZHVsZV9hcHByb3ZlIiwiY3ljbGVfY291bnQ6ZXhlY3V0ZSIsInJlcGxlbmlzaG1lbnQ6Y29uZmlnIiwicmVwbGVuaXNobWVudDphcHByb3ZlIiwicnR2OmNvbmZpZ19hcHByb3ZlIiwicnR2OmNyZWF0ZV9hcHByb3ZlIiwicnR2OmV4ZWN1dGUiLCJwb3M6dmlldyIsInBvczpleGVjdXRlIiwic3RvcmVfd2hfcmVxdWVzdHM6dmlldyIsInN0b3JlX3doX3JlcXVlc3RzOmNyZWF0ZV9jaGVja2luIiwiZXhjZXB0aW9uczphbGxfYWN0aW9ucyIsImV4Y2VwdGlvbnM6cmVzb2x2ZSIsImV4Y2VwdGlvbnM6cmFpc2UiLCJleGNlcHRpb25zOnJhaXNlX3N0b3JlIiwiZGFzaGJvYXJkczp2aWV3X2FsbCIsImRhc2hib2FyZHM6dmlld193aCIsImRhc2hib2FyZHM6dmlld190YXNrIiwiZGFzaGJvYXJkczp2aWV3X3N0b3JlIiwic2xhOmNvbmZpZ3VyZSIsInNsYTp2aWV3Iiwic3RvcmVfb3BzOnBvc19jaGVja291dCIsInN0b3JlX29wczppbnZvaWNlX2NyZWF0ZSIsInN0b3JlX29wczpzdG9yZV9zdGF0dXMiLCJzdG9yZV9vcHM6c3VyZ2VfdG9nZ2xlIiwic3RvcmVfb3BzOnN0b2NrX2NoZWNrIiwicGlja2luZzptb25pdG9yIl0sImlhdCI6MTc1NjIxNDM5MCwiZXhwIjoxNzU2ODE5MTkwfQ.B8kGtT4b2hginUvjqcOSPc6cSfplJjMdahWXT1jVs-I';
+      
+      const payload = {
+        orderIds: [`${orderId}`],
+        priority: "HIGH",
+        routeOptimization: true,
+        fefoRequired: false,
+        tagsAndBags: false
+      };
+
+      const response = await fetch(picklistUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Picklist generation failed: ${response.status} ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      
+      // Log the picklist generation
+      await EcomLog.create({
+        order_id: numericOrderId,
+        action: 'generatePicklist',
+        payload: JSON.stringify(payload),
+        response: JSON.stringify(result),
+        status: 'success'
+      });
+
+      console.log(`✅ Picklist generated successfully for order ${orderId}`);
+      return result;
+
+    } catch (error: any) {
+      console.error(`❌ Error generating picklist for order ${orderId}:`, error);
+      
+      // Log the error
+      await EcomLog.create({
+        order_id: numericOrderId,
+        action: 'generatePicklist',
+        payload: JSON.stringify({ orderIds: [`${orderId}`] }),
+        response: JSON.stringify({ error: error.message }),
+        status: 'failed'
+      });
+
+      throw error;
+    }
+  }
+
   public static async Ecommorder(order: OrderAttributes): Promise<any> {
     try {
       
@@ -95,10 +146,7 @@ export class Helpers {
         throw new Error(`Order ${order.id} not found in database`);
       }
 
-    // Convert full order object into JSON
     const orderJson = JSON.stringify(order);
-
-    // Store success log with full order payload
     await EcomLog.create({
       order_id: order.id,
       action: 'createOrder',
@@ -106,14 +154,15 @@ export class Helpers {
       response: JSON.stringify({ status: 'processing' }),
       status: 'success'
     });
-      
-      // try {
 
-      //   console.log(`✅ EcomLog created successfully for order ${order.id}`);
-      // } catch (logError) {
-      //   console.error(`❌ Failed to create EcomLog for order ${order.id}:`, logError);
-      //   // Don't fail the entire process if logging fails
-      // }
+
+    // Generate picklist for the order
+    try {
+      await this.generatePicklist(order.order_id, order.id);
+      } catch (picklistError) {
+        console.error(`❌ Failed to generate picklist for order ${order.order_id}:`, picklistError);
+        // Don't throw error here as picklist generation is not critical for order creation
+      }
 
       if (!currentDomain.includes('admin.ozi.in')) {
         // Just log and return without placing the order
@@ -328,6 +377,7 @@ export class Helpers {
 
         throw error;
       }
+
     } catch (error: any) {
       console.error('Error in Ecommorder:', error);
       throw error;
