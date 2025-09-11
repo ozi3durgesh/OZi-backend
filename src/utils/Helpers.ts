@@ -140,11 +140,11 @@ export class Helpers {
       const currentDomain = process.env.CURRENT_DOMAIN || 'localhost';
       
       // First, verify that the order exists in the database
-      const existingOrder = await Order.findByPk(order.id);
-      if (!existingOrder) {
-        console.error(`❌ Order ${order.id} not found in database, skipping ecom_logs creation`);
-        throw new Error(`Order ${order.id} not found in database`);
-      }
+      // const existingOrder = await Order.findByPk(order.id);
+      // if (!existingOrder) {
+      //   console.error(`❌ Order ${order.id} not found in database, skipping ecom_logs creation`);
+      //   throw new Error(`Order ${order.id} not found in database`);
+      // }
 
     const orderJson = JSON.stringify(order);
     await EcomLog.create({
