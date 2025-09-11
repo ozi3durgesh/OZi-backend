@@ -1,4 +1,5 @@
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { v4 as uuidv4 } from 'uuid';
 import multer from 'multer';
 
@@ -213,6 +214,170 @@ export class S3Service {
 
       const uploadPromises = files.map((file, index) => 
         this.uploadFormDataImage(file, skuId, `${skuId}_${index + 1}`)
+      );
+      
+      return await Promise.all(uploadPromises);
+    } catch (error) {
+      console.error('Error uploading multiple FormData images to S3:', error);
+      throw new Error(`Failed to upload images to S3: ${error}`);
+    }
+  }
+
+  /**
+   * Generate a signed URL for an S3 object
+   * @param key - S3 object key (path)
+   * @param expiresIn - URL expiration time in seconds (default: 1 hour)
+   * @returns Promise<string> - Signed URL
+   */
+  static async getSignedUrl(key: string, expiresIn: number = 3600): Promise<string> {
+    try {
+      const command = new GetObjectCommand({
+        Bucket: this.BUCKET_NAME,
+        Key: key,
+      });
+
+      const signedUrl = await getSignedUrl(s3Client, command, { expiresIn });
+      return signedUrl;
+    } catch (error) {
+      console.error('Error generating signed URL:', error);
+      throw new Error(`Failed to generate signed URL: ${error}`);
+    }
+  }
+
+  /**
+   * Generate signed URL from existing S3 URL
+   * @param s3Url - Existing S3 URL
+   * @param expiresIn - URL expiration time in seconds (default: 1 hour)
+   * @returns Promise<string> - Signed URL
+   */
+  static async getSignedUrlFromExistingUrl(s3Url: string, expiresIn: number = 3600): Promise<string> {
+    try {
+      // Extract key from URL
+      const url = new URL(s3Url);
+      const key = url.pathname.substring(1); // Remove leading slash
+      
+      return await this.getSignedUrl(key, expiresIn);
+    } catch (error) {
+      console.error('Error generating signed URL from existing URL:', error);
+      throw new Error(`Failed to generate signed URL from existing URL: ${error}`);
+    }
+  }
+
+  /**
+   * Upload base64 image to S3 and return signed URL
+   * @param base64Data - Base64 encoded image data
+   * @param fileName - Optional custom filename
+   * @param folder - Folder path in S3 bucket
+   * @returns Promise<string> - Signed S3 URL of uploaded image
+   */
+  static async uploadBase64ImageWithSignedUrl(
+    base64Data: string,
+    fileName?: string,
+    folder: string = 'grn-photos'
+  ): Promise<string> {
+    try {
+      // Remove data URL prefix if present (e.g., "data:image/jpeg;base64,")
+      const base64String = base64Data.replace(/^data:image\/[a-z]+;base64,/, '');
+      
+      // Convert base64 to buffer
+      const buffer = Buffer.from(base64String, 'base64');
+      
+      // Determine file extension from base64 data or default to jpg
+      const extension = this.getFileExtensionFromBase64(base64Data) || 'jpg';
+      
+      // Generate unique filename
+      const uniqueFileName = fileName ? 
+        `${fileName}_${uuidv4()}.${extension}` : 
+        `${uuidv4()}.${extension}`;
+      
+      // Create S3 key (path)
+      const key = `${folder}/${uniqueFileName}`;
+      
+      // Upload to S3
+      const command = new PutObjectCommand({
+        Bucket: this.BUCKET_NAME,
+        Key: key,
+        Body: buffer,
+        ContentType: this.getContentTypeFromExtension(extension),
+        // ACL removed - bucket doesn't allow ACLs
+      });
+      
+      await s3Client.send(command);
+      
+      // Return the signed URL instead of public URL
+      return await this.getSignedUrl(key);
+      
+    } catch (error) {
+      console.error('Error uploading image to S3:', error);
+      throw new Error(`Failed to upload image to S3: ${error}`);
+    }
+  }
+
+  /**
+   * Upload FormData file to S3 and return signed URL
+   * @param file - Multer file object from FormData
+   * @param skuId - SKU ID for folder organization
+   * @param fileName - Optional custom filename
+   * @returns Promise<string> - Signed S3 URL of uploaded image
+   */
+  static async uploadFormDataImageWithSignedUrl(
+    file: Express.Multer.File,
+    skuId: string,
+    fileName?: string
+  ): Promise<string> {
+    try {
+      if (!file) {
+        throw new Error('No file provided');
+      }
+
+      // Get file extension from original filename
+      const extension = file.originalname.split('.').pop() || 'jpg';
+      
+      // Generate unique filename
+      const uniqueFileName = fileName ? 
+        `${fileName}_${uuidv4()}.${extension}` : 
+        `${uuidv4()}.${extension}`;
+      
+      // Create S3 key (path) - upload to grn-sku-rejection folder
+      const key = `grn-sku-rejection/${skuId}/${uniqueFileName}`;
+      
+      // Upload to S3
+      const command = new PutObjectCommand({
+        Bucket: this.BUCKET_NAME,
+        Key: key,
+        Body: file.buffer,
+        ContentType: file.mimetype,
+        // ACL removed - bucket doesn't allow ACLs
+      });
+      
+      await s3Client.send(command);
+      
+      // Return the signed URL instead of public URL
+      return await this.getSignedUrl(key);
+      
+    } catch (error) {
+      console.error('Error uploading FormData image to S3:', error);
+      throw new Error(`Failed to upload image to S3: ${error}`);
+    }
+  }
+
+  /**
+   * Upload multiple FormData files to S3 and return signed URLs
+   * @param files - Array of Multer file objects
+   * @param skuId - SKU ID for folder organization
+   * @returns Promise<string[]> - Array of signed S3 URLs
+   */
+  static async uploadMultipleFormDataImagesWithSignedUrls(
+    files: Express.Multer.File[],
+    skuId: string
+  ): Promise<string[]> {
+    try {
+      if (!files || files.length === 0) {
+        throw new Error('No files provided');
+      }
+
+      const uploadPromises = files.map((file, index) => 
+        this.uploadFormDataImageWithSignedUrl(file, skuId, `${skuId}_${index + 1}`)
       );
       
       return await Promise.all(uploadPromises);

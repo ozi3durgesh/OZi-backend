@@ -41,8 +41,8 @@ export class GrnPhotoController {
         });
       }
 
-      // Upload files to S3
-      const uploadedUrls = await S3Service.uploadMultipleFormDataImages(
+      // Upload files to S3 and get signed URLs
+      const uploadedUrls = await S3Service.uploadMultipleFormDataImagesWithSignedUrls(
         Array.isArray(files) ? files : [files],
         skuId as string
       );
@@ -237,6 +237,121 @@ export class GrnPhotoController {
       });
     } catch (error: any) {
       console.error('Error deleting GRN photo:', error);
+      return res.status(500).json({
+        statusCode: 500,
+        success: false,
+        data: null,
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Generate signed URLs for existing GRN photos
+   * GET /api/grn/photo/signed-urls/:id
+   */
+  static async getSignedUrlsForPhoto(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const photo = await GRNPhoto.findByPk(id);
+
+      if (!photo) {
+        return res.status(404).json({
+          statusCode: 404,
+          success: false,
+          data: null,
+          error: 'Photo not found',
+        });
+      }
+
+      // Generate signed URL for the existing photo URL
+      const signedUrl = await S3Service.getSignedUrlFromExistingUrl(photo.url);
+
+      return res.status(200).json({
+        statusCode: 200,
+        success: true,
+        data: {
+          id: photo.id,
+          originalUrl: photo.url,
+          signedUrl: signedUrl,
+          expiresIn: 3600, // 1 hour
+        },
+        error: null,
+      });
+    } catch (error: any) {
+      console.error('Error generating signed URL for photo:', error);
+      return res.status(500).json({
+        statusCode: 500,
+        success: false,
+        data: null,
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Generate signed URLs for all photos in a GRN line
+   * GET /api/grn/photo/signed-urls/line/:lineId
+   */
+  static async getSignedUrlsForGrnLine(req: Request, res: Response) {
+    try {
+      const { lineId } = req.params;
+      
+      // Get the GRN Line to find the GRN ID
+      const grnLine = await GRNLine.findByPk(lineId);
+      if (!grnLine) {
+        return res.status(404).json({
+          statusCode: 404,
+          success: false,
+          data: null,
+          error: 'GRN Line not found',
+        });
+      }
+      
+      const photos = await GRNPhoto.findAll({
+        where: {
+          grn_id: grnLine.grn_id,
+        },
+      });
+
+      if (photos.length === 0) {
+        return res.status(404).json({
+          statusCode: 404,
+          success: false,
+          data: null,
+          error: 'No photos found for this GRN line',
+        });
+      }
+
+      // Generate signed URLs for all photos
+      const photosWithSignedUrls = await Promise.all(
+        photos.map(async (photo) => {
+          try {
+            const signedUrl = await S3Service.getSignedUrlFromExistingUrl(photo.url);
+            return {
+              ...photo.toJSON(),
+              signedUrl: signedUrl,
+              expiresIn: 3600, // 1 hour
+            };
+          } catch (error) {
+            console.error(`Error generating signed URL for photo ${photo.id}:`, error);
+            return {
+              ...photo.toJSON(),
+              signedUrl: null,
+              error: 'Failed to generate signed URL',
+            };
+          }
+        })
+      );
+
+      return res.status(200).json({
+        statusCode: 200,
+        success: true,
+        data: photosWithSignedUrls,
+        error: null,
+      });
+    } catch (error: any) {
+      console.error('Error generating signed URLs for GRN line:', error);
       return res.status(500).json({
         statusCode: 500,
         success: false,

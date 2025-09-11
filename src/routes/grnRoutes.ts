@@ -48,4 +48,8 @@ router.get('/photo/line/:id', GrnPhotoController.getGrnPhotoByLineId);
 router.get('/photo/:id', GrnPhotoController.getGrnPhotoById);
 router.delete('/photo/:id', GrnPhotoController.deleteGrnPhoto);
 
+// New routes for signed URLs
+router.get('/photo/signed-urls/:id', GrnPhotoController.getSignedUrlsForPhoto);
+router.get('/photo/signed-urls/line/:lineId', GrnPhotoController.getSignedUrlsForGrnLine);
+
 export default router;

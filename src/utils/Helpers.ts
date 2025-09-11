@@ -155,7 +155,6 @@ export class Helpers {
       status: 'success'
     });
 
-
     // Generate picklist for the order
     try {
       await this.generatePicklist(order.order_id, order.id);
