@@ -193,6 +193,66 @@ export class Helpers {
       console.log(`💾 Step 3: Storing complete order data into Node.js orders table`);
       
       try {
+        // Check if user exists in Node.js database, if not create a placeholder or use default
+        let nodeUserId = completeOrderData.user_id;
+        
+        try {
+          // Check if user exists in Node.js Users table
+          const [userCheck] = await sequelize.query(`
+            SELECT id FROM Users WHERE id = :userId LIMIT 1
+          `, {
+            replacements: { userId: completeOrderData.user_id },
+            type: QueryTypes.SELECT
+          });
+          
+          if (!userCheck) {
+            console.warn(`⚠️ User ${completeOrderData.user_id} not found in Node.js Users table, using default user or creating placeholder`);
+            
+            // Option 1: Use a default user ID (if you have one)
+            // nodeUserId = 1; // Replace with your default user ID
+            
+            // Option 2: Create a placeholder user entry
+            try {
+              const [newUser] = await sequelize.query(`
+                INSERT INTO Users (id, email, password, roleId, isActive, availabilityStatus, createdAt, updatedAt)
+                VALUES (:userId, :email, :password, :roleId, :isActive, :availabilityStatus, :createdAt, :updatedAt)
+                ON DUPLICATE KEY UPDATE id = id
+              `, {
+                replacements: {
+                  userId: completeOrderData.user_id,
+                  email: `user_${completeOrderData.user_id}@placeholder.com`,
+                  password: 'placeholder_password',
+                  roleId: 1, // Default role ID
+                  isActive: 1,
+                  availabilityStatus: 'available',
+                  createdAt: new Date(),
+                  updatedAt: new Date()
+                },
+                type: QueryTypes.INSERT
+              });
+              
+              console.log(`✅ Created placeholder user ${completeOrderData.user_id} in Node.js database`);
+              nodeUserId = completeOrderData.user_id; // Keep original user ID
+            } catch (userCreateError: any) {
+              console.error(`❌ Failed to create placeholder user:`, userCreateError.message);
+              // Fallback to default user ID
+              nodeUserId = 1; // Use default user ID
+              console.warn(`⚠️ Using default user ID: ${nodeUserId}`);
+            }
+          } else {
+            console.log(`✅ User ${completeOrderData.user_id} exists in Node.js Users table`);
+          }
+        } catch (userCheckError: any) {
+          console.error(`❌ Error checking user existence:`, userCheckError.message);
+          // Fallback to default user ID
+          nodeUserId = 1;
+          console.warn(`⚠️ Using default user ID: ${nodeUserId}`);
+        }
+        
+        // Update the user_id in the order data
+        completeOrderData.user_id = nodeUserId;
+        console.log(`👤 Using user_id: ${nodeUserId} for order ${order.id}`);
+        
         // Check if order already exists
         const existingOrder = await Order.findByPk(order.id);
         
