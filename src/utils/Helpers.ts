@@ -2,6 +2,9 @@ import OrderConnector from '../services/OrderConnector';
 import EcomLog from '../models/EcomLog';
 import Order from '../models/Order';
 import { OrderAttributes } from '../types';
+import sequelize from '../config/database';
+import { QueryTypes } from 'sequelize';
+import { generateSimpleOrderId } from './orderIdGenerator';
 
 interface DeliveryAddress {
   contact_person_name: string;
@@ -77,6 +80,7 @@ interface CreateOrderPayload {
 
 export class Helpers {
 
+
   public static async generatePicklist(orderId: string, numericOrderId: number): Promise<any> {
     try {
       const picklistUrl = 'http://13.232.150.239/api/picklist/generate';
@@ -151,60 +155,108 @@ export class Helpers {
     try {
       
       // Debug: Log the order data we received
-      console.log(`🔍 Processing order:`, {
+      console.log(`🔍 Processing Ecommorder for order:`, {
         id: order.id,
-        order_id: order.order_id,
         user_id: order.user_id,
-        order_amount: order.order_amount
+        order_amount: order.order_amount,
+        payment_status: order.payment_status,
+        order_status: order.order_status,
+        cart_items: order.cart?.length || 0
       });
       
-      // Detect if current domain matches vestiqq.com
-      const currentDomain = process.env.CURRENT_DOMAIN || 'localhost';
+      // Step 1: Generate dynamic order_id using the same formula as place order controller
+      console.log(`🆔 Step 1: Generating dynamic order_id for order ID: ${order.id}`);
       
-      // First, verify that the order exists in the database
-      // const existingOrder = await Order.findByPk(order.id);
-      // if (!existingOrder) {
-      //   console.error(`❌ Order ${order.id} not found in database, skipping ecom_logs creation`);
-      //   throw new Error(`Order ${order.id} not found in database`);
-      // }
-
-    const orderJson = JSON.stringify(order);
-
-    // Try to log, but don't fail if order doesn't exist in database yet
-    try {
-      // First check if order exists in database
-      const existingOrder = await Order.findByPk(order.id);
-      if (existingOrder) {
-    await EcomLog.create({
-      order_id: order.id,
-      action: 'createOrder',
-      payload: orderJson,  // full order JSON here
-      response: JSON.stringify({ status: 'processing' }),
-      status: 'success'
-    });
-        console.log(`✅ Logged to ecom_logs for order ${order.id}`);
-      } else {
-        console.warn(`⚠️ Order ${order.id} not found in database yet, skipping ecom_logs creation`);
-      }
-    } catch (logError: any) {
-      console.warn(`⚠️ Could not log to ecom_logs for order ${order.id}:`, logError.message);
-      // Continue processing even if logging fails
-    }
-
-    // Generate picklist for the order
-    if (order.order_id && order.id) {
+      let generatedOrderId: string;
       try {
-        await this.generatePicklist(order.order_id, order.id);
-      } catch (picklistError) {
-        console.error(`❌ Failed to generate picklist for order ${order.order_id}:`, picklistError);
-        // Don't throw error here as picklist generation is not critical for order creation
+        generatedOrderId = await generateSimpleOrderId();
+        console.log(`✅ Generated order_id: ${generatedOrderId} for order ID: ${order.id}`);
+      } catch (orderIdError: any) {
+        console.error(`❌ Failed to generate order_id for order ${order.id}:`, orderIdError.message);
+        throw new Error(`Order ID generation failed: ${orderIdError.message}`);
       }
-    } else {
-      console.warn(`⚠️ Skipping picklist generation - missing order data:`, { 
-        order_id: order.order_id, 
-        id: order.id 
+      
+      // Step 2: Prepare complete order data with generated order_id
+      console.log(`💾 Step 2: Preparing complete order data for storage`);
+      
+      let completeOrderData: any = { ...order };
+      completeOrderData.order_id = generatedOrderId; // Use generated order_id
+      
+      console.log(`🛒 Order data prepared:`, {
+        orderId: order.id,
+        generatedOrderId: generatedOrderId,
+        cartItems: completeOrderData.cart?.length || 0,
+        totalValue: completeOrderData.cart?.reduce((sum: number, item: any) => sum + (item.amount * item.quantity), 0) || 0
       });
-    }
+      
+      // Step 3: Store complete order data into Node.js orders table
+      console.log(`💾 Step 3: Storing complete order data into Node.js orders table`);
+      
+      try {
+        // Check if order already exists
+        const existingOrder = await Order.findByPk(order.id);
+        
+        if (existingOrder) {
+          // Update existing order with complete data
+          console.log(`🔄 Updating existing order ${order.id} with complete data`);
+          await existingOrder.update(completeOrderData);
+          console.log(`✅ Successfully updated order ${order.id} with complete data`);
+        } else {
+          // Create new order with complete data
+          console.log(`🆕 Creating new order ${order.id} with complete data`);
+          await Order.create(completeOrderData);
+          console.log(`✅ Successfully created order ${order.id} with complete data`);
+        }
+      } catch (dbError: any) {
+        console.error(`❌ Failed to store order ${order.id} in Node.js database:`, dbError.message);
+        throw new Error(`Database operation failed: ${dbError.message}`);
+      }
+      
+      // Step 4: Log to ecom_logs
+      console.log(`📝 Step 4: Logging to ecom_logs`);
+      
+      const orderJson = JSON.stringify(completeOrderData);
+
+      try {
+        await EcomLog.create({
+          order_id: order.id,
+          action: 'createOrder',
+          payload: orderJson,
+          response: JSON.stringify({ 
+            status: 'success',
+            message: 'Order processed successfully with complete data from PHP',
+            cartItems: completeOrderData.cart?.length || 0,
+            generated_order_id: generatedOrderId
+          }),
+          status: 'success'
+        });
+        console.log(`✅ Logged to ecom_logs for order ${order.id}`);
+      } catch (logError: any) {
+        console.warn(`⚠️ Could not log to ecom_logs for order ${order.id}:`, logError.message);
+      }
+
+      // Step 5: Generate picklist for the order using generated order_id
+      console.log(`📦 Step 5: Generating picklist for order ${order.id} with order_id: ${generatedOrderId}`);
+      
+      if (generatedOrderId && order.id) {
+        try {
+          await this.generatePicklist(generatedOrderId, order.id);
+          console.log(`✅ Successfully generated picklist for order ${generatedOrderId}`);
+        } catch (picklistError: any) {
+          console.error(`❌ Failed to generate picklist for order ${generatedOrderId}:`, picklistError.message);
+        }
+      }
+      
+      console.log(`🎉 Ecommorder processing completed successfully for order ${order.id}`);
+      
+      return {
+        success: true,
+        message: 'Order processed successfully',
+        order_id: order.id,
+        generated_order_id: generatedOrderId,
+        cart_items: completeOrderData.cart?.length || 0,
+        picklist_generated: true
+      };
 
       // if (!currentDomain.includes('admin.ozi.in')) {
       //   // Just log and return without placing the order
