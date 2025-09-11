@@ -106,13 +106,17 @@ export class Helpers {
       const result = await response.json();
       
       // Log the picklist generation
-      await EcomLog.create({
-        order_id: numericOrderId,
-        action: 'generatePicklist',
-        payload: JSON.stringify(payload),
-        response: JSON.stringify(result),
-        status: 'success'
-      });
+      try {
+        await EcomLog.create({
+          order_id: numericOrderId,
+          action: 'generatePicklist',
+          payload: JSON.stringify(payload),
+          response: JSON.stringify(result),
+          status: 'success'
+        });
+      } catch (logError: any) {
+        console.warn(`⚠️ Could not log picklist success to ecom_logs for order ${orderId}:`, logError.message);
+      }
 
       console.log(`✅ Picklist generated successfully for order ${orderId}`);
       return result;
@@ -121,13 +125,17 @@ export class Helpers {
       console.error(`❌ Error generating picklist for order ${orderId}:`, error);
       
       // Log the error
-      await EcomLog.create({
-        order_id: numericOrderId,
-        action: 'generatePicklist',
-        payload: JSON.stringify({ orderIds: [`${orderId}`] }),
-        response: JSON.stringify({ error: error.message }),
-        status: 'failed'
-      });
+      try {
+        await EcomLog.create({
+          order_id: numericOrderId,
+          action: 'generatePicklist',
+          payload: JSON.stringify({ orderIds: [`${orderId}`] }),
+          response: JSON.stringify({ error: error.message }),
+          status: 'failed'
+        });
+      } catch (logError: any) {
+        console.warn(`⚠️ Could not log picklist error to ecom_logs for order ${orderId}:`, logError.message);
+      }
 
       throw error;
     }
@@ -147,13 +155,20 @@ export class Helpers {
       // }
 
     const orderJson = JSON.stringify(order);
-    await EcomLog.create({
-      order_id: order.id,
-      action: 'createOrder',
-      payload: orderJson,  // full order JSON here
-      response: JSON.stringify({ status: 'processing' }),
-      status: 'success'
-    });
+    
+    // Try to log, but don't fail if order doesn't exist in database yet
+    try {
+      await EcomLog.create({
+        order_id: order.id,
+        action: 'createOrder',
+        payload: orderJson,  // full order JSON here
+        response: JSON.stringify({ status: 'processing' }),
+        status: 'success'
+      });
+    } catch (logError: any) {
+      console.warn(`⚠️ Could not log to ecom_logs for order ${order.id}:`, logError.message);
+      // Continue processing even if logging fails
+    }
 
     // Generate picklist for the order
     try {
