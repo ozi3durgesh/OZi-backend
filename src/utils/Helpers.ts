@@ -80,8 +80,6 @@ export class Helpers {
   public static async generatePicklist(orderId: string, numericOrderId: number): Promise<any> {
     try {
       const picklistUrl = 'http://13.232.150.239/api/picklist/generate';
-      // TODO: Update with fresh token - current token expired
-      const authToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjIsImVtYWlsIjoiYWRtaW5AY29tcGFueS5jb20iLCJyb2xlIjoiYWRtaW4iLCJwZXJtaXNzaW9ucyI6WyJ1c2Vyc19yb2xlczptYW5hZ2UiLCJzaXRlczpjcmVhdGVfY29uZmlnIiwic2l0ZXM6dmlldyIsInNpdGVzOnZpZXdfb3duIiwib3JkZXJzOnZpZXdfYWxsIiwib3JkZXJzOnZpZXdfd2giLCJvcmRlcnM6dmlld19zdG9yZSIsIm9yZGVyczp2aWV3X3Rhc2siLCJwaWNraW5nOnZpZXciLCJwaWNraW5nOmFzc2lnbl9tYW5hZ2UiLCJwaWNraW5nOmV4ZWN1dGUiLCJwaWNraW5nOm1vbml0b3IiLCJpbmJvdW5kOnZpZXciLCJpbmJvdW5kOmFwcHJvdmVfdmFyaWFuY2VzIiwiaW5ib3VuZDpleGVjdXRlIiwicHV0YXdheTp2aWV3IiwicHV0YXdheTptYW5hZ2UiLCJwdXRhd2F5OmV4ZWN1dGUiLCJpbnZlbnRvcnk6YXBwcm92ZSIsImludmVudG9yeTpyYWlzZSIsImN5Y2xlX2NvdW50OnZpZXciLCJjeWNsZV9jb3VudDpzY2hlZHVsZV9hcHByb3ZlIiwiY3ljbGVfY291bnQ6ZXhlY3V0ZSIsInJlcGxlbmlzaG1lbnQ6Y29uZmlnIiwicmVwbGVuaXNobWVudDphcHByb3ZlIiwicnR2OmNvbmZpZ19hcHByb3ZlIiwicnR2OmNyZWF0ZV9hcHByb3ZlIiwicnR2OmV4ZWN1dGUiLCJwb3M6dmlldyIsInBvczpleGVjdXRlIiwic3RvcmVfd2hfcmVxdWVzdHM6dmlldyIsInN0b3JlX3doX3JlcXVlc3RzOmNyZWF0ZV9jaGVja2luIiwiZXhjZXB0aW9uczphbGxfYWN0aW9ucyIsImV4Y2VwdGlvbnM6cmVzb2x2ZSIsImV4Y2VwdGlvbnM6cmFpc2UiLCJleGNlcHRpb25zOnJhaXNlX3N0b3JlIiwiZGFzaGJvYXJkczp2aWV3X2FsbCIsImRhc2hib2FyZHM6dmlld193aCIsImRhc2hib2FyZHM6dmlld190YXNrIiwiZGFzaGJvYXJkczp2aWV3X3N0b3JlIiwic2xhOmNvbmZpZ3VyZSIsInNsYTp2aWV3Iiwic3RvcmVfb3BzOnBvc19jaGVja291dCIsInN0b3JlX29wczppbnZvaWNlX2NyZWF0ZSIsInN0b3JlX29wczpzdG9yZV9zdGF0dXMiLCJzdG9yZV9vcHM6c3VyZ2VfdG9nZ2xlIiwic3RvcmVfb3BzOnN0b2NrX2NoZWNrIl0sImlhdCI6MTc1NzU4NDg4MSwiZXhwIjoxNzU4MTg5NjgxfQ.e65SS1y85AP0yKZVTWjMNZI4cYba62sdpc5rJFfJDzc';
       
       const payload = {
         orderIds: [`${orderId}`],
@@ -94,8 +92,7 @@ export class Helpers {
       const response = await fetch(picklistUrl, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(payload)
       });
@@ -172,19 +169,19 @@ export class Helpers {
       // }
 
     const orderJson = JSON.stringify(order);
-    
+
     // Try to log, but don't fail if order doesn't exist in database yet
     try {
       // First check if order exists in database
       const existingOrder = await Order.findByPk(order.id);
       if (existingOrder) {
-        await EcomLog.create({
-          order_id: order.id,
-          action: 'createOrder',
-          payload: orderJson,  // full order JSON here
-          response: JSON.stringify({ status: 'processing' }),
-          status: 'success'
-        });
+    await EcomLog.create({
+      order_id: order.id,
+      action: 'createOrder',
+      payload: orderJson,  // full order JSON here
+      response: JSON.stringify({ status: 'processing' }),
+      status: 'success'
+    });
         console.log(`✅ Logged to ecom_logs for order ${order.id}`);
       } else {
         console.warn(`⚠️ Order ${order.id} not found in database yet, skipping ecom_logs creation`);

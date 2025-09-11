@@ -11,8 +11,6 @@ router.use(versionCheck);
 
 // Picklist Management
 router.post('/generate', 
-  authenticate, 
-  hasPermission('picking:assign_manage'), 
   PickingController.generateWaves
 );
 
