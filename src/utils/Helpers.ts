@@ -1,5 +1,6 @@
 import OrderConnector from '../services/OrderConnector';
 import EcomLog from '../models/EcomLog';
+import Order from '../models/Order';
 import { OrderAttributes } from '../types';
 
 interface DeliveryAddress {
@@ -87,6 +88,12 @@ export class Helpers {
       // Detect if current domain matches vestiqq.com
       const currentDomain = process.env.CURRENT_DOMAIN || 'localhost';
       
+      // First, verify that the order exists in the database
+      const existingOrder = await Order.findByPk(order.id);
+      if (!existingOrder) {
+        console.error(`❌ Order ${order.id} not found in database, skipping ecom_logs creation`);
+        throw new Error(`Order ${order.id} not found in database`);
+      }
 
     // Convert full order object into JSON
     const orderJson = JSON.stringify(order);
