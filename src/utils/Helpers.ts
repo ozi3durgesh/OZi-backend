@@ -105,6 +105,10 @@ export class Helpers {
           console.warn(`⚠️ Picklist API token expired (401 Unauthorized) - skipping picklist generation for order ${orderId}`);
           return { message: 'Picklist generation skipped - token expired' };
         }
+        if (response.status === 404) {
+          console.warn(`⚠️ Picklist API endpoint not found (404) - skipping picklist generation for order ${orderId}`);
+          return { message: 'Picklist generation skipped - endpoint not found' };
+        }
         throw new Error(`Picklist generation failed: ${response.status} ${response.statusText}`);
       }
 
@@ -171,13 +175,20 @@ export class Helpers {
     
     // Try to log, but don't fail if order doesn't exist in database yet
     try {
-      await EcomLog.create({
-        order_id: order.id,
-        action: 'createOrder',
-        payload: orderJson,  // full order JSON here
-        response: JSON.stringify({ status: 'processing' }),
-        status: 'success'
-      });
+      // First check if order exists in database
+      const existingOrder = await Order.findByPk(order.id);
+      if (existingOrder) {
+        await EcomLog.create({
+          order_id: order.id,
+          action: 'createOrder',
+          payload: orderJson,  // full order JSON here
+          response: JSON.stringify({ status: 'processing' }),
+          status: 'success'
+        });
+        console.log(`✅ Logged to ecom_logs for order ${order.id}`);
+      } else {
+        console.warn(`⚠️ Order ${order.id} not found in database yet, skipping ecom_logs creation`);
+      }
     } catch (logError: any) {
       console.warn(`⚠️ Could not log to ecom_logs for order ${order.id}:`, logError.message);
       // Continue processing even if logging fails
