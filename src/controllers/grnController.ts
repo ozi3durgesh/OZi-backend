@@ -20,6 +20,20 @@ import { rejects } from 'assert';
 import { S3Service } from '../services/s3Service';
 
 export class GrnController {
+  /**
+   * Validate if the provided string is a valid S3 URL
+   * @param url - URL to validate
+   * @returns boolean - Whether the URL is a valid S3 URL
+   */
+  private static isValidS3Url(url: string): boolean {
+    try {
+      const s3UrlPattern = /^https:\/\/[a-zA-Z0-9-]+\.s3\.[a-zA-Z0-9-]+\.amazonaws\.com\/.+/;
+      return s3UrlPattern.test(url);
+    } catch (error) {
+      return false;
+    }
+  }
+
   static async createGrn(req: AuthRequest, res: Response): Promise<void> {
     try {
       const data: GRNRequest = req.body;
@@ -176,15 +190,15 @@ export class GrnController {
           return;
         }
 
-        // Validate base64 image if provided
+        // Validate S3 URL if provided
         if (line.photos) {
-          if (!S3Service.validateBase64Image(line.photos)) {
+          if (!GrnController.isValidS3Url(line.photos)) {
             await t.rollback();
             res.status(400).json({
               statusCode: 400,
               success: false,
               data: null,
-              error: `Invalid base64 image format for SKU ${line.skuId}`,
+              error: `Invalid S3 URL format for SKU ${line.skuId}. Please upload images first using the photo upload API.`,
             });
             return;
           }
@@ -212,33 +226,28 @@ export class GrnController {
           { transaction: t }
         );
 
-        // Upload SKU-level photo to S3 and create GRNPhoto record
+        // Create GRNPhoto record for the S3 URL
         if (line.photos) {
           try {
-            const uploadedPhotoUrl = await S3Service.uploadSkuBase64Image(
-              line.photos,
-              line.skuId
-            );
-
-            // Create GRNPhoto record for the uploaded image
+            // Create GRNPhoto record for the S3 URL (already uploaded via photo upload API)
             await GRNPhoto.create(
               {
                 sku_id: line.skuId,
                 grn_id: grn.id,
                 po_id: input.poId,
-                url: uploadedPhotoUrl,
+                url: line.photos,
                 reason: 'sku-level-photo',
               },
               { transaction: t }
             );
-          } catch (s3Error) {
+          } catch (photoError) {
             await t.rollback();
-            console.error('S3 upload error:', s3Error);
+            console.error('GRN Photo creation error:', photoError);
             res.status(500).json({
               statusCode: 500,
               success: false,
               data: null,
-              error: `Failed to upload image for SKU ${line.skuId}: ${s3Error}`,
+              error: `Failed to create photo record for SKU ${line.skuId}: ${photoError}`,
             });
             return;
           }
