@@ -254,9 +254,9 @@ export class Helpers {
         console.log(`👤 Using user_id: ${nodeUserId} for order ${order.id}`);
         
         // Check if order already exists
-        const existingOrder = await Order.findByPk(order.id);
+      const existingOrder = await Order.findByPk(order.id);
         
-        if (existingOrder) {
+      if (existingOrder) {
           // Update existing order with complete data
           console.log(`🔄 Updating existing order ${order.id} with complete data`);
           await existingOrder.update(completeOrderData);
@@ -278,9 +278,9 @@ export class Helpers {
       const orderJson = JSON.stringify(completeOrderData);
 
       try {
-        await EcomLog.create({
-          order_id: order.id,
-          action: 'createOrder',
+    await EcomLog.create({
+      order_id: order.id,
+      action: 'createOrder',
           payload: orderJson,
           response: JSON.stringify({ 
             status: 'success',
@@ -288,11 +288,11 @@ export class Helpers {
             cartItems: completeOrderData.cart?.length || 0,
             generated_order_id: generatedOrderId
           }),
-          status: 'success'
-        });
+      status: 'success'
+    });
         console.log(`✅ Logged to ecom_logs for order ${order.id}`);
-      } catch (logError: any) {
-        console.warn(`⚠️ Could not log to ecom_logs for order ${order.id}:`, logError.message);
+    } catch (logError: any) {
+      console.warn(`⚠️ Could not log to ecom_logs for order ${order.id}:`, logError.message);
       }
 
       // Step 5: Generate picklist for the order using generated order_id
@@ -303,12 +303,33 @@ export class Helpers {
         try {
           const picklistResult = await this.generatePicklist(generatedOrderId, order.id);
           console.log(`✅ Successfully generated picklist for order ${generatedOrderId}`);
+          console.log(`📊 Picklist result structure:`, JSON.stringify(picklistResult, null, 2));
           
-          // Extract waveId from picklist result
-          if (picklistResult && picklistResult.waves && picklistResult.waves.length > 0) {
-            waveId = picklistResult.waves[0].id;
-            console.log(`🎯 Generated wave ID: ${waveId} for order ${generatedOrderId}`);
+          // Extract waveId from picklist result - check multiple possible structures
+          if (picklistResult) {
+            // Check if it's in the waves array
+            if (picklistResult.waves && picklistResult.waves.length > 0) {
+              waveId = picklistResult.waves[0].id;
+              console.log(`🎯 Extracted wave ID from waves array: ${waveId}`);
+            }
+            // Check if it's in the data.waves array
+            else if (picklistResult.data && picklistResult.data.waves && picklistResult.data.waves.length > 0) {
+              waveId = picklistResult.data.waves[0].id;
+              console.log(`🎯 Extracted wave ID from data.waves array: ${waveId}`);
+            }
+            // Check if it's directly in the result
+            else if (picklistResult.id) {
+              waveId = picklistResult.id;
+              console.log(`🎯 Extracted wave ID directly from result: ${waveId}`);
+            }
+            else {
+              console.warn(`⚠️ No wave ID found in picklist result structure`);
+            }
+          } else {
+            console.warn(`⚠️ Picklist result is null or undefined`);
           }
+          
+          console.log(`🎯 Final wave ID for order ${generatedOrderId}: ${waveId}`);
         } catch (picklistError: any) {
           console.error(`❌ Failed to generate picklist for order ${generatedOrderId}:`, picklistError.message);
         }
@@ -317,6 +338,11 @@ export class Helpers {
       // Step 6: Auto-assign picklist to available picker using round-robin
       if (waveId) {
         console.log(`👤 Step 6: Auto-assigning wave ${waveId} to available picker`);
+        console.log(`📡 Making API call to: http://13.232.150.239/api/picklist/assign`);
+        console.log(`📋 Assignment payload:`, JSON.stringify({
+          waveId: waveId,
+          priority: 'HIGH'
+        }, null, 2));
         
         try {
           // Make internal API call to assign the wave (round-robin)
@@ -332,16 +358,35 @@ export class Helpers {
             })
           });
           
+          console.log(`📡 Assignment API response status: ${assignResponse.status} ${assignResponse.statusText}`);
+          
           if (assignResponse.ok) {
-            const assignResult = await assignResponse.json();
-            console.log(`✅ Successfully assigned wave ${waveId} to picker:`, assignResult);
+            const assignResult: any = await assignResponse.json();
+            console.log(`✅ Successfully assigned wave ${waveId} to picker:`, JSON.stringify(assignResult, null, 2));
+            
+            // Log the specific assignment details
+            if (assignResult.data && assignResult.data.assignment) {
+              const assignment = assignResult.data.assignment;
+              console.log(`🎯 Assignment Details:`);
+              console.log(`   - Wave ID: ${assignment.waveId}`);
+              console.log(`   - Wave Number: ${assignment.waveNumber}`);
+              console.log(`   - Picker ID: ${assignment.pickerId}`);
+              console.log(`   - Picker Email: ${assignment.pickerEmail}`);
+              console.log(`   - Assigned At: ${assignment.assignedAt}`);
+              console.log(`   - Priority: ${assignment.priority}`);
+            }
           } else {
             const errorText = await assignResponse.text();
             console.error(`❌ Failed to assign wave ${waveId}:`, errorText);
+            console.error(`❌ Response status: ${assignResponse.status} ${assignResponse.statusText}`);
           }
         } catch (assignError: any) {
           console.error(`❌ Failed to auto-assign wave ${waveId}:`, assignError.message);
+          console.error(`❌ Full error:`, assignError);
         }
+      } else {
+        console.warn(`⚠️ No wave ID available for auto-assignment`);
+        console.warn(`⚠️ Wave ID value: ${waveId}`);
       }
       
       console.log(`🎉 Ecommorder processing completed successfully for order ${order.id}`);
@@ -572,6 +617,41 @@ export class Helpers {
     } catch (error: any) {
       console.error('Error in Ecommorder:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Test function to manually test picklist assignment
+   */
+  public static async testAssignment(waveId: number): Promise<any> {
+    try {
+      console.log(`🧪 Testing assignment for wave ID: ${waveId}`);
+      
+      const assignResponse = await fetch('http://13.232.150.239/api/picklist/assign', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          waveId: waveId,
+          priority: 'HIGH'
+        })
+      });
+      
+      console.log(`📡 Test assignment response status: ${assignResponse.status} ${assignResponse.statusText}`);
+      
+      if (assignResponse.ok) {
+        const assignResult = await assignResponse.json();
+        console.log(`✅ Test assignment successful:`, JSON.stringify(assignResult, null, 2));
+        return assignResult;
+      } else {
+        const errorText = await assignResponse.text();
+        console.error(`❌ Test assignment failed:`, errorText);
+        return { error: errorText };
+      }
+    } catch (error: any) {
+      console.error(`❌ Test assignment error:`, error.message);
+      return { error: error.message };
     }
   }
 }
