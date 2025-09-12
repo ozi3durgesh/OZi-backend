@@ -397,11 +397,7 @@ export class PickingController {
 
       // Validate picker exists and has picking permissions
       const picker = await User.findByPk(targetPickerId, {
-        include: [{
-          association: 'Role',
-          include: ['Permissions']
-        }],
-        attributes: ['id', 'email', 'availabilityStatus', 'isActive']
+        attributes: ['id', 'email', 'availabilityStatus', 'isActive', 'roleId']
       });
 
       if (!picker) {
@@ -416,13 +412,8 @@ export class PickingController {
         return ResponseHandler.error(res, `Picker is not available. Current status: ${picker.availabilityStatus}`, 400);
       }
 
-      // Check if picker has picking permissions
-      const permissions = (picker as any).Role?.Permissions || [];
-      const hasPickingPermission = permissions.some((p: any) => 
-        p.module === 'picking' && ['view', 'assign_manage', 'execute'].includes(p.action)
-      );
-
-      if (!hasPickingPermission) {
+      // Check if picker has picking permissions (roleId 4 = wh_staff_2 has picking permissions)
+      if (picker.roleId !== 4) {
         return ResponseHandler.error(res, 'Picker does not have picking permissions', 403);
       }
 
