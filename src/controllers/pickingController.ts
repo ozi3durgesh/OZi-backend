@@ -366,6 +366,8 @@ export class PickingController {
     try {
       const { waveId, pickerId, priority } = req.body;
 
+      console.log(`🎯 Assignment request: waveId=${waveId}, pickerId=${pickerId}, priority=${priority}`);
+
       if (!waveId) {
         return ResponseHandler.error(res, 'Wave ID is required', 400);
       }
@@ -375,12 +377,45 @@ export class PickingController {
       // If no pickerId provided, use round-robin assignment
       if (!targetPickerId) {
         console.log(`Auto-assigning wave ${waveId} using round-robin`);
-        const nextPicker = await this.getNextPicker();
         
-        if (!nextPicker) {
+        // Get all active pickers with picking permissions (roleId = 4 for wh_staff_2)
+        const pickers = await User.findAll({
+          where: {
+            isActive: true,
+            availabilityStatus: 'available',
+            roleId: 4 // wh_staff_2 role has picking permissions
+          },
+          order: [['id', 'ASC']],
+          attributes: ['id', 'email', 'availabilityStatus']
+        });
+
+        if (pickers.length === 0) {
+          console.warn('No available pickers found');
           return ResponseHandler.error(res, 'No available pickers found for assignment', 400);
         }
+
+        console.log(`Available pickers: ${pickers.map(p => `${p.id}(${p.email})`).join(', ')}`);
+
+        // Get the last assigned picker ID from the most recent wave
+        const lastAssignedWave = await PickingWave.findOne({
+          where: Sequelize.where(Sequelize.col('pickerId'), Op.ne, null),
+          order: [['assignedAt', 'DESC']],
+          attributes: ['pickerId']
+        });
+
+        let nextPickerIndex = 0;
         
+        if (lastAssignedWave) {
+          console.log(`Last assigned picker ID: ${lastAssignedWave.pickerId}`);
+          // Find the index of the last assigned picker
+          const lastPickerIndex = pickers.findIndex(p => p.id === lastAssignedWave.pickerId);
+          if (lastPickerIndex !== -1) {
+            // Round-robin: next picker in the list
+            nextPickerIndex = (lastPickerIndex + 1) % pickers.length;
+          }
+        }
+
+        const nextPicker = pickers[nextPickerIndex];
         targetPickerId = nextPicker.id;
         console.log(`Auto-assigned picker ${targetPickerId} (${nextPicker.email}) to wave ${waveId}`);
       }
@@ -417,14 +452,16 @@ export class PickingController {
         return ResponseHandler.error(res, 'Picker does not have picking permissions', 403);
       }
 
-      // Check if picker can handle more waves (max 3)
+      // Check if picker can handle more waves (max 20)
       const pickerWaves = await PickingWave.count({
         where: { pickerId: picker.id, status: ['ASSIGNED', 'PICKING'] }
       });
 
       if (pickerWaves >= 20) {
-        return ResponseHandler.error(res, 'Picker has reached maximum wave limit (3)', 400);
+        return ResponseHandler.error(res, 'Picker has reached maximum wave limit (20)', 400);
       }
+
+      console.log(`Assigning wave ${waveId} to picker ${picker.id} (${picker.email})`);
 
       // Update wave with assignment
       await wave.update({
@@ -433,6 +470,8 @@ export class PickingController {
         assignedAt: new Date(),
         priority: priority || wave.priority // Use provided priority or keep existing
       });
+
+      console.log(`✅ Successfully assigned wave ${waveId} to picker ${picker.email}`);
 
       return ResponseHandler.success(res, {
         message: 'Wave assigned successfully',
