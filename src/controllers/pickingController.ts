@@ -362,7 +362,7 @@ export class PickingController {
   /**
    * Manually assign a specific wave to a specific picker
    */
-  static async assignWaveToPicker(req: AuthRequest, res: Response): Promise<Response> {
+  static async assignWaveToPicker(req: AuthRequest | any, res: Response): Promise<Response> {
     try {
       const { waveId, pickerId, priority } = req.body;
 
