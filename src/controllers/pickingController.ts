@@ -311,14 +311,78 @@ export class PickingController {
   }
 
   /**
+   * Get next available picker using round-robin assignment
+   */
+  static async getNextPicker(): Promise<any> {
+    try {
+      // Get all active pickers with picking permissions (roleId = 4 for wh_staff_2)
+      const pickers = await User.findAll({
+        where: {
+          isActive: true,
+          availabilityStatus: 'available',
+          roleId: 4 // wh_staff_2 role has picking permissions
+        },
+        order: [['id', 'ASC']],
+        attributes: ['id', 'email', 'availabilityStatus']
+      });
+
+      if (pickers.length === 0) {
+        console.warn('No available pickers found');
+        return null;
+      }
+
+      // Get the last assigned picker ID from the most recent wave
+      const lastAssignedWave = await PickingWave.findOne({
+        where: Sequelize.where(Sequelize.col('pickerId'), Op.ne, null),
+        order: [['assignedAt', 'DESC']],
+        attributes: ['pickerId']
+      });
+
+      let nextPickerIndex = 0;
+      
+      if (lastAssignedWave) {
+        // Find the index of the last assigned picker
+        const lastPickerIndex = pickers.findIndex(p => p.id === lastAssignedWave.pickerId);
+        if (lastPickerIndex !== -1) {
+          // Next picker is the one after the last assigned, with wrap-around
+          nextPickerIndex = (lastPickerIndex + 1) % pickers.length;
+        }
+      }
+
+      const nextPicker = pickers[nextPickerIndex];
+      console.log(`Round-robin: Selected picker ${nextPicker.id} (${nextPicker.email}) from ${pickers.length} available pickers`);
+      
+      return nextPicker;
+    } catch (error) {
+      console.error('Error getting next picker:', error);
+      return null;
+    }
+  }
+
+  /**
    * Manually assign a specific wave to a specific picker
    */
   static async assignWaveToPicker(req: AuthRequest, res: Response): Promise<Response> {
     try {
       const { waveId, pickerId, priority } = req.body;
 
-      if (!waveId || !pickerId) {
-        return ResponseHandler.error(res, 'Wave ID and picker ID are required', 400);
+      if (!waveId) {
+        return ResponseHandler.error(res, 'Wave ID is required', 400);
+      }
+
+      let targetPickerId = pickerId;
+
+      // If no pickerId provided, use round-robin assignment
+      if (!targetPickerId) {
+        console.log(`Auto-assigning wave ${waveId} using round-robin`);
+        const nextPicker = await this.getNextPicker();
+        
+        if (!nextPicker) {
+          return ResponseHandler.error(res, 'No available pickers found for assignment', 400);
+        }
+        
+        targetPickerId = nextPicker.id;
+        console.log(`Auto-assigned picker ${targetPickerId} (${nextPicker.email}) to wave ${waveId}`);
       }
 
       // Validate wave exists and is available for assignment
@@ -332,7 +396,7 @@ export class PickingController {
       }
 
       // Validate picker exists and has picking permissions
-      const picker = await User.findByPk(pickerId, {
+      const picker = await User.findByPk(targetPickerId, {
         include: [{
           association: 'Role',
           include: ['Permissions']
@@ -374,7 +438,7 @@ export class PickingController {
       // Update wave with assignment
       await wave.update({
         status: 'ASSIGNED',
-        pickerId: picker.id,
+        pickerId: targetPickerId,
         assignedAt: new Date(),
         priority: priority || wave.priority // Use provided priority or keep existing
       });
@@ -384,7 +448,7 @@ export class PickingController {
         assignment: {
           waveId: wave.id,
           waveNumber: wave.waveNumber,
-          pickerId: picker.id,
+          pickerId: targetPickerId,
           pickerEmail: picker.email,
           assignedAt: wave.assignedAt,
           priority: wave.priority

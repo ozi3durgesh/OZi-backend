@@ -298,12 +298,49 @@ export class Helpers {
       // Step 5: Generate picklist for the order using generated order_id
       console.log(`📦 Step 5: Generating picklist for order ${order.id} with order_id: ${generatedOrderId}`);
       
+      let waveId: number | null = null;
       if (generatedOrderId && order.id) {
         try {
-          await this.generatePicklist(generatedOrderId, order.id);
+          const picklistResult = await this.generatePicklist(generatedOrderId, order.id);
           console.log(`✅ Successfully generated picklist for order ${generatedOrderId}`);
+          
+          // Extract waveId from picklist result
+          if (picklistResult && picklistResult.waves && picklistResult.waves.length > 0) {
+            waveId = picklistResult.waves[0].id;
+            console.log(`🎯 Generated wave ID: ${waveId} for order ${generatedOrderId}`);
+          }
         } catch (picklistError: any) {
           console.error(`❌ Failed to generate picklist for order ${generatedOrderId}:`, picklistError.message);
+        }
+      }
+      
+      // Step 6: Auto-assign picklist to available picker using round-robin
+      if (waveId) {
+        console.log(`👤 Step 6: Auto-assigning wave ${waveId} to available picker`);
+        
+        try {
+          // Make internal API call to assign the wave (round-robin)
+          const assignResponse = await fetch('http://13.232.150.239/api/picklist/assign', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              waveId: waveId,
+              priority: 'HIGH'
+              // No pickerId - will use round-robin assignment
+            })
+          });
+          
+          if (assignResponse.ok) {
+            const assignResult = await assignResponse.json();
+            console.log(`✅ Successfully assigned wave ${waveId} to picker:`, assignResult);
+          } else {
+            const errorText = await assignResponse.text();
+            console.error(`❌ Failed to assign wave ${waveId}:`, errorText);
+          }
+        } catch (assignError: any) {
+          console.error(`❌ Failed to auto-assign wave ${waveId}:`, assignError.message);
         }
       }
       
