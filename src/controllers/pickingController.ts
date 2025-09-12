@@ -92,7 +92,8 @@ export class PickingController {
           slaDeadline,
           routeOptimization,
           fefoRequired,
-          tagsAndBags
+          tagsAndBags,
+          orderId: orderData.id
         } as any);
         
 

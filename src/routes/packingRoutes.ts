@@ -3,7 +3,8 @@ import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
 import { PackingController } from '../controllers/packingController';
 import PickingWave from '../models/PickingWave';
-import Rider from '../models/Rider';
+import Order from '../models/Order';
+import DeliveryMan from '../models/DeliveryMan';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
@@ -175,7 +176,7 @@ router.post("/:waveId/pack-and-seal", upload.single("photo"), async (req, res) =
       });
     }
 
-    // Ensure wave exists
+    // Ensure the wave exists
     const wave = await PickingWave.findByPk(waveId);
     if (!wave) {
       return res.status(404).json({
@@ -185,64 +186,47 @@ router.post("/:waveId/pack-and-seal", upload.single("photo"), async (req, res) =
       });
     }
 
-    // Find minimum deliveries
-    const minDeliveries = await Rider.min("totalDeliveries", {
-      where: { isActive: true, availabilityStatus: "AVAILABLE" },
-    });
-
-    if (minDeliveries === null) {
+    // Fetch the order related to the wave
+    const order = await Order.findByPk(wave.orderId);
+    if (!order || !order.delivery_man_id) {
       return res.status(404).json({
         statusCode: 404,
         success: false,
-        error: "No eligible riders found",
+        error: "No delivery partner assigned to this order",
       });
     }
 
-    // Riders with minimum deliveries
-    const candidates = await Rider.findAll({
-      where: {
-        isActive: true,
-        availabilityStatus: "AVAILABLE",
-        totalDeliveries: minDeliveries,
-      },
-      attributes: [
-        "id",
-        "riderCode",
-        "name",
-        "phone",
-        "email",
-        "vehicleType",
-        "vehicleNumber",
-        "availabilityStatus",
-        "rating",
-        "totalDeliveries",
-      ],
-    });
-
-    if (!candidates.length) {
+    // Fetch the delivery partner (rider) details using delivery_man_id from the order
+    const deliveryPartner = await DeliveryMan.findByPk(order.delivery_man_id);
+    if (!deliveryPartner) {
       return res.status(404).json({
         statusCode: 404,
         success: false,
-        error: "No eligible riders found",
+        error: "Delivery partner not found",
       });
     }
 
-    // Random from candidates
-    const assignedRider = candidates[Math.floor(Math.random() * candidates.length)];
-
-    // Update wave → assign rider + mark as PACKED + save S3 photo URL
+    // Update the PickingWave to assign the delivery partner and mark it as 'PACKED'
     await wave.update({
-      riderId: assignedRider.id,
-      status: "PACKED",
-      photoPath: photo.location, // store S3 URL
+      riderId: deliveryPartner.id,  // Assign delivery partner (riderId from DeliveryMan)
+      status: "PACKED",              // Mark the wave as packed
+      photoPath: photo.location,     // Store the S3 URL of the photo
     });
 
-    // Increment totalDeliveries for assigned rider
-    await assignedRider.update({
-      totalDeliveries: assignedRider.totalDeliveries + 1,
+    // Emit real-time update via WebSocket (using Socket.io)
+    // This will notify all connected clients about the wave assignment
+    req.app.locals.io.emit('delivery_assigned', {
+      waveId: wave.id,
+      deliveryPartner: {
+        id: deliveryPartner.id,
+        name: deliveryPartner.f_name + ' ' + deliveryPartner.l_name,
+        vehicleId: deliveryPartner.vehicle_id,
+        phone: deliveryPartner.phone,
+      },
+      photoPath: photo.location,
     });
 
-    // ✅ Response with S3 URL instead of local path
+    // ✅ Respond with the S3 URL instead of the local path
     return res.status(201).json({
       statusCode: 201,
       success: true,
@@ -255,7 +239,7 @@ router.post("/:waveId/pack-and-seal", upload.single("photo"), async (req, res) =
           mimetype: photo.mimetype,
           size: photo.size,
         },
-        deliveryPartner: assignedRider,
+        deliveryPartner: deliveryPartner,
       },
     });
   } catch (error) {
