@@ -151,7 +151,8 @@ export const autoInitializeRBAC = async (): Promise<void> => {
     // WH Staff 2 (Picker/Packer) permissions
     const whStaff2Permissions = [
       'orders:view_task',
-      'picking:execute',
+      'picking:view',        // Allow pickers to view available picklists
+      'picking:execute',     // Allow pickers to execute picking tasks
       'exceptions:raise',
       'dashboards:view_task',
     ];

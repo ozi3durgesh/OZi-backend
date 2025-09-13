@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import app from './app';
 import { connectDatabase } from './config/database';
+import { autoInitializeRBAC } from './config/autoInit';
 import http from 'http';
 import { Server } from 'socket.io';
 import { socketManager } from './utils/socketManager';
@@ -11,6 +12,10 @@ const PORT = process.env.PORT || 3000;
 const startServer = async () => {
   try {
     await connectDatabase();
+    
+    // Initialize RBAC system with updated permissions
+    await autoInitializeRBAC();
+    
     const server = http.createServer(app);
 
     const io = new Server(server, {
