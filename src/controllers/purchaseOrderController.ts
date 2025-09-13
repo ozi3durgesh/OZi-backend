@@ -84,8 +84,7 @@ Vendor: ${po.vendor_name}
 PO Amount: ₹${po.total_amount}
 PO ID: ${po.po_id}
 
-Products:
-${productLines}
+PO Raised kindely find the details below:
 
 ${role !== 'creator' ? `Approval Link: ${approvalLink}` : 'Please check the PO and submit PI details.'}
 
