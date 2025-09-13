@@ -113,13 +113,38 @@ export class PickingController {
               const quantity = item.quantity || (item.amount ? 1 : 1);
               
               try {
+                // First, ensure the SKU exists in product_master table
+                const skuString = item.sku.toString();
+                let productExists = await Product.findOne({
+                  where: { SKU: skuString }
+                });
+
+                if (!productExists) {
+                  console.log(`📦 Creating placeholder product for SKU ${skuString}`);
+                  try {
+                    await Product.create({
+                      SKU: skuString,
+                      ProductName: `Product-${skuString}`,
+                      ImageURL: '',
+                      EAN_UPC: '',
+                      MRP: 0.00,
+                      CreatedDate: new Date().toISOString(),
+                      LastUpdatedDate: new Date().toISOString()
+                    } as any);
+                    console.log(`✅ Created placeholder product for SKU ${skuString}`);
+                  } catch (productCreateError: any) {
+                    console.error(`❌ Failed to create placeholder product for SKU ${skuString}:`, productCreateError.message);
+                    // Continue anyway, we'll try to create the picklist item
+                  }
+                }
+
                 // Find the SKU in ScannerSku table to get bin location
                 const scannerSku = await ScannerSku.findOne({
-                  where: { skuScanId: item.sku.toString() }
+                  where: { skuScanId: skuString }
                 });
 
                 let binLocation = 'DEFAULT-BIN'; // Default bin location
-                let productName = `Product-${item.sku}`;
+                let productName = `Product-${skuString}`;
 
                 if (scannerSku) {
                   // Get the bin location from ScannerBin table
@@ -132,16 +157,16 @@ export class PickingController {
                   if (scannerBin) {
                     binLocation = scannerBin.binLocationScanId;
                   } else {
-                    console.warn(`Bin location not found for SKU ${item.sku}. Using default bin location.`);
+                    console.warn(`Bin location not found for SKU ${skuString}. Using default bin location.`);
                   }
                 } else {
-                  console.warn(`SKU ${item.sku} not found in scanner system. Using default bin location.`);
+                  console.warn(`SKU ${skuString} not found in scanner system. Using default bin location.`);
                 }
 
                 const picklistItem = await PicklistItem.create({
                   waveId: wave.id,
                   orderId: orderData.id, // Keep using internal ID for database relationships
-                  sku: item.sku.toString(), // Convert number to string for storage
+                  sku: skuString, // Convert number to string for storage
                   productName: productName, // Generate product name from SKU
                   binLocation: binLocation, // Use actual or default bin location
                   quantity: quantity, // Use quantity or default to 1
@@ -158,11 +183,36 @@ export class PickingController {
                 console.error(`Error creating picklist item for SKU ${item.sku}:`, createError);
                 // Try to create with minimal data
                 try {
+                  const skuString = item.sku.toString();
+                  
+                  // Ensure product exists before creating picklist item
+                  let productExists = await Product.findOne({
+                    where: { SKU: skuString }
+                  });
+
+                  if (!productExists) {
+                    console.log(`📦 Creating placeholder product for SKU ${skuString} (fallback)`);
+                    try {
+                      await Product.create({
+                        SKU: skuString,
+                        ProductName: `Product-${skuString}`,
+                        ImageURL: '',
+                        EAN_UPC: '',
+                        MRP: 0.00,
+                        CreatedDate: new Date().toISOString(),
+                        LastUpdatedDate: new Date().toISOString()
+                      } as any);
+                      console.log(`✅ Created placeholder product for SKU ${skuString} (fallback)`);
+                    } catch (productCreateError: any) {
+                      console.error(`❌ Failed to create placeholder product for SKU ${skuString} (fallback):`, productCreateError.message);
+                    }
+                  }
+
                   const picklistItem = await PicklistItem.create({
                     waveId: wave.id,
                     orderId: orderData.id,
-                    sku: item.sku.toString(),
-                    productName: `Product-${item.sku}`,
+                    sku: skuString,
+                    productName: `Product-${skuString}`,
                     binLocation: 'DEFAULT-BIN',
                     quantity: quantity,
                     scanSequence: Math.floor(Math.random() * 100) + 1,
@@ -1410,13 +1460,38 @@ export class PickingController {
             const quantity = item.quantity || (item.amount ? 1 : 1);
             
             try {
+              // First, ensure the SKU exists in product_master table
+              const skuString = item.sku.toString();
+              let productExists = await Product.findOne({
+                where: { SKU: skuString }
+              });
+
+              if (!productExists) {
+                console.log(`📦 Creating placeholder product for SKU ${skuString}`);
+                try {
+                  await Product.create({
+                    SKU: skuString,
+                    ProductName: `Product-${skuString}`,
+                    ImageURL: '',
+                    EAN_UPC: '',
+                    MRP: 0.00,
+                    CreatedDate: new Date().toISOString(),
+                    LastUpdatedDate: new Date().toISOString()
+                  } as any);
+                  console.log(`✅ Created placeholder product for SKU ${skuString}`);
+                } catch (productCreateError: any) {
+                  console.error(`❌ Failed to create placeholder product for SKU ${skuString}:`, productCreateError.message);
+                  // Continue anyway, we'll try to create the picklist item
+                }
+              }
+
               // Find the SKU in ScannerSku table to get bin location
               const scannerSku = await ScannerSku.findOne({
-                where: { skuScanId: item.sku.toString() }
+                where: { skuScanId: skuString }
               });
 
               let binLocation = 'DEFAULT-BIN';
-              let productName = `Product-${item.sku}`;
+              let productName = `Product-${skuString}`;
 
               if (scannerSku) {
                 const scannerBin = await ScannerBin.findOne({
@@ -1433,7 +1508,7 @@ export class PickingController {
               const picklistItem = await PicklistItem.create({
                 waveId: wave.id,
                 orderId: orderData.id,
-                sku: item.sku.toString(),
+                sku: skuString,
                 productName: productName,
                 binLocation: binLocation,
                 quantity: quantity,
@@ -1446,29 +1521,54 @@ export class PickingController {
               actualTotalItems += quantity;
               console.log(`✅ Created picklist item for SKU ${item.sku} with bin location ${binLocation}`);
               
-            } catch (createError) {
-              console.error(`❌ Error creating picklist item for SKU ${item.sku}:`, createError);
-              // Try to create with minimal data
-              try {
-                await PicklistItem.create({
-                  waveId: wave.id,
-                  orderId: orderData.id,
-                  sku: item.sku.toString(),
-                  productName: `Product-${item.sku}`,
-                  binLocation: 'DEFAULT-BIN',
-                  quantity: quantity,
-                  scanSequence: Math.floor(Math.random() * 100) + 1,
-                  fefoBatch: false ? `BATCH-${Date.now()}` : undefined,
-                  expiryDate: false ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : undefined
-                } as any);
-                
-                createdItems++;
-                actualTotalItems += quantity;
-                console.log(`✅ Created fallback picklist item for SKU ${item.sku}`);
-              } catch (fallbackError) {
-                console.error(`❌ Failed to create even fallback picklist item for SKU ${item.sku}:`, fallbackError);
+              } catch (createError) {
+                console.error(`❌ Error creating picklist item for SKU ${item.sku}:`, createError);
+                // Try to create with minimal data
+                try {
+                  const skuString = item.sku.toString();
+                  
+                  // Ensure product exists before creating picklist item
+                  let productExists = await Product.findOne({
+                    where: { SKU: skuString }
+                  });
+
+                  if (!productExists) {
+                    console.log(`📦 Creating placeholder product for SKU ${skuString} (fallback)`);
+                    try {
+                      await Product.create({
+                        SKU: skuString,
+                        ProductName: `Product-${skuString}`,
+                        ImageURL: '',
+                        EAN_UPC: '',
+                        MRP: 0.00,
+                        CreatedDate: new Date().toISOString(),
+                        LastUpdatedDate: new Date().toISOString()
+                      } as any);
+                      console.log(`✅ Created placeholder product for SKU ${skuString} (fallback)`);
+                    } catch (productCreateError: any) {
+                      console.error(`❌ Failed to create placeholder product for SKU ${skuString} (fallback):`, productCreateError.message);
+                    }
+                  }
+
+                  await PicklistItem.create({
+                    waveId: wave.id,
+                    orderId: orderData.id,
+                    sku: skuString,
+                    productName: `Product-${skuString}`,
+                    binLocation: 'DEFAULT-BIN',
+                    quantity: quantity,
+                    scanSequence: Math.floor(Math.random() * 100) + 1,
+                    fefoBatch: false ? `BATCH-${Date.now()}` : undefined,
+                    expiryDate: false ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : undefined
+                  } as any);
+                  
+                  createdItems++;
+                  actualTotalItems += quantity;
+                  console.log(`✅ Created fallback picklist item for SKU ${item.sku}`);
+                } catch (fallbackError) {
+                  console.error(`❌ Failed to create even fallback picklist item for SKU ${item.sku}:`, fallbackError);
+                }
               }
-            }
           }
         }
       }
