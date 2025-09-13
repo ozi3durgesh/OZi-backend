@@ -381,12 +381,12 @@ export class PickingController {
         // Get all active pickers with picking permissions (roleId = 4 for wh_staff_2)
         const pickers = await User.findAll({
           where: {
-            isActive: true,
+            isActive: [true, 1], // Handle both boolean true and integer 1
             availabilityStatus: 'available',
             roleId: 4 // wh_staff_2 role has picking permissions
           },
           order: [['id', 'ASC']],
-          attributes: ['id', 'email', 'availabilityStatus']
+          attributes: ['id', 'email', 'availabilityStatus', 'isActive', 'roleId']
         });
 
         if (pickers.length === 0) {
@@ -439,7 +439,9 @@ export class PickingController {
         return ResponseHandler.error(res, 'Picker not found', 404);
       }
 
-      if (!picker.isActive) {
+      // Check if picker is active
+      const isActive = picker.isActive === true;
+      if (!isActive) {
         return ResponseHandler.error(res, 'Picker is not active', 400);
       }
 
