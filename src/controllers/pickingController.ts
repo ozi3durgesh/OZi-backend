@@ -1,6 +1,6 @@
 // controllers/pickingController.ts
 import { Request, Response } from 'express';
-import { PickingWave, PicklistItem, PickingException, User, Order, ScannerBin, ScannerSku } from '../models';
+import { PickingWave, PicklistItem, PickingException, User, Order, ScannerBin, ScannerSku, Role } from '../models';
 import { ResponseHandler } from '../middleware/responseHandler';
 import { OrderAttributes } from '../types';
 import Product from '../models/productModel';
@@ -575,6 +575,36 @@ export class PickingController {
       const whereClause: any = {};
       if (status) whereClause.status = status;
       if (priority) whereClause.priority = priority;
+
+      // Role-based filtering: Dynamic role checking from database
+      const user = req.user;
+      if (!user) {
+        return ResponseHandler.error(res, 'User not authenticated', 401);
+      }
+
+      // Get user's role from database to check permissions dynamically
+      const userWithRole = await User.findByPk(user.id, {
+        include: [{
+          model: Role,
+          as: 'Role',
+          attributes: ['id', 'name']
+        }]
+      });
+
+      if (!userWithRole) {
+        return ResponseHandler.error(res, 'User not found', 404);
+      }
+
+      const userRole = userWithRole.Role;
+      const isAdmin = userRole?.name === 'admin' || user.permissions?.includes('admin:all');
+      
+      if (!isAdmin) {
+        // Non-admin users can only see waves assigned to them
+        whereClause.pickerId = user.id;
+        console.log(`🔒 Filtering waves for user ${user.id} with role: ${userRole?.name || 'unknown'}`);
+      } else {
+        console.log(`👑 Admin user ${user.id} with role: ${userRole?.name} can see all waves`);
+      }
 
       const waves = await PickingWave.findAndCountAll({
         where: whereClause,
