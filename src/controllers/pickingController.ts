@@ -131,10 +131,30 @@ export class PickingController {
                       CreatedDate: new Date().toISOString(),
                       LastUpdatedDate: new Date().toISOString()
                     } as any);
-                    console.log(`✅ Created placeholder product for SKU ${skuString}`);
+                    console.log(`✅ Created placeholder product for SKU ${skuString} with MRP: ${orderData.order_amount}`);
                   } catch (productCreateError: any) {
                     console.error(`❌ Failed to create placeholder product for SKU ${skuString}:`, productCreateError.message);
                     // Continue anyway, we'll try to create the picklist item
+                  }
+                } else {
+                  // Product exists, but let's update MRP if the current order has a different amount
+                  const currentMRP = parseFloat(String(productExists.MRP || '0'));
+                  const orderMRP = orderData.order_amount || 0.00;
+                  
+                  if (orderMRP > 0 && orderMRP !== currentMRP) {
+                    console.log(`📦 Updating MRP for existing SKU ${skuString} from ${currentMRP} to ${orderMRP}`);
+                    try {
+                      await Product.update(
+                        { 
+                          MRP: orderMRP,
+                          LastUpdatedDate: new Date().toISOString()
+                        },
+                        { where: { SKU: skuString } }
+                      );
+                      console.log(`✅ Updated MRP for SKU ${skuString} to ${orderMRP}`);
+                    } catch (updateError: any) {
+                      console.error(`❌ Failed to update MRP for SKU ${skuString}:`, updateError.message);
+                    }
                   }
                 }
 
@@ -1482,6 +1502,26 @@ export class PickingController {
                 } catch (productCreateError: any) {
                   console.error(`❌ Failed to create placeholder product for SKU ${skuString}:`, productCreateError.message);
                   // Continue anyway, we'll try to create the picklist item
+                }
+              } else {
+                // Product exists, but let's update MRP if the current order has a different amount
+                const currentMRP = parseFloat(String(productExists.MRP || '0'));
+                const orderMRP = orderData.order_amount || 0.00;
+                
+                if (orderMRP > 0 && orderMRP !== currentMRP) {
+                  console.log(`📦 Updating MRP for existing SKU ${skuString} from ${currentMRP} to ${orderMRP}`);
+                  try {
+                    await Product.update(
+                      { 
+                        MRP: orderMRP,
+                        LastUpdatedDate: new Date().toISOString()
+                      },
+                      { where: { SKU: skuString } }
+                    );
+                    console.log(`✅ Updated MRP for SKU ${skuString} to ${orderMRP}`);
+                  } catch (updateError: any) {
+                    console.error(`❌ Failed to update MRP for SKU ${skuString}:`, updateError.message);
+                  }
                 }
               }
 
