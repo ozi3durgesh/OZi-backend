@@ -127,7 +127,7 @@ export class PickingController {
                       ProductName: `Product-${skuString}`,
                       ImageURL: '',
                       EAN_UPC: '',
-                      MRP: 0.00,
+                      MRP: orderData.order_amount || 0.00, // Use total order amount from PHP
                       CreatedDate: new Date().toISOString(),
                       LastUpdatedDate: new Date().toISOString()
                     } as any);
@@ -198,7 +198,7 @@ export class PickingController {
                         ProductName: `Product-${skuString}`,
                         ImageURL: '',
                         EAN_UPC: '',
-                        MRP: 0.00,
+                        MRP: orderData.order_amount || 0.00, // Use total order amount from PHP
                         CreatedDate: new Date().toISOString(),
                         LastUpdatedDate: new Date().toISOString()
                       } as any);
@@ -1474,11 +1474,11 @@ export class PickingController {
                     ProductName: `Product-${skuString}`,
                     ImageURL: '',
                     EAN_UPC: '',
-                    MRP: 0.00,
+                    MRP: orderData.order_amount || 0.00, // Use total order amount from PHP
                     CreatedDate: new Date().toISOString(),
                     LastUpdatedDate: new Date().toISOString()
                   } as any);
-                  console.log(`✅ Created placeholder product for SKU ${skuString}`);
+                  console.log(`✅ Created placeholder product for SKU ${skuString} with MRP: ${orderData.order_amount}`);
                 } catch (productCreateError: any) {
                   console.error(`❌ Failed to create placeholder product for SKU ${skuString}:`, productCreateError.message);
                   // Continue anyway, we'll try to create the picklist item
@@ -1540,7 +1540,7 @@ export class PickingController {
                         ProductName: `Product-${skuString}`,
                         ImageURL: '',
                         EAN_UPC: '',
-                        MRP: 0.00,
+                        MRP: orderData.order_amount || 0.00, // Use total order amount from PHP
                         CreatedDate: new Date().toISOString(),
                         LastUpdatedDate: new Date().toISOString()
                       } as any);
