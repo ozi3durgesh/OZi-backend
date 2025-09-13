@@ -6,6 +6,7 @@ import sequelize from '../config/database';
 import { QueryTypes } from 'sequelize';
 import { generateSimpleOrderId } from './orderIdGenerator';
 import { socketManager } from './socketManager';
+import { PickingController } from '../controllers/pickingController';
 
 interface DeliveryAddress {
   contact_person_name: string;
@@ -84,44 +85,37 @@ export class Helpers {
 
   public static async generatePicklist(orderId: string, numericOrderId: number): Promise<any> {
     try {
-      const picklistUrl = 'http://13.232.150.239/api/picklist/generate';
+      console.log(`🔄 Generating picklist internally for order ${orderId} (numeric ID: ${numericOrderId})`);
       
-      const payload = {
-        orderIds: [`${orderId}`],
-        priority: "HIGH",
-        routeOptimization: true,
-        fefoRequired: false,
-        tagsAndBags: false
-      };
-
-      const response = await fetch(picklistUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          console.warn(`⚠️ Picklist API token expired (401 Unauthorized) - skipping picklist generation for order ${orderId}`);
-          return { message: 'Picklist generation skipped - token expired' };
-        }
-        if (response.status === 404) {
-          console.warn(`⚠️ Picklist API endpoint not found (404) - skipping picklist generation for order ${orderId}`);
-          return { message: 'Picklist generation skipped - endpoint not found' };
-        }
-        throw new Error(`Picklist generation failed: ${response.status} ${response.statusText}`);
+      // Get the order data from the database
+      const orderData = await Order.findByPk(numericOrderId);
+      if (!orderData) {
+        throw new Error(`Order ${numericOrderId} not found in database`);
       }
 
-      const result = await response.json();
+      console.log(`📦 Order data found:`, {
+        id: orderData.id,
+        cartItems: (orderData as any).cart?.length || 0,
+        orderAmount: (orderData as any).order_amount
+      });
+
+      // Use the internal picklist generation from PickingController
+      const result = await PickingController.generatePicklistInternal(numericOrderId);
+
+      console.log(`✅ Internal picklist generation result:`, result);
       
       // Log the picklist generation
       try {
         await EcomLog.create({
           order_id: numericOrderId,
           action: 'generatePicklist',
-          payload: JSON.stringify(payload),
+          payload: JSON.stringify({ 
+            orderIds: [numericOrderId],
+            priority: "HIGH",
+            routeOptimization: true,
+            fefoRequired: false,
+            tagsAndBags: false
+          }),
           response: JSON.stringify(result),
           status: 'success'
         });
@@ -140,7 +134,7 @@ export class Helpers {
         await EcomLog.create({
           order_id: numericOrderId,
           action: 'generatePicklist',
-          payload: JSON.stringify({ orderIds: [`${orderId}`] }),
+          payload: JSON.stringify({ orderIds: [numericOrderId] }),
           response: JSON.stringify({ error: error.message }),
           status: 'failed'
         });
@@ -306,28 +300,13 @@ export class Helpers {
           console.log(`✅ Successfully generated picklist for order ${generatedOrderId}`);
           console.log(`📊 Picklist result structure:`, JSON.stringify(picklistResult, null, 2));
           
-          // Extract waveId from picklist result - check multiple possible structures
-          if (picklistResult) {
-            // Check if it's in the waves array
-            if (picklistResult.waves && picklistResult.waves.length > 0) {
-              waveId = picklistResult.waves[0].id;
-              console.log(`🎯 Extracted wave ID from waves array: ${waveId}`);
-            }
-            // Check if it's in the data.waves array
-            else if (picklistResult.data && picklistResult.data.waves && picklistResult.data.waves.length > 0) {
-              waveId = picklistResult.data.waves[0].id;
-              console.log(`🎯 Extracted wave ID from data.waves array: ${waveId}`);
-            }
-            // Check if it's directly in the result
-            else if (picklistResult.id) {
-              waveId = picklistResult.id;
-              console.log(`🎯 Extracted wave ID directly from result: ${waveId}`);
-            }
-            else {
-              console.warn(`⚠️ No wave ID found in picklist result structure`);
-            }
+          // Extract waveId from picklist result
+          if (picklistResult && picklistResult.success) {
+            waveId = picklistResult.waveId;
+            console.log(`🎯 Extracted wave ID from internal result: ${waveId}`);
           } else {
-            console.warn(`⚠️ Picklist result is null or undefined`);
+            console.warn(`⚠️ Picklist generation failed or no wave ID returned`);
+            console.warn(`⚠️ Result:`, picklistResult);
           }
           
           console.log(`🎯 Final wave ID for order ${generatedOrderId}: ${waveId}`);
