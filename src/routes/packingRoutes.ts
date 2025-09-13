@@ -10,6 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import multerS3 from "multer-s3";
 import { S3Client } from "@aws-sdk/client-s3";
+import { socketManager } from '../utils/socketManager';
 
 const router = Router();
 
@@ -163,6 +164,11 @@ interface MulterS3File extends Express.Multer.File {
 /**
  * @route POST /api/handover/:waveId/pack-and-seal
  */
+interface MulterS3File extends Express.Multer.File {
+  location: string;
+  key: string;
+}
+
 router.post("/:waveId/pack-and-seal", upload.single("photo"), async (req, res) => {
   try {
     const { waveId } = req.params;
@@ -176,7 +182,6 @@ router.post("/:waveId/pack-and-seal", upload.single("photo"), async (req, res) =
       });
     }
 
-    // Ensure the wave exists
     const wave = await PickingWave.findByPk(waveId);
     if (!wave) {
       return res.status(404).json({
@@ -186,47 +191,40 @@ router.post("/:waveId/pack-and-seal", upload.single("photo"), async (req, res) =
       });
     }
 
-    // Fetch the order related to the wave
     const order = await Order.findByPk(wave.orderId);
-    if (!order || !order.delivery_man_id) {
+    if (!order) {
       return res.status(404).json({
         statusCode: 404,
         success: false,
-        error: "No delivery partner assigned to this order",
+        error: "Order not found",
       });
     }
 
-    // Fetch the delivery partner (rider) details using delivery_man_id from the order
-    const deliveryPartner = await DeliveryMan.findByPk(order.delivery_man_id);
-    if (!deliveryPartner) {
-      return res.status(404).json({
-        statusCode: 404,
-        success: false,
-        error: "Delivery partner not found",
-      });
+    let deliveryPartner: DeliveryMan | null = null;
+    if (order.delivery_man_id) {
+      deliveryPartner = await DeliveryMan.findByPk(order.delivery_man_id);
     }
 
-    // Update the PickingWave to assign the delivery partner and mark it as 'PACKED'
     await wave.update({
-      riderId: deliveryPartner.id,  // Assign delivery partner (riderId from DeliveryMan)
-      status: "PACKED",              // Mark the wave as packed
-      photoPath: photo.location,     // Store the S3 URL of the photo
-    });
-
-    // Emit real-time update via WebSocket (using Socket.io)
-    // This will notify all connected clients about the wave assignment
-    req.app.locals.io.emit('delivery_assigned', {
-      waveId: wave.id,
-      deliveryPartner: {
-        id: deliveryPartner.id,
-        name: deliveryPartner.f_name + ' ' + deliveryPartner.l_name,
-        vehicleId: deliveryPartner.vehicle_id,
-        phone: deliveryPartner.phone,
-      },
+      status: "PACKED",
       photoPath: photo.location,
+      riderId: deliveryPartner?.id ?? undefined, // ✅ assign undefined instead of null
     });
 
-    // ✅ Respond with the S3 URL instead of the local path
+    socketManager.emit("delivery_assigned", {
+      waveId: wave.id,
+      deliveryPartner: deliveryPartner
+        ? {
+            id: deliveryPartner.id,
+            name: `${deliveryPartner.f_name} ${deliveryPartner.l_name}`,
+            vehicleId: deliveryPartner.vehicle_id,
+            phone: deliveryPartner.phone,
+          }
+        : null,
+      message: deliveryPartner ? undefined : "No delivery partner assigned to this order",
+      photoPath: wave.photoPath,
+    });
+
     return res.status(201).json({
       statusCode: 201,
       success: true,
@@ -239,7 +237,7 @@ router.post("/:waveId/pack-and-seal", upload.single("photo"), async (req, res) =
           mimetype: photo.mimetype,
           size: photo.size,
         },
-        deliveryPartner: deliveryPartner,
+        deliveryPartner: deliveryPartner || null,
       },
     });
   } catch (error) {

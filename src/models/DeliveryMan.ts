@@ -1,32 +1,32 @@
 import { Model, DataTypes } from 'sequelize';
-import sequelize from '../config/database'; // Assuming you have a sequelize instance
+import sequelize from '../config/database';
 
 class DeliveryMan extends Model {
-  public id!: number;
-  public f_name!: string;
-  public l_name!: string;
-  public phone!: string;
-  public email!: string;
-  public identity_number!: string;
-  public identity_type!: string;
-  public identity_image!: string;
-  public image!: string;
-  public password!: string;
-  public auth_token!: string;
-  public fcm_token!: string;
-  public zone_id!: number;
-  public created_at!: Date;
-  public updated_at!: Date;
-  public status!: boolean;
-  public active!: boolean;
-  public earning!: boolean;
-  public current_orders!: number;
-  public type!: string;
-  public store_id!: number | null;
-  public application_status!: 'approved' | 'denied' | 'pending';
-  public order_count!: number;
-  public assigned_order_count!: number;
-  public vehicle_id!: number | null;
+  declare id: number;
+  declare f_name: string | null;
+  declare l_name: string | null;
+  declare phone: string;
+  declare email: string | null;
+  declare identity_number: string | null;
+  declare identity_type: string | null;
+  declare identity_image: string | null;
+  declare image: string | null;
+  declare password: string;
+  declare auth_token: string | null;
+  declare fcm_token: string | null;
+  declare zone_id: number | null;
+  declare created_at: Date;
+  declare updated_at: Date;
+  declare status: boolean;
+  declare active: boolean;
+  declare earning: boolean;
+  declare current_orders: number;
+  declare type: string;
+  declare store_id: number | null;
+  declare application_status: 'approved' | 'denied' | 'pending';
+  declare order_count: number;
+  declare assigned_order_count: number;
+  declare vehicle_id: number | null;
 }
 
 DeliveryMan.init(
@@ -144,11 +144,11 @@ DeliveryMan.init(
     },
   },
   {
-    sequelize,  // Pass in your sequelize instance
+    sequelize,
     modelName: 'DeliveryMan',
-    tableName: 'delivery_men',  // Name of the table in your DB
-    timestamps: false,  // Disable automatic `createdAt` and `updatedAt` fields
-    underscored: true,  // To use snake_case for column names
+    tableName: 'delivery_men',
+    timestamps: false,
+    underscored: true,
   }
 );
 

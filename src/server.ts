@@ -3,40 +3,47 @@ import app from './app';
 import { connectDatabase } from './config/database';
 import http from 'http';
 import { Server } from 'socket.io';
-import { io as ClientIO } from "socket.io-client";
+import { socketManager } from './utils/socketManager';
+
 dotenv.config();
 const PORT = process.env.PORT || 3000;
+
 const startServer = async () => {
   try {
     await connectDatabase();
     const server = http.createServer(app);
-        const io = new Server(server, {
+
+    const io = new Server(server, {
       cors: {
         origin: "*",
       },
     });
-     io.on("connection", (socket) => {
-      console.log(":electric_plug: Client connected:", socket.id);
+
+    socketManager.init(io);
+
+    io.on("connection", (socket) => {
+      console.log("🔌 Client connected:", socket.id);
+
+      // 📌 Picker joins their own room
+      socket.on("join_picker", (pickerId: number) => {
+        const roomName = `picker_${pickerId}`;
+        socket.join(roomName);
+        console.log(`✅ Picker ${pickerId} joined room ${roomName}`);
+      });
+
       socket.on("disconnect", () => {
-        console.log(":x: Client disconnected:", socket.id);
+        console.log("❌ Client disconnected:", socket.id);
       });
     });
-     app.locals.io = io;
+
     server.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT}`);
-      console.log(`Environment: ${process.env.NODE_ENV}`);
+      console.log(`🚀 Server running on port ${PORT}`);
     });
-      // client self-test
-      const testSocket = ClientIO(`http://localhost:${PORT}`);
-      testSocket.on("connect", () => {
-      console.log(":test_tube: Self-test client connected:", testSocket.id);
-      });
-      testSocket.on("delivery_assigned", (data) => {
-      console.log(":test_tube: Self-test client received:", data);
-      });
+
   } catch (error) {
-    console.error('Failed to start server:', error);
+    console.error("❌ Failed to start server:", error);
     process.exit(1);
   }
 };
+
 startServer();
