@@ -3,12 +3,14 @@ import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
 import { PackingController } from '../controllers/packingController';
 import PickingWave from '../models/PickingWave';
-import Rider from '../models/Rider';
+import Order from '../models/Order';
+import DeliveryMan from '../models/DeliveryMan';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
 import multerS3 from "multer-s3";
 import { S3Client } from "@aws-sdk/client-s3";
+import { socketManager } from '../utils/socketManager';
 
 const router = Router();
 
@@ -162,6 +164,11 @@ interface MulterS3File extends Express.Multer.File {
 /**
  * @route POST /api/handover/:waveId/pack-and-seal
  */
+interface MulterS3File extends Express.Multer.File {
+  location: string;
+  key: string;
+}
+
 router.post("/:waveId/pack-and-seal", upload.single("photo"), async (req, res) => {
   try {
     const { waveId } = req.params;
@@ -175,7 +182,6 @@ router.post("/:waveId/pack-and-seal", upload.single("photo"), async (req, res) =
       });
     }
 
-    // Ensure wave exists
     const wave = await PickingWave.findByPk(waveId);
     if (!wave) {
       return res.status(404).json({
@@ -185,64 +191,40 @@ router.post("/:waveId/pack-and-seal", upload.single("photo"), async (req, res) =
       });
     }
 
-    // Find minimum deliveries
-    const minDeliveries = await Rider.min("totalDeliveries", {
-      where: { isActive: true, availabilityStatus: "AVAILABLE" },
-    });
-
-    if (minDeliveries === null) {
+    const order = await Order.findByPk(wave.orderId);
+    if (!order) {
       return res.status(404).json({
         statusCode: 404,
         success: false,
-        error: "No eligible riders found",
+        error: "Order not found",
       });
     }
 
-    // Riders with minimum deliveries
-    const candidates = await Rider.findAll({
-      where: {
-        isActive: true,
-        availabilityStatus: "AVAILABLE",
-        totalDeliveries: minDeliveries,
-      },
-      attributes: [
-        "id",
-        "riderCode",
-        "name",
-        "phone",
-        "email",
-        "vehicleType",
-        "vehicleNumber",
-        "availabilityStatus",
-        "rating",
-        "totalDeliveries",
-      ],
-    });
-
-    if (!candidates.length) {
-      return res.status(404).json({
-        statusCode: 404,
-        success: false,
-        error: "No eligible riders found",
-      });
+    let deliveryPartner: DeliveryMan | null = null;
+    if (order.delivery_man_id) {
+      deliveryPartner = await DeliveryMan.findByPk(order.delivery_man_id);
     }
 
-    // Random from candidates
-    const assignedRider = candidates[Math.floor(Math.random() * candidates.length)];
-
-    // Update wave → assign rider + mark as PACKED + save S3 photo URL
     await wave.update({
-      riderId: assignedRider.id,
       status: "PACKED",
-      photoPath: photo.location, // store S3 URL
+      photoPath: photo.location,
+      riderId: deliveryPartner?.id ?? undefined, // ✅ assign undefined instead of null
     });
 
-    // Increment totalDeliveries for assigned rider
-    await assignedRider.update({
-      totalDeliveries: assignedRider.totalDeliveries + 1,
+    socketManager.emit("delivery_assigned", {
+      waveId: wave.id,
+      deliveryPartner: deliveryPartner
+        ? {
+            id: deliveryPartner.id,
+            name: `${deliveryPartner.f_name} ${deliveryPartner.l_name}`,
+            vehicleId: deliveryPartner.vehicle_id,
+            phone: deliveryPartner.phone,
+          }
+        : null,
+      message: deliveryPartner ? undefined : "No delivery partner assigned to this order",
+      photoPath: wave.photoPath,
     });
 
-    // ✅ Response with S3 URL instead of local path
     return res.status(201).json({
       statusCode: 201,
       success: true,
@@ -255,7 +237,7 @@ router.post("/:waveId/pack-and-seal", upload.single("photo"), async (req, res) =
           mimetype: photo.mimetype,
           size: photo.size,
         },
-        deliveryPartner: assignedRider,
+        deliveryPartner: deliveryPartner || null,
       },
     });
   } catch (error) {

@@ -5,6 +5,7 @@ import { OrderAttributes } from '../types';
 import sequelize from '../config/database';
 import { QueryTypes } from 'sequelize';
 import { generateSimpleOrderId } from './orderIdGenerator';
+import { socketManager } from './socketManager';
 
 interface DeliveryAddress {
   contact_person_name: string;
@@ -364,6 +365,13 @@ export class Helpers {
             const assignResult: any = await assignResponse.json();
             console.log(`✅ Successfully assigned wave ${waveId} to picker:`, JSON.stringify(assignResult, null, 2));
             
+             // 🔥 Emit event to all connected clients
+            socketManager.emit('waveAssigned', {
+              orderId: order.id,
+              generatedOrderId,
+              waveId,
+              assignment: assignResult?.data?.assignment || null,
+            });
             // Log the specific assignment details
             if (assignResult.data && assignResult.data.assignment) {
               const assignment = assignResult.data.assignment;

@@ -24,6 +24,7 @@ interface PickingWaveAttributes {
   tagsAndBags: boolean;
   createdAt: Date;
   updatedAt: Date;
+  orderId?: number; // Add the new orderId field
   // New fields
   handoverAt?: Date;
   handoverBy?: number;
@@ -52,6 +53,7 @@ class PickingWave extends Model<PickingWaveAttributes> implements PickingWaveAtt
   declare tagsAndBags: boolean;
   declare createdAt: Date;
   declare updatedAt: Date;
+  declare orderId?: number; // Add the new orderId field
   // New fields
   declare handoverAt?: Date;
   declare handoverBy?: number;
@@ -91,6 +93,7 @@ PickingWave.init({
   tagsAndBags: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
   createdAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   updatedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+  orderId: { type: DataTypes.INTEGER, allowNull: true, references: { model: 'Orders', key: 'id' } }, // Reference to Orders table
   // New fields
   handoverAt: { type: DataTypes.DATE, allowNull: true },
   handoverBy: { type: DataTypes.INTEGER, allowNull: true },
@@ -106,10 +109,8 @@ PickingWave.init({
     { fields: ['riderId'] },
     { fields: ['slaDeadline'] },
     { fields: ['waveNumber'] },
+    { fields: ['orderId'] }, // Index on orderId for quick lookup
   ],
 });
-
-// Example association if needed
-// PickingWave.hasMany(PicklistItem, { foreignKey: 'waveId', as: 'PicklistItems' });
 
 export default PickingWave;

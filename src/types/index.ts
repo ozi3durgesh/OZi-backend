@@ -160,7 +160,7 @@ export interface OrderAttributes {
   payment_method: string;
   transaction_reference?: string;
   delivery_address_id?: number;
-  delivery_man_id?: number;
+  delivery_man_id?: number | null;
   coupon_code?: string;
   order_note?: string;
   order_type: string;
@@ -262,7 +262,7 @@ export interface OrderCreationAttributes {
   payment_method: string;
   transaction_reference?: string;
   delivery_address_id?: number;
-  delivery_man_id?: number;
+  delivery_man_id?: number | null;
   coupon_code?: string;
   order_note?: string;
   order_type: string;

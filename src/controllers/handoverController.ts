@@ -10,6 +10,7 @@ import {
 } from '../types';
 import sequelize from '../config/database';
 import { ResponseHandler } from '../middleware/responseHandler';
+import DeliveryMan from '../models/DeliveryMan';
 
 
 interface AuthRequest extends Request {
@@ -728,11 +729,9 @@ export const dispatchWave = async (req: Request, res: Response) => {
     }
 
     // 2. Validate Rider
-    const rider = await Rider.findOne({
+    const rider = await DeliveryMan.findOne({
       where: {
-        id: riderId,
-        isActive: true,
-        availabilityStatus: "AVAILABLE",
+        id: riderId
       },
     });
 
@@ -741,9 +740,6 @@ export const dispatchWave = async (req: Request, res: Response) => {
         .status(400)
         .json({ success: false, message: "Rider not available" });
     }
-
-    rider.availabilityStatus = "BUSY"; // Set the rider's availability to BUSY
-    await rider.save();
 
     // 3. Update Wave → Dispatched
     wave.status = "COMPLETED"; // mark as completed
@@ -768,15 +764,13 @@ export const dispatchWave = async (req: Request, res: Response) => {
         handoverBy: { id: staffId },
         deliveryPartner: {
           id: rider.id,
-          riderCode: rider.riderCode,
-          name: rider.name,
+          riderCode: rider.identity_number,
+          name: rider.f_name + ' ' + rider.l_name,
           phone: rider.phone,
           email: rider.email,
-          vehicleType: rider.vehicleType,
-          vehicleNumber: rider.vehicleNumber,
-          availabilityStatus: rider.availabilityStatus,
-          rating: rider.rating,
-          totalDeliveries: rider.totalDeliveries,
+          vehicleId: rider.vehicle_id,
+          availabilityStatus: rider.active,
+          totalDeliveries: rider.assigned_order_count,
         },
         photo: photoUrl
           ? {
