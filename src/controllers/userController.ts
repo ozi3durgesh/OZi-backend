@@ -271,4 +271,62 @@ export class UserController {
       return ResponseHandler.error(res, 'Internal server error', 500);
     }
   }
+
+  /**
+   * Toggle user's isActive status (activate/deactivate)
+   */
+  static async toggleUserStatus(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { userId } = req.params;
+      const { isActive } = req.body;
+
+      // Check if requester has permission to manage users
+      if (!req.user?.permissions.includes('users_roles:manage')) {
+        return ResponseHandler.error(res, 'Insufficient permissions', 403);
+      }
+
+      if (!userId) {
+        return ResponseHandler.error(res, 'User ID is required', 400);
+      }
+
+      // Validate isActive parameter
+      if (typeof isActive !== 'boolean') {
+        return ResponseHandler.error(res, 'isActive must be a boolean value (true or false)', 400);
+      }
+
+      const user = await User.findByPk(userId);
+      if (!user) {
+        return ResponseHandler.error(res, 'User not found', 404);
+      }
+
+      // Prevent toggling the last admin user to inactive
+      if (user.roleId === 1 && !isActive) { // Assuming admin role ID is 1
+        const adminUsers = await User.count({ where: { roleId: 1, isActive: true } });
+        if (adminUsers <= 1) {
+          return ResponseHandler.error(res, 'Cannot deactivate the last admin user', 403);
+        }
+      }
+
+      // Prevent users from toggling their own status
+      if (parseInt(userId) === req.user?.id) {
+        return ResponseHandler.error(res, 'Cannot toggle your own account status', 403);
+      }
+
+      // Update the user's isActive status
+      user.isActive = isActive;
+      await user.save();
+
+      const statusText = isActive ? 'activated' : 'deactivated';
+
+      return ResponseHandler.success(res, {
+        id: user.id,
+        email: user.email,
+        isActive: user.isActive,
+        message: `User ${statusText} successfully`
+      });
+    } catch (error) {
+      console.error('Toggle user status error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
 }
