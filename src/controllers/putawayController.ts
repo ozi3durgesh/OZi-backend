@@ -1017,7 +1017,8 @@ export class PutawayController {
         }
 
         // Update or create ScannerSku entry
-        const skuScanId = `${sku_id}_${bin_location}_${Date.now()}`;
+        // Use the actual SKU as the skuScanId instead of complex format
+        const skuScanId = sku_id;
         await ScannerSku.create({
           skuScanId: skuScanId,
           sku: [{ skuId: sku_id, quantity: quantity }],

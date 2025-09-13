@@ -34,4 +34,9 @@ router.delete('/:userId',
   UserController.deactivateUser
 );
 
+router.put('/:userId/toggle-status', 
+  hasPermission('users_roles:manage'), 
+  UserController.toggleUserStatus
+);
+
 export default router;
