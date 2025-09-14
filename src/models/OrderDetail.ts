@@ -7,7 +7,7 @@ interface OrderDetailAttributes {
   item_id: number | null;
   order_id: number;
   price: number;
-  food_details: string | null;
+  item_details: string | null;
   variation: string | null;
   add_ons: string | null;
   discount_on_item: number | null;
@@ -25,7 +25,7 @@ interface OrderDetailCreationAttributes {
   item_id?: number | null;
   order_id: number;
   price: number;
-  food_details?: string | null;
+  item_details?: string | null;
   variation?: string | null;
   add_ons?: string | null;
   discount_on_item?: number | null;
@@ -44,7 +44,7 @@ class OrderDetail extends Model<OrderDetailAttributes, OrderDetailCreationAttrib
   declare item_id: number | null;
   declare order_id: number;
   declare price: number;
-  declare food_details: string | null;
+  declare item_details: string | null;
   declare variation: string | null;
   declare add_ons: string | null;
   declare discount_on_item: number | null;
@@ -63,7 +63,7 @@ OrderDetail.init({
   item_id: { type: DataTypes.INTEGER, allowNull: true },
   order_id: { type: DataTypes.INTEGER, allowNull: false, references: { model: Order, key: 'id' } },
   price: { type: DataTypes.DECIMAL(24, 2), allowNull: false, defaultValue: 0.00 },
-  food_details: { type: DataTypes.TEXT, allowNull: true },
+  item_details: { type: DataTypes.TEXT, allowNull: true },
   variation: { type: DataTypes.STRING(255), allowNull: true },
   add_ons: { type: DataTypes.TEXT, allowNull: true },
   discount_on_item: { type: DataTypes.DECIMAL(24, 2), allowNull: true },

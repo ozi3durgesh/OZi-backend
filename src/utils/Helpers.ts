@@ -110,7 +110,6 @@ export class Helpers {
         // Parse variation and add_ons safely
         let variation: string | null = null;
         let addOns: string | null = null;
-        let foodDetails: string | null = null;
         let itemDetails: string | null = null;
 
         try {
@@ -133,12 +132,8 @@ export class Helpers {
           console.warn(`⚠️ Failed to parse add_ons for item ${cartItem.item_id}:`, error);
         }
 
-        // Handle item details (could be food_details or item_details)
-        if (cartItem.food_details) {
-          foodDetails = typeof cartItem.food_details === 'string' 
-            ? cartItem.food_details 
-            : JSON.stringify(cartItem.food_details);
-        } else if (cartItem.item_details) {
+        // Handle item details
+        if (cartItem.item_details) {
           itemDetails = typeof cartItem.item_details === 'string' 
             ? cartItem.item_details 
             : JSON.stringify(cartItem.item_details);
@@ -148,7 +143,7 @@ export class Helpers {
           item_id: cartItem.item_id,
           order_id: orderId,
           price: parseFloat(cartItem.price.toString()) || ORDER_CONSTANTS.DEFAULTS.PRICE,
-          food_details: foodDetails || itemDetails || null,
+          item_details: itemDetails || null,
           variation: variation,
           add_ons: addOns,
           discount_on_item: cartItem.discount_on_item || null,

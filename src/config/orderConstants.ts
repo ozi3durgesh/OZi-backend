@@ -167,7 +167,6 @@ export interface CartItem {
   item_campaign_id?: number | null;
   total_add_on_price?: number;
   item_details?: string | null;
-  food_details?: string | null;
 }
 
 // Interface for order detail creation
@@ -175,7 +174,7 @@ export interface OrderDetailData {
   item_id: number | null;
   order_id: number;
   price: number;
-  food_details?: string | null;
+  item_details?: string | null;
   variation?: string | null;
   add_ons?: string | null;
   discount_on_item?: number | null;
