@@ -608,7 +608,8 @@ export class PickingController {
 
       const waves = await PickingWave.findAndCountAll({
         where: whereClause,
-        order: [['priority', 'DESC'], ['slaDeadline', 'ASC']],
+        //order: [['priority', 'DESC'], ['slaDeadline', 'ASC']],
+        order: [['id', 'DESC']],
         limit: parseInt(limit.toString()),
         offset
       });

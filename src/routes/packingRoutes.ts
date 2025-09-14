@@ -208,22 +208,23 @@ router.post("/:waveId/pack-and-seal", upload.single("photo"), async (req, res) =
     await wave.update({
       status: "PACKED",
       photoPath: photo.location,
-      riderId: deliveryPartner?.id ?? undefined, // ✅ assign undefined instead of null
+      riderId: deliveryPartner?.id ?? undefined, 
+      riderAssignedAt: deliveryPartner ? new Date() : undefined,
     });
 
-    socketManager.emit("delivery_assigned", {
-      waveId: wave.id,
-      deliveryPartner: deliveryPartner
-        ? {
-            id: deliveryPartner.id,
-            name: `${deliveryPartner.f_name} ${deliveryPartner.l_name}`,
-            vehicleId: deliveryPartner.vehicle_id,
-            phone: deliveryPartner.phone,
-          }
-        : null,
-      message: deliveryPartner ? undefined : "No delivery partner assigned to this order",
-      photoPath: wave.photoPath,
-    });
+    // socketManager.emit("delivery_assigned", {
+    //   waveId: wave.id,
+    //   deliveryPartner: deliveryPartner
+    //     ? {
+    //         id: deliveryPartner.id,
+    //         name: `${deliveryPartner.f_name} ${deliveryPartner.l_name}`,
+    //         vehicleId: deliveryPartner.vehicle_id,
+    //         phone: deliveryPartner.phone,
+    //       }
+    //     : null,
+    //   message: deliveryPartner ? undefined : "No delivery partner assigned to this order",
+    //   photoPath: wave.photoPath,
+    // });
 
     return res.status(201).json({
       statusCode: 201,
@@ -249,6 +250,72 @@ router.post("/:waveId/pack-and-seal", upload.single("photo"), async (req, res) =
     });
   }
 });
+
+router.get("/:waveId/refresh", async (req, res) => {
+  try {
+    const { waveId } = req.params;
+
+    const wave = await PickingWave.findByPk(waveId);
+    if (!wave) {
+      return res.status(404).json({
+        statusCode: 404,
+        success: false,
+        error: `Wave with id ${waveId} not found`,
+      });
+    }
+
+    const order = await Order.findByPk(wave.orderId);
+    if (!order) {
+      return res.status(404).json({
+        statusCode: 404,
+        success: false,
+        error: "Order not found",
+      });
+    }
+
+    let deliveryPartner: DeliveryMan | null = null;
+    if (order.delivery_man_id) {
+      deliveryPartner = await DeliveryMan.findByPk(order.delivery_man_id);
+
+      if (deliveryPartner && !wave.riderId) {
+        await wave.update({
+          riderId: deliveryPartner.id,
+          riderAssignedAt: new Date(),
+        });
+      }
+    }
+
+    return res.status(200).json({
+      statusCode: 200,
+      success: true,
+      data: {
+        waveId: wave.id,
+        status: wave.status,
+        riderId: wave.riderId,
+        riderAssignedAt: wave.riderAssignedAt,
+        deliveryPartner: deliveryPartner
+          ? {
+              id: deliveryPartner.id,
+              name: `${deliveryPartner.f_name} ${deliveryPartner.l_name}`,
+              vehicleId: deliveryPartner.vehicle_id,
+              phone: deliveryPartner.phone,
+            }
+          : null,
+      },
+      message: deliveryPartner
+        ? "Delivery partner assigned"
+        : "No delivery partner assigned yet",
+    });
+  } catch (error) {
+    console.error("Error in refresh:", error);
+    return res.status(500).json({
+      statusCode: 500,
+      success: false,
+      error: "Failed to refresh wave details",
+    });
+  }
+});
+
 
 /**
  * @route GET /api/packing/status/:jobId
