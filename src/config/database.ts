@@ -133,6 +133,82 @@ const createReturnTables = async (): Promise<void> => {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
     `);
     
+    // Create return_reject_grn table
+    await sequelize.query(`
+      CREATE TABLE IF NOT EXISTS return_reject_grn (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        
+        -- Return Request References
+        return_order_id VARCHAR(100) NOT NULL,
+        return_request_item_id INT NOT NULL,
+        original_order_id VARCHAR(100) NOT NULL,
+        customer_id INT NOT NULL,
+        
+        -- Product Details
+        item_id INT NOT NULL,
+        sku_id VARCHAR(50) NOT NULL,
+        product_name VARCHAR(255),
+        product_category VARCHAR(100),
+        product_brand VARCHAR(100),
+        product_mrp DECIMAL(10,2),
+        product_cost DECIMAL(10,2),
+        
+        -- Return Details
+        return_type ENUM('full_return', 'partial_return', 'exchange', 'try_and_buy_return') NOT NULL,
+        return_reason VARCHAR(100) NOT NULL,
+        original_quantity INT NOT NULL,
+        rejected_quantity INT NOT NULL,
+        original_price DECIMAL(10,2) NOT NULL,
+        
+        -- Rejection Details
+        rejection_reason VARCHAR(255) NOT NULL,
+        rejection_notes TEXT,
+        rejection_category ENUM('damaged', 'defective', 'wrong_item', 'quality_issue', 'expired', 'other') NOT NULL,
+        rejection_severity ENUM('minor', 'major', 'critical') DEFAULT 'minor',
+        
+        -- Photo References
+        photo_urls JSON,
+        photo_count INT DEFAULT 0,
+        
+        -- GRN Details
+        grn_id VARCHAR(100) NOT NULL,
+        grn_notes TEXT,
+        grn_status ENUM('pending', 'in_progress', 'completed', 'rejected') DEFAULT 'pending',
+        
+        -- Processing Details
+        processed_by INT NOT NULL,
+        processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        
+        -- Try and Buy Specific
+        is_try_and_buy BOOLEAN DEFAULT FALSE,
+        try_and_buy_feedback TEXT,
+        try_and_buy_rating INT,
+        
+        -- Additional Metadata
+        item_details TEXT,
+        variation VARCHAR(255),
+        customer_feedback TEXT,
+        
+        -- Timestamps
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        
+        -- Indexes
+        INDEX idx_return_order_id (return_order_id),
+        INDEX idx_return_request_item_id (return_request_item_id),
+        INDEX idx_original_order_id (original_order_id),
+        INDEX idx_customer_id (customer_id),
+        INDEX idx_item_id (item_id),
+        INDEX idx_sku_id (sku_id),
+        INDEX idx_grn_id (grn_id),
+        INDEX idx_rejection_category (rejection_category),
+        INDEX idx_grn_status (grn_status),
+        INDEX idx_processed_by (processed_by),
+        INDEX idx_created_at (created_at),
+        INDEX idx_is_try_and_buy (is_try_and_buy)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+    `);
+    
     console.log('✅ Return tables created successfully');
   } catch (error) {
     console.error('Error creating return tables:', error);

@@ -27,8 +27,15 @@ router.get('/item/:id/timeline', ReturnRequestItemController.getReturnRequestIte
 // 1. Get list of return orders ready for GRN with complete details
 router.get('/grn/ready', ReturnRequestItemController.getReturnOrdersForGRN);
 
-// 2. Create GRN for return items with simultaneous status updates
+// 2. Create GRN for return items with simultaneous status updates (handles both regular and reject GRN)
 router.post('/grn/:returnOrderId/create', ReturnRequestItemController.createReturnGRN);
+
+// ==================== RETURN REJECT GRN APIs ====================
+// 3. Get list of rejected return items for review
+router.get('/reject-grn/items', ReturnRequestItemController.getRejectedReturnItems);
+
+// 4. Get rejected return item details by ID
+router.get('/reject-grn/items/:id', ReturnRequestItemController.getRejectedReturnItemById);
 
 // ==================== RETURN PUTAWAY APIs ====================
 // 5. Get list of return items with completed GRN ready for putaway
