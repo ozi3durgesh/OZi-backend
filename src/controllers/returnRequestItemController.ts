@@ -661,7 +661,7 @@ export class ReturnRequestItemController {
   // ==================== RETURN GRN APIs ====================
 
   /**
-   * Get list of return orders ready for GRN
+   * Get list of return orders ready for GRN with complete details
    */
   static async getReturnOrdersForGRN(req: AuthRequest, res: Response): Promise<Response> {
     try {
@@ -676,8 +676,8 @@ export class ReturnRequestItemController {
           grn_status: { [require('sequelize').Op.or]: [null, 'pending'] }
         },
         include: [
-          { model: Order, as: 'originalOrder', attributes: ['id', 'order_id', 'user_id', 'order_amount'] },
-          { model: Product, as: 'product', attributes: ['SKU', 'ProductName', 'Category', 'Brand'] }
+          { model: Order, as: 'originalOrder', attributes: ['id', 'order_id', 'user_id', 'order_amount', 'created_at'] },
+          { model: Product, as: 'product', attributes: ['SKU', 'ProductName', 'Category', 'Brand', 'MRP', 'COST'] }
         ],
         order: [['created_at', 'DESC']],
         limit,
@@ -693,27 +693,40 @@ export class ReturnRequestItemController {
         
         if (!returnOrdersMap.has(returnOrderId)) {
           returnOrdersMap.set(returnOrderId, {
-            return_order_id: returnOrderId,
-            original_order_id: item.original_order_id,
-            customer_id: item.customer_id,
-            return_type: item.return_type,
-            total_items: 0,
-            total_amount: item.total_return_amount || 0,
-            received_date: item.created_at,
-            items: []
+            grn: {
+              id: `RET-${returnOrderId}`,
+              return_order_id: returnOrderId,
+              original_order_id: item.original_order_id,
+              customer_id: item.customer_id,
+              return_type: item.return_type,
+              status: item.status,
+              total_items_count: item.total_items_count || 0,
+              total_return_amount: item.total_return_amount || "0.00",
+              created_at: item.created_at,
+              updated_at: item.updated_at
+            },
+            lines: [],
+            originalOrder: (item as any).originalOrder
           });
         }
         
         const returnOrder = returnOrdersMap.get(returnOrderId);
-        returnOrder.total_items += 1;
-        returnOrder.items.push({
+        returnOrder.lines.push({
           id: item.id,
           item_id: item.item_id,
-          quantity: item.quantity,
-          price: item.price,
+          sku_id: item.item_id,
+          ordered_qty: item.quantity,
+          received_qty: item.quantity, // Default to ordered quantity
+          pending_qty: 0,
+          rejected_qty: 0,
+          held_qty: 0,
+          rtv_qty: 0,
+          line_status: 'pending',
+          product: (item as any).product,
           item_details: item.item_details,
           variation: item.variation,
-          product: (item as any).product
+          price: item.price?.toString() || "0.00",
+          is_try_and_buy: item.is_try_and_buy || 0
         });
       });
 
@@ -864,7 +877,7 @@ export class ReturnRequestItemController {
   }
 
   /**
-   * Create GRN for return items
+   * Create GRN for return items with simultaneous status updates
    */
   static async createReturnGRN(req: AuthRequest, res: Response): Promise<Response> {
     try {
@@ -877,66 +890,106 @@ export class ReturnRequestItemController {
 
       // Find all return request items for this return order
       const returnRequestItems = await ReturnRequestItem.findAll({
-        where: { return_order_id: returnOrderId }
+        where: { return_order_id: returnOrderId },
+        include: [
+          { model: Order, as: 'originalOrder', attributes: ['id', 'order_id', 'user_id', 'order_amount', 'created_at'] },
+          { model: Product, as: 'product', attributes: ['SKU', 'ProductName', 'Category', 'Brand', 'MRP', 'COST'] }
+        ]
       });
 
       if (returnRequestItems.length === 0) {
         return ResponseHandler.error(res, 'Return request items not found', 404);
       }
 
-      // Process each line
-      for (const line of lines) {
-        const returnItem = returnRequestItems.find(item => item.id === line.id);
-        
-        if (!returnItem) {
-          return ResponseHandler.error(res, `Return item with ID ${line.id} not found`, 404);
-        }
+      // Start transaction for atomic updates
+      const transaction = await sequelize.transaction();
 
-        // Validate quantities
-        if (line.received_qty > returnItem.quantity) {
-          return ResponseHandler.error(res, `Received quantity cannot exceed original quantity for item ${line.id}`, 400);
-        }
+      try {
+        // Process each line and update status simultaneously
+        for (const line of lines) {
+          const returnItem = returnRequestItems.find(item => item.id === line.id);
+          
+          if (!returnItem) {
+            await transaction.rollback();
+            return ResponseHandler.error(res, `Return item with ID ${line.id} not found`, 404);
+          }
 
-        // Add GRN timeline event
-        const timelineEvents = returnItem.timeline_events || [];
-        timelineEvents.push({
-          event_type: RETURN_CONSTANTS.TIMELINE_EVENTS.GRN_CREATED,
-          status: returnItem.status,
-          notes: `GRN created for return item`,
-          metadata: { 
+          // Validate quantities
+          if (line.received_qty > returnItem.quantity) {
+            await transaction.rollback();
+            return ResponseHandler.error(res, `Received quantity cannot exceed original quantity for item ${line.id}`, 400);
+          }
+
+          // Add GRN timeline events (start and completion)
+          const timelineEvents = returnItem.timeline_events || [];
+          
+          // Add GRN started event
+          timelineEvents.push({
+            event_type: RETURN_CONSTANTS.TIMELINE_EVENTS.GRN_CREATED,
+            status: returnItem.status,
+            notes: `GRN process started for return order ${returnOrderId}`,
+            metadata: { 
+              grn_notes,
+              grn_started_at: Date.now()
+            },
+            created_at: Date.now(),
+            created_by: 1
+          });
+
+          // Add GRN completed event
+          timelineEvents.push({
+            event_type: RETURN_CONSTANTS.TIMELINE_EVENTS.GRN_CREATED,
+            status: returnItem.status,
+            notes: `GRN created for return item`,
+            metadata: { 
+              grn_id: `RET-${returnOrderId}`,
+              received_qty: line.received_qty,
+              expected_qty: returnItem.quantity,
+              grn_notes,
+              grn_completed_at: Date.now()
+            },
+            created_at: Date.now(),
+            created_by: 1
+          });
+
+          // Update the return request item with all status changes
+          await returnItem.update({
             grn_id: `RET-${returnOrderId}`,
-            received_qty: line.received_qty,
-            expected_qty: returnItem.quantity,
-            grn_notes
-          },
-          created_at: Date.now(),
-          created_by: 1
-        });
+            grn_status: 'completed',
+            received_quantity: line.received_qty,
+            expected_quantity: returnItem.quantity,
+            timeline_events: timelineEvents,
+            last_event_type: RETURN_CONSTANTS.TIMELINE_EVENTS.GRN_CREATED,
+            last_event_notes: `GRN created for return item`,
+            last_event_metadata: { 
+              grn_id: `RET-${returnOrderId}`,
+              received_qty: line.received_qty,
+              grn_notes
+            },
+            updated_at: Date.now()
+          }, { transaction });
+        }
 
-        // Update the return request item
-        await returnItem.update({
+        // Commit transaction
+        await transaction.commit();
+
+        return ResponseHandler.success(res, {
+          message: 'Return GRN created successfully with status updates',
           grn_id: `RET-${returnOrderId}`,
-          grn_status: 'completed',
-          received_quantity: line.received_qty,
-          expected_quantity: returnItem.quantity,
-          timeline_events: timelineEvents,
-          last_event_type: RETURN_CONSTANTS.TIMELINE_EVENTS.GRN_CREATED,
-          last_event_notes: `GRN created for return item`,
-          last_event_metadata: { 
-            grn_id: `RET-${returnOrderId}`,
-            received_qty: line.received_qty
-          },
-          updated_at: Date.now()
+          return_order_id: returnOrderId,
+          processed_items: lines.length,
+          grn_notes,
+          status_updates: {
+            grn_status: 'completed',
+            timeline_events_added: lines.length * 2, // Start + Complete events
+            last_updated: Date.now()
+          }
         });
-      }
 
-      return ResponseHandler.success(res, {
-        message: 'Return GRN created successfully',
-        grn_id: `RET-${returnOrderId}`,
-        return_order_id: returnOrderId,
-        processed_items: lines.length,
-        grn_notes
-      });
+      } catch (transactionError) {
+        await transaction.rollback();
+        throw transactionError;
+      }
 
     } catch (error) {
       console.error('Create return GRN error:', error);
