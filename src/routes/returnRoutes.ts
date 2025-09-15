@@ -12,6 +12,9 @@ router.put('/item/:id/status', ReturnRequestItemController.updateReturnRequestIt
 // Pidge webhook for return status updates
 router.post('/webhook/pidge', ReturnRequestItemController.handlePidgeWebhook);
 
+// Simulate Pidge webhook for testing
+router.post('/simulate/pidge-webhook/:returnOrderId', ReturnRequestItemController.simulatePidgeWebhook);
+
 // QC, GRN, and Putaway processing
 router.post('/item/:id/qc', ReturnRequestItemController.processQC);
 router.post('/item/:id/grn', ReturnRequestItemController.processGRN);
@@ -42,5 +45,8 @@ router.post('/putaway/scan-sku', ReturnRequestItemController.scanReturnSkuForPut
 
 // 7. Confirm return putaway (similar to /api/putaway/confirm)
 router.post('/putaway/confirm', ReturnRequestItemController.confirmReturnPutaway);
+
+// 8. Update scanner_sku quantity (dedicated endpoint)
+router.post('/putaway/update-sku-quantity', ReturnRequestItemController.updateScannerSkuQuantity);
 
 export default router;

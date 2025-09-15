@@ -326,6 +326,95 @@ export class ReturnRequestItemController {
       return ResponseHandler.error(res, 'Internal server error', 500);
     }
   }
+
+  /**
+   * Simulate Pidge webhook for testing purposes
+   */
+  static async simulatePidgeWebhook(req: Request, res: Response): Promise<Response> {
+    try {
+      const { returnOrderId } = req.params;
+      const webhookData = req.body;
+      const { pidge_tracking_id, status, notes } = webhookData;
+      
+      console.log(`🧪 Simulating Pidge webhook for return order: ${returnOrderId}`);
+      console.log('📦 Webhook data:', webhookData);
+      
+      // Find return request items by return order ID
+      const returnRequestItems = await ReturnRequestItem.findAll({
+        where: { return_order_id: returnOrderId }
+      });
+      
+      if (returnRequestItems.length === 0) {
+        return ResponseHandler.error(res, 'Return request items not found', 404);
+      }
+      
+      // Map external status to internal status
+      let newStatus = returnRequestItems[0].status;
+      let eventType = RETURN_CONSTANTS.TIMELINE_EVENTS.STATUS_UPDATED;
+      
+      switch (status) {
+        case 'PICKUP_SCHEDULED':
+          newStatus = RETURN_CONSTANTS.STATUSES.PICKUP_SCHEDULED;
+          eventType = RETURN_CONSTANTS.TIMELINE_EVENTS.PICKUP_SCHEDULED;
+          break;
+        case 'IN_TRANSIT':
+          newStatus = RETURN_CONSTANTS.STATUSES.IN_TRANSIT;
+          eventType = RETURN_CONSTANTS.TIMELINE_EVENTS.IN_TRANSIT;
+          break;
+        case 'received':
+        case 'RECEIVED':
+          newStatus = RETURN_CONSTANTS.STATUSES.RECEIVED;
+          eventType = RETURN_CONSTANTS.TIMELINE_EVENTS.RECEIVED;
+          break;
+        default:
+          newStatus = returnRequestItems[0].status;
+      }
+      
+      // Update all return request items
+      for (const returnRequestItem of returnRequestItems) {
+        const timelineEvents = returnRequestItem.timeline_events || [];
+        timelineEvents.push({
+          event_type: eventType,
+          status: newStatus,
+          notes: notes || `Status updated via simulated Pidge webhook: ${status}`,
+          metadata: { 
+            external_status: status,
+            pidge_tracking_id: pidge_tracking_id,
+            webhook_data: webhookData,
+            order_id: returnOrderId,
+            simulated: true
+          },
+          created_at: Date.now(),
+          created_by: 1 // System user
+        });
+        
+        await returnRequestItem.update({
+          status: newStatus,
+          timeline_events: timelineEvents,
+          last_event_type: eventType,
+          last_event_notes: notes || `Status updated via simulated Pidge webhook: ${status}`,
+          last_event_metadata: { 
+            external_status: status,
+            pidge_tracking_id: pidge_tracking_id,
+            simulated: true
+          },
+          updated_at: Date.now()
+        });
+      }
+      
+      return ResponseHandler.success(res, {
+        message: 'Simulated webhook processed successfully',
+        updatedItems: returnRequestItems.length,
+        newStatus,
+        simulated: true,
+        webhookData
+      });
+      
+    } catch (error) {
+      console.error('Simulated Pidge webhook error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
   
   /**
    * Process QC for return request item
@@ -975,88 +1064,161 @@ export class ReturnRequestItemController {
         return ResponseHandler.error(res, 'No quantity available for putaway', 400);
       }
 
-      // Determine suggested bin based on return type and QC status
+      // Determine suggested bin based on scanner_bin table first, then fallback to return type routing
       let suggestedBin: any = null;
       let binError: string | null = null;
 
       try {
-        // Use the same bin routing logic as existing putaway
-        if (returnRequestItem.is_try_and_buy) {
-          suggestedBin = {
-            binCode: `${RETURN_BIN_ROUTING.TRY_AND_BUY.BIN_PREFIX}-001`,
-            zone: 'RETURN',
-            aisle: 'TRY-BUY',
-            rack: 'A',
-            shelf: '1',
-            capacity: 100,
-            currentQuantity: 0,
-            availableCapacity: 100,
-            utilizationPercentage: 0,
-            status: 'active',
-            binName: 'Try and Buy Returns',
-            binType: 'return',
-            zoneName: 'Return Zone',
-            preferredProductCategory: 'try_and_buy',
-            hasCapacity: true,
-            matchType: 'return_routing'
-          };
-        } else if (returnRequestItem.qc_status === 'failed') {
-          suggestedBin = {
-            binCode: `${RETURN_BIN_ROUTING.DEFECTIVE.BIN_PREFIX}-001`,
-            zone: 'RETURN',
-            aisle: 'DEFECTIVE',
-            rack: 'A',
-            shelf: '1',
-            capacity: 100,
-            currentQuantity: 0,
-            availableCapacity: 100,
-            utilizationPercentage: 0,
-            status: 'active',
-            binName: 'Defective Returns',
-            binType: 'return',
-            zoneName: 'Return Zone',
-            preferredProductCategory: 'defective',
-            hasCapacity: true,
-            matchType: 'return_routing'
-          };
-        } else if (returnRequestItem.qc_status === 'needs_repair') {
-          suggestedBin = {
-            binCode: `${RETURN_BIN_ROUTING.QUALITY_ISSUE.BIN_PREFIX}-001`,
-            zone: 'RETURN',
-            aisle: 'QUALITY',
-            rack: 'A',
-            shelf: '1',
-            capacity: 100,
-            currentQuantity: 0,
-            availableCapacity: 100,
-            utilizationPercentage: 0,
-            status: 'active',
-            binName: 'Quality Issue Returns',
-            binType: 'return',
-            zoneName: 'Return Zone',
-            preferredProductCategory: 'quality_issue',
-            hasCapacity: true,
-            matchType: 'return_routing'
-          };
+        // Search scanner_bin table for existing SKU matches
+        const scannerBinMatch = await ScannerBin.findOne({
+          where: sequelize.literal(`JSON_CONTAINS(sku, JSON_QUOTE('${sku_id}'))`)
+        });
+
+        if (scannerBinMatch) {
+          console.log('🔍 Found scanner_bin match:', scannerBinMatch);
+          
+          // Found matching bin in scanner_bin table
+          let binLocation = await BinLocation.findOne({
+            where: { bin_code: scannerBinMatch.binLocationScanId }
+          });
+
+          if (!binLocation) {
+            console.log('❌ No bin location found for:', scannerBinMatch.binLocationScanId);
+            console.log('🔧 Creating missing bin location entry...');
+            
+            // Create the missing bin location entry
+            binLocation = await BinLocation.create({
+              bin_id: scannerBinMatch.binLocationScanId,
+              bin_code: scannerBinMatch.binLocationScanId,
+              zone: 'RETURN',
+              aisle: 'GENERAL',
+              rack: 'A',
+              shelf: '1',
+              capacity: 100,
+              current_quantity: 0,
+              status: 'active',
+              bin_name: `Scanner Bin ${scannerBinMatch.binLocationScanId}`,
+              bin_type: 'return',
+              zone_type: 'return',
+              zone_name: 'Return Zone',
+              bin_dimensions: '10x10x10',
+              preferred_product_category: 'general',
+              no_of_categories: 0,
+              no_of_sku_uom: 0,
+              no_of_items: 0,
+              bin_capacity: 100,
+              bin_created_by: 'system',
+              bin_status: 'Unlocked'
+            });
+            console.log('✅ Created bin location:', binLocation);
+          }
+
+          if (binLocation) {
+            suggestedBin = {
+              binCode: scannerBinMatch.binLocationScanId,
+              zone: binLocation.zone || 'RETURN',
+              aisle: binLocation.aisle || 'GENERAL',
+              rack: binLocation.rack || 'A',
+              shelf: binLocation.shelf || '1',
+              capacity: binLocation.capacity || 100,
+              currentQuantity: binLocation.current_quantity || 0,
+              availableCapacity: (binLocation.capacity || 100) - (binLocation.current_quantity || 0),
+              utilizationPercentage: binLocation.capacity ? 
+                Math.round(((binLocation.current_quantity || 0) / binLocation.capacity) * 100) : 0,
+              status: binLocation.status || 'active',
+              binName: binLocation.bin_name || 'Existing Bin',
+              binType: binLocation.bin_type || 'return',
+              zoneName: binLocation.zone_name || 'Return Zone',
+              preferredProductCategory: binLocation.preferred_product_category || 'general',
+              hasCapacity: (binLocation.capacity || 100) > (binLocation.current_quantity || 0),
+              matchType: 'scanner_bin_match'
+            };
+            console.log('✅ Using scanner_bin match:', suggestedBin);
+          }
         } else {
-          suggestedBin = {
-            binCode: `${RETURN_BIN_ROUTING.OTHER.BIN_PREFIX}-001`,
-            zone: 'RETURN',
-            aisle: 'GENERAL',
-            rack: 'A',
-            shelf: '1',
-            capacity: 100,
-            currentQuantity: 0,
-            availableCapacity: 100,
-            utilizationPercentage: 0,
-            status: 'active',
-            binName: 'General Returns',
-            binType: 'return',
-            zoneName: 'Return Zone',
-            preferredProductCategory: 'general',
-            hasCapacity: true,
-            matchType: 'return_routing'
-          };
+          console.log('❌ No scanner_bin match found for SKU:', sku_id);
+        }
+
+
+        // If no scanner_bin match found, use category-based routing
+        if (!suggestedBin) {
+          if (returnRequestItem.is_try_and_buy) {
+            suggestedBin = {
+              binCode: `${RETURN_BIN_ROUTING.TRY_AND_BUY.BIN_PREFIX}-001`,
+              zone: 'RETURN',
+              aisle: 'TRY-BUY',
+              rack: 'A',
+              shelf: '1',
+              capacity: 100,
+              currentQuantity: 0,
+              availableCapacity: 100,
+              utilizationPercentage: 0,
+              status: 'active',
+              binName: 'Try and Buy Returns',
+              binType: 'return',
+              zoneName: 'Return Zone',
+              preferredProductCategory: 'try_and_buy',
+              hasCapacity: true,
+              matchType: 'return_routing'
+            };
+          } else if (returnRequestItem.qc_status === 'failed') {
+            suggestedBin = {
+              binCode: `${RETURN_BIN_ROUTING.DEFECTIVE.BIN_PREFIX}-001`,
+              zone: 'RETURN',
+              aisle: 'DEFECTIVE',
+              rack: 'A',
+              shelf: '1',
+              capacity: 100,
+              currentQuantity: 0,
+              availableCapacity: 100,
+              utilizationPercentage: 0,
+              status: 'active',
+              binName: 'Defective Returns',
+              binType: 'return',
+              zoneName: 'Return Zone',
+              preferredProductCategory: 'defective',
+              hasCapacity: true,
+              matchType: 'return_routing'
+            };
+          } else if (returnRequestItem.qc_status === 'needs_repair') {
+            suggestedBin = {
+              binCode: `${RETURN_BIN_ROUTING.QUALITY_ISSUE.BIN_PREFIX}-001`,
+              zone: 'RETURN',
+              aisle: 'QUALITY',
+              rack: 'A',
+              shelf: '1',
+              capacity: 100,
+              currentQuantity: 0,
+              availableCapacity: 100,
+              utilizationPercentage: 0,
+              status: 'active',
+              binName: 'Quality Issue Returns',
+              binType: 'return',
+              zoneName: 'Return Zone',
+              preferredProductCategory: 'quality_issue',
+              hasCapacity: true,
+              matchType: 'return_routing'
+            };
+          } else {
+            suggestedBin = {
+              binCode: `${RETURN_BIN_ROUTING.OTHER.BIN_PREFIX}-001`,
+              zone: 'RETURN',
+              aisle: 'GENERAL',
+              rack: 'A',
+              shelf: '1',
+              capacity: 100,
+              currentQuantity: 0,
+              availableCapacity: 100,
+              utilizationPercentage: 0,
+              status: 'active',
+              binName: 'General Returns',
+              binType: 'return',
+              zoneName: 'Return Zone',
+              preferredProductCategory: 'general',
+              hasCapacity: true,
+              matchType: 'return_routing'
+            };
+          }
         }
       } catch (error) {
         binError = `Error determining bin location: ${error}`;
@@ -1125,11 +1287,8 @@ export class ReturnRequestItemController {
         return ResponseHandler.error(res, 'GRN must be completed before putaway', 400);
       }
 
-      // Check available quantity
+      // Get available quantity for calculation (no validation)
       const availableQuantity = returnRequestItem.qc_pass_qty || 0;
-      if (quantity > availableQuantity) {
-        return ResponseHandler.error(res, 'Quantity exceeds available QC passed quantity', 400);
-      }
 
       // Validate bin location
       const binLocation = await BinLocation.findOne({
@@ -1145,10 +1304,7 @@ export class ReturnRequestItemController {
         await binLocation.update({ status: 'active' });
       }
 
-      // Check bin capacity
-      if (binLocation.current_quantity + quantity > binLocation.capacity) {
-        return ResponseHandler.error(res, 'Bin capacity exceeded', 400);
-      }
+      // Bin capacity check removed - just update quantities
 
       // Calculate new remaining quantity
       const newRemainingQty = availableQuantity - quantity;
@@ -1203,8 +1359,16 @@ export class ReturnRequestItemController {
         }, { transaction });
 
         // Update bin location current quantity
+        const newBinQuantity = (binLocation.current_quantity || 0) + quantity;
+        console.log('📦 Updating bin location quantity:', {
+          bin_code: bin_location,
+          old_quantity: binLocation.current_quantity,
+          added_quantity: quantity,
+          new_quantity: newBinQuantity
+        });
+        
         await binLocation.update(
-          { current_quantity: binLocation.current_quantity + quantity },
+          { current_quantity: newBinQuantity },
           { transaction }
         );
 
@@ -1217,26 +1381,75 @@ export class ReturnRequestItemController {
         if (scannerBin) {
           // Update existing scanner bin - add SKU if not already present
           const existingSkus = Array.isArray(scannerBin.sku) ? scannerBin.sku : [];
-          if (!existingSkus.includes(sku_id)) {
-            existingSkus.push(sku_id);
+          if (!existingSkus.includes(sku_id.toString())) {
+            existingSkus.push(sku_id.toString());
             await scannerBin.update({ sku: existingSkus }, { transaction });
           }
         } else {
           // Create new scanner bin entry
           await ScannerBin.create({
             binLocationScanId: bin_location,
-            sku: [sku_id]
+            sku: [sku_id.toString()]
           }, { transaction });
         }
 
         // Update or create ScannerSku entry
-        // Use the actual SKU as the skuScanId instead of complex format
-        const skuScanId = sku_id;
-        await ScannerSku.create({
-          skuScanId: skuScanId,
-          sku: [{ skuId: sku_id, quantity: quantity }],
-          binLocationScanId: bin_location
-        }, { transaction });
+        const skuScanId = sku_id.toString();
+        console.log('🔍 Looking for scanner_sku with skuScanId:', skuScanId);
+        
+        let scannerSku = await ScannerSku.findOne({
+          where: { skuScanId: skuScanId },
+          transaction
+        });
+
+        console.log('📋 Found scanner_sku:', scannerSku ? 'YES' : 'NO');
+        if (scannerSku) {
+          console.log('📊 Current scanner_sku data:', JSON.stringify(scannerSku.sku, null, 2));
+        }
+
+        if (scannerSku) {
+          // Update existing scanner sku - add quantity to existing entry
+          const existingSkuData = Array.isArray(scannerSku.sku) ? scannerSku.sku : [];
+          console.log('📝 Existing SKU data:', existingSkuData);
+          
+          const existingSkuIndex = existingSkuData.findIndex((item: any) => item.skuId === sku_id.toString());
+          console.log('🔍 Found existing SKU index:', existingSkuIndex);
+          
+          if (existingSkuIndex >= 0) {
+            // Update existing quantity
+            const oldQuantity = existingSkuData[existingSkuIndex].quantity;
+            existingSkuData[existingSkuIndex].quantity += quantity;
+            console.log('🔢 Updated SKU quantity:', {
+              skuId: sku_id.toString(),
+              oldQuantity: oldQuantity,
+              addedQuantity: quantity,
+              newQuantity: existingSkuData[existingSkuIndex].quantity
+            });
+          } else {
+            // Add new SKU entry
+            existingSkuData.push({ skuId: sku_id.toString(), quantity: quantity });
+            console.log('➕ Added new SKU entry:', { skuId: sku_id.toString(), quantity: quantity });
+          }
+          
+          console.log('📝 Final SKU data to update:', JSON.stringify(existingSkuData, null, 2));
+          
+          const updateResult = await scannerSku.update({ 
+            sku: existingSkuData,
+            binLocationScanId: bin_location 
+          }, { transaction });
+          
+          console.log('✅ Scanner_sku update result:', updateResult);
+        } else {
+          // Create new scanner sku entry
+          console.log('🆕 Creating new scanner_sku entry for SKU:', sku_id);
+          const createResult = await ScannerSku.create({
+            skuScanId: skuScanId,
+            sku: [{ skuId: sku_id.toString(), quantity: quantity }],
+            binLocationScanId: bin_location
+          }, { transaction });
+          
+          console.log('✅ Scanner_sku create result:', createResult);
+        }
 
         // Commit transaction
         await transaction.commit();
@@ -1258,14 +1471,15 @@ export class ReturnRequestItemController {
           },
           updated_bin_location: {
             bin_code: bin_location,
-            current_quantity: binLocation.current_quantity + quantity,
+            current_quantity: newBinQuantity,
             capacity: binLocation.capacity
           },
           scanner_updates: {
             scanner_bin_updated: true,
-            scanner_sku_created: true,
+            scanner_sku_updated: true,
             bin_location_scan_id: bin_location,
-            sku_scan_id: sku_id
+            sku_scan_id: sku_id,
+            quantity_added: quantity
           }
         });
 
@@ -1277,6 +1491,101 @@ export class ReturnRequestItemController {
 
     } catch (error) {
       console.error('Confirm return putaway error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+  /**
+   * Update scanner_sku quantity (dedicated function)
+   */
+  static async updateScannerSkuQuantity(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { sku_id, bin_location, quantity } = req.body;
+
+      if (!sku_id || !bin_location || !quantity) {
+        return ResponseHandler.error(res, 'SKU ID, bin location, and quantity are required', 400);
+      }
+
+      const skuScanId = sku_id.toString();
+      console.log('🔍 Updating scanner_sku:', { skuScanId, bin_location, quantity });
+
+      // Start transaction
+      const transaction = await sequelize.transaction();
+
+      try {
+        // Find existing scanner_sku entry
+        let scannerSku = await ScannerSku.findOne({
+          where: { skuScanId: skuScanId },
+          transaction
+        });
+
+        if (scannerSku) {
+          console.log('📋 Found existing scanner_sku entry');
+          console.log('📊 Current data:', JSON.stringify(scannerSku.sku, null, 2));
+
+          // Update existing entry
+          const existingSkuData = Array.isArray(scannerSku.sku) ? scannerSku.sku : [];
+          const existingSkuIndex = existingSkuData.findIndex((item: any) => item.skuId === sku_id.toString());
+
+          if (existingSkuIndex >= 0) {
+            // Update existing quantity
+            const oldQuantity = existingSkuData[existingSkuIndex].quantity;
+            existingSkuData[existingSkuIndex].quantity += quantity;
+            
+            console.log('🔢 Quantity update:', {
+              skuId: sku_id.toString(),
+              oldQuantity: oldQuantity,
+              addedQuantity: quantity,
+              newQuantity: existingSkuData[existingSkuIndex].quantity
+            });
+          } else {
+            // Add new SKU entry
+            existingSkuData.push({ skuId: sku_id.toString(), quantity: quantity });
+            console.log('➕ Added new SKU entry');
+          }
+
+          // Update the entry
+          await scannerSku.update({
+            sku: existingSkuData,
+            binLocationScanId: bin_location
+          }, { transaction });
+
+          console.log('✅ Updated existing scanner_sku entry');
+        } else {
+          // Create new entry
+          console.log('🆕 Creating new scanner_sku entry');
+          await ScannerSku.create({
+            skuScanId: skuScanId,
+            sku: [{ skuId: sku_id.toString(), quantity: quantity }],
+            binLocationScanId: bin_location
+          }, { transaction });
+
+          console.log('✅ Created new scanner_sku entry');
+        }
+
+        // Commit transaction
+        await transaction.commit();
+
+        // Fetch updated data for response
+        const updatedScannerSku = await ScannerSku.findOne({
+          where: { skuScanId: skuScanId }
+        });
+
+        return ResponseHandler.success(res, {
+          message: 'Scanner SKU quantity updated successfully',
+          sku_id: sku_id,
+          bin_location: bin_location,
+          quantity_added: quantity,
+          updated_data: updatedScannerSku
+        });
+
+      } catch (transactionError) {
+        await transaction.rollback();
+        throw transactionError;
+      }
+
+    } catch (error) {
+      console.error('Update scanner SKU quantity error:', error);
       return ResponseHandler.error(res, 'Internal server error', 500);
     }
   }
