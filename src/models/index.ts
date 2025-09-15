@@ -29,6 +29,9 @@ import Product from './productModel';
 import ProductMaster from './productModel';
 import POProduct from './POProduct';
 import TokenBlacklist from './TokenBlacklist';
+import ReturnRequestItem from './ReturnRequestItem';
+import PutawayTask from './PutawayTask';
+import PutawayAudit from './PutawayAudit';
 
 // Set up associations
 Coupon.hasMany(CouponTranslation, {
@@ -213,6 +216,19 @@ GRNPhoto.belongsTo(GRN, { foreignKey: 'grn_id', as: 'GRN' });
 PurchaseOrder.hasMany(GRNPhoto, { foreignKey: 'po_id', as: 'Photos' });
 GRNPhoto.belongsTo(PurchaseOrder, { foreignKey: 'po_id', as: 'PurchaseOrder' });
 
+// Putaway associations
+PutawayTask.belongsTo(GRN, { foreignKey: 'grn_id', as: 'GRN' });
+PutawayTask.belongsTo(GRNLine, { foreignKey: 'grn_line_id', as: 'GRNLine' });
+PutawayTask.belongsTo(User, { foreignKey: 'assigned_to', as: 'AssignedTo' });
+PutawayTask.belongsTo(User, { foreignKey: 'created_by', as: 'CreatedBy' });
+
+PutawayAudit.belongsTo(PutawayTask, { foreignKey: 'putaway_task_id', as: 'PutawayTask' });
+PutawayAudit.belongsTo(User, { foreignKey: 'performed_by', as: 'PerformedBy' });
+
+PutawayTask.hasMany(PutawayAudit, { foreignKey: 'putaway_task_id', as: 'AuditLogs' });
+
+// Return system associations are defined in individual model files
+
 export {
   User,
   Order,
@@ -243,4 +259,6 @@ export {
   PurchaseOrder,
   POProduct,
   TokenBlacklist,
+  PutawayTask,
+  PutawayAudit,
 };

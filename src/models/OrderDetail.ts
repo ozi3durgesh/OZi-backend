@@ -19,6 +19,7 @@ interface OrderDetailAttributes {
   updated_at: number;
   item_campaign_id: number | null;
   total_add_on_price: number;
+  return_item_id: string | null;
 }
 
 interface OrderDetailCreationAttributes {
@@ -37,6 +38,7 @@ interface OrderDetailCreationAttributes {
   updated_at?: number;
   item_campaign_id?: number | null;
   total_add_on_price?: number;
+  return_item_id?: string | null;
 }
 
 class OrderDetail extends Model<OrderDetailAttributes, OrderDetailCreationAttributes> {
@@ -56,6 +58,7 @@ class OrderDetail extends Model<OrderDetailAttributes, OrderDetailCreationAttrib
   declare updated_at: number;
   declare item_campaign_id: number | null;
   declare total_add_on_price: number;
+  declare return_item_id: string | null;
 }
 
 OrderDetail.init({
@@ -75,6 +78,7 @@ OrderDetail.init({
   updated_at: { type: DataTypes.BIGINT, allowNull: false },
   item_campaign_id: { type: DataTypes.INTEGER, allowNull: true },
   total_add_on_price: { type: DataTypes.DECIMAL(24, 2), allowNull: false, defaultValue: 0.00 },
+  return_item_id: { type: DataTypes.STRING(50), allowNull: true, comment: 'Return order ID for tracking returns' },
 }, {
   sequelize,
   tableName: 'order_details',

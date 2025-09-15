@@ -21,6 +21,8 @@ import vendorRoutes from './routes/vendorRoutes';
 import productRoutes from './routes/productRoutes';
 import purchaOrderRoutes from './routes/purchaseOrderRoutes';
 import putawayRoutes from './routes/putawayRoutes';
+import returnRoutes from './routes/returnRoutes';
+import returnRequestItemRoutes from './routes/returnRequestItemRoutes';
 
 const app = express();
 
@@ -60,6 +62,8 @@ app.use('/api', vendorRoutes);
 app.use('/api', productRoutes);
 app.use('/api/purchase-orders', purchaOrderRoutes);
 app.use('/api/putaway', putawayRoutes);
+app.use('/api/returns', returnRoutes);
+app.use('/api/return-request-items', returnRequestItemRoutes);
 
 // PHP Production Compatible Routes
 app.use('/api/v1/customer/order', orderRoutes);

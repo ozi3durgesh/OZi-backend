@@ -6,7 +6,10 @@ import { socketManager } from '../utils/socketManager';
 
 class Order extends Model<OrderAttributes, OrderCreationAttributes> {
   declare id: number;
+  declare order_id: string;
+  declare user_id: number;
   declare delivery_man_id?: number | null;
+  declare return_item_id?: string | null;
 }
 
 Order.init({
@@ -104,6 +107,7 @@ Order.init({
   create_new_user: { type: DataTypes.TINYINT, defaultValue: 0, allowNull: true },
   guest_id: { type: DataTypes.STRING(255), allowNull: true },
   password: { type: DataTypes.STRING(255), allowNull: true },
+  return_item_id: { type: DataTypes.STRING(50), allowNull: true, comment: 'Return order ID for tracking returns' },
 }, {
   sequelize,
   tableName: 'orders',

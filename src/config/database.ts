@@ -61,6 +61,92 @@ const sequelize = new Sequelize({
 
 export default sequelize;
 
+const createReturnTables = async (): Promise<void> => {
+  try {
+    console.log('Creating return tables...');
+    
+    // Create return_requests table
+    await sequelize.query(`
+      CREATE TABLE IF NOT EXISTS return_requests (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        return_order_id VARCHAR(50) NOT NULL UNIQUE,
+        original_order_id VARCHAR(50) NOT NULL,
+        customer_id INT NOT NULL,
+        return_reason ENUM('defective_product', 'wrong_item', 'damaged_in_transit', 'not_as_described', 'size_issue', 'quality_issue', 'customer_changed_mind', 'duplicate_order', 'late_delivery', 'try_and_buy_not_satisfied', 'try_and_buy_expired', 'other') NOT NULL,
+        status ENUM('pending', 'approved', 'pickup_scheduled', 'in_transit', 'received', 'qc_pending', 'qc_completed', 'refund_initiated', 'refunded', 'rejected', 'cancelled') NOT NULL DEFAULT 'pending',
+        return_type ENUM('full_return', 'partial_return', 'exchange', 'try_and_buy_return') NOT NULL DEFAULT 'full_return',
+        total_items_count INT NOT NULL DEFAULT 0,
+        total_return_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        pidge_tracking_id VARCHAR(100) NULL,
+        pickup_address JSON NULL,
+        return_notes TEXT NULL,
+        images JSON NULL,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        created_by INT NOT NULL,
+        is_active TINYINT NOT NULL DEFAULT 1,
+        INDEX idx_return_order_id (return_order_id),
+        INDEX idx_original_order_id (original_order_id),
+        INDEX idx_customer_id (customer_id),
+        INDEX idx_status (status),
+        INDEX idx_pidge_tracking_id (pidge_tracking_id),
+        INDEX idx_created_at (created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    
+    // Create return_items table
+    await sequelize.query(`
+      CREATE TABLE IF NOT EXISTS return_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        return_request_id INT NOT NULL,
+        item_id INT NOT NULL,
+        quantity INT NOT NULL,
+        return_reason ENUM('defective_product', 'wrong_item', 'damaged_in_transit', 'not_as_described', 'size_issue', 'quality_issue', 'customer_changed_mind', 'duplicate_order', 'late_delivery', 'try_and_buy_not_satisfied', 'try_and_buy_expired', 'other') NOT NULL,
+        item_details TEXT NULL,
+        variation VARCHAR(255) NULL,
+        price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        images JSON NULL,
+        notes TEXT NULL,
+        qc_status ENUM('pending', 'passed', 'failed', 'needs_repair', 'disposal') NOT NULL DEFAULT 'pending',
+        qc_notes TEXT NULL,
+        qc_by INT NULL,
+        qc_at BIGINT NULL,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        is_active TINYINT NOT NULL DEFAULT 1,
+        INDEX idx_return_request_id (return_request_id),
+        INDEX idx_item_id (item_id),
+        INDEX idx_qc_status (qc_status),
+        INDEX idx_created_at (created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    
+    // Create return_timeline table
+    await sequelize.query(`
+      CREATE TABLE IF NOT EXISTS return_timeline (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        return_request_id INT NOT NULL,
+        event_type ENUM('created', 'approved', 'pickup_scheduled', 'picked_up', 'in_transit', 'received', 'qc_started', 'qc_completed', 'grn_created', 'putaway_started', 'putaway_completed', 'refund_initiated', 'refunded', 'rejected', 'cancelled', 'status_updated') NOT NULL,
+        status ENUM('pending', 'approved', 'pickup_scheduled', 'in_transit', 'received', 'qc_pending', 'qc_completed', 'refund_initiated', 'refunded', 'rejected', 'cancelled') NULL,
+        notes TEXT NULL,
+        metadata JSON NULL,
+        created_at BIGINT NOT NULL,
+        created_by INT NULL,
+        INDEX idx_return_request_id (return_request_id),
+        INDEX idx_event_type (event_type),
+        INDEX idx_status (status),
+        INDEX idx_created_at (created_at),
+        INDEX idx_created_by (created_by)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    
+    console.log('✅ Return tables created successfully');
+  } catch (error) {
+    console.error('Error creating return tables:', error);
+    // Continue anyway
+  }
+};
+
 export const connectDatabase = async (): Promise<void> => {
   try {
     console.log('Attempting to connect to database...');
@@ -139,8 +225,8 @@ export const connectDatabase = async (): Promise<void> => {
     // Disable foreign key checks temporarily
     await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
     
-    // Use simple sync without force or alter to avoid conflicts
-    await sequelize.sync({ force: false, alter: false });
+    // Create return tables manually to avoid schema conflicts
+    await createReturnTables();
     
     // Re-enable foreign key checks
     await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');

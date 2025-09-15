@@ -244,6 +244,7 @@ export interface OrderAttributes {
   create_new_user?: number;
   guest_id?: string;
   password?: string;
+  return_item_id?: string;
 
   // Associations
   orderDetails?: any[];
@@ -346,6 +347,7 @@ export interface OrderCreationAttributes {
   create_new_user?: number;
   guest_id?: string;
   password?: string;
+  return_item_id?: string;
 }
 
 // Packing and Handover Module Types
