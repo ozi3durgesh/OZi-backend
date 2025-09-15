@@ -4,6 +4,10 @@ import Order from '../models/Order';
 import OrderDetail from '../models/OrderDetail';
 import User from '../models/User';
 import Product from '../models/productModel';
+import ScannerBin from '../models/ScannerBin';
+import ScannerSku from '../models/ScannerSku';
+import BinLocation from '../models/BinLocation';
+import sequelize from '../config/database';
 import { RETURN_CONSTANTS, RETURN_BIN_ROUTING } from '../config/returnConstants';
 import { ResponseHandler } from '../middleware/responseHandler';
 
@@ -22,7 +26,7 @@ export class ReturnRequestItemController {
       
       // Generate unique return order ID with timestamp to avoid duplicates
       const timestamp = Date.now();
-      const returnOrderId = `${returnData.original_order_id}${RETURN_CONSTANTS.RETURN_ORDER_ID.SUFFIX}-${timestamp}`;
+      const returnOrderId = `${returnData.original_order_id}${RETURN_CONSTANTS.RETURN_ORDER_ID.SUFFIX}`;
       
       // Verify original order exists
       console.log(`🔍 Looking for original order: ${returnData.original_order_id}`);
@@ -561,6 +565,718 @@ export class ReturnRequestItemController {
       
     } catch (error) {
       console.error('Get return request item timeline error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+  // ==================== RETURN GRN APIs ====================
+
+  /**
+   * Get list of return orders ready for GRN
+   */
+  static async getReturnOrdersForGRN(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const offset = (page - 1) * limit;
+
+      // Find return request items with status 'received' that are ready for GRN
+      const { count, rows } = await ReturnRequestItem.findAndCountAll({
+        where: { 
+          status: RETURN_CONSTANTS.STATUSES.RECEIVED,
+          grn_status: { [require('sequelize').Op.or]: [null, 'pending'] }
+        },
+        include: [
+          { model: Order, as: 'originalOrder', attributes: ['id', 'order_id', 'user_id', 'order_amount'] },
+          { model: Product, as: 'product', attributes: ['SKU', 'ProductName', 'Category', 'Brand'] }
+        ],
+        order: [['created_at', 'DESC']],
+        limit,
+        offset,
+        distinct: true
+      });
+
+      // Group by return_order_id to get unique return orders
+      const returnOrdersMap = new Map();
+      
+      rows.forEach((item: any) => {
+        const returnOrderId = item.return_order_id;
+        
+        if (!returnOrdersMap.has(returnOrderId)) {
+          returnOrdersMap.set(returnOrderId, {
+            return_order_id: returnOrderId,
+            original_order_id: item.original_order_id,
+            customer_id: item.customer_id,
+            return_type: item.return_type,
+            total_items: 0,
+            total_amount: item.total_return_amount || 0,
+            received_date: item.created_at,
+            items: []
+          });
+        }
+        
+        const returnOrder = returnOrdersMap.get(returnOrderId);
+        returnOrder.total_items += 1;
+        returnOrder.items.push({
+          id: item.id,
+          item_id: item.item_id,
+          quantity: item.quantity,
+          price: item.price,
+          item_details: item.item_details,
+          variation: item.variation,
+          product: (item as any).product
+        });
+      });
+
+      const returnOrders = Array.from(returnOrdersMap.values());
+
+      return ResponseHandler.success(res, {
+        returnOrders,
+        pagination: {
+          page,
+          limit,
+          total: count,
+          totalPages: Math.ceil(count / limit)
+        }
+      });
+
+    } catch (error) {
+      console.error('Get return orders for GRN error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+  /**
+   * Start GRN status update for return items
+   */
+  static async startReturnGRN(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { returnOrderId } = req.params;
+      const { grn_notes } = req.body;
+
+      // Find all return request items for this return order
+      const returnRequestItems = await ReturnRequestItem.findAll({
+        where: { return_order_id: returnOrderId },
+        include: [
+          { model: Order, as: 'originalOrder', attributes: ['id', 'order_id', 'user_id'] },
+          { model: Product, as: 'product', attributes: ['SKU', 'ProductName', 'Category'] }
+        ]
+      });
+
+      if (returnRequestItems.length === 0) {
+        return ResponseHandler.error(res, 'Return request items not found', 404);
+      }
+
+      // Update status to indicate GRN is starting
+      for (const item of returnRequestItems) {
+        const timelineEvents = item.timeline_events || [];
+        timelineEvents.push({
+          event_type: RETURN_CONSTANTS.TIMELINE_EVENTS.GRN_CREATED,
+          status: item.status,
+          notes: `GRN process started for return order ${returnOrderId}`,
+          metadata: { 
+            grn_notes,
+            grn_started_at: Date.now()
+          },
+          created_at: Date.now(),
+          created_by: 1
+        });
+
+        await item.update({
+          grn_status: 'in_progress',
+          timeline_events: timelineEvents,
+          last_event_type: RETURN_CONSTANTS.TIMELINE_EVENTS.GRN_CREATED,
+          last_event_notes: `GRN process started for return order ${returnOrderId}`,
+          updated_at: Date.now()
+        });
+      }
+
+      return ResponseHandler.success(res, {
+        message: 'GRN process started successfully',
+        returnOrderId,
+        totalItems: returnRequestItems.length,
+        items: returnRequestItems.map(item => ({
+          id: item.id,
+          item_id: item.item_id,
+          quantity: item.quantity,
+          product: (item as any).product
+        }))
+      });
+
+    } catch (error) {
+      console.error('Start return GRN error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+  /**
+   * Get return order details for GRN (similar to /api/grn/1)
+   */
+  static async getReturnOrderDetailsForGRN(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { returnOrderId } = req.params;
+
+      // Get all return request items for this return order
+      const returnRequestItems = await ReturnRequestItem.findAll({
+        where: { return_order_id: returnOrderId },
+        include: [
+          { model: Order, as: 'originalOrder', attributes: ['id', 'order_id', 'user_id', 'order_amount', 'created_at'] },
+          { model: Product, as: 'product', attributes: ['SKU', 'ProductName', 'Category', 'Brand', 'MRP', 'COST'] }
+        ],
+        order: [['created_at', 'ASC']]
+      });
+
+      if (returnRequestItems.length === 0) {
+        return ResponseHandler.error(res, 'Return request items not found', 404);
+      }
+
+      const firstItem = returnRequestItems[0];
+      
+      // Prepare GRN details similar to existing GRN structure
+      const grnDetails = {
+        grn: {
+          id: `RET-${returnOrderId}`,
+          return_order_id: returnOrderId,
+          original_order_id: firstItem.original_order_id,
+          customer_id: firstItem.customer_id,
+          return_type: firstItem.return_type,
+          status: firstItem.grn_status || 'pending',
+          total_items_count: returnRequestItems.length,
+          total_return_amount: firstItem.total_return_amount || 0,
+          created_at: firstItem.created_at,
+          updated_at: firstItem.updated_at
+        },
+        lines: returnRequestItems.map(item => ({
+          id: item.id,
+          item_id: item.item_id,
+          sku_id: item.item_id, // Using item_id as SKU for return items
+          ordered_qty: item.quantity,
+          received_qty: item.quantity, // For returns, received = ordered
+          pending_qty: 0,
+          rejected_qty: 0,
+          held_qty: 0,
+          rtv_qty: 0,
+          line_status: 'pending',
+          product: (item as any).product,
+          item_details: item.item_details,
+          variation: item.variation,
+          price: item.price,
+          is_try_and_buy: item.is_try_and_buy
+        })),
+        originalOrder: (firstItem as any).originalOrder
+      };
+
+      return ResponseHandler.success(res, grnDetails);
+
+    } catch (error) {
+      console.error('Get return order details for GRN error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+  /**
+   * Create GRN for return items
+   */
+  static async createReturnGRN(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { returnOrderId } = req.params;
+      const { lines, grn_notes } = req.body;
+
+      if (!lines || !Array.isArray(lines) || lines.length === 0) {
+        return ResponseHandler.error(res, 'Lines array is required', 400);
+      }
+
+      // Find all return request items for this return order
+      const returnRequestItems = await ReturnRequestItem.findAll({
+        where: { return_order_id: returnOrderId }
+      });
+
+      if (returnRequestItems.length === 0) {
+        return ResponseHandler.error(res, 'Return request items not found', 404);
+      }
+
+      // Process each line
+      for (const line of lines) {
+        const returnItem = returnRequestItems.find(item => item.id === line.id);
+        
+        if (!returnItem) {
+          return ResponseHandler.error(res, `Return item with ID ${line.id} not found`, 404);
+        }
+
+        // Validate quantities
+        if (line.received_qty > returnItem.quantity) {
+          return ResponseHandler.error(res, `Received quantity cannot exceed original quantity for item ${line.id}`, 400);
+        }
+
+        // Add GRN timeline event
+        const timelineEvents = returnItem.timeline_events || [];
+        timelineEvents.push({
+          event_type: RETURN_CONSTANTS.TIMELINE_EVENTS.GRN_CREATED,
+          status: returnItem.status,
+          notes: `GRN created for return item`,
+          metadata: { 
+            grn_id: `RET-${returnOrderId}`,
+            received_qty: line.received_qty,
+            expected_qty: returnItem.quantity,
+            grn_notes
+          },
+          created_at: Date.now(),
+          created_by: 1
+        });
+
+        // Update the return request item
+        await returnItem.update({
+          grn_id: `RET-${returnOrderId}`,
+          grn_status: 'completed',
+          received_quantity: line.received_qty,
+          expected_quantity: returnItem.quantity,
+          timeline_events: timelineEvents,
+          last_event_type: RETURN_CONSTANTS.TIMELINE_EVENTS.GRN_CREATED,
+          last_event_notes: `GRN created for return item`,
+          last_event_metadata: { 
+            grn_id: `RET-${returnOrderId}`,
+            received_qty: line.received_qty
+          },
+          updated_at: Date.now()
+        });
+      }
+
+      return ResponseHandler.success(res, {
+        message: 'Return GRN created successfully',
+        grn_id: `RET-${returnOrderId}`,
+        return_order_id: returnOrderId,
+        processed_items: lines.length,
+        grn_notes
+      });
+
+    } catch (error) {
+      console.error('Create return GRN error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+  // ==================== RETURN PUTAWAY APIs ====================
+
+  /**
+   * Get list of return items with completed GRN ready for putaway
+   */
+  static async getReturnItemsForPutaway(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const offset = (page - 1) * limit;
+
+      // Find return request items with completed GRN that are ready for putaway
+      const { count, rows } = await ReturnRequestItem.findAndCountAll({
+        where: { 
+          grn_status: 'completed',
+          putaway_status: { [require('sequelize').Op.or]: [null, 'pending'] },
+          received_quantity: { [require('sequelize').Op.gt]: 0 }
+        },
+        include: [
+          { model: Order, as: 'originalOrder', attributes: ['id', 'order_id', 'user_id'] },
+          { model: Product, as: 'product', attributes: ['SKU', 'ProductName', 'Category', 'Brand'] }
+        ],
+        order: [['updated_at', 'DESC']],
+        limit,
+        offset,
+        distinct: true
+      });
+
+      // Group by return_order_id to get unique return orders
+      const returnOrdersMap = new Map();
+      
+      rows.forEach((item: any) => {
+        const returnOrderId = item.return_order_id;
+        
+        if (!returnOrdersMap.has(returnOrderId)) {
+          returnOrdersMap.set(returnOrderId, {
+            return_order_id: returnOrderId,
+            original_order_id: item.original_order_id,
+            customer_id: item.customer_id,
+            return_type: item.return_type,
+            total_items: 0,
+            total_putaway_qty: 0,
+            grn_completed_date: item.updated_at,
+            items: []
+          });
+        }
+        
+        const returnOrder = returnOrdersMap.get(returnOrderId);
+        returnOrder.total_items += 1;
+        returnOrder.total_putaway_qty += item.received_quantity || 0;
+        returnOrder.items.push({
+          id: item.id,
+          item_id: item.item_id,
+          quantity: item.received_quantity || 0,
+          price: item.price,
+          item_details: item.item_details,
+          variation: item.variation,
+          is_try_and_buy: item.is_try_and_buy,
+          qc_status: item.qc_status,
+          product: (item as any).product
+        });
+      });
+
+      const returnOrders = Array.from(returnOrdersMap.values());
+
+      return ResponseHandler.success(res, {
+        returnOrders,
+        pagination: {
+          page,
+          limit,
+          total: count,
+          totalPages: Math.ceil(count / limit)
+        }
+      });
+
+    } catch (error) {
+      console.error('Get return items for putaway error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+  /**
+   * Scan SKU for return putaway (similar to /api/putaway/scan-sku-product-detail)
+   */
+  static async scanReturnSkuForPutaway(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { sku_id, return_item_id } = req.body;
+
+      if (!sku_id || !return_item_id) {
+        return ResponseHandler.error(res, 'SKU ID and return item ID are required', 400);
+      }
+
+      // Find the return request item
+      const returnRequestItem = await ReturnRequestItem.findByPk(return_item_id, {
+        include: [
+          { model: Order, as: 'originalOrder', attributes: ['id', 'order_id', 'user_id'] },
+          { model: Product, as: 'product', attributes: ['SKU', 'ProductName', 'Category', 'Brand', 'MRP', 'COST'] }
+        ]
+      });
+
+      if (!returnRequestItem) {
+        return ResponseHandler.error(res, 'Return request item not found', 404);
+      }
+
+      // Verify SKU matches
+      if (returnRequestItem.item_id.toString() !== sku_id.toString()) {
+        return ResponseHandler.error(res, 'SKU does not match the return item', 400);
+      }
+
+      // Check if GRN is completed
+      if (returnRequestItem.grn_status !== 'completed') {
+        return ResponseHandler.error(res, 'GRN must be completed before putaway', 400);
+      }
+
+      // Check available quantity for putaway
+      const availableQuantity = returnRequestItem.received_quantity || 0;
+      if (availableQuantity <= 0) {
+        return ResponseHandler.error(res, 'No quantity available for putaway', 400);
+      }
+
+      // Determine suggested bin based on return type and QC status
+      let suggestedBin: any = null;
+      let binError: string | null = null;
+
+      try {
+        // Use the same bin routing logic as existing putaway
+        if (returnRequestItem.is_try_and_buy) {
+          suggestedBin = {
+            binCode: `${RETURN_BIN_ROUTING.TRY_AND_BUY.BIN_PREFIX}-001`,
+            zone: 'RETURN',
+            aisle: 'TRY-BUY',
+            rack: 'A',
+            shelf: '1',
+            capacity: 100,
+            currentQuantity: 0,
+            availableCapacity: 100,
+            utilizationPercentage: 0,
+            status: 'active',
+            binName: 'Try and Buy Returns',
+            binType: 'return',
+            zoneName: 'Return Zone',
+            preferredProductCategory: 'try_and_buy',
+            hasCapacity: true,
+            matchType: 'return_routing'
+          };
+        } else if (returnRequestItem.qc_status === 'failed') {
+          suggestedBin = {
+            binCode: `${RETURN_BIN_ROUTING.DEFECTIVE.BIN_PREFIX}-001`,
+            zone: 'RETURN',
+            aisle: 'DEFECTIVE',
+            rack: 'A',
+            shelf: '1',
+            capacity: 100,
+            currentQuantity: 0,
+            availableCapacity: 100,
+            utilizationPercentage: 0,
+            status: 'active',
+            binName: 'Defective Returns',
+            binType: 'return',
+            zoneName: 'Return Zone',
+            preferredProductCategory: 'defective',
+            hasCapacity: true,
+            matchType: 'return_routing'
+          };
+        } else if (returnRequestItem.qc_status === 'needs_repair') {
+          suggestedBin = {
+            binCode: `${RETURN_BIN_ROUTING.QUALITY_ISSUE.BIN_PREFIX}-001`,
+            zone: 'RETURN',
+            aisle: 'QUALITY',
+            rack: 'A',
+            shelf: '1',
+            capacity: 100,
+            currentQuantity: 0,
+            availableCapacity: 100,
+            utilizationPercentage: 0,
+            status: 'active',
+            binName: 'Quality Issue Returns',
+            binType: 'return',
+            zoneName: 'Return Zone',
+            preferredProductCategory: 'quality_issue',
+            hasCapacity: true,
+            matchType: 'return_routing'
+          };
+        } else {
+          suggestedBin = {
+            binCode: `${RETURN_BIN_ROUTING.OTHER.BIN_PREFIX}-001`,
+            zone: 'RETURN',
+            aisle: 'GENERAL',
+            rack: 'A',
+            shelf: '1',
+            capacity: 100,
+            currentQuantity: 0,
+            availableCapacity: 100,
+            utilizationPercentage: 0,
+            status: 'active',
+            binName: 'General Returns',
+            binType: 'return',
+            zoneName: 'Return Zone',
+            preferredProductCategory: 'general',
+            hasCapacity: true,
+            matchType: 'return_routing'
+          };
+        }
+      } catch (error) {
+        binError = `Error determining bin location: ${error}`;
+      }
+
+      if (binError) {
+        return ResponseHandler.error(res, binError, 400);
+      }
+
+      return ResponseHandler.success(res, {
+        message: 'Return SKU scanned successfully',
+        skuId: sku_id,
+        returnItemId: return_item_id,
+        returnOrderId: returnRequestItem.return_order_id,
+        availableQuantity: availableQuantity,
+        scannedProductDetail: {
+          id: (returnRequestItem as any).product?.SKU || sku_id,
+          sku: (returnRequestItem as any).product?.SKU || sku_id,
+          productName: (returnRequestItem as any).product?.ProductName || 'Unknown Product',
+          category: (returnRequestItem as any).product?.Category || 'Unknown',
+          brand: (returnRequestItem as any).product?.Brand || 'Unknown',
+          mrp: (returnRequestItem as any).product?.MRP || 0,
+          cost: (returnRequestItem as any).product?.COST || 0
+        },
+        returnDetails: {
+          returnType: returnRequestItem.return_type,
+          isTryAndBuy: returnRequestItem.is_try_and_buy,
+          qcStatus: returnRequestItem.qc_status,
+          itemDetails: returnRequestItem.item_details,
+          variation: returnRequestItem.variation
+        },
+        binSuggested: suggestedBin
+      });
+
+    } catch (error) {
+      console.error('Scan return SKU for putaway error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+  /**
+   * Confirm return putaway (similar to /api/putaway/confirm)
+   */
+  static async confirmReturnPutaway(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { sku_id, return_item_id, quantity, bin_location, remarks } = req.body;
+
+      if (!sku_id || !return_item_id || !quantity || !bin_location) {
+        return ResponseHandler.error(res, 'SKU ID, return item ID, quantity, and bin location are required', 400);
+      }
+
+      // Find the return request item
+      const returnRequestItem = await ReturnRequestItem.findByPk(return_item_id);
+
+      if (!returnRequestItem) {
+        return ResponseHandler.error(res, 'Return request item not found', 404);
+      }
+
+      // Verify SKU matches
+      if (returnRequestItem.item_id.toString() !== sku_id.toString()) {
+        return ResponseHandler.error(res, 'SKU does not match the return item', 400);
+      }
+
+      // Check if GRN is completed
+      if (returnRequestItem.grn_status !== 'completed') {
+        return ResponseHandler.error(res, 'GRN must be completed before putaway', 400);
+      }
+
+      // Check available quantity
+      const availableQuantity = returnRequestItem.qc_pass_qty || 0;
+      if (quantity > availableQuantity) {
+        return ResponseHandler.error(res, 'Quantity exceeds available QC passed quantity', 400);
+      }
+
+      // Validate bin location
+      const binLocation = await BinLocation.findOne({
+        where: { bin_code: bin_location },
+      });
+
+      if (!binLocation) {
+        return ResponseHandler.error(res, 'Invalid bin location', 400);
+      }
+
+      if (binLocation.status !== 'active') {
+        // Activate the bin if it's inactive
+        await binLocation.update({ status: 'active' });
+      }
+
+      // Check bin capacity
+      if (binLocation.current_quantity + quantity > binLocation.capacity) {
+        return ResponseHandler.error(res, 'Bin capacity exceeded', 400);
+      }
+
+      // Calculate new remaining quantity
+      const newRemainingQty = availableQuantity - quantity;
+      
+      // Determine status based on remaining quantity
+      let putawayStatus: string;
+      if (newRemainingQty <= 0) {
+        putawayStatus = 'completed';
+      } else {
+        putawayStatus = 'partial';
+      }
+
+      // Start transaction for data consistency
+      const transaction = await sequelize.transaction();
+
+      try {
+        // Add Putaway timeline event
+        const timelineEvents = returnRequestItem.timeline_events || [];
+        timelineEvents.push({
+          event_type: RETURN_CONSTANTS.TIMELINE_EVENTS.PUTAWAY_COMPLETED,
+          status: returnRequestItem.status,
+          notes: `Return putaway completed to bin: ${bin_location}`,
+          metadata: { 
+            bin_location_id: bin_location,
+            putaway_quantity: quantity,
+            putaway_notes: remarks,
+            remaining_quantity: newRemainingQty,
+            is_try_and_buy: returnRequestItem.is_try_and_buy,
+            qc_status: returnRequestItem.qc_status
+          },
+          created_at: Date.now(),
+          created_by: 1
+        });
+
+        // Update the return request item
+        await returnRequestItem.update({
+          qc_pass_qty: newRemainingQty,
+          putaway_status: putawayStatus,
+          bin_location_id: bin_location,
+          putaway_by: 1,
+          putaway_at: Date.now(),
+          putaway_notes: remarks,
+          timeline_events: timelineEvents,
+          last_event_type: RETURN_CONSTANTS.TIMELINE_EVENTS.PUTAWAY_COMPLETED,
+          last_event_notes: `Return putaway completed to bin: ${bin_location}`,
+          last_event_metadata: { 
+            bin_location_id: bin_location,
+            putaway_quantity: quantity,
+            remaining_quantity: newRemainingQty
+          },
+          updated_at: Date.now()
+        }, { transaction });
+
+        // Update bin location current quantity
+        await binLocation.update(
+          { current_quantity: binLocation.current_quantity + quantity },
+          { transaction }
+        );
+
+        // Update or create ScannerBin entry
+        let scannerBin = await ScannerBin.findOne({
+          where: { binLocationScanId: bin_location },
+          transaction
+        });
+
+        if (scannerBin) {
+          // Update existing scanner bin - add SKU if not already present
+          const existingSkus = Array.isArray(scannerBin.sku) ? scannerBin.sku : [];
+          if (!existingSkus.includes(sku_id)) {
+            existingSkus.push(sku_id);
+            await scannerBin.update({ sku: existingSkus }, { transaction });
+          }
+        } else {
+          // Create new scanner bin entry
+          await ScannerBin.create({
+            binLocationScanId: bin_location,
+            sku: [sku_id]
+          }, { transaction });
+        }
+
+        // Update or create ScannerSku entry
+        // Use the actual SKU as the skuScanId instead of complex format
+        const skuScanId = sku_id;
+        await ScannerSku.create({
+          skuScanId: skuScanId,
+          sku: [{ skuId: sku_id, quantity: quantity }],
+          binLocationScanId: bin_location
+        }, { transaction });
+
+        // Commit transaction
+        await transaction.commit();
+
+        return ResponseHandler.success(res, {
+          message: 'Return putaway confirmed successfully',
+          sku_id,
+          return_item_id,
+          return_order_id: returnRequestItem.return_order_id,
+          quantity,
+          bin_location,
+          remarks,
+          status: putawayStatus,
+          updated_return_item: {
+            qc_pass_qty: newRemainingQty,
+            remaining_qty: newRemainingQty,
+            putaway_status: putawayStatus,
+            bin_location_id: bin_location
+          },
+          updated_bin_location: {
+            bin_code: bin_location,
+            current_quantity: binLocation.current_quantity + quantity,
+            capacity: binLocation.capacity
+          },
+          scanner_updates: {
+            scanner_bin_updated: true,
+            scanner_sku_created: true,
+            bin_location_scan_id: bin_location,
+            sku_scan_id: sku_id
+          }
+        });
+
+      } catch (transactionError) {
+        // Rollback transaction on error
+        await transaction.rollback();
+        throw transactionError;
+      }
+
+    } catch (error) {
+      console.error('Confirm return putaway error:', error);
       return ResponseHandler.error(res, 'Internal server error', 500);
     }
   }

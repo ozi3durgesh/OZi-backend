@@ -2,6 +2,7 @@ import { DataTypes, Model } from 'sequelize';
 import sequelize from '../config/database';
 import User from './User';
 import Order from './Order';
+import Product from './productModel';
 import { RETURN_CONSTANTS, ReturnStatus, ReturnReason, ReturnType, QCStatus, TimelineEvent } from '../config/returnConstants';
 
 interface ReturnRequestItemAttributes {
@@ -51,10 +52,12 @@ interface ReturnRequestItemAttributes {
   try_and_buy_reason: string | null;
   
   // GRN Fields
-  grn_id: number | null;
+  grn_id: string | null;
   grn_status: string | null;
   received_quantity: number | null;
   expected_quantity: number | null;
+  qc_pass_qty: number | null;
+  qc_fail_qty: number | null;
   
   // Putaway Fields
   putaway_status: string | null;
@@ -109,7 +112,7 @@ interface ReturnRequestItemCreationAttributes {
   item_rating?: number | null;
   try_and_buy_reason?: string | null;
   
-  grn_id?: number | null;
+  grn_id?: string | null;
   grn_status?: string | null;
   received_quantity?: number | null;
   expected_quantity?: number | null;
@@ -173,10 +176,12 @@ class ReturnRequestItem extends Model<ReturnRequestItemAttributes, ReturnRequest
   declare try_and_buy_reason: string | null;
   
   // GRN Fields
-  declare grn_id: number | null;
+  declare grn_id: string | null;
   declare grn_status: string | null;
   declare received_quantity: number | null;
   declare expected_quantity: number | null;
+  declare qc_pass_qty: number | null;
+  declare qc_fail_qty: number | null;
   
   // Putaway Fields
   declare putaway_status: string | null;
@@ -372,7 +377,7 @@ ReturnRequestItem.init({
   
   // GRN Fields
   grn_id: { 
-    type: DataTypes.INTEGER, 
+    type: DataTypes.STRING(50), 
     allowNull: true,
     comment: 'Reference to GRN'
   },
@@ -390,6 +395,16 @@ ReturnRequestItem.init({
     type: DataTypes.INTEGER, 
     allowNull: true,
     comment: 'Expected quantity in GRN'
+  },
+  qc_pass_qty: { 
+    type: DataTypes.INTEGER, 
+    allowNull: true,
+    comment: 'QC passed quantity for putaway'
+  },
+  qc_fail_qty: { 
+    type: DataTypes.INTEGER, 
+    allowNull: true,
+    comment: 'QC failed quantity'
   },
   
   // Putaway Fields
@@ -456,5 +471,13 @@ ReturnRequestItem.belongsTo(User, { foreignKey: 'customer_id', as: 'customer' })
 
 User.hasMany(ReturnRequestItem, { foreignKey: 'created_by', as: 'createdReturnRequestItems' });
 ReturnRequestItem.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
+
+// Order associations
+Order.hasMany(ReturnRequestItem, { foreignKey: 'original_order_id', sourceKey: 'order_id', as: 'returnRequestItems' });
+ReturnRequestItem.belongsTo(Order, { foreignKey: 'original_order_id', targetKey: 'order_id', as: 'originalOrder' });
+
+// Product associations
+Product.hasMany(ReturnRequestItem, { foreignKey: 'item_id', sourceKey: 'SKU', as: 'returnRequestItems' });
+ReturnRequestItem.belongsTo(Product, { foreignKey: 'item_id', targetKey: 'SKU', as: 'product' });
 
 export default ReturnRequestItem;

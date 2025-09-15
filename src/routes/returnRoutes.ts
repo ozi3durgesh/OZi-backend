@@ -20,4 +20,27 @@ router.post('/item/:id/putaway', ReturnRequestItemController.processPutaway);
 // Timeline tracking
 router.get('/item/:id/timeline', ReturnRequestItemController.getReturnRequestItemTimeline);
 
+// ==================== RETURN GRN APIs ====================
+// 1. Get list of return orders ready for GRN
+router.get('/grn/ready', ReturnRequestItemController.getReturnOrdersForGRN);
+
+// 2. Start GRN status update for return items
+router.post('/grn/:returnOrderId/start', ReturnRequestItemController.startReturnGRN);
+
+// 3. Get return order details for GRN (similar to /api/grn/1)
+router.get('/grn/:returnOrderId/details', ReturnRequestItemController.getReturnOrderDetailsForGRN);
+
+// 4. Create GRN for return items
+router.post('/grn/:returnOrderId/create', ReturnRequestItemController.createReturnGRN);
+
+// ==================== RETURN PUTAWAY APIs ====================
+// 5. Get list of return items with completed GRN ready for putaway
+router.get('/putaway/ready', ReturnRequestItemController.getReturnItemsForPutaway);
+
+// 6. Scan SKU for return putaway (similar to /api/putaway/scan-sku-product-detail)
+router.post('/putaway/scan-sku', ReturnRequestItemController.scanReturnSkuForPutaway);
+
+// 7. Confirm return putaway (similar to /api/putaway/confirm)
+router.post('/putaway/confirm', ReturnRequestItemController.confirmReturnPutaway);
+
 export default router;
