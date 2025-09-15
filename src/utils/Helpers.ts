@@ -1,12 +1,14 @@
 import OrderConnector from '../services/OrderConnector';
 import EcomLog from '../models/EcomLog';
 import Order from '../models/Order';
+import OrderDetail from '../models/OrderDetail';
 import { OrderAttributes } from '../types';
 import sequelize from '../config/database';
 import { QueryTypes } from 'sequelize';
 import { generateSimpleOrderId } from './orderIdGenerator';
 import { socketManager } from './socketManager';
 import { PickingController } from '../controllers/pickingController';
+import { ORDER_CONSTANTS, CartItem, OrderDetailData } from '../config/orderConstants';
 
 interface DeliveryAddress {
   contact_person_name: string;
@@ -19,7 +21,7 @@ interface DeliveryAddress {
   longitude: number;
 }
 
-interface OrderDetail {
+interface OrderDetailItem {
   item_id: number;
   quantity: number;
   price: number;
@@ -82,6 +84,137 @@ interface CreateOrderPayload {
 
 export class Helpers {
 
+  /**
+   * Create order details from cart items
+   * Matches the admin panel's order details creation flow
+   */
+  public static async createOrderDetails(orderId: number, cartItems: CartItem[]): Promise<void> {
+    try {
+      console.log(`📝 Creating order details for order ${orderId} with ${cartItems.length} items`);
+      
+      if (!cartItems || cartItems.length === 0) {
+        console.warn(`⚠️ No cart items provided for order ${orderId}`);
+        return;
+      }
+
+      const orderDetailsData: OrderDetailData[] = [];
+      const currentTimestamp = Date.now();
+
+      for (const cartItem of cartItems) {
+        // Validate required fields
+        if (!cartItem.item_id || !cartItem.quantity || cartItem.price === undefined) {
+          console.warn(`⚠️ Skipping invalid cart item:`, cartItem);
+          continue;
+        }
+
+        // Parse variation and add_ons safely
+        let variation: string | null = null;
+        let addOns: string | null = null;
+        let itemDetails: string | null = null;
+
+        try {
+          if (cartItem.variation) {
+            variation = typeof cartItem.variation === 'string' 
+              ? cartItem.variation 
+              : JSON.stringify(cartItem.variation);
+          }
+        } catch (error) {
+          console.warn(`⚠️ Failed to parse variation for item ${cartItem.item_id}:`, error);
+        }
+
+        try {
+          if (cartItem.add_ons) {
+            addOns = typeof cartItem.add_ons === 'string' 
+              ? cartItem.add_ons 
+              : JSON.stringify(cartItem.add_ons);
+          }
+        } catch (error) {
+          console.warn(`⚠️ Failed to parse add_ons for item ${cartItem.item_id}:`, error);
+        }
+
+        // Handle item details
+        if (cartItem.item_details) {
+          itemDetails = typeof cartItem.item_details === 'string' 
+            ? cartItem.item_details 
+            : JSON.stringify(cartItem.item_details);
+        }
+
+        const orderDetailData: OrderDetailData = {
+          item_id: cartItem.item_id,
+          order_id: orderId,
+          price: parseFloat(cartItem.price.toString()) || ORDER_CONSTANTS.DEFAULTS.PRICE,
+          item_details: itemDetails || null,
+          variation: variation,
+          add_ons: addOns,
+          discount_on_item: cartItem.discount_on_item || null,
+          discount_type: ORDER_CONSTANTS.DEFAULTS.DISCOUNT_TYPE,
+          quantity: parseInt(cartItem.quantity.toString()) || ORDER_CONSTANTS.DEFAULTS.QUANTITY,
+          tax_amount: cartItem.tax_amount || ORDER_CONSTANTS.DEFAULTS.TAX_AMOUNT,
+          variant: cartItem.variant || null,
+          created_at: currentTimestamp,
+          updated_at: currentTimestamp,
+          item_campaign_id: cartItem.item_campaign_id || null,
+          total_add_on_price: cartItem.total_add_on_price || ORDER_CONSTANTS.DEFAULTS.TOTAL_ADD_ON_PRICE,
+        };
+
+        orderDetailsData.push(orderDetailData);
+      }
+
+      if (orderDetailsData.length === 0) {
+        console.warn(`⚠️ No valid order details to create for order ${orderId}`);
+        return;
+      }
+
+      // Bulk insert order details
+      console.log(`💾 Inserting ${orderDetailsData.length} order details for order ${orderId}`);
+      await OrderDetail.bulkCreate(orderDetailsData);
+      
+      console.log(`✅ Successfully created ${orderDetailsData.length} order details for order ${orderId}`);
+      
+      // Log the creation
+      try {
+        await EcomLog.create({
+          order_id: orderId,
+          action: 'createOrderDetails',
+          payload: JSON.stringify({ 
+            orderId: orderId,
+            itemCount: orderDetailsData.length,
+            items: orderDetailsData.map(item => ({
+              item_id: item.item_id,
+              quantity: item.quantity,
+              price: item.price
+            }))
+          }),
+          response: JSON.stringify({ 
+            status: 'success',
+            message: 'Order details created successfully',
+            count: orderDetailsData.length
+          }),
+          status: 'success'
+        });
+      } catch (logError: any) {
+        console.warn(`⚠️ Could not log order details creation to ecom_logs for order ${orderId}:`, logError.message);
+      }
+
+    } catch (error: any) {
+      console.error(`❌ Error creating order details for order ${orderId}:`, error);
+      
+      // Log the error
+      try {
+        await EcomLog.create({
+          order_id: orderId,
+          action: 'createOrderDetails',
+          payload: JSON.stringify({ orderId: orderId, cartItems: cartItems }),
+          response: JSON.stringify({ error: error.message }),
+          status: 'failed'
+        });
+      } catch (logError: any) {
+        console.warn(`⚠️ Could not log order details error to ecom_logs for order ${orderId}:`, logError.message);
+      }
+      
+      throw error;
+    }
+  }
 
   public static async generatePicklist(orderId: string, numericOrderId: number): Promise<any> {
     try {
@@ -251,7 +384,7 @@ export class Helpers {
         // Check if order already exists
       const existingOrder = await Order.findByPk(order.id);
         
-      if (existingOrder) {
+        if (existingOrder) {
           // Update existing order with complete data
           console.log(`🔄 Updating existing order ${order.id} with complete data`);
           await existingOrder.update(completeOrderData);
@@ -261,6 +394,37 @@ export class Helpers {
           console.log(`🆕 Creating new order ${order.id} with complete data`);
           await Order.create(completeOrderData);
           console.log(`✅ Successfully created order ${order.id} with complete data`);
+        }
+
+        // Step 3.1: Create order details from cart items
+        console.log(`📝 Step 3.1: Creating order details from cart items`);
+        
+        if (completeOrderData.cart && Array.isArray(completeOrderData.cart) && completeOrderData.cart.length > 0) {
+          try {
+            // Convert cart items to the expected format
+            const cartItems: CartItem[] = completeOrderData.cart.map((item: any) => ({
+              item_id: item.item_id || item.id || 1, // Fallback to 1 if no item_id
+              quantity: item.quantity || ORDER_CONSTANTS.DEFAULTS.QUANTITY,
+              price: item.price || item.amount || ORDER_CONSTANTS.DEFAULTS.PRICE,
+              variation: item.variation || null,
+              add_ons: item.add_ons || null,
+              discount_on_item: item.discount_on_item || null,
+              tax_amount: item.tax_amount || ORDER_CONSTANTS.DEFAULTS.TAX_AMOUNT,
+              variant: item.variant || null,
+              item_campaign_id: item.item_campaign_id || null,
+              total_add_on_price: item.total_add_on_price || ORDER_CONSTANTS.DEFAULTS.TOTAL_ADD_ON_PRICE,
+              food_details: item.food_details || null,
+              item_details: item.item_details || null
+            }));
+
+            await this.createOrderDetails(order.id, cartItems);
+            console.log(`✅ Successfully created order details for order ${order.id}`);
+          } catch (orderDetailsError: any) {
+            console.error(`❌ Failed to create order details for order ${order.id}:`, orderDetailsError.message);
+            // Don't throw error here, just log it - order creation should still succeed
+          }
+        } else {
+          console.warn(`⚠️ No cart items found for order ${order.id}, skipping order details creation`);
         }
       } catch (dbError: any) {
         console.error(`❌ Failed to store order ${order.id} in Node.js database:`, dbError.message);

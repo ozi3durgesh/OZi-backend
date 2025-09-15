@@ -1,6 +1,6 @@
 // controllers/pickingController.ts
 import { Request, Response } from 'express';
-import { PickingWave, PicklistItem, PickingException, User, Order, ScannerBin, ScannerSku } from '../models';
+import { PickingWave, PicklistItem, PickingException, User, Order, ScannerBin, ScannerSku, Role } from '../models';
 import { ResponseHandler } from '../middleware/responseHandler';
 import { OrderAttributes } from '../types';
 import Product from '../models/productModel';
@@ -127,14 +127,34 @@ export class PickingController {
                       ProductName: `Product-${skuString}`,
                       ImageURL: '',
                       EAN_UPC: '',
-                      MRP: 0.00,
+                      MRP: orderData.order_amount || 0.00, // Use total order amount from PHP
                       CreatedDate: new Date().toISOString(),
                       LastUpdatedDate: new Date().toISOString()
                     } as any);
-                    console.log(`✅ Created placeholder product for SKU ${skuString}`);
+                    console.log(`✅ Created placeholder product for SKU ${skuString} with MRP: ${orderData.order_amount}`);
                   } catch (productCreateError: any) {
                     console.error(`❌ Failed to create placeholder product for SKU ${skuString}:`, productCreateError.message);
                     // Continue anyway, we'll try to create the picklist item
+                  }
+                } else {
+                  // Product exists, but let's update MRP if the current order has a different amount
+                  const currentMRP = parseFloat(String(productExists.MRP || '0'));
+                  const orderMRP = orderData.order_amount || 0.00;
+                  
+                  if (orderMRP > 0 && orderMRP !== currentMRP) {
+                    console.log(`📦 Updating MRP for existing SKU ${skuString} from ${currentMRP} to ${orderMRP}`);
+                    try {
+                      await Product.update(
+                        { 
+                          MRP: orderMRP,
+                          LastUpdatedDate: new Date().toISOString()
+                        },
+                        { where: { SKU: skuString } }
+                      );
+                      console.log(`✅ Updated MRP for SKU ${skuString} to ${orderMRP}`);
+                    } catch (updateError: any) {
+                      console.error(`❌ Failed to update MRP for SKU ${skuString}:`, updateError.message);
+                    }
                   }
                 }
 
@@ -198,7 +218,7 @@ export class PickingController {
                         ProductName: `Product-${skuString}`,
                         ImageURL: '',
                         EAN_UPC: '',
-                        MRP: 0.00,
+                        MRP: orderData.order_amount || 0.00, // Use total order amount from PHP
                         CreatedDate: new Date().toISOString(),
                         LastUpdatedDate: new Date().toISOString()
                       } as any);
@@ -555,6 +575,36 @@ export class PickingController {
       const whereClause: any = {};
       if (status) whereClause.status = status;
       if (priority) whereClause.priority = priority;
+
+      // Role-based filtering: Dynamic role checking from database
+      const user = req.user;
+      if (!user) {
+        return ResponseHandler.error(res, 'User not authenticated', 401);
+      }
+
+      // Get user's role from database to check permissions dynamically
+      const userWithRole = await User.findByPk(user.id, {
+        include: [{
+          model: Role,
+          as: 'Role',
+          attributes: ['id', 'name']
+        }]
+      });
+
+      if (!userWithRole) {
+        return ResponseHandler.error(res, 'User not found', 404);
+      }
+
+      const userRole = userWithRole.Role;
+      const isAdmin = userRole?.name === 'admin' || user.permissions?.includes('admin:all');
+      
+      if (!isAdmin) {
+        // Non-admin users can only see waves assigned to them
+        whereClause.pickerId = user.id;
+        console.log(`🔒 Filtering waves for user ${user.id} with role: ${userRole?.name || 'unknown'}`);
+      } else {
+        console.log(`👑 Admin user ${user.id} with role: ${userRole?.name} can see all waves`);
+      }
 
       const waves = await PickingWave.findAndCountAll({
         where: whereClause,
@@ -1475,14 +1525,34 @@ export class PickingController {
                     ProductName: `Product-${skuString}`,
                     ImageURL: '',
                     EAN_UPC: '',
-                    MRP: 0.00,
+                    MRP: orderData.order_amount || 0.00, // Use total order amount from PHP
                     CreatedDate: new Date().toISOString(),
                     LastUpdatedDate: new Date().toISOString()
                   } as any);
-                  console.log(`✅ Created placeholder product for SKU ${skuString}`);
+                  console.log(`✅ Created placeholder product for SKU ${skuString} with MRP: ${orderData.order_amount}`);
                 } catch (productCreateError: any) {
                   console.error(`❌ Failed to create placeholder product for SKU ${skuString}:`, productCreateError.message);
                   // Continue anyway, we'll try to create the picklist item
+                }
+              } else {
+                // Product exists, but let's update MRP if the current order has a different amount
+                const currentMRP = parseFloat(String(productExists.MRP || '0'));
+                const orderMRP = orderData.order_amount || 0.00;
+                
+                if (orderMRP > 0 && orderMRP !== currentMRP) {
+                  console.log(`📦 Updating MRP for existing SKU ${skuString} from ${currentMRP} to ${orderMRP}`);
+                  try {
+                    await Product.update(
+                      { 
+                        MRP: orderMRP,
+                        LastUpdatedDate: new Date().toISOString()
+                      },
+                      { where: { SKU: skuString } }
+                    );
+                    console.log(`✅ Updated MRP for SKU ${skuString} to ${orderMRP}`);
+                  } catch (updateError: any) {
+                    console.error(`❌ Failed to update MRP for SKU ${skuString}:`, updateError.message);
+                  }
                 }
               }
 
@@ -1541,7 +1611,7 @@ export class PickingController {
                         ProductName: `Product-${skuString}`,
                         ImageURL: '',
                         EAN_UPC: '',
-                        MRP: 0.00,
+                        MRP: orderData.order_amount || 0.00, // Use total order amount from PHP
                         CreatedDate: new Date().toISOString(),
                         LastUpdatedDate: new Date().toISOString()
                       } as any);
