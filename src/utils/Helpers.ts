@@ -509,12 +509,29 @@ export class Helpers {
             console.log(`✅ Successfully assigned wave ${waveId} to picker:`, JSON.stringify(assignResult, null, 2));
             
              // 🔥 Emit event to all connected clients
-            socketManager.emit('waveAssigned', {
-              orderId: order.id,
-              generatedOrderId,
-              waveId,
-              assignment: assignResult?.data?.assignment || null,
-            });
+            const assignment = assignResult?.data?.assignment || null;
+            const assignedPickerId = assignment?.pickerId;
+
+            // if we have a pickerId, emit to that picker's room only
+            if (assignedPickerId) {
+              socketManager.emitToPicker(Number(assignedPickerId), 'waveAssigned', {
+                orderId: order.id,
+                generatedOrderId,
+                waveId,
+                assignment,
+              });
+              console.log(`📨 Emitted waveAssigned to picker_${assignedPickerId}`);
+            } else {
+              // fallback: emit globally if no picker id available
+              socketManager.emit('waveAssigned', {
+                orderId: order.id,
+                generatedOrderId,
+                waveId,
+                assignment,
+              });
+              console.warn('⚠️ assignResult did not contain pickerId — emitted globally as fallback');
+            }
+
             // Log the specific assignment details
             if (assignResult.data && assignResult.data.assignment) {
               const assignment = assignResult.data.assignment;
