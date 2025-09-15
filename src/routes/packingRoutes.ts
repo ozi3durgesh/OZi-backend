@@ -161,6 +161,19 @@ interface MulterS3File extends Express.Multer.File {
   key: string;      // Object key
 }
 
+
+export function formatDeliveryPartner(deliveryPartner: DeliveryMan | null) {
+  if (!deliveryPartner) return null;
+
+  return {
+    id: deliveryPartner.id,
+    name: `${deliveryPartner.f_name} ${deliveryPartner.l_name}`,
+    phone: deliveryPartner.phone,
+    vehicleId: deliveryPartner.vehicle_id,
+    image: deliveryPartner.image, // profile image if needed
+  };
+}
+
 /**
  * @route POST /api/handover/:waveId/pack-and-seal
  */
@@ -238,7 +251,7 @@ router.post("/:waveId/pack-and-seal", upload.single("photo"), async (req, res) =
           mimetype: photo.mimetype,
           size: photo.size,
         },
-        deliveryPartner: deliveryPartner || null,
+        deliveryPartner: formatDeliveryPartner(deliveryPartner),
       },
     });
   } catch (error) {
@@ -293,14 +306,7 @@ router.get("/:waveId/refresh", async (req, res) => {
         status: wave.status,
         riderId: wave.riderId,
         riderAssignedAt: wave.riderAssignedAt,
-        deliveryPartner: deliveryPartner
-          ? {
-              id: deliveryPartner.id,
-              name: `${deliveryPartner.f_name} ${deliveryPartner.l_name}`,
-              vehicleId: deliveryPartner.vehicle_id,
-              phone: deliveryPartner.phone,
-            }
-          : null,
+        deliveryPartner: formatDeliveryPartner(deliveryPartner),
       },
       message: deliveryPartner
         ? "Delivery partner assigned"
