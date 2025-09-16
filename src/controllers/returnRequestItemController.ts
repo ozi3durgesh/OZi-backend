@@ -1752,10 +1752,13 @@ export class ReturnRequestItemController {
 
         // Update or create ScannerSku entry
         const skuScanId = sku_id.toString();
-        console.log('🔍 Looking for scanner_sku with skuScanId:', skuScanId);
+        console.log('🔍 Looking for scanner_sku with skuScanId:', skuScanId, 'and binLocationScanId:', bin_location);
         
         let scannerSku = await ScannerSku.findOne({
-          where: { skuScanId: skuScanId },
+          where: { 
+            skuScanId: skuScanId,
+            binLocationScanId: bin_location
+          },
           transaction
         });
 
@@ -1773,32 +1776,38 @@ export class ReturnRequestItemController {
           console.log('🔍 Found existing SKU index:', existingSkuIndex);
           
           if (existingSkuIndex >= 0) {
-            // Update existing quantity
+            // Update existing quantity by adding the new quantity
             const oldQuantity = existingSkuData[existingSkuIndex].quantity;
-            existingSkuData[existingSkuIndex].quantity += quantity;
+            const newTotalQuantity = oldQuantity + quantity;
+            existingSkuData[existingSkuIndex].quantity = newTotalQuantity;
+            
             console.log('🔢 Updated SKU quantity:', {
               skuId: sku_id.toString(),
               oldQuantity: oldQuantity,
               addedQuantity: quantity,
-              newQuantity: existingSkuData[existingSkuIndex].quantity
+              newTotalQuantity: newTotalQuantity,
+              binLocation: bin_location
             });
           } else {
             // Add new SKU entry
             existingSkuData.push({ skuId: sku_id.toString(), quantity: quantity });
-            console.log('➕ Added new SKU entry:', { skuId: sku_id.toString(), quantity: quantity });
+            console.log('➕ Added new SKU entry:', { 
+              skuId: sku_id.toString(), 
+              quantity: quantity,
+              binLocation: bin_location
+            });
           }
           
           console.log('📝 Final SKU data to update:', JSON.stringify(existingSkuData, null, 2));
           
           const updateResult = await scannerSku.update({ 
-            sku: existingSkuData,
-            binLocationScanId: bin_location 
+            sku: existingSkuData
           }, { transaction });
           
           console.log('✅ Scanner_sku update result:', updateResult);
         } else {
           // Create new scanner sku entry
-          console.log('🆕 Creating new scanner_sku entry for SKU:', sku_id);
+          console.log('🆕 Creating new scanner_sku entry for SKU:', sku_id, 'in bin:', bin_location);
           const createResult = await ScannerSku.create({
             skuScanId: skuScanId,
             sku: [{ skuId: sku_id.toString(), quantity: quantity }],
@@ -1836,7 +1845,9 @@ export class ReturnRequestItemController {
             scanner_sku_updated: true,
             bin_location_scan_id: bin_location,
             sku_scan_id: sku_id,
-            quantity_added: quantity
+            quantity_added: quantity,
+            scanner_sku_found: scannerSku ? true : false,
+            scanner_sku_action: scannerSku ? 'updated_existing' : 'created_new'
           }
         });
 
