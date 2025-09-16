@@ -340,13 +340,24 @@ export class ReturnRequestItemController {
       console.log(`🧪 Simulating Pidge webhook for return order: ${returnOrderId}`);
       console.log('📦 Webhook data:', webhookData);
       
-      // Find return request items by return order ID
+      // Find return request items by return order ID or by ID if numeric
+      let whereClause: any;
+      if (/^\d+$/.test(returnOrderId)) {
+        // If it's a numeric ID, search by the primary key ID
+        whereClause = { id: parseInt(returnOrderId) };
+        console.log(`🔍 Searching by primary key ID: ${returnOrderId}`);
+      } else {
+        // If it's a string, search by return_order_id
+        whereClause = { return_order_id: returnOrderId };
+        console.log(`🔍 Searching by return order ID: ${returnOrderId}`);
+      }
+      
       const returnRequestItems = await ReturnRequestItem.findAll({
-        where: { return_order_id: returnOrderId }
+        where: whereClause
       });
       
       if (returnRequestItems.length === 0) {
-        return ResponseHandler.error(res, 'Return request items not found', 404);
+        return ResponseHandler.error(res, `Return request items not found for ${/^\d+$/.test(returnOrderId) ? 'ID' : 'return order ID'}: ${returnOrderId}`, 404);
       }
       
       // Map external status to internal status
@@ -405,10 +416,12 @@ export class ReturnRequestItemController {
       
       return ResponseHandler.success(res, {
         message: 'Simulated webhook processed successfully',
+        returnOrderId: returnRequestItems[0].return_order_id,
         updatedItems: returnRequestItems.length,
         newStatus,
         simulated: true,
-        webhookData
+        webhookData,
+        searchMethod: /^\d+$/.test(returnOrderId) ? 'by_primary_key_id' : 'by_return_order_id'
       });
       
     } catch (error) {
@@ -878,13 +891,13 @@ export class ReturnRequestItemController {
   }
 
   /**
-   * Create GRN for return items with simultaneous status updates
+   * Create GRN for return items with GRN create flow structure
    * Handles both regular GRN and return reject GRN for non-TryAndBuy products
    */
   static async createReturnGRN(req: AuthRequest, res: Response): Promise<Response> {
     try {
       const { returnOrderId } = req.params;
-      const { lines, grn_notes, rejection_data } = req.body;
+      const { poId, status, lines, closeReason } = req.body;
 
       if (!lines || !Array.isArray(lines) || lines.length === 0) {
         return ResponseHandler.error(res, 'Lines array is required', 400);
@@ -909,6 +922,8 @@ export class ReturnRequestItemController {
       try {
         const processedItems: any[] = [];
         const rejectedItems: any[] = [];
+        const grnLines: any[] = [];
+        const grnPhotos: any[] = [];
 
         // Process each line and update status simultaneously
         for (const line of lines) {
@@ -920,20 +935,25 @@ export class ReturnRequestItemController {
           }
 
           // Validate quantities
-          if (line.received_qty > returnItem.quantity) {
+          if (line.receivedQty > returnItem.quantity) {
             await transaction.rollback();
             return ResponseHandler.error(res, `Received quantity cannot exceed original quantity for item ${line.id}`, 400);
           }
 
           // Check if this is a non-TryAndBuy product that should go to reject GRN
           const isTryAndBuy = returnItem.is_try_and_buy === 1;
-          const shouldReject = !isTryAndBuy && rejection_data && rejection_data[line.id];
+          const shouldReject = !isTryAndBuy && line.rejectedQty > 0;
+          
+          console.log(`🔍 Processing item ${line.id}:`, {
+            isTryAndBuy,
+            rejectedQty: line.rejectedQty,
+            shouldReject,
+            returnType: returnItem.return_type
+          });
 
           if (shouldReject) {
             // Handle return reject GRN for non-TryAndBuy products
-            const rejectData = rejection_data[line.id];
-            
-            // Create return reject GRN record
+            console.log(`🚫 Creating reject GRN record for item ${line.id}`);
             const rejectGrnRecord = await ReturnRejectGrn.create({
               return_order_id: returnOrderId,
               return_request_item_id: returnItem.id,
@@ -949,16 +969,16 @@ export class ReturnRequestItemController {
               return_type: returnItem.return_type,
               return_reason: returnItem.return_reason,
               original_quantity: returnItem.quantity,
-              rejected_quantity: line.received_qty,
+              rejected_quantity: line.rejectedQty,
               original_price: returnItem.price,
-              rejection_reason: rejectData.rejection_reason || 'Product rejected during GRN',
-              rejection_notes: rejectData.rejection_notes || grn_notes,
-              rejection_category: rejectData.rejection_category || RETURN_CONSTANTS.REJECTION_CATEGORIES.OTHER,
-              rejection_severity: rejectData.rejection_severity || RETURN_CONSTANTS.REJECTION_SEVERITY.MINOR,
-              photo_urls: rejectData.photo_urls || [],
-              photo_count: rejectData.photo_urls?.length || 0,
+              rejection_reason: line.remarks || 'Product rejected during GRN',
+              rejection_notes: line.remarks || 'Product rejected during GRN',
+              rejection_category: RETURN_CONSTANTS.REJECTION_CATEGORIES.OTHER,
+              rejection_severity: RETURN_CONSTANTS.REJECTION_SEVERITY.MINOR,
+              photo_urls: line.photos ? [line.photos] : [],
+              photo_count: line.photos ? 1 : 0,
               grn_id: `RET-REJECT-${returnOrderId}`,
-              grn_notes: grn_notes,
+              grn_notes: closeReason || 'Return reject GRN',
               grn_status: RETURN_CONSTANTS.REJECT_GRN_STATUSES.COMPLETED,
               processed_by: req.user?.id || 1,
               processed_at: new Date(),
@@ -969,6 +989,8 @@ export class ReturnRequestItemController {
               variation: returnItem.variation,
               customer_feedback: returnItem.customer_feedback
             }, { transaction });
+            
+            console.log(`✅ Created reject GRN record with ID: ${rejectGrnRecord.id}`);
 
             // Add rejection timeline events
             const timelineEvents = returnItem.timeline_events || [];
@@ -978,10 +1000,10 @@ export class ReturnRequestItemController {
               notes: `Return reject GRN created for non-TryAndBuy product`,
               metadata: { 
                 grn_id: `RET-REJECT-${returnOrderId}`,
-                rejection_reason: rejectData.rejection_reason,
-                rejection_category: rejectData.rejection_category,
-                photo_count: rejectData.photo_urls?.length || 0,
-                grn_notes
+                rejection_reason: line.remarks,
+                rejection_category: RETURN_CONSTANTS.REJECTION_CATEGORIES.OTHER,
+                photo_count: line.photos ? 1 : 0,
+                grn_notes: closeReason
               },
               created_at: Date.now(),
               created_by: req.user?.id || 1
@@ -991,16 +1013,16 @@ export class ReturnRequestItemController {
             await returnItem.update({
               grn_id: `RET-REJECT-${returnOrderId}`,
               grn_status: 'rejected',
-              received_quantity: line.received_qty,
+              received_quantity: line.receivedQty,
               expected_quantity: returnItem.quantity,
-              putaway_status: RETURN_CONSTANTS.PUTAWAY_STATUSES.FAILED, // Rejected items are not eligible for putaway
+              putaway_status: RETURN_CONSTANTS.PUTAWAY_STATUSES.FAILED,
               timeline_events: timelineEvents,
               last_event_type: RETURN_CONSTANTS.TIMELINE_EVENTS.GRN_CREATED,
               last_event_notes: `Return reject GRN created for non-TryAndBuy product`,
               last_event_metadata: { 
                 grn_id: `RET-REJECT-${returnOrderId}`,
-                rejection_reason: rejectData.rejection_reason,
-                rejection_category: rejectData.rejection_category
+                rejection_reason: line.remarks,
+                rejection_category: RETURN_CONSTANTS.REJECTION_CATEGORIES.OTHER
               },
               updated_at: Date.now()
             }, { transaction });
@@ -1009,10 +1031,29 @@ export class ReturnRequestItemController {
               id: returnItem.id,
               item_id: returnItem.item_id,
               sku_id: (returnItem as any).product?.SKU,
-              rejection_reason: rejectData.rejection_reason,
-              rejection_category: rejectData.rejection_category,
+              rejection_reason: line.remarks,
+              rejection_category: RETURN_CONSTANTS.REJECTION_CATEGORIES.OTHER,
               reject_grn_id: `RET-REJECT-${returnOrderId}`,
-              photo_count: rejectData.photo_urls?.length || 0
+              photo_count: line.photos ? 1 : 0
+            });
+
+            // Add to GRN lines for response
+            grnLines.push({
+              id: returnItem.id,
+              grn_id: `RET-REJECT-${returnOrderId}`,
+              sku_id: (returnItem as any).product?.SKU || returnItem.item_id.toString(),
+              ordered_qty: returnItem.quantity,
+              received_qty: line.receivedQty,
+              pending_qty: returnItem.quantity - line.receivedQty,
+              rejected_qty: line.rejectedQty,
+              qc_pass_qty: line.qcPassQty || line.receivedQty,
+              qc_fail_qty: line.rejectedQty,
+              held_qty: line.heldQty || 0,
+              rtv_qty: line.rtvQty || 0,
+              line_status: line.receivedQty === 0 ? 'pending' : line.receivedQty < returnItem.quantity ? 'partial' : 'completed',
+              created_at: new Date(),
+              updated_at: new Date(),
+              Batches: []
             });
 
           } else {
@@ -1025,7 +1066,7 @@ export class ReturnRequestItemController {
               status: returnItem.status,
               notes: `GRN process started for return order ${returnOrderId}`,
               metadata: { 
-                grn_notes,
+                grn_notes: closeReason,
                 grn_started_at: Date.now()
               },
               created_at: Date.now(),
@@ -1039,9 +1080,9 @@ export class ReturnRequestItemController {
               notes: `GRN created for return item`,
               metadata: { 
                 grn_id: `RET-${returnOrderId}`,
-                received_qty: line.received_qty,
+                received_qty: line.receivedQty,
                 expected_qty: returnItem.quantity,
-                grn_notes,
+                grn_notes: closeReason,
                 grn_completed_at: Date.now()
               },
               created_at: Date.now(),
@@ -1052,16 +1093,16 @@ export class ReturnRequestItemController {
             await returnItem.update({
               grn_id: `RET-${returnOrderId}`,
               grn_status: 'completed',
-              received_quantity: line.received_qty,
+              received_quantity: line.receivedQty,
               expected_quantity: returnItem.quantity,
-              putaway_status: RETURN_CONSTANTS.PUTAWAY_STATUSES.PENDING, // Set putaway status to pending
+              putaway_status: RETURN_CONSTANTS.PUTAWAY_STATUSES.PENDING,
               timeline_events: timelineEvents,
               last_event_type: RETURN_CONSTANTS.TIMELINE_EVENTS.GRN_CREATED,
               last_event_notes: `GRN created for return item`,
               last_event_metadata: { 
                 grn_id: `RET-${returnOrderId}`,
-                received_qty: line.received_qty,
-                grn_notes
+                received_qty: line.receivedQty,
+                grn_notes: closeReason
               },
               updated_at: Date.now()
             }, { transaction });
@@ -1073,27 +1114,86 @@ export class ReturnRequestItemController {
               grn_id: `RET-${returnOrderId}`,
               is_try_and_buy: isTryAndBuy
             });
+
+            // Add to GRN lines for response
+            grnLines.push({
+              id: returnItem.id,
+              grn_id: `RET-${returnOrderId}`,
+              sku_id: (returnItem as any).product?.SKU || returnItem.item_id.toString(),
+              ordered_qty: returnItem.quantity,
+              received_qty: line.receivedQty,
+              pending_qty: returnItem.quantity - line.receivedQty,
+              rejected_qty: line.rejectedQty || 0,
+              qc_pass_qty: line.qcPassQty || line.receivedQty,
+              qc_fail_qty: line.rejectedQty || 0,
+              held_qty: line.heldQty || 0,
+              rtv_qty: line.rtvQty || 0,
+              line_status: line.receivedQty === 0 ? 'pending' : line.receivedQty < returnItem.quantity ? 'partial' : 'completed',
+              created_at: new Date(),
+              updated_at: new Date(),
+              Batches: line.batches ? line.batches.map((batch: any, index: number) => ({
+                id: index + 1,
+                grn_line_id: returnItem.id,
+                batch_no: batch.batchNo,
+                expiry_date: batch.expiry,
+                qty: batch.qty,
+                created_at: new Date(),
+                updated_at: new Date()
+              })) : []
+            });
+
+            // Add photos if provided
+            if (line.photos) {
+              grnPhotos.push({
+                id: grnPhotos.length + 1,
+                sku_id: (returnItem as any).product?.SKU || returnItem.item_id.toString(),
+                grn_id: `RET-${returnOrderId}`,
+                po_id: null,
+                url: line.photos,
+                reason: 'sku-level-photo',
+                created_at: new Date()
+              });
+            }
           }
         }
 
         // Commit transaction
         await transaction.commit();
 
-        return ResponseHandler.success(res, {
-          message: 'Return GRN processed successfully with status updates',
-          grn_id: `RET-${returnOrderId}`,
-          return_order_id: returnOrderId,
-          processed_items_count: processedItems.length,
-          rejected_items_count: rejectedItems.length,
-          grn_notes,
-          status_updates: {
-            regular_grn_status: 'completed',
-            reject_grn_status: rejectedItems.length > 0 ? 'completed' : 'not_applicable',
-            timeline_events_added: (processedItems.length * 2) + rejectedItems.length,
-            last_updated: Date.now()
+        // Prepare response in GRN create flow format
+        const hasRejections = rejectedItems.length > 0;
+        const grnId = hasRejections ? `RET-REJECT-${returnOrderId}` : `RET-${returnOrderId}`;
+        
+        console.log(`📋 Preparing response:`, {
+          hasRejections,
+          grnId,
+          processedItems: processedItems.length,
+          rejectedItems: rejectedItems.length,
+          grnLines: grnLines.length,
+          grnPhotos: grnPhotos.length
+        });
+        
+        const responseData = {
+          id: grnId,
+          po_id: poId || null,
+          status: status || 'partial',
+          closeReason: closeReason || null,
+          created_by: req.user?.id || 1,
+          created_at: new Date(),
+          updated_at: new Date(),
+          GrnCreatedBy: {
+            id: req.user?.id || 1,
+            email: req.user?.email || 'system@company.com'
           },
-          processed_items: processedItems,
-          rejected_items: rejectedItems
+          Line: grnLines,
+          Photos: grnPhotos
+        };
+
+        return res.status(201).json({
+          statusCode: 201,
+          success: true,
+          data: responseData,
+          error: null
         });
 
       } catch (transactionError) {
