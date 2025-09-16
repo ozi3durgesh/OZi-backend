@@ -940,20 +940,22 @@ export class ReturnRequestItemController {
             return ResponseHandler.error(res, `Received quantity cannot exceed original quantity for item ${line.id}`, 400);
           }
 
-          // Check if this is a non-TryAndBuy product that should go to reject GRN
+          // Check if there are rejected quantities that should go to reject GRN
           const isTryAndBuy = returnItem.is_try_and_buy === 1;
-          const shouldReject = !isTryAndBuy && line.rejectedQty > 0;
+          const hasRejections = line.rejectedQty > 0;
           
           console.log(`🔍 Processing item ${line.id}:`, {
             isTryAndBuy,
             rejectedQty: line.rejectedQty,
-            shouldReject,
-            returnType: returnItem.return_type
+            hasRejections,
+            returnType: returnItem.return_type,
+            receivedQty: line.receivedQty,
+            qcPassQty: line.qcPassQty
           });
 
-          if (shouldReject) {
-            // Handle return reject GRN for non-TryAndBuy products
-            console.log(`🚫 Creating reject GRN record for item ${line.id}`);
+          if (hasRejections) {
+            // Handle return reject GRN for rejected quantities (all return types)
+            console.log(`🚫 Creating reject GRN record for item ${line.id} - rejected quantity: ${line.rejectedQty}`);
             const rejectGrnRecord = await ReturnRejectGrn.create({
               return_order_id: returnOrderId,
               return_request_item_id: returnItem.id,
@@ -982,9 +984,9 @@ export class ReturnRequestItemController {
               grn_status: RETURN_CONSTANTS.REJECT_GRN_STATUSES.COMPLETED,
               processed_by: req.user?.id || 1,
               processed_at: new Date(),
-              is_try_and_buy: false,
-              try_and_buy_feedback: null,
-              try_and_buy_rating: null,
+              is_try_and_buy: isTryAndBuy,
+              try_and_buy_feedback: isTryAndBuy ? returnItem.customer_feedback : null,
+              try_and_buy_rating: isTryAndBuy ? returnItem.overall_rating : null,
               item_details: returnItem.item_details,
               variation: returnItem.variation,
               customer_feedback: returnItem.customer_feedback
@@ -997,11 +999,14 @@ export class ReturnRequestItemController {
             timelineEvents.push({
               event_type: RETURN_CONSTANTS.TIMELINE_EVENTS.GRN_CREATED,
               status: returnItem.status,
-              notes: `Return reject GRN created for non-TryAndBuy product`,
+              notes: `Return reject GRN created for rejected quantity: ${line.rejectedQty}`,
               metadata: { 
                 grn_id: `RET-REJECT-${returnOrderId}`,
                 rejection_reason: line.remarks,
                 rejection_category: RETURN_CONSTANTS.REJECTION_CATEGORIES.OTHER,
+                rejected_quantity: line.rejectedQty,
+                return_type: returnItem.return_type,
+                is_try_and_buy: isTryAndBuy,
                 photo_count: line.photos ? 1 : 0,
                 grn_notes: closeReason
               },
@@ -1018,11 +1023,13 @@ export class ReturnRequestItemController {
               putaway_status: RETURN_CONSTANTS.PUTAWAY_STATUSES.FAILED,
               timeline_events: timelineEvents,
               last_event_type: RETURN_CONSTANTS.TIMELINE_EVENTS.GRN_CREATED,
-              last_event_notes: `Return reject GRN created for non-TryAndBuy product`,
+              last_event_notes: `Return reject GRN created for rejected quantity: ${line.rejectedQty}`,
               last_event_metadata: { 
                 grn_id: `RET-REJECT-${returnOrderId}`,
                 rejection_reason: line.remarks,
-                rejection_category: RETURN_CONSTANTS.REJECTION_CATEGORIES.OTHER
+                rejection_category: RETURN_CONSTANTS.REJECTION_CATEGORIES.OTHER,
+                rejected_quantity: line.rejectedQty,
+                return_type: returnItem.return_type
               },
               updated_at: Date.now()
             }, { transaction });
@@ -1031,6 +1038,9 @@ export class ReturnRequestItemController {
               id: returnItem.id,
               item_id: returnItem.item_id,
               sku_id: (returnItem as any).product?.SKU,
+              return_type: returnItem.return_type,
+              is_try_and_buy: isTryAndBuy,
+              rejected_quantity: line.rejectedQty,
               rejection_reason: line.remarks,
               rejection_category: RETURN_CONSTANTS.REJECTION_CATEGORIES.OTHER,
               reject_grn_id: `RET-REJECT-${returnOrderId}`,
@@ -1057,7 +1067,7 @@ export class ReturnRequestItemController {
             });
 
           } else {
-            // Handle regular GRN for TryAndBuy products or non-rejected items
+            // Handle regular GRN for non-rejected items (all return types eligible for putaway)
             const timelineEvents = returnItem.timeline_events || [];
             
             // Add GRN started event
@@ -1095,7 +1105,7 @@ export class ReturnRequestItemController {
               grn_status: 'completed',
               received_quantity: line.receivedQty,
               expected_quantity: returnItem.quantity,
-              putaway_status: RETURN_CONSTANTS.PUTAWAY_STATUSES.PENDING,
+              putaway_status: RETURN_CONSTANTS.PUTAWAY_STATUSES.PENDING, // All return types eligible for putaway
               timeline_events: timelineEvents,
               last_event_type: RETURN_CONSTANTS.TIMELINE_EVENTS.GRN_CREATED,
               last_event_notes: `GRN created for return item`,
@@ -1111,8 +1121,10 @@ export class ReturnRequestItemController {
               id: returnItem.id,
               item_id: returnItem.item_id,
               sku_id: (returnItem as any).product?.SKU,
+              return_type: returnItem.return_type,
               grn_id: `RET-${returnOrderId}`,
-              is_try_and_buy: isTryAndBuy
+              is_try_and_buy: isTryAndBuy,
+              eligible_for_putaway: true
             });
 
             // Add to GRN lines for response
@@ -1350,28 +1362,40 @@ export class ReturnRequestItemController {
    */
   static async scanReturnSkuForPutaway(req: AuthRequest, res: Response): Promise<Response> {
     try {
-      const { sku_id, return_item_id } = req.body;
+      const { sku_id } = req.body;
 
-      if (!sku_id || !return_item_id) {
-        return ResponseHandler.error(res, 'SKU ID and return item ID are required', 400);
+      if (!sku_id) {
+        return ResponseHandler.error(res, 'SKU ID is required', 400);
       }
 
-      // Find the return request item
-      const returnRequestItem = await ReturnRequestItem.findByPk(return_item_id, {
+      console.log(`🔍 Scanning SKU for putaway: ${sku_id}`);
+
+      // Find the return request item by SKU
+      const returnRequestItem = await ReturnRequestItem.findOne({
+        where: { 
+          item_id: sku_id,
+          grn_status: 'completed',
+          putaway_status: { [require('sequelize').Op.or]: [null, 'pending'] },
+          received_quantity: { [require('sequelize').Op.gt]: 0 }
+        },
         include: [
           { model: Order, as: 'originalOrder', attributes: ['id', 'order_id', 'user_id'] },
           { model: Product, as: 'product', attributes: ['SKU', 'ProductName', 'Category', 'Brand', 'MRP', 'COST'] }
-        ]
+        ],
+        order: [['updated_at', 'DESC']] // Get the most recent item for this SKU
       });
 
       if (!returnRequestItem) {
-        return ResponseHandler.error(res, 'Return request item not found', 404);
+        return ResponseHandler.error(res, `No return item found for SKU ${sku_id} that is ready for putaway`, 404);
       }
 
-      // Verify SKU matches
-      if (returnRequestItem.item_id.toString() !== sku_id.toString()) {
-        return ResponseHandler.error(res, 'SKU does not match the return item', 400);
-      }
+      console.log(`✅ Found return item for SKU ${sku_id}:`, {
+        id: returnRequestItem.id,
+        return_order_id: returnRequestItem.return_order_id,
+        grn_status: returnRequestItem.grn_status,
+        putaway_status: returnRequestItem.putaway_status,
+        received_quantity: returnRequestItem.received_quantity
+      });
 
       // Check if GRN is completed
       if (returnRequestItem.grn_status !== 'completed') {
@@ -1551,7 +1575,7 @@ export class ReturnRequestItemController {
       return ResponseHandler.success(res, {
         message: 'Return SKU scanned successfully',
         skuId: sku_id,
-        returnItemId: return_item_id,
+        returnItemId: returnRequestItem.id,
         returnOrderId: returnRequestItem.return_order_id,
         availableQuantity: availableQuantity,
         scannedProductDetail: {
@@ -1584,23 +1608,36 @@ export class ReturnRequestItemController {
    */
   static async confirmReturnPutaway(req: AuthRequest, res: Response): Promise<Response> {
     try {
-      const { sku_id, return_item_id, quantity, bin_location, remarks } = req.body;
+      const { sku_id, quantity, bin_location, remarks } = req.body;
 
-      if (!sku_id || !return_item_id || !quantity || !bin_location) {
-        return ResponseHandler.error(res, 'SKU ID, return item ID, quantity, and bin location are required', 400);
+      if (!sku_id || !quantity || !bin_location) {
+        return ResponseHandler.error(res, 'SKU ID, quantity, and bin location are required', 400);
       }
 
-      // Find the return request item
-      const returnRequestItem = await ReturnRequestItem.findByPk(return_item_id);
+      console.log(`📦 Confirming return putaway for SKU: ${sku_id}`);
+
+      // Find the return request item by SKU
+      const returnRequestItem = await ReturnRequestItem.findOne({
+        where: { 
+          item_id: sku_id,
+          grn_status: 'completed',
+          putaway_status: { [require('sequelize').Op.or]: [null, 'pending'] },
+          received_quantity: { [require('sequelize').Op.gt]: 0 }
+        },
+        order: [['updated_at', 'DESC']] // Get the most recent item for this SKU
+      });
 
       if (!returnRequestItem) {
-        return ResponseHandler.error(res, 'Return request item not found', 404);
+        return ResponseHandler.error(res, `No return item found for SKU ${sku_id} that is ready for putaway`, 404);
       }
 
-      // Verify SKU matches
-      if (returnRequestItem.item_id.toString() !== sku_id.toString()) {
-        return ResponseHandler.error(res, 'SKU does not match the return item', 400);
-      }
+      console.log(`✅ Found return item for SKU ${sku_id}:`, {
+        id: returnRequestItem.id,
+        return_order_id: returnRequestItem.return_order_id,
+        grn_status: returnRequestItem.grn_status,
+        putaway_status: returnRequestItem.putaway_status,
+        received_quantity: returnRequestItem.received_quantity
+      });
 
       // Check if GRN is completed
       if (returnRequestItem.grn_status !== 'completed') {
@@ -1777,7 +1814,7 @@ export class ReturnRequestItemController {
         return ResponseHandler.success(res, {
           message: 'Return putaway confirmed successfully',
           sku_id,
-          return_item_id,
+          return_item_id: returnRequestItem.id,
           return_order_id: returnRequestItem.return_order_id,
           quantity,
           bin_location,
