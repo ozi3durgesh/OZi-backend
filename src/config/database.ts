@@ -65,79 +65,148 @@ const createReturnTables = async (): Promise<void> => {
   try {
     console.log('Creating return tables...');
     
-    // Create return_requests table
+    // Create return_request_items table (matches Sequelize model)
     await sequelize.query(`
-      CREATE TABLE IF NOT EXISTS return_requests (
+      CREATE TABLE IF NOT EXISTS return_request_items (
         id INT AUTO_INCREMENT PRIMARY KEY,
-        return_order_id VARCHAR(50) NOT NULL UNIQUE,
+        return_order_id VARCHAR(50) NOT NULL,
         original_order_id VARCHAR(50) NOT NULL,
         customer_id INT NOT NULL,
-        return_reason ENUM('defective_product', 'wrong_item', 'damaged_in_transit', 'not_as_described', 'size_issue', 'quality_issue', 'customer_changed_mind', 'duplicate_order', 'late_delivery', 'try_and_buy_not_satisfied', 'try_and_buy_expired', 'other') NOT NULL,
-        status ENUM('pending', 'approved', 'pickup_scheduled', 'in_transit', 'received', 'qc_pending', 'qc_completed', 'refund_initiated', 'refunded', 'rejected', 'cancelled') NOT NULL DEFAULT 'pending',
-        return_type ENUM('full_return', 'partial_return', 'exchange', 'try_and_buy_return') NOT NULL DEFAULT 'full_return',
-        total_items_count INT NOT NULL DEFAULT 0,
-        total_return_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-        pidge_tracking_id VARCHAR(100) NULL,
-        pickup_address JSON NULL,
-        return_notes TEXT NULL,
-        images JSON NULL,
+        return_reason ENUM('defective_product','wrong_item','damaged_in_transit','not_as_described','size_issue','quality_issue','customer_changed_mind','duplicate_order','late_delivery','try_and_buy_not_satisfied','try_and_buy_expired','other') NOT NULL,
+        status ENUM('pending','approved','pickup_scheduled','in_transit','received','qc_pending','qc_completed','refund_initiated','refunded','rejected','cancelled') NOT NULL DEFAULT 'pending',
+        return_type ENUM('full_return','partial_return','exchange','try_and_buy_return') NOT NULL DEFAULT 'full_return',
+        total_items_count INT NOT NULL DEFAULT '0',
+        total_return_amount DECIMAL(10,2) NOT NULL DEFAULT '0.00',
+        pidge_tracking_id VARCHAR(100) DEFAULT NULL,
+        pickup_address JSON DEFAULT NULL,
+        return_notes TEXT,
+        images JSON DEFAULT NULL,
+        item_id INT NOT NULL,
+        quantity INT NOT NULL,
+        item_details TEXT,
+        variation VARCHAR(255) DEFAULT NULL,
+        price DECIMAL(10,2) NOT NULL DEFAULT '0.00',
+        item_images JSON DEFAULT NULL,
+        item_notes TEXT,
+        qc_status ENUM('pending','passed','failed','needs_repair','disposal') NOT NULL DEFAULT 'pending',
+        qc_notes TEXT,
+        qc_by INT DEFAULT NULL,
+        qc_at BIGINT DEFAULT NULL,
+        timeline_events JSON DEFAULT NULL,
+        last_event_type ENUM('created','approved','pickup_scheduled','picked_up','in_transit','received','qc_started','qc_completed','grn_created','putaway_started','putaway_completed','refund_initiated','refunded','rejected','cancelled','status_updated') NOT NULL DEFAULT 'created',
+        last_event_notes TEXT,
+        last_event_metadata JSON DEFAULT NULL,
+        is_try_and_buy TINYINT NOT NULL DEFAULT '0',
+        customer_feedback TEXT,
+        overall_rating INT DEFAULT NULL,
+        item_feedback TEXT,
+        item_rating INT DEFAULT NULL,
+        try_and_buy_reason VARCHAR(50) DEFAULT NULL,
+        grn_id VARCHAR(50) DEFAULT NULL,
+        grn_status VARCHAR(50) DEFAULT NULL,
+        received_quantity INT DEFAULT NULL,
+        expected_quantity INT DEFAULT NULL,
+        qc_pass_qty INT DEFAULT NULL,
+        qc_fail_qty INT DEFAULT NULL,
+        putaway_status VARCHAR(50) DEFAULT NULL,
+        bin_location_id VARCHAR(50) DEFAULT NULL,
+        putaway_by INT DEFAULT NULL,
+        putaway_at BIGINT DEFAULT NULL,
+        putaway_notes TEXT,
         created_at BIGINT NOT NULL,
         updated_at BIGINT NOT NULL,
         created_by INT NOT NULL,
-        is_active TINYINT NOT NULL DEFAULT 1,
+        is_active TINYINT NOT NULL DEFAULT '1',
+        PRIMARY KEY (id),
+        UNIQUE KEY return_order_id (return_order_id),
+        KEY original_order_id (original_order_id),
+        KEY customer_id (customer_id),
+        KEY status (status),
+        KEY item_id (item_id),
+        KEY qc_status (qc_status),
+        KEY is_try_and_buy (is_try_and_buy),
+        KEY grn_id (grn_id),
+        KEY putaway_status (putaway_status),
+        KEY created_at (created_at),
+        CONSTRAINT return_request_items_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES Users (id) ON DELETE RESTRICT ON UPDATE CASCADE,
+        CONSTRAINT return_request_items_created_by_fkey FOREIGN KEY (created_by) REFERENCES Users (id) ON DELETE RESTRICT ON UPDATE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+    `);
+    
+    // Create return_reject_grn table
+    await sequelize.query(`
+      CREATE TABLE IF NOT EXISTS return_reject_grn (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        
+        -- Return Request References
+        return_order_id VARCHAR(100) NOT NULL,
+        return_request_item_id INT NOT NULL,
+        original_order_id VARCHAR(100) NOT NULL,
+        customer_id INT NOT NULL,
+        
+        -- Product Details
+        item_id INT NOT NULL,
+        sku_id VARCHAR(50) NOT NULL,
+        product_name VARCHAR(255),
+        product_category VARCHAR(100),
+        product_brand VARCHAR(100),
+        product_mrp DECIMAL(10,2),
+        product_cost DECIMAL(10,2),
+        
+        -- Return Details
+        return_type ENUM('full_return', 'partial_return', 'exchange', 'try_and_buy_return') NOT NULL,
+        return_reason VARCHAR(100) NOT NULL,
+        original_quantity INT NOT NULL,
+        rejected_quantity INT NOT NULL,
+        original_price DECIMAL(10,2) NOT NULL,
+        
+        -- Rejection Details
+        rejection_reason VARCHAR(255) NOT NULL,
+        rejection_notes TEXT,
+        rejection_category ENUM('damaged', 'defective', 'wrong_item', 'quality_issue', 'expired', 'other') NOT NULL,
+        rejection_severity ENUM('minor', 'major', 'critical') DEFAULT 'minor',
+        
+        -- Photo References
+        photo_urls JSON,
+        photo_count INT DEFAULT 0,
+        
+        -- GRN Details
+        grn_id VARCHAR(100) NOT NULL,
+        grn_notes TEXT,
+        grn_status ENUM('pending', 'in_progress', 'completed', 'rejected') DEFAULT 'pending',
+        
+        -- Processing Details
+        processed_by INT NOT NULL,
+        processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        
+        -- Try and Buy Specific
+        is_try_and_buy BOOLEAN DEFAULT FALSE,
+        try_and_buy_feedback TEXT,
+        try_and_buy_rating INT,
+        
+        -- Additional Metadata
+        item_details TEXT,
+        variation VARCHAR(255),
+        customer_feedback TEXT,
+        
+        -- Timestamps
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        
+        -- Indexes
         INDEX idx_return_order_id (return_order_id),
+        INDEX idx_return_request_item_id (return_request_item_id),
         INDEX idx_original_order_id (original_order_id),
         INDEX idx_customer_id (customer_id),
-        INDEX idx_status (status),
-        INDEX idx_pidge_tracking_id (pidge_tracking_id),
-        INDEX idx_created_at (created_at)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    `);
-    
-    // Create return_items table
-    await sequelize.query(`
-      CREATE TABLE IF NOT EXISTS return_items (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        return_request_id INT NOT NULL,
-        item_id INT NOT NULL,
-        quantity INT NOT NULL,
-        return_reason ENUM('defective_product', 'wrong_item', 'damaged_in_transit', 'not_as_described', 'size_issue', 'quality_issue', 'customer_changed_mind', 'duplicate_order', 'late_delivery', 'try_and_buy_not_satisfied', 'try_and_buy_expired', 'other') NOT NULL,
-        item_details TEXT NULL,
-        variation VARCHAR(255) NULL,
-        price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-        images JSON NULL,
-        notes TEXT NULL,
-        qc_status ENUM('pending', 'passed', 'failed', 'needs_repair', 'disposal') NOT NULL DEFAULT 'pending',
-        qc_notes TEXT NULL,
-        qc_by INT NULL,
-        qc_at BIGINT NULL,
-        created_at BIGINT NOT NULL,
-        updated_at BIGINT NOT NULL,
-        is_active TINYINT NOT NULL DEFAULT 1,
-        INDEX idx_return_request_id (return_request_id),
         INDEX idx_item_id (item_id),
-        INDEX idx_qc_status (qc_status),
-        INDEX idx_created_at (created_at)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    `);
-    
-    // Create return_timeline table
-    await sequelize.query(`
-      CREATE TABLE IF NOT EXISTS return_timeline (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        return_request_id INT NOT NULL,
-        event_type ENUM('created', 'approved', 'pickup_scheduled', 'picked_up', 'in_transit', 'received', 'qc_started', 'qc_completed', 'grn_created', 'putaway_started', 'putaway_completed', 'refund_initiated', 'refunded', 'rejected', 'cancelled', 'status_updated') NOT NULL,
-        status ENUM('pending', 'approved', 'pickup_scheduled', 'in_transit', 'received', 'qc_pending', 'qc_completed', 'refund_initiated', 'refunded', 'rejected', 'cancelled') NULL,
-        notes TEXT NULL,
-        metadata JSON NULL,
-        created_at BIGINT NOT NULL,
-        created_by INT NULL,
-        INDEX idx_return_request_id (return_request_id),
-        INDEX idx_event_type (event_type),
-        INDEX idx_status (status),
+        INDEX idx_sku_id (sku_id),
+        INDEX idx_grn_id (grn_id),
+        INDEX idx_rejection_category (rejection_category),
+        INDEX idx_grn_status (grn_status),
+        INDEX idx_processed_by (processed_by),
         INDEX idx_created_at (created_at),
-        INDEX idx_created_by (created_by)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        INDEX idx_is_try_and_buy (is_try_and_buy)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
     `);
     
     console.log('✅ Return tables created successfully');

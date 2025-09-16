@@ -72,6 +72,31 @@ export const RETURN_CONSTANTS = {
     FAILED: 'failed'
   },
 
+  // Return reject GRN statuses
+  REJECT_GRN_STATUSES: {
+    PENDING: 'pending',
+    IN_PROGRESS: 'in_progress',
+    COMPLETED: 'completed',
+    REJECTED: 'rejected'
+  },
+
+  // Rejection categories
+  REJECTION_CATEGORIES: {
+    DAMAGED: 'damaged',
+    DEFECTIVE: 'defective',
+    WRONG_ITEM: 'wrong_item',
+    QUALITY_ISSUE: 'quality_issue',
+    EXPIRED: 'expired',
+    OTHER: 'other'
+  },
+
+  // Rejection severity levels
+  REJECTION_SEVERITY: {
+    MINOR: 'minor',
+    MAJOR: 'major',
+    CRITICAL: 'critical'
+  },
+
   // Default values
   DEFAULTS: {
     STATUS: 'pending',
@@ -133,6 +158,9 @@ export type QCStatus = typeof RETURN_CONSTANTS.QC_STATUSES[keyof typeof RETURN_C
 export type GRNReturnStatus = typeof RETURN_CONSTANTS.GRN_RETURN_STATUSES[keyof typeof RETURN_CONSTANTS.GRN_RETURN_STATUSES];
 export type PutawayStatus = typeof RETURN_CONSTANTS.PUTAWAY_STATUSES[keyof typeof RETURN_CONSTANTS.PUTAWAY_STATUSES];
 export type TimelineEvent = typeof RETURN_CONSTANTS.TIMELINE_EVENTS[keyof typeof RETURN_CONSTANTS.TIMELINE_EVENTS];
+export type RejectGrnStatus = typeof RETURN_CONSTANTS.REJECT_GRN_STATUSES[keyof typeof RETURN_CONSTANTS.REJECT_GRN_STATUSES];
+export type RejectionCategory = typeof RETURN_CONSTANTS.REJECTION_CATEGORIES[keyof typeof RETURN_CONSTANTS.REJECTION_CATEGORIES];
+export type RejectionSeverity = typeof RETURN_CONSTANTS.REJECTION_SEVERITY[keyof typeof RETURN_CONSTANTS.REJECTION_SEVERITY];
 
 // Interface for return request creation
 export interface ReturnRequestData {
