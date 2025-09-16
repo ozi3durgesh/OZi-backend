@@ -1312,6 +1312,7 @@ export class ReturnRequestItemController {
         
         if (!returnOrdersMap.has(returnOrderId)) {
           returnOrdersMap.set(returnOrderId, {
+            return_item_id: item.id, // First item's ID for the return order
             return_order_id: returnOrderId,
             original_order_id: item.original_order_id,
             customer_id: item.customer_id,
@@ -1327,6 +1328,7 @@ export class ReturnRequestItemController {
         returnOrder.total_items += 1;
         returnOrder.total_putaway_qty += item.received_quantity || 0;
         returnOrder.items.push({
+          return_item_id: item.id,
           id: item.id,
           item_id: item.item_id,
           quantity: item.received_quantity || 0,
@@ -1362,17 +1364,22 @@ export class ReturnRequestItemController {
    */
   static async scanReturnSkuForPutaway(req: AuthRequest, res: Response): Promise<Response> {
     try {
-      const { sku_id } = req.body;
+      const { sku_id, return_item_id } = req.body;
 
       if (!sku_id) {
         return ResponseHandler.error(res, 'SKU ID is required', 400);
       }
 
-      console.log(`🔍 Scanning SKU for putaway: ${sku_id}`);
+      if (!return_item_id) {
+        return ResponseHandler.error(res, 'Return item ID is required', 400);
+      }
 
-      // Find the return request item by SKU
+      console.log(`🔍 Scanning SKU for putaway: ${sku_id} with return_item_id: ${return_item_id}`);
+
+      // Find the return request item by both SKU and return_item_id for precise identification
       const returnRequestItem = await ReturnRequestItem.findOne({
         where: { 
+          id: return_item_id,
           item_id: sku_id,
           grn_status: 'completed',
           putaway_status: { [require('sequelize').Op.or]: [null, 'pending'] },
@@ -1381,15 +1388,14 @@ export class ReturnRequestItemController {
         include: [
           { model: Order, as: 'originalOrder', attributes: ['id', 'order_id', 'user_id'] },
           { model: Product, as: 'product', attributes: ['SKU', 'ProductName', 'Category', 'Brand', 'MRP', 'COST'] }
-        ],
-        order: [['updated_at', 'DESC']] // Get the most recent item for this SKU
+        ]
       });
 
       if (!returnRequestItem) {
-        return ResponseHandler.error(res, `No return item found for SKU ${sku_id} that is ready for putaway`, 404);
+        return ResponseHandler.error(res, `No return item found for SKU ${sku_id} with return_item_id ${return_item_id} that is ready for putaway`, 404);
       }
 
-      console.log(`✅ Found return item for SKU ${sku_id}:`, {
+      console.log(`✅ Found return item for SKU ${sku_id} with return_item_id ${return_item_id}:`, {
         id: returnRequestItem.id,
         return_order_id: returnRequestItem.return_order_id,
         grn_status: returnRequestItem.grn_status,
