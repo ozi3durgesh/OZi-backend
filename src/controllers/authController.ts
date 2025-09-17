@@ -350,10 +350,33 @@ export class AuthController {
       try {
         payload = JwtUtils.verifyAccessToken(accessToken);
       } catch (error) {
-        return ResponseHandler.error(res, 'Invalid access token', 401);
+        console.error('Token verification failed:', error);
+        return ResponseHandler.error(res, 'Invalid or expired access token', 401);
       }
 
       const userId = payload.userId;
+
+      // Get user information from database to return in response
+      const user = await User.findByPk(userId, {
+        include: [
+          {
+            association: 'Role',
+            include: ['Permissions'],
+          },
+        ],
+        attributes: [
+          'id',
+          'email',
+          'roleId',
+          'isActive',
+          'availabilityStatus',
+          'createdAt',
+        ],
+      });
+
+      if (!user) {
+        return ResponseHandler.error(res, 'User not found', 404);
+      }
 
       // Check if token is already blacklisted
       const existingToken = await TokenBlacklist.findOne({
@@ -362,18 +385,32 @@ export class AuthController {
 
       // Add access token to blacklist only if not already there
       if (!existingToken) {
-        await TokenBlacklist.create({
-          token: accessToken,
-          userId: userId,
-          tokenType: 'access',
-          expiresAt: payload.exp ? new Date(payload.exp * 1000) : new Date(Date.now() + 15 * 60 * 1000), // Default to 15 minutes if exp not available
-        });
+        try {
+          await TokenBlacklist.create({
+            token: accessToken,
+            userId: userId,
+            tokenType: 'access',
+            expiresAt: payload.exp ? new Date(payload.exp * 1000) : new Date(Date.now() + 15 * 60 * 1000), // Default to 15 minutes if exp not available
+          });
+        } catch (error: any) {
+          // If it's a duplicate entry error, that's fine - token is already blacklisted
+          if (error.name === 'SequelizeUniqueConstraintError' || error.code === 'ER_DUP_ENTRY') {
+            console.log('Token already blacklisted, continuing with logout');
+          } else {
+            throw error; // Re-throw if it's a different error
+          }
+        }
       }
 
       // If refresh token is provided, add it to blacklist as well
       if (refreshToken) {
         try {
           const refreshPayload = JwtUtils.verifyRefreshToken(refreshToken);
+          
+          // Verify refresh token belongs to the same user
+          if (refreshPayload.userId !== userId) {
+            return ResponseHandler.error(res, 'Refresh token does not belong to the authenticated user', 403);
+          }
           
           // Check if refresh token is already blacklisted
           const existingRefreshToken = await TokenBlacklist.findOne({
@@ -382,26 +419,57 @@ export class AuthController {
           
           // Add refresh token to blacklist only if not already there
           if (!existingRefreshToken) {
-            await TokenBlacklist.create({
-              token: refreshToken,
-              userId: userId,
-              tokenType: 'refresh',
-              expiresAt: refreshPayload.exp ? new Date(refreshPayload.exp * 1000) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Default to 7 days if exp not available
-            });
+            try {
+              await TokenBlacklist.create({
+                token: refreshToken,
+                userId: userId,
+                tokenType: 'refresh',
+                expiresAt: refreshPayload.exp ? new Date(refreshPayload.exp * 1000) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Default to 7 days if exp not available
+              });
+            } catch (error: any) {
+              // If it's a duplicate entry error, that's fine - token is already blacklisted
+              if (error.name === 'SequelizeUniqueConstraintError' || error.code === 'ER_DUP_ENTRY') {
+                console.log('Refresh token already blacklisted, continuing with logout');
+              } else {
+                throw error; // Re-throw if it's a different error
+              }
+            }
           }
         } catch (error) {
-          // If refresh token is invalid, we still proceed with logout
-          console.warn('Invalid refresh token during logout:', error);
+          console.error('Refresh token verification failed:', error);
+          return ResponseHandler.error(res, 'Invalid refresh token', 401);
         }
       }
 
       return ResponseHandler.success(res, {
         message: 'Successfully logged out',
         loggedOutAt: new Date().toISOString(),
+        user: {
+          id: user.id,
+          email: user.email,
+          roleId: user.roleId,
+          role: user.Role?.name || '',
+          permissions: user.Role?.Permissions
+            ? user.Role.Permissions.map((p) => `${p.module}:${p.action}`)
+            : [],
+          availabilityStatus: user.availabilityStatus,
+          createdAt: user.createdAt,
+        },
       });
     } catch (error) {
       console.error('Logout error:', error);
-      return ResponseHandler.error(res, 'Internal server error', 500);
+      
+      // Provide more specific error messages based on error type
+      if (error instanceof Error) {
+        if (error.message.includes('JWT_ACCESS_SECRET')) {
+          return ResponseHandler.error(res, 'Server configuration error', 500);
+        }
+        if (error.message.includes('database') || error.message.includes('connection')) {
+          return ResponseHandler.error(res, 'Database connection error', 500);
+        }
+      }
+      
+      return ResponseHandler.error(res, 'Logout failed due to server error', 500);
     }
   }
 
