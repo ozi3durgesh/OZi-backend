@@ -365,7 +365,7 @@ export class UserController {
 
       // Deactivate the user
       user.isActive = false;
-      user.availabilityStatus = 'unavailable'; // Also set availability to unavailable
+      user.availabilityStatus = 'off-shift'; // Also set availability to off-shift
       await user.save();
 
       return ResponseHandler.success(res, {
@@ -425,7 +425,7 @@ export class UserController {
 
       // Update the user's status
       user.isActive = isActive;
-      user.availabilityStatus = isActive ? 'available' : 'unavailable';
+      user.availabilityStatus = isActive ? 'available' : 'off-shift';
       await user.save();
 
       const statusText = isActive ? 'activated' : 'deactivated';
