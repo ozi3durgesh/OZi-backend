@@ -449,10 +449,10 @@ export class PickingController {
       if (!targetPickerId) {
         console.log(`Auto-assigning wave ${waveId} using round-robin`);
         
-        // Get all active pickers with picking permissions (roleId = 4 for wh_staff_2)
+        // Get all available pickers with picking permissions (roleId = 4 for wh_staff_2)
+        // Exclude users who are off-shift (availabilityStatus = 'off-shift')
         const pickers = await User.findAll({
           where: {
-            isActive: [true, 1], // Handle both boolean true and integer 1
             availabilityStatus: 'available',
             roleId: 4 // wh_staff_2 role has picking permissions
           },
@@ -510,12 +510,7 @@ export class PickingController {
         return ResponseHandler.error(res, 'Picker not found', 404);
       }
 
-      // Check if picker is active
-      const isActive = picker.isActive === true;
-      if (!isActive) {
-        return ResponseHandler.error(res, 'Picker is not active', 400);
-      }
-
+      // Check if picker is available (not off-shift)
       if (picker.availabilityStatus !== 'available') {
         return ResponseHandler.error(res, `Picker is not available. Current status: ${picker.availabilityStatus}`, 400);
       }

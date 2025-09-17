@@ -383,8 +383,8 @@ export class UserController {
 
 
   /**
-   * Self-manage account status (activate/deactivate)
-   * Users can set their own isActive status
+   * Self-manage availability status (available/off-shift)
+   * Users can set their own availability status
    */
   static async selfManageStatus(req: AuthRequest, res: Response): Promise<Response> {
     try {
@@ -404,38 +404,32 @@ export class UserController {
         return ResponseHandler.error(res, 'User not found', 404);
       }
 
+      // Convert isActive boolean to availabilityStatus
+      const newAvailabilityStatus = isActive ? 'available' : 'off-shift';
+
       // Check if status is already set to the requested value
-      if (user.isActive === isActive) {
-        const statusText = isActive ? 'active' : 'inactive';
-        return ResponseHandler.error(res, `Account is already ${statusText}`, 400);
+      if (user.availabilityStatus === newAvailabilityStatus) {
+        const statusText = isActive ? 'available' : 'off-shift';
+        return ResponseHandler.error(res, `Availability status is already ${statusText}`, 400);
       }
 
-      // Special handling for deactivated users trying to reactivate
-      if (!user.isActive && isActive) {
-        console.log(`Deactivated user ${user.email} attempting to reactivate account`);
+      // Special handling for off-shift users trying to go available
+      if (user.availabilityStatus === 'off-shift' && isActive) {
+        console.log(`Off-shift user ${user.email} attempting to go available`);
       }
 
-      // Prevent the last admin user from deactivating themselves
-      if (user.roleId === 1 && !isActive) { // Assuming admin role ID is 1
-        const adminUsers = await User.count({ where: { roleId: 1, isActive: true } });
-        if (adminUsers <= 1) {
-          return ResponseHandler.error(res, 'Cannot deactivate the last admin user', 403);
-        }
-      }
-
-      // Update the user's status
-      user.isActive = isActive;
-      user.availabilityStatus = isActive ? 'available' : 'off-shift';
+      // Update only the availability status, not isActive
+      user.availabilityStatus = newAvailabilityStatus;
       await user.save();
 
-      const statusText = isActive ? 'activated' : 'deactivated';
-      const actionText = isActive ? 'activated' : 'deactivated';
+      const statusText = isActive ? 'available' : 'off-shift';
+      const actionText = isActive ? 'available' : 'off-shift';
 
       return ResponseHandler.success(res, {
-        message: `Account ${actionText} successfully`,
+        message: `Availability status set to ${actionText} successfully`,
         id: user.id,
         email: user.email,
-        isActive: user.isActive,
+        isActive: user.isActive, // Keep original isActive value
         availabilityStatus: user.availabilityStatus,
         [`${statusText}At`]: new Date().toISOString(),
       });
