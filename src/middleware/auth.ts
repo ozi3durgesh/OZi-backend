@@ -52,8 +52,28 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
       return;
     }
 
+    // Allow deactivated users to access only self-reactivation endpoint
     if (!user.isActive) {
-      ResponseHandler.error(res, 'User account is deactivated', 401);
+      // Check if this is the self-reactivation endpoint
+      const isSelfReactivationEndpoint = req.path === '/api/users/self/isActive' && req.method === 'POST';
+      
+      if (!isSelfReactivationEndpoint) {
+        ResponseHandler.error(res, 'User account is deactivated', 401);
+        return;
+      }
+      
+      // For self-reactivation endpoint, allow access but with limited user data
+      req.user = {
+        id: user.id,
+        email: user.email,
+        roleId: user.roleId,
+        role: user.Role?.name || '',
+        permissions: [], // No permissions for deactivated users
+        availabilityStatus: user.availabilityStatus,
+        createdAt: user.createdAt,
+        isActive: false // Explicitly mark as inactive
+      };
+      next();
       return;
     }
 

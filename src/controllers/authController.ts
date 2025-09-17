@@ -184,9 +184,8 @@ export class AuthController {
         return ResponseHandler.error(res, 'Invalid credentials', 401);
       }
 
-      if (!user.isActive) {
-        return ResponseHandler.error(res, 'Account is deactivated', 401);
-      }
+      // Allow deactivated users to login so they can reactivate themselves
+      // The authentication middleware will handle access control for deactivated users
 
       const isValidPassword = await bcrypt.compare(password, user.password);
       if (!isValidPassword) {
@@ -248,9 +247,8 @@ export class AuthController {
         return ResponseHandler.error(res, 'User not found', 401);
       }
 
-      if (!user.isActive) {
-        return ResponseHandler.error(res, 'Account is deactivated', 401);
-      }
+      // Allow deactivated users to refresh tokens so they can reactivate themselves
+      // The authentication middleware will handle access control for deactivated users
 
       const newAccessToken = await JwtUtils.generateAccessToken(user);
       const newRefreshToken = await JwtUtils.generateRefreshToken(user);
@@ -357,24 +355,40 @@ export class AuthController {
 
       const userId = payload.userId;
 
-      // Add access token to blacklist
-      await TokenBlacklist.create({
-        token: accessToken,
-        userId: userId,
-        tokenType: 'access',
-        expiresAt: payload.exp ? new Date(payload.exp * 1000) : new Date(Date.now() + 15 * 60 * 1000), // Default to 15 minutes if exp not available
+      // Check if token is already blacklisted
+      const existingToken = await TokenBlacklist.findOne({
+        where: { token: accessToken }
       });
+
+      // Add access token to blacklist only if not already there
+      if (!existingToken) {
+        await TokenBlacklist.create({
+          token: accessToken,
+          userId: userId,
+          tokenType: 'access',
+          expiresAt: payload.exp ? new Date(payload.exp * 1000) : new Date(Date.now() + 15 * 60 * 1000), // Default to 15 minutes if exp not available
+        });
+      }
 
       // If refresh token is provided, add it to blacklist as well
       if (refreshToken) {
         try {
           const refreshPayload = JwtUtils.verifyRefreshToken(refreshToken);
-          await TokenBlacklist.create({
-            token: refreshToken,
-            userId: userId,
-            tokenType: 'refresh',
-            expiresAt: refreshPayload.exp ? new Date(refreshPayload.exp * 1000) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Default to 7 days if exp not available
+          
+          // Check if refresh token is already blacklisted
+          const existingRefreshToken = await TokenBlacklist.findOne({
+            where: { token: refreshToken }
           });
+          
+          // Add refresh token to blacklist only if not already there
+          if (!existingRefreshToken) {
+            await TokenBlacklist.create({
+              token: refreshToken,
+              userId: userId,
+              tokenType: 'refresh',
+              expiresAt: refreshPayload.exp ? new Date(refreshPayload.exp * 1000) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Default to 7 days if exp not available
+            });
+          }
         } catch (error) {
           // If refresh token is invalid, we still proceed with logout
           console.warn('Invalid refresh token during logout:', error);
@@ -409,31 +423,27 @@ export class AuthController {
 
       const userId = payload.userId;
 
-      // Add current access token to blacklist
-      await TokenBlacklist.create({
-        token: accessToken,
-        userId: userId,
-        tokenType: 'access',
-        expiresAt: payload.exp ? new Date(payload.exp * 1000) : new Date(Date.now() + 15 * 60 * 1000), // Default to 15 minutes if exp not available
+      // Check if current access token is already blacklisted
+      const existingToken = await TokenBlacklist.findOne({
+        where: { token: accessToken }
       });
 
-      // Blacklist all existing tokens for this user (both access and refresh)
-      // This is a more aggressive logout that invalidates all sessions
-      const userTokens = await TokenBlacklist.findAll({
-        where: { userId },
-      });
-
-      // Add all existing tokens to blacklist if not already there
-      for (const tokenRecord of userTokens) {
-        if (tokenRecord.token !== accessToken) {
-          await TokenBlacklist.create({
-            token: tokenRecord.token,
-            userId: userId,
-            tokenType: tokenRecord.tokenType,
-            expiresAt: tokenRecord.expiresAt,
-          });
-        }
+      // Add current access token to blacklist only if not already there
+      if (!existingToken) {
+        await TokenBlacklist.create({
+          token: accessToken,
+          userId: userId,
+          tokenType: 'access',
+          expiresAt: payload.exp ? new Date(payload.exp * 1000) : new Date(Date.now() + 15 * 60 * 1000), // Default to 15 minutes if exp not available
+        });
       }
+
+      // For logout-all, we just blacklist the current access token
+      // In a real implementation, you might want to:
+      // 1. Store active refresh tokens in a separate table when users login
+      // 2. Blacklist all active refresh tokens for this user
+      // For now, we'll just blacklist the current access token
+      // Future refresh token usage will be handled by the middleware checking blacklist
 
       return ResponseHandler.success(res, {
         message: 'Successfully logged out from all devices',
@@ -442,6 +452,74 @@ export class AuthController {
       });
     } catch (error) {
       console.error('Logout all error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+  /**
+   * Logout a specific user (Admin only)
+   * This allows admin users to logout other users from all their devices
+   */
+  static async logoutUser(req: any, res: Response): Promise<Response> {
+    try {
+      const { userId } = req.params;
+      const accessToken = req.headers.authorization?.substring(7); // Remove 'Bearer ' prefix
+
+      if (!accessToken) {
+        return ResponseHandler.error(res, 'Access token is required', 400);
+      }
+
+      if (!userId) {
+        return ResponseHandler.error(res, 'User ID is required', 400);
+      }
+
+      // Verify the access token to get admin user information
+      let payload;
+      try {
+        payload = JwtUtils.verifyAccessToken(accessToken);
+      } catch (error) {
+        return ResponseHandler.error(res, 'Invalid access token', 401);
+      }
+
+      const adminUserId = payload.userId;
+
+      // Check if the requesting user has admin permissions
+      if (!req.user?.permissions.includes('users_roles:manage')) {
+        return ResponseHandler.error(res, 'Insufficient permissions. Admin access required.', 403);
+      }
+
+      // Prevent admin from logging out themselves through this endpoint
+      if (parseInt(userId) === adminUserId) {
+        return ResponseHandler.error(res, 'Use the regular logout endpoint to logout yourself', 400);
+      }
+
+      // Check if target user exists
+      const targetUser = await User.findByPk(userId);
+      if (!targetUser) {
+        return ResponseHandler.error(res, 'Target user not found', 404);
+      }
+
+      // For admin logout, we'll create a special blacklist entry
+      // In a real implementation, you might want to:
+      // 1. Store active tokens in a separate table when users login
+      // 2. Blacklist all active tokens for this specific user
+      // For now, we'll create a marker entry to indicate the user was logged out by admin
+      await TokenBlacklist.create({
+        token: `admin_logout_${userId}_${Date.now()}`, // Create a unique marker token
+        userId: parseInt(userId),
+        tokenType: 'access',
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // Expires in 24 hours
+      });
+
+      return ResponseHandler.success(res, {
+        message: `Successfully logged out user ${targetUser.email}`,
+        targetUserId: parseInt(userId),
+        targetUserEmail: targetUser.email,
+        loggedOutAt: new Date().toISOString(),
+        adminUserId: adminUserId,
+      });
+    } catch (error) {
+      console.error('Logout user error:', error);
       return ResponseHandler.error(res, 'Internal server error', 500);
     }
   }

@@ -8,7 +8,8 @@ import {
   uploadPIFile,              // save PI and delivery date
   getAllPOs,
   getPOById,
-  getPOByToken
+  getPOByToken,
+  getPOInventorySummary
 } from "../controllers/purchaseOrderController";
 
 const router = Router();
@@ -41,5 +42,8 @@ router.get("/:id", getPOById);
 
 // Get PO by token (for frontend approval link)
 router.get("/approval/:token", getPOByToken);
+
+// Get PO inventory summary
+router.get("/:id/inventory", getPOInventorySummary);
 
 export default router;

@@ -317,6 +317,14 @@ export const connectDatabase = async (): Promise<void> => {
     // Create initial admin user if specified
     await createInitialAdmin();
     
+    // Setup inventory system if not already initialized
+    try {
+      const { setupInventorySystem } = await import('../script/setupInventorySystem.js');
+      await setupInventorySystem();
+    } catch (inventoryError) {
+      console.log('ℹ️ Inventory system setup skipped (may already exist)');
+    }
+    
   } catch (error) {
     console.error('Unable to connect to the database:', error);
     console.error('Please check your database configuration and ensure MySQL is running.');

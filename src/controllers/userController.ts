@@ -333,4 +333,115 @@ export class UserController {
       return ResponseHandler.error(res, 'Internal server error', 500);
     }
   }
+
+  /**
+   * Self-deactivation endpoint - allows users to deactivate their own account
+   */
+  static async selfDeactivate(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return ResponseHandler.error(res, 'User ID not found in request', 400);
+      }
+
+      const user = await User.findByPk(userId);
+      if (!user) {
+        return ResponseHandler.error(res, 'User not found', 404);
+      }
+
+      // Check if user is already deactivated
+      if (!user.isActive) {
+        return ResponseHandler.error(res, 'Account is already deactivated', 400);
+      }
+
+      // Prevent deactivating the last admin user
+      if (user.roleId === 1) { // Assuming admin role ID is 1
+        const adminUsers = await User.count({ where: { roleId: 1, isActive: true } });
+        if (adminUsers <= 1) {
+          return ResponseHandler.error(res, 'Cannot deactivate the last admin user', 403);
+        }
+      }
+
+      // Deactivate the user
+      user.isActive = false;
+      user.availabilityStatus = 'unavailable'; // Also set availability to unavailable
+      await user.save();
+
+      return ResponseHandler.success(res, {
+        id: user.id,
+        email: user.email,
+        isActive: user.isActive,
+        message: 'Account deactivated successfully. Please contact an administrator to reactivate your account.',
+        deactivatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Self-deactivation error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+
+  /**
+   * Self-manage account status (activate/deactivate)
+   * Users can set their own isActive status
+   */
+  static async selfManageStatus(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { isActive } = req.body;
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return ResponseHandler.error(res, 'User not authenticated', 401);
+      }
+
+      if (typeof isActive !== 'boolean') {
+        return ResponseHandler.error(res, 'isActive must be a boolean value (true or false)', 400);
+      }
+
+      const user = await User.findByPk(userId);
+      if (!user) {
+        return ResponseHandler.error(res, 'User not found', 404);
+      }
+
+      // Check if status is already set to the requested value
+      if (user.isActive === isActive) {
+        const statusText = isActive ? 'active' : 'inactive';
+        return ResponseHandler.error(res, `Account is already ${statusText}`, 400);
+      }
+
+      // Special handling for deactivated users trying to reactivate
+      if (!user.isActive && isActive) {
+        console.log(`Deactivated user ${user.email} attempting to reactivate account`);
+      }
+
+      // Prevent the last admin user from deactivating themselves
+      if (user.roleId === 1 && !isActive) { // Assuming admin role ID is 1
+        const adminUsers = await User.count({ where: { roleId: 1, isActive: true } });
+        if (adminUsers <= 1) {
+          return ResponseHandler.error(res, 'Cannot deactivate the last admin user', 403);
+        }
+      }
+
+      // Update the user's status
+      user.isActive = isActive;
+      user.availabilityStatus = isActive ? 'available' : 'unavailable';
+      await user.save();
+
+      const statusText = isActive ? 'activated' : 'deactivated';
+      const actionText = isActive ? 'activated' : 'deactivated';
+
+      return ResponseHandler.success(res, {
+        message: `Account ${actionText} successfully`,
+        id: user.id,
+        email: user.email,
+        isActive: user.isActive,
+        availabilityStatus: user.availabilityStatus,
+        [`${statusText}At`]: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error('Self-manage status error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
 }

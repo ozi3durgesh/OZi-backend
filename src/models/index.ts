@@ -32,6 +32,8 @@ import TokenBlacklist from './TokenBlacklist';
 import ReturnRequestItem from './ReturnRequestItem';
 import PutawayTask from './PutawayTask';
 import PutawayAudit from './PutawayAudit';
+import Inventory from './Inventory';
+import InventoryLog from './InventoryLog';
 
 // Set up associations
 Coupon.hasMany(CouponTranslation, {
@@ -227,6 +229,10 @@ PutawayAudit.belongsTo(User, { foreignKey: 'performed_by', as: 'PerformedBy' });
 
 PutawayTask.hasMany(PutawayAudit, { foreignKey: 'putaway_task_id', as: 'AuditLogs' });
 
+// Inventory associations
+Inventory.hasMany(InventoryLog, { foreignKey: 'sku', sourceKey: 'sku', as: 'Logs' });
+InventoryLog.belongsTo(Inventory, { foreignKey: 'sku', targetKey: 'sku', as: 'Inventory' });
+
 // Return system associations are defined in individual model files
 
 export {
@@ -262,4 +268,6 @@ export {
   PutawayTask,
   PutawayAudit,
   ReturnRequestItem,
+  Inventory,
+  InventoryLog,
 };

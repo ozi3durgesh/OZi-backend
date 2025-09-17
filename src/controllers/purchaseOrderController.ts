@@ -8,6 +8,8 @@ import dotenv from 'dotenv';
 import crypto from 'crypto';
 import multer from "multer";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import DirectInventoryService from '../services/DirectInventoryService';
+import { INVENTORY_OPERATIONS } from '../config/inventoryConstants';
 
 dotenv.config();
 
@@ -147,6 +149,69 @@ export const createPurchaseOrder = async (req: Request, res: Response) => {
 
     await POProduct.bulkCreate(productRecords);
 
+    // Update inventory for each product in the PO
+    console.log('🔄 Updating inventory for PO products...');
+    const inventoryUpdates: Array<{
+      sku: string;
+      status: string;
+      message: string;
+      data?: any;
+    }> = [];
+
+    for (const product of products) {
+      try {
+        const inventoryResult = await DirectInventoryService.updateInventory({
+          sku: product.sku_id,
+          operation: INVENTORY_OPERATIONS.PO,
+          quantity: product.units,
+          referenceId: nextPoId,
+          operationDetails: {
+            po_id: nextPoId,
+            product_name: product.product,
+            vendor_name: vendor_name,
+            purchase_date: purchase_date,
+            expected_delivery_date: expected_delivery_date,
+            mrp: product.mrp,
+            sp: product.sp,
+            rlp: product.rlp
+          },
+          performedBy: 1 // System user
+        });
+
+        if (inventoryResult.success) {
+          console.log(`✅ Inventory updated for SKU ${product.sku_id}: +${product.units} units`);
+          inventoryUpdates.push({
+            sku: product.sku_id,
+            status: 'success',
+            message: inventoryResult.message,
+            data: inventoryResult.data
+          });
+        } else {
+          console.error(`❌ Inventory update failed for SKU ${product.sku_id}: ${inventoryResult.message}`);
+          inventoryUpdates.push({
+            sku: product.sku_id,
+            status: 'failed',
+            message: inventoryResult.message
+          });
+        }
+      } catch (error: any) {
+        console.error(`❌ Error updating inventory for SKU ${product.sku_id}:`, error.message);
+        inventoryUpdates.push({
+          sku: product.sku_id,
+          status: 'error',
+          message: error.message
+        });
+      }
+    }
+
+    const inventorySummary = {
+      total_skus: products.length,
+      successful_updates: inventoryUpdates.filter(u => u.status === 'success').length,
+      failed_updates: inventoryUpdates.filter(u => u.status === 'failed').length,
+      error_updates: inventoryUpdates.filter(u => u.status === 'error').length,
+      updates: inventoryUpdates
+    };
+
     const poWithProducts = await PurchaseOrder.findByPk(newPo.id, { include: [{ model: POProduct, as: 'products' }] });
 
     if (!draft && poWithProducts) {
@@ -154,7 +219,11 @@ export const createPurchaseOrder = async (req: Request, res: Response) => {
     }
 
     return ResponseHandler.success(res, {
-      PO: { message: draft ? 'Draft PO created' : 'PO created and sent for approval', po_id: newPo.po_id }
+      PO: { 
+        message: draft ? 'Draft PO created' : 'PO created and sent for approval', 
+        po_id: newPo.po_id,
+        inventory_summary: inventorySummary
+      }
     }, 201);
 
   } catch (error: any) {
@@ -246,6 +315,62 @@ export const approvePO = async (req: Request, res: Response) => {
       po.rejection_reason = reason || `${role} rejected the PO`;
       po.current_approver = null;
       await po.save();
+      
+      // Reverse inventory when PO is rejected
+      try {
+        console.log(`🔄 Reversing inventory for rejected PO ${po.po_id}...`);
+        const inventoryUpdates: Array<{
+          sku: string;
+          status: string;
+          message: string;
+        }> = [];
+
+        for (const product of po.products || []) {
+          try {
+            const inventoryResult = await DirectInventoryService.updateInventory({
+              sku: product.sku_id,
+              operation: INVENTORY_OPERATIONS.PO,
+              quantity: -product.units, // Negative quantity to reverse
+              referenceId: po.po_id,
+              operationDetails: {
+                po_id: po.po_id,
+                product_name: product.product,
+                operation: 'po_rejection',
+                rejected_date: new Date().toISOString()
+              },
+              performedBy: 1 // System user
+            });
+
+            if (inventoryResult.success) {
+              console.log(`✅ PO inventory reversed for SKU ${product.sku_id}: -${product.units} units`);
+              inventoryUpdates.push({
+                sku: product.sku_id,
+                status: 'success',
+                message: inventoryResult.message
+              });
+            } else {
+              console.error(`❌ PO inventory reversal failed for SKU ${product.sku_id}: ${inventoryResult.message}`);
+              inventoryUpdates.push({
+                sku: product.sku_id,
+                status: 'failed',
+                message: inventoryResult.message
+              });
+            }
+          } catch (error: any) {
+            console.error(`❌ Error reversing PO inventory for SKU ${product.sku_id}:`, error.message);
+            inventoryUpdates.push({
+              sku: product.sku_id,
+              status: 'error',
+              message: error.message
+            });
+          }
+        }
+
+        console.log(`✅ Inventory reversal completed for rejected PO ${po.po_id}:`, inventoryUpdates);
+      } catch (inventoryError: any) {
+        console.error(`❌ Inventory reversal failed for rejected PO ${po.po_id}:`, inventoryError.message);
+      }
+      
       return ResponseHandler.success(res,{PO:{message:`PO rejected by ${role}`, po_id: po.po_id}},200);
     }
 
@@ -262,6 +387,62 @@ export const approvePO = async (req: Request, res: Response) => {
         po.approval_status = 'admin';
         po.current_approver = 'creator'; // Hand over to creator for PI
         await po.save();
+        
+        // Update inventory when PO is finally approved (move from PO to GRN)
+        try {
+          console.log(`🔄 Updating inventory for approved PO ${po.po_id}...`);
+          const inventoryUpdates: Array<{
+            sku: string;
+            status: string;
+            message: string;
+          }> = [];
+
+          for (const product of po.products || []) {
+            try {
+              const inventoryResult = await DirectInventoryService.updateInventory({
+                sku: product.sku_id,
+                operation: INVENTORY_OPERATIONS.GRN,
+                quantity: product.units,
+                referenceId: po.po_id,
+                operationDetails: {
+                  po_id: po.po_id,
+                  product_name: product.product,
+                  operation: 'po_approval',
+                  approved_date: new Date().toISOString()
+                },
+                performedBy: 1 // System user
+              });
+
+              if (inventoryResult.success) {
+                console.log(`✅ GRN inventory updated for SKU ${product.sku_id}: +${product.units} units`);
+                inventoryUpdates.push({
+                  sku: product.sku_id,
+                  status: 'success',
+                  message: inventoryResult.message
+                });
+              } else {
+                console.error(`❌ GRN inventory update failed for SKU ${product.sku_id}: ${inventoryResult.message}`);
+                inventoryUpdates.push({
+                  sku: product.sku_id,
+                  status: 'failed',
+                  message: inventoryResult.message
+                });
+              }
+            } catch (error: any) {
+              console.error(`❌ Error updating GRN inventory for SKU ${product.sku_id}:`, error.message);
+              inventoryUpdates.push({
+                sku: product.sku_id,
+                status: 'error',
+                message: error.message
+              });
+            }
+          }
+
+          console.log(`✅ Inventory update completed for approved PO ${po.po_id}:`, inventoryUpdates);
+        } catch (inventoryError: any) {
+          console.error(`❌ Inventory update failed for approved PO ${po.po_id}:`, inventoryError.message);
+        }
+        
         await sendApprovalEmail(po,'creator');
         return ResponseHandler.success(res,{PO:{message:'PO approved by Admin, sent to Creator for PI', po_id: po.po_id}},200);
       }
@@ -424,5 +605,65 @@ export const getPOByToken = async (req: Request,res: Response)=>{
 
   }catch(error:any){
     return ResponseHandler.error(res,error.message||'Invalid token',400);
+  }
+};
+
+/** Get PO Inventory Summary */
+export const getPOInventorySummary = async (req: Request, res: Response) => {
+  const poId = req.params.id;
+  
+  try {
+    const po = await PurchaseOrder.findByPk(poId, { include: [{ model: POProduct, as: 'products' }] });
+    if (!po) return ResponseHandler.error(res, 'PO not found', 404);
+    
+    console.log(`🔍 Getting inventory summary for PO ${po.po_id} with ${po.products?.length || 0} products`);
+    
+    const inventorySummaries: Array<{
+      sku: string;
+      product_name: string;
+      po_quantity: number;
+      current_inventory: any;
+    }> = [];
+    
+    // Debug: Check if products exist
+    console.log(`🔍 PO products:`, po.products?.map(p => ({ sku: p.sku_id, name: p.product })));
+    
+    for (const product of po.products || []) {
+      try {
+        console.log(`🔍 Processing product SKU: ${product.sku_id}`);
+        const summary = await DirectInventoryService.getInventorySummary(product.sku_id);
+        console.log(`🔍 Summary for ${product.sku_id}:`, summary ? 'Found' : 'Not found');
+        if (summary) {
+          inventorySummaries.push({
+            sku: product.sku_id,
+            product_name: product.product,
+            po_quantity: product.units,
+            current_inventory: summary
+          });
+          console.log(`✅ Added inventory summary for SKU ${product.sku_id}`);
+        } else {
+          console.log(`❌ No inventory summary found for SKU ${product.sku_id}`);
+        }
+      } catch (error: any) {
+        console.error(`❌ Error getting inventory summary for SKU ${product.sku_id}:`, error.message);
+      }
+    }
+
+    const inventorySummary = {
+      po_id: po.po_id,
+      po_status: po.approval_status,
+      total_products: po.products?.length || 0,
+      inventory_summaries: inventorySummaries
+    };
+    
+    return ResponseHandler.success(res, {
+      po_id: po.po_id,
+      po_status: po.approval_status,
+      inventory_summary: inventorySummary
+    });
+    
+  } catch (error: any) {
+    console.error('Error getting PO inventory summary:', error);
+    return ResponseHandler.error(res, error.message || 'Error getting PO inventory summary', 500);
   }
 };

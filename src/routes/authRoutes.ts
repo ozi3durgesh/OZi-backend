@@ -1,7 +1,7 @@
 // routes/authRoutes.ts
 import { Router } from 'express';
 import { AuthController } from '../controllers/authController';
-import { authenticate } from '../middleware/auth';
+import { authenticate, hasPermission } from '../middleware/auth';
 import { versionCheck } from '../middleware/versionCheck';
 
 const router = Router();
@@ -20,6 +20,7 @@ router.post('/login', AuthController.login);
 router.post('/refresh-token', AuthController.refreshToken);
 router.post('/logout', authenticate, AuthController.logout);
 router.post('/logout-all', authenticate, AuthController.logoutAll);
+router.post('/logout/:userId', authenticate, hasPermission('users_roles:manage'), AuthController.logoutUser);
 router.get('/roles', AuthController.getRoles);
 router.get('/profile', authenticate, AuthController.getProfile);
 
