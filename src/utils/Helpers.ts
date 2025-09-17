@@ -9,6 +9,9 @@ import { generateSimpleOrderId } from './orderIdGenerator';
 import { socketManager } from './socketManager';
 import { PickingController } from '../controllers/pickingController';
 import { ORDER_CONSTANTS, CartItem, OrderDetailData } from '../config/orderConstants';
+import { sendPushNotification } from '../services/snsService';
+import User from '../models/User';
+import UserDevice from '../models/userDevice';
 
 interface DeliveryAddress {
   contact_person_name: string;
@@ -521,6 +524,24 @@ export class Helpers {
                 assignment,
               });
               console.log(`📨 Emitted waveAssigned to picker_${assignedPickerId}`);
+
+              // 👉 Send Push Notification via SNS
+              const picker = await User.findByPk(assignedPickerId, {
+                include: [{ model: UserDevice, as: "devices" }],
+              });
+
+              if (picker && picker.devices && picker.devices.length > 0) {
+                for (const device of picker.devices) {
+                  await sendPushNotification(
+                    device.snsEndpointArn,
+                    "📦 New Wave Assigned",
+                    `Wave #${waveId} has been assigned to you.`,
+                    { orderId: order.id.toString(), waveId: waveId.toString() }
+                  );
+                }
+              }
+
+              console.log(`📨 SNS push notification sent to picker_${assignedPickerId}`);
             } else {
               // fallback: emit globally if no picker id available
               socketManager.emit('waveAssigned', {
