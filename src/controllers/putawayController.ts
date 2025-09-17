@@ -9,6 +9,8 @@ import BinLocation from '../models/BinLocation';
 import ScannerSku from '../models/ScannerSku';
 import ScannerBin from '../models/ScannerBin';
 import { AuthRequest } from '../types';
+import DirectInventoryService from '../services/DirectInventoryService';
+import { INVENTORY_OPERATIONS } from '../config/inventoryConstants';
 
 // Helper function to convert product detail keys to camelCase
 const convertProductDetailKeys = (productData: any) => {
@@ -955,12 +957,12 @@ export class PutawayController {
         return;
       }
 
-      if (grnLine.qc_pass_qty < quantity) {
+      if (quantity > grnLine.qc_pass_qty) {
         res.status(400).json({
           statusCode: 400,
           success: false,
           data: null,
-          error: 'Quantity exceeds available QC passed quantity',
+          error: `Quantity exceeds available QC passed quantity. Available: ${grnLine.qc_pass_qty}, Requested: ${quantity}`,
         });
         return;
       }
@@ -995,38 +997,138 @@ export class PutawayController {
           { transaction }
         );
 
-        // Update or create ScannerBin entry
-        let scannerBin = await ScannerBin.findOne({
-          where: { binLocationScanId: bin_location },
-          transaction
-        });
+        // Update or create ScannerBin entry - use atomic approach
+        try {
+          // Use a more reliable approach: find first, then update or create
+          const existingBin = await ScannerBin.findOne({
+            where: { binLocationScanId: bin_location },
+            transaction
+          });
 
-        if (scannerBin) {
-          // Update existing scanner bin - add SKU if not already present
-          const existingSkus = Array.isArray(scannerBin.sku) ? scannerBin.sku : [];
-          if (!existingSkus.includes(sku_id)) {
-            existingSkus.push(sku_id);
-            await scannerBin.update({ sku: existingSkus }, { transaction });
+          if (existingBin) {
+            // Update existing record - add SKU if not already present
+            const existingSkus = Array.isArray(existingBin.sku) ? [...existingBin.sku] : [];
+            console.log(`📦 Existing SKUs in bin ${bin_location}:`, existingSkus);
+            
+            if (!existingSkus.includes(sku_id)) {
+              existingSkus.push(sku_id);
+              console.log(`📦 Adding SKU ${sku_id} to bin ${bin_location}. New SKU list:`, existingSkus);
+              await existingBin.update({ sku: existingSkus }, { transaction });
+            } else {
+              console.log(`📦 SKU ${sku_id} already exists in bin ${bin_location}`);
+            }
+          } else {
+            // Create new record if none exists
+            console.log(`📦 Creating new bin record for ${bin_location} with SKU ${sku_id}`);
+            await ScannerBin.create({
+              binLocationScanId: bin_location,
+              sku: [sku_id]
+            }, { transaction });
           }
-        } else {
-          // Create new scanner bin entry
-          await ScannerBin.create({
-            binLocationScanId: bin_location,
-            sku: [sku_id]
-          }, { transaction });
+        } catch (scannerBinError: any) {
+          console.error(`❌ ScannerBin error for bin ${bin_location}:`, scannerBinError.message);
+          
+          // If it's a unique constraint error, try to find and update the existing record
+          if (scannerBinError.name === 'SequelizeUniqueConstraintError' || scannerBinError.code === 'ER_DUP_ENTRY') {
+            console.log(`🔄 Unique constraint violation detected, finding existing record for ${bin_location}`);
+            
+            // Try to find the existing record again
+            const existingBin = await ScannerBin.findOne({
+              where: { binLocationScanId: bin_location },
+              transaction
+            });
+            
+            if (existingBin) {
+              const existingSkus = Array.isArray(existingBin.sku) ? [...existingBin.sku] : [];
+              if (!existingSkus.includes(sku_id)) {
+                existingSkus.push(sku_id);
+                console.log(`📦 Adding SKU ${sku_id} to existing bin ${bin_location}. New SKU list:`, existingSkus);
+                await existingBin.update({ sku: existingSkus }, { transaction });
+              } else {
+                console.log(`📦 SKU ${sku_id} already exists in existing bin ${bin_location}`);
+              }
+            } else {
+              throw new Error(`Failed to find existing ScannerBin record for ${bin_location}`);
+            }
+          } else {
+            throw scannerBinError;
+          }
         }
 
         // Update or create ScannerSku entry
         // Use the actual SKU as the skuScanId instead of complex format
         const skuScanId = sku_id;
-        await ScannerSku.create({
-          skuScanId: skuScanId,
-          sku: [{ skuId: sku_id, quantity: quantity }],
-          binLocationScanId: bin_location
-        }, { transaction });
+        
+        // Check if ScannerSku entry already exists
+        let scannerSku = await ScannerSku.findOne({
+          where: { skuScanId: skuScanId },
+          transaction
+        });
+
+        if (scannerSku) {
+          // Update existing ScannerSku entry - add to existing quantity
+          const existingSkus = Array.isArray(scannerSku.sku) ? scannerSku.sku : [];
+          const existingSkuIndex = existingSkus.findIndex((item: any) => item.skuId === sku_id);
+          
+          if (existingSkuIndex >= 0) {
+            // Update existing SKU quantity
+            existingSkus[existingSkuIndex].quantity += quantity;
+          } else {
+            // Add new SKU to the list
+            existingSkus.push({ skuId: sku_id, quantity: quantity });
+          }
+          
+          await scannerSku.update({
+            sku: existingSkus,
+            binLocationScanId: bin_location
+          }, { transaction });
+        } else {
+          // Create new ScannerSku entry
+          await ScannerSku.create({
+            skuScanId: skuScanId,
+            sku: [{ skuId: sku_id, quantity: quantity }],
+            binLocationScanId: bin_location
+          }, { transaction });
+        }
 
         // Commit transaction
         await transaction.commit();
+
+        // Update inventory for putaway operation
+        let inventoryUpdateResult: {
+          success: boolean;
+          message: string;
+          data?: any;
+        } | null = null;
+        try {
+          inventoryUpdateResult = await DirectInventoryService.updateInventory({
+            sku: sku_id,
+            operation: INVENTORY_OPERATIONS.PUTAWAY,
+            quantity: quantity,
+            referenceId: `PUTAWAY-GRN-${grn_id}`,
+            operationDetails: {
+              grnId: grn_id,
+              skuId: sku_id,
+              quantity: quantity,
+              binLocation: bin_location,
+              remarks: remarks || 'Putaway completed',
+              putawayStatus: putawayStatus
+            },
+            performedBy: userId
+          });
+
+          if (inventoryUpdateResult.success) {
+            console.log(`✅ Inventory updated for putaway SKU ${sku_id}: +${quantity} units`);
+          } else {
+            console.error(`❌ Inventory update failed for putaway SKU ${sku_id}: ${inventoryUpdateResult.message}`);
+          }
+        } catch (inventoryError: any) {
+          console.error(`❌ Inventory update error for putaway SKU ${sku_id}:`, inventoryError.message);
+          inventoryUpdateResult = {
+            success: false,
+            message: inventoryError.message
+          };
+        }
 
         // Return success response
         res.status(200).json({
@@ -1049,6 +1151,13 @@ export class PutawayController {
               bin_code: bin_location,
               current_quantity: binLocation.current_quantity + quantity,
               capacity: binLocation.capacity
+            },
+            inventoryUpdate: {
+              success: inventoryUpdateResult?.success || false,
+              message: inventoryUpdateResult?.message || 'Inventory update not attempted',
+              operation: 'putaway',
+              quantity: quantity,
+              sku: sku_id
             }
           },
           error: null,
@@ -1062,11 +1171,30 @@ export class PutawayController {
 
     } catch (error: any) {
       console.error('Error confirming putaway:', error);
-      res.status(500).json({
-        statusCode: 500,
+      
+      // Provide more specific error messages
+      let errorMessage = 'Internal server error';
+      let statusCode = 500;
+      
+      if (error.name === 'SequelizeValidationError') {
+        errorMessage = 'Validation error: ' + error.errors.map((e: any) => e.message).join(', ');
+        statusCode = 400;
+      } else if (error.name === 'SequelizeForeignKeyConstraintError') {
+        errorMessage = 'Foreign key constraint error: Invalid reference';
+        statusCode = 400;
+      } else if (error.name === 'SequelizeUniqueConstraintError') {
+        errorMessage = 'Unique constraint error: Duplicate entry';
+        statusCode = 400;
+      } else if (error.message && error.message.includes('transaction')) {
+        errorMessage = 'Database transaction error';
+        statusCode = 500;
+      }
+      
+      res.status(statusCode).json({
+        statusCode,
         success: false,
         data: null,
-        error: 'Internal server error',
+        error: errorMessage,
       });
     }
   }
