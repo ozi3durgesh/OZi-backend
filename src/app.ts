@@ -24,6 +24,8 @@ import putawayRoutes from './routes/putawayRoutes';
 import returnRoutes from './routes/returnRoutes';
 import returnRequestItemRoutes from './routes/returnRequestItemRoutes';
 import pickerRoutes from './routes/pickerRoutes';
+import { rawRiderRouter } from './routes/rawRiderRoutes';
+import { rawPickerRouter } from './routes/rawPickerRoutes';
 
 const app = express();
 
@@ -66,6 +68,9 @@ app.use('/api/putaway', putawayRoutes);
 app.use('/api/returns', returnRoutes);
 app.use('/api/return-request-items', returnRequestItemRoutes);
 app.use("/api/picker", pickerRoutes);
+
+app.use('/api/raw-riders', rawRiderRouter);
+app.use('/api/raw-pickers', rawPickerRouter);
 
 // PHP Production Compatible Routes
 app.use('/api/v1/customer/order', orderRoutes);
