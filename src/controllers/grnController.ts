@@ -18,6 +18,8 @@ import PurchaseOrder from '../models/PurchaseOrder';
 import POProduct from '../models/POProduct';
 import { rejects } from 'assert';
 import { S3Service } from '../services/s3Service';
+import DirectInventoryService from '../services/DirectInventoryService';
+import { INVENTORY_OPERATIONS } from '../config/inventoryConstants';
 
 export class GrnController {
   /**
@@ -300,16 +302,90 @@ export class GrnController {
 
       await t.commit();
 
+      // Update inventory for each GRN line item
+      const inventoryUpdates: Array<{
+        sku: string;
+        status: 'success' | 'failed' | 'error';
+        quantity: number;
+        message: string;
+      }> = [];
+      for (const line of input.lines) {
+        if (line.receivedQty > 0) {
+          try {
+            const inventoryResult = await DirectInventoryService.updateInventory({
+              sku: line.skuId,
+              operation: INVENTORY_OPERATIONS.GRN,
+              quantity: line.receivedQty,
+              referenceId: `GRN-${grn.id}`,
+              operationDetails: {
+                grnId: grn.id,
+                poId: input.poId,
+                receivedQty: line.receivedQty,
+                rejectedQty: line.rejectedQty || 0,
+                qcPassQty: line.qcPassQty || line.receivedQty,
+                remarks: line.remarks || 'GRN received'
+              },
+              performedBy: userId
+            });
+
+            if (inventoryResult.success) {
+              console.log(`✅ Inventory updated for SKU ${line.skuId}: +${line.receivedQty} units`);
+              inventoryUpdates.push({
+                sku: line.skuId,
+                status: 'success',
+                quantity: line.receivedQty,
+                message: inventoryResult.message
+              });
+            } else {
+              console.error(`❌ Inventory update failed for SKU ${line.skuId}: ${inventoryResult.message}`);
+              inventoryUpdates.push({
+                sku: line.skuId,
+                status: 'failed',
+                quantity: line.receivedQty,
+                message: inventoryResult.message
+              });
+            }
+          } catch (inventoryError: any) {
+            console.error(`❌ Inventory update error for SKU ${line.skuId}:`, inventoryError.message);
+            inventoryUpdates.push({
+              sku: line.skuId,
+              status: 'error',
+              quantity: line.receivedQty,
+              message: inventoryError.message
+            });
+          }
+        }
+      }
+
       const createdGrn = await GRN.findByPk(grn.id, {
         include: [
           { model: User, as: 'GrnCreatedBy', attributes: ['id', 'email'] },
         ],
       });
 
+      if (!createdGrn) {
+        res.status(500).json({
+          statusCode: 500,
+          success: false,
+          data: null,
+          error: 'Failed to retrieve created GRN',
+        });
+        return;
+      }
+
       res.status(201).json({
         statusCode: 201,
         success: true,
-        data: createdGrn,
+        data: {
+          ...createdGrn.toJSON(),
+          inventoryUpdates: {
+            total_updates: inventoryUpdates.length,
+            successful_updates: inventoryUpdates.filter(u => u.status === 'success').length,
+            failed_updates: inventoryUpdates.filter(u => u.status === 'failed').length,
+            error_updates: inventoryUpdates.filter(u => u.status === 'error').length,
+            updates: inventoryUpdates
+          }
+        },
         error: null,
       });
     } catch (err: any) {

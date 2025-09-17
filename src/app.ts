@@ -26,6 +26,7 @@ import returnRequestItemRoutes from './routes/returnRequestItemRoutes';
 import pickerRoutes from './routes/pickerRoutes';
 import { rawRiderRouter } from './routes/rawRiderRoutes';
 import { rawPickerRouter } from './routes/rawPickerRoutes';
+import inventoryRoutes from './routes/inventoryRoutes';
 
 const app = express();
 
@@ -71,6 +72,7 @@ app.use("/api/picker", pickerRoutes);
 
 app.use('/api/raw-riders', rawRiderRouter);
 app.use('/api/raw-pickers', rawPickerRouter);
+app.use('/api/inventory', inventoryRoutes);
 
 // PHP Production Compatible Routes
 app.use('/api/v1/customer/order', orderRoutes);
