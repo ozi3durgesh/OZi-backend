@@ -530,8 +530,8 @@ export class Helpers {
                 include: [{ model: UserDevice, as: "devices" }],
               });
 
-              if (picker && picker.devices && picker.devices.length > 0) {
-                for (const device of picker.devices) {
+              if (picker && (picker as any).devices && (picker as any).devices.length > 0) {
+                for (const device of (picker as any).devices) {
                   await sendPushNotification(
                     device.snsEndpointArn,
                     "📦 New Wave Assigned",

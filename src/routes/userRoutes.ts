@@ -39,4 +39,9 @@ router.put('/:userId/toggle-status',
   UserController.toggleUserStatus
 );
 
+// Self-management endpoint - no admin permission required
+router.post('/self/isActive', 
+  UserController.selfManageStatus
+);
+
 export default router;
