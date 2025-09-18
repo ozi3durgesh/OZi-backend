@@ -3,7 +3,7 @@ import sequelize from '../config/database';
 import Product  from './productModel.js';
 
 interface PicklistItemAttributes {
-  id: number;
+  id?: number;
   waveId: number;
   orderId: number;
   sku: string;
@@ -21,8 +21,8 @@ interface PicklistItemAttributes {
   pickedBy?: number;
   notes?: string;
   scannerId?: string;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 class PicklistItem
@@ -165,6 +165,9 @@ PicklistItem.init(
   {
     sequelize,
     tableName: 'picklist_items',
+    timestamps: true,
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt',
     indexes: [
       { fields: ['waveId'] },
       { fields: ['orderId'] },

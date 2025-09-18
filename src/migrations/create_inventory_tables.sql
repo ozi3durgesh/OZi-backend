@@ -32,7 +32,8 @@ CREATE TABLE IF NOT EXISTS inventory (
   CONSTRAINT chk_picklist_quantity CHECK (picklist_quantity >= 0),
   CONSTRAINT chk_return_try_and_buy_quantity CHECK (return_try_and_buy_quantity >= 0),
   CONSTRAINT chk_return_other_quantity CHECK (return_other_quantity >= 0),
-  CONSTRAINT chk_total_available_quantity CHECK (total_available_quantity >= 0)
+  -- Removed constraint to allow negative values (overallocated items)
+  -- CONSTRAINT chk_total_available_quantity CHECK (total_available_quantity >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Create inventory_logs table

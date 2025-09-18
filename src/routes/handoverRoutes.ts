@@ -37,6 +37,20 @@ const upload = multer({
 });
 
 /**
+ * @route POST /api/handover/picklist-quantity
+ * @desc Update picklist quantity during picking process
+ * @access Picker, Manager
+ */
+router.post('/picklist-quantity', HandoverController.updatePicklistQuantity);
+
+/**
+ * @route GET /api/handover/inventory/:sku
+ * @desc Get inventory status for a specific SKU
+ * @access Manager, Picker, Dispatcher
+ */
+router.get('/inventory/:sku', HandoverController.getInventoryStatus);
+
+/**
  * @route POST /api/handover/dispatch
  * @desc Handover packed products to dispatch and generate AWB/Manifest ID
  * @access Manager, Dispatcher

@@ -110,9 +110,7 @@ Inventory.init(
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 0,
-      validate: {
-        min: 0,
-      },
+      // Removed min: 0 constraint to allow negative values (overallocated items)
     },
     created_at: {
       type: DataTypes.DATE,

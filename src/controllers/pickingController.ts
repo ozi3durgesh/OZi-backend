@@ -5,6 +5,8 @@ import { ResponseHandler } from '../middleware/responseHandler';
 import { OrderAttributes } from '../types';
 import Product from '../models/productModel';
 import { Sequelize, Op } from 'sequelize';
+import DirectInventoryService from '../services/DirectInventoryService';
+import { INVENTORY_OPERATIONS } from '../config/inventoryConstants';
 
 interface AuthRequest extends Request {
   user?: any;
@@ -971,6 +973,33 @@ export class PickingController {
         pickedAt: new Date(),
         pickedBy: pickerId
       });
+
+      // Update inventory - increase picklist_quantity when items are picked
+      try {
+        const inventoryResult = await DirectInventoryService.updateInventory({
+          sku: skuID,
+          operation: INVENTORY_OPERATIONS.PICKLIST,
+          quantity: currentItem.quantity, // Positive to increase picklist quantity
+          referenceId: `PICK-WAVE-${waveId}`,
+          operationDetails: {
+            waveId: parseInt(waveId),
+            waveNumber: wave.waveNumber,
+            picklistItemId: currentItem.id,
+            binLocation: binlocation,
+            pickedAt: new Date(),
+            pickedBy: pickerId
+          },
+          performedBy: pickerId
+        });
+
+        if (!inventoryResult.success) {
+          console.error(`Failed to update inventory for SKU ${skuID}:`, inventoryResult.message);
+          // Don't fail the picking process, just log the error
+        }
+      } catch (inventoryError) {
+        console.error('Inventory update error during picking:', inventoryError);
+        // Don't fail the picking process, just log the error
+      }
 
       // Check if all items in wave are picked
       const remainingItems = await PicklistItem.count({
