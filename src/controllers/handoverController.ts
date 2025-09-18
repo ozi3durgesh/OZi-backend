@@ -1024,32 +1024,17 @@ export const dispatchWave = async (req: Request, res: Response) => {
             });
           }
 
-          // Update inventory: increase picklist_quantity and reduce putaway_quantity
-          // Step 1: Increase picklist_quantity (items are being allocated for dispatch)
-          const picklistResult = await DirectInventoryService.updateInventory({
-            sku: sku,
-            operation: INVENTORY_OPERATIONS.PICKLIST,
-            quantity: quantity, // Positive to increase picklist quantity
-            referenceId: `DISPATCH-WAVE-${waveId}`,
-            operationDetails: {
-              waveId: waveId,
-              waveNumber: wave.waveNumber,
-              riderId: riderId,
-              dispatchNotes: dispatchNotes,
-              dispatchedAt: new Date(),
-              dispatchedBy: staffId,
-              previousPicklistQuantity: currentInventory.picklist_quantity,
-              newPicklistQuantity: currentInventory.picklist_quantity + quantity,
-              operation: 'dispatch_picklist_allocation'
-            },
-            performedBy: staffId
-          });
-
-          if (!picklistResult.success) {
-            throw new Error(`Failed to increase picklist quantity: ${picklistResult.message}`);
+          // Check if we have enough picklist quantity (items should be picked before dispatch)
+          if (currentInventory.picklist_quantity < quantity) {
+            await transaction.rollback();
+            return res.status(400).json({
+              success: false,
+              message: `Insufficient picklist quantity for SKU ${sku}. Available: ${currentInventory.picklist_quantity}, Required: ${quantity}. Items must be picked before dispatch.`,
+            });
           }
 
-          // Step 2: Reduce putaway_quantity (items are leaving the warehouse)
+          // Update inventory: reduce putaway_quantity (items are leaving the warehouse)
+          // Note: picklist_quantity was already updated during scanning, so we only reduce putaway_quantity
           const putawayResult = await DirectInventoryService.updateInventory({
             sku: sku,
             operation: INVENTORY_OPERATIONS.PUTAWAY,
@@ -1076,7 +1061,6 @@ export const dispatchWave = async (req: Request, res: Response) => {
           const inventoryResult = {
             success: true,
             message: 'Inventory updated successfully',
-            picklistUpdate: picklistResult,
             putawayUpdate: putawayResult
           };
 
@@ -1085,7 +1069,6 @@ export const dispatchWave = async (req: Request, res: Response) => {
             success: inventoryResult.success,
             message: inventoryResult.message,
             data: {
-              picklistUpdate: inventoryResult.picklistUpdate,
               putawayUpdate: inventoryResult.putawayUpdate
             }
           });
