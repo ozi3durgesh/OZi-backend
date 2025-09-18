@@ -11,6 +11,8 @@ import sequelize from '../config/database';
 import { RETURN_CONSTANTS, RETURN_BIN_ROUTING } from '../config/returnConstants';
 import { ResponseHandler } from '../middleware/responseHandler';
 import ReturnRejectGrn from '../models/ReturnRejectGrn';
+import { InventoryService } from '../services/InventoryService';
+import { INVENTORY_OPERATIONS } from '../config/inventoryConstants';
 
 interface AuthRequest extends Request {
   user?: any;
@@ -1823,6 +1825,69 @@ export class ReturnRequestItemController {
           console.log('✅ Scanner_sku create result:', createResult);
         }
 
+        // Update inventory quantities based on return type
+        const inventoryService = new InventoryService();
+        
+        if (returnRequestItem.is_try_and_buy) {
+          // Update return_try_and_buy_quantity for try and buy returns
+          await inventoryService.updateInventory({
+            sku: sku_id.toString(),
+            operation: INVENTORY_OPERATIONS.RETURN_TRY_AND_BUY,
+            quantity,
+            referenceId: `return_putaway_${returnRequestItem.id}`,
+            operationDetails: {
+              return_item_id: returnRequestItem.id,
+              return_order_id: returnRequestItem.return_order_id,
+              bin_location: bin_location,
+              is_try_and_buy: true,
+              putaway_quantity: quantity
+            },
+            performedBy: 1, // TODO: Get actual user ID from request
+            transaction
+          });
+          
+          console.log(`📦 Updated return_try_and_buy_quantity for SKU ${sku_id}: +${quantity}`);
+        } else {
+          // Update return_other_quantity for other returns
+          await inventoryService.updateInventory({
+            sku: sku_id.toString(),
+            operation: INVENTORY_OPERATIONS.RETURN_OTHER,
+            quantity,
+            referenceId: `return_putaway_${returnRequestItem.id}`,
+            operationDetails: {
+              return_item_id: returnRequestItem.id,
+              return_order_id: returnRequestItem.return_order_id,
+              bin_location: bin_location,
+              is_try_and_buy: false,
+              putaway_quantity: quantity
+            },
+            performedBy: 1, // TODO: Get actual user ID from request
+            transaction
+          });
+          
+          console.log(`📦 Updated return_other_quantity for SKU ${sku_id}: +${quantity}`);
+        }
+
+        // Update putaway_quantity in inventory (add returned putaway quantity)
+        await inventoryService.updateInventory({
+          sku: sku_id.toString(),
+          operation: INVENTORY_OPERATIONS.PUTAWAY,
+          quantity,
+          referenceId: `return_putaway_${returnRequestItem.id}`,
+          operationDetails: {
+            return_item_id: returnRequestItem.id,
+            return_order_id: returnRequestItem.return_order_id,
+            bin_location: bin_location,
+            is_try_and_buy: returnRequestItem.is_try_and_buy,
+            putaway_quantity: quantity,
+            source: 'return_putaway'
+          },
+          performedBy: 1, // TODO: Get actual user ID from request
+          transaction
+        });
+        
+        console.log(`📦 Updated putaway_quantity for SKU ${sku_id}: +${quantity}`);
+
         // Commit transaction
         await transaction.commit();
 
@@ -1854,6 +1919,14 @@ export class ReturnRequestItemController {
             quantity_added: quantity,
             scanner_sku_found: scannerSku ? true : false,
             scanner_sku_action: scannerSku ? 'updated_existing' : 'created_new'
+          },
+          inventory_updates: {
+            sku: sku_id.toString(),
+            is_try_and_buy: returnRequestItem.is_try_and_buy,
+            return_quantity_updated: returnRequestItem.is_try_and_buy ? 'return_try_and_buy_quantity' : 'return_other_quantity',
+            putaway_quantity_updated: true,
+            quantity_added: quantity,
+            return_type: returnRequestItem.is_try_and_buy ? 'try_and_buy' : 'other'
           }
         });
 
