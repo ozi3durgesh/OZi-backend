@@ -514,6 +514,28 @@ export class PutawayController {
         });
         return;
       }
+
+      // Validation Case 1: Check if received_qty is 0 and rejected_qty > 0
+      if (grnLine.received_qty === 0 && grnLine.rejected_qty > 0) {
+        res.status(400).json({
+          statusCode: 400,
+          success: false,
+          data: null,
+          error: 'Cannot proceed with putaway: received quantity is 0 but rejected quantity is greater than 0',
+        });
+        return;
+      }
+
+      // Validation Case 2: Check if received_qty < rejected_qty and rejected_qty != 0
+      if (grnLine.received_qty < grnLine.rejected_qty && grnLine.rejected_qty !== 0) {
+        res.status(400).json({
+          statusCode: 400,
+          success: false,
+          data: null,
+          error: 'Cannot proceed with putaway: received quantity is less than rejected quantity',
+        });
+        return;
+      }
   
       // Case 1: Check if SKU exists in scanner_sku table
       let existingSkuScan: any = null;
@@ -953,6 +975,28 @@ export class PutawayController {
           success: false,
           data: null,
           error: 'GRN line not found',
+        });
+        return;
+      }
+
+      // Validation: Check if received_qty > 0
+      if (grnLine.received_qty <= 0) {
+        res.status(400).json({
+          statusCode: 400,
+          success: false,
+          data: null,
+          error: 'Cannot proceed with putaway: received quantity must be greater than 0',
+        });
+        return;
+      }
+
+      // Validation: Check if quantity <= received_qty
+      if (quantity > grnLine.received_qty) {
+        res.status(400).json({
+          statusCode: 400,
+          success: false,
+          data: null,
+          error: `Quantity exceeds received quantity. Received: ${grnLine.received_qty}, Requested: ${quantity}`,
         });
         return;
       }
