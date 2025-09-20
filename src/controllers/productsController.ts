@@ -1,11 +1,12 @@
 import { Request, Response } from 'express';
 import Product, { ProductCreationAttributes } from '../models/productModel';
 import { ResponseHandler } from '../middleware/responseHandler';
+import sequelize from '../config/database';
 import fs from 'fs';
 import path from 'path';
 import AWS from 'aws-sdk';
 import fetch from 'node-fetch';
-import { Op } from 'sequelize';
+import { Op, QueryTypes } from 'sequelize';
 import csv from 'csv-parser';
 
 // AWS S3 Configuration
@@ -274,5 +275,136 @@ export const bulkUpdateProducts = async (req: Request, res: Response) => {
     return ResponseHandler.success(res, 'Products updated/created successfully', 200);
   } catch (error: any) {
     return ResponseHandler.error(res, error.message || 'Error updating products', 500);
+  }
+};
+
+// Update EAN/UPC for product and related GRN lines - SUPER SIMPLE VERSION
+export const updateProductEAN = async (req: Request, res: Response) => {
+  try {
+    console.log('🔍 EAN Update API called with:', req.body);
+    
+    const { SKU, EAN_UPC } = req.body;
+
+    // Basic validation
+    if (!SKU) {
+      return ResponseHandler.error(res, 'SKU is required', 400);
+    }
+
+    if (!EAN_UPC) {
+      return ResponseHandler.error(res, 'EAN_UPC is required', 400);
+    }
+
+    console.log(`🔍 Looking for product with SKU: ${SKU}`);
+
+    // Find the product by SKU
+    const product = await Product.findOne({ 
+      where: { SKU: SKU } 
+    });
+
+    if (!product) {
+      console.log(`❌ Product not found for SKU: ${SKU}`);
+      return ResponseHandler.error(res, 'Product not found', 404);
+    }
+
+    console.log(`✅ Found product:`, {
+      SKU: product.SKU,
+      EAN_UPC: product.EAN_UPC,
+      ProductName: product.ProductName
+    });
+
+    // Case 1: EAN_UPC is empty/null - Update both product_master and grn_lines
+    if (!product.EAN_UPC || product.EAN_UPC.trim() === '') {
+      console.log('📝 Case 1: Empty EAN_UPC - Updating both tables');
+      
+      try {
+        // Update product_master
+        await product.update({ 
+          EAN_UPC: EAN_UPC,
+          LastUpdatedDate: new Date().toISOString()
+        });
+
+        // Update grn_lines - handle unique constraint by clearing existing EANs first
+        await sequelize.query(
+          'UPDATE grn_lines SET ean = NULL WHERE sku_id = ?',
+          {
+            replacements: [SKU],
+            type: QueryTypes.UPDATE
+          }
+        );
+
+        // Now update with the new EAN
+        const [updatedGrnLines] = await sequelize.query(
+          'UPDATE grn_lines SET ean = ? WHERE sku_id = ?',
+          {
+            replacements: [EAN_UPC, SKU],
+            type: QueryTypes.UPDATE
+          }
+        );
+
+        console.log(`✅ Updated product_master and ${updatedGrnLines} GRN lines`);
+
+        return ResponseHandler.success(res, {
+          message: 'EAN/UPC updated successfully',
+          data: {
+            SKU: SKU,
+            EAN_UPC: EAN_UPC,
+            updated_tables: ['product_master', 'grn_lines'],
+            grn_lines_updated: updatedGrnLines
+          }
+        }, 200);
+      } catch (dbError: any) {
+        console.error('❌ Database update error:', dbError);
+        return ResponseHandler.error(res, `Database update failed: ${dbError.message}`, 500);
+      }
+    }
+
+    // Case 2: EAN_UPC already exists and matches the provided value
+    if (product.EAN_UPC === EAN_UPC) {
+      console.log('📝 Case 2: Matching EAN_UPC - Updating only GRN lines');
+      
+      try {
+        // Update grn_lines - handle unique constraint by clearing existing EANs first
+        await sequelize.query(
+          'UPDATE grn_lines SET ean = NULL WHERE sku_id = ?',
+          {
+            replacements: [SKU],
+            type: QueryTypes.UPDATE
+          }
+        );
+
+        // Now update with the matching EAN
+        const [updatedGrnLines] = await sequelize.query(
+          'UPDATE grn_lines SET ean = ? WHERE sku_id = ?',
+          {
+            replacements: [EAN_UPC, SKU],
+            type: QueryTypes.UPDATE
+          }
+        );
+
+        console.log(`✅ Updated ${updatedGrnLines} GRN lines`);
+
+        return ResponseHandler.success(res, {
+          message: 'EAN/UPC updated successfully',
+          data: {
+            SKU: SKU,
+            EAN_UPC: EAN_UPC,
+            updated_tables: ['grn_lines'],
+            grn_lines_updated: updatedGrnLines
+          }
+        }, 200);
+      } catch (dbError: any) {
+        console.error('❌ Database update error:', dbError);
+        return ResponseHandler.error(res, `Database update failed: ${dbError.message}`, 500);
+      }
+    }
+
+    // Case 3: EAN_UPC already exists but doesn't match - Return error with suggested EAN
+    console.log(`📝 Case 3: Non-matching EAN_UPC - Current: ${product.EAN_UPC}, Provided: ${EAN_UPC}`);
+    
+    return ResponseHandler.error(res, `EAN/UPC already exists with different value. Suggested EAN: ${product.EAN_UPC}`, 409);
+
+  } catch (error: any) {
+    console.error('❌ Error updating EAN/UPC:', error);
+    return ResponseHandler.error(res, error.message || 'Internal server error', 500);
   }
 };
