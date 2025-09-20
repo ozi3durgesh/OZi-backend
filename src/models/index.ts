@@ -34,6 +34,7 @@ import PutawayTask from './PutawayTask';
 import PutawayAudit from './PutawayAudit';
 import Inventory from './Inventory';
 import InventoryLog from './InventoryLog';
+import UserDevice from './userDevice';
 
 // Set up associations
 Coupon.hasMany(CouponTranslation, {
@@ -233,6 +234,10 @@ PutawayTask.hasMany(PutawayAudit, { foreignKey: 'putaway_task_id', as: 'AuditLog
 Inventory.hasMany(InventoryLog, { foreignKey: 'sku', sourceKey: 'sku', as: 'Logs' });
 InventoryLog.belongsTo(Inventory, { foreignKey: 'sku', targetKey: 'sku', as: 'Inventory' });
 
+// User-Device associations for push notifications
+User.hasMany(UserDevice, { foreignKey: 'userId', as: 'devices' });
+UserDevice.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+
 // Return system associations are defined in individual model files
 
 export {
@@ -270,4 +275,5 @@ export {
   ReturnRequestItem,
   Inventory,
   InventoryLog,
+  UserDevice,
 };

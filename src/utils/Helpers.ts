@@ -526,22 +526,53 @@ export class Helpers {
               console.log(`📨 Emitted waveAssigned to picker_${assignedPickerId}`);
 
               // 👉 Send Push Notification via SNS
+              console.log(`🔍 Looking up picker ${assignedPickerId} for push notification...`);
               const picker = await User.findByPk(assignedPickerId, {
                 include: [{ model: UserDevice, as: "devices" }],
               });
 
-              if (picker && (picker as any).devices && (picker as any).devices.length > 0) {
-                for (const device of (picker as any).devices) {
-                  await sendPushNotification(
-                    device.snsEndpointArn,
-                    "📦 New Wave Assigned",
-                    `Wave #${waveId} has been assigned to you.`,
-                    { orderId: order.id.toString(), waveId: waveId.toString() }
-                  );
+              if (picker) {
+                console.log(`✅ Picker found:`, {
+                  id: picker.id,
+                  email: picker.email,
+                  deviceCount: (picker as any).devices ? (picker as any).devices.length : 0
+                });
+
+                if ((picker as any).devices && (picker as any).devices.length > 0) {
+                  console.log(`📱 Found ${(picker as any).devices.length} device(s) for picker ${assignedPickerId}`);
+                  
+                  for (const device of (picker as any).devices) {
+                    console.log(`📱 Processing device:`, {
+                      deviceId: device.id,
+                      userId: device.userId,
+                      hasEndpointArn: !!device.snsEndpointArn,
+                      endpointArn: device.snsEndpointArn ? `${device.snsEndpointArn.substring(0, 50)}...` : 'None'
+                    });
+
+                    if (device.snsEndpointArn) {
+                      try {
+                        await sendPushNotification(
+                          device.snsEndpointArn,
+                          "📦 New Wave Assigned",
+                          `Wave #${waveId} has been assigned to you.`,
+                          { orderId: order.id.toString(), waveId: waveId.toString() }
+                        );
+                        console.log(`✅ Push notification sent successfully to device ${device.id}`);
+                      } catch (pushError: any) {
+                        console.error(`❌ Failed to send push notification to device ${device.id}:`, pushError.message);
+                      }
+                    } else {
+                      console.warn(`⚠️ Device ${device.id} has no SNS endpoint ARN, skipping push notification`);
+                    }
+                  }
+                } else {
+                  console.warn(`⚠️ Picker ${assignedPickerId} has no registered devices`);
                 }
+              } else {
+                console.error(`❌ Picker ${assignedPickerId} not found in database`);
               }
 
-              console.log(`📨 SNS push notification sent to picker_${assignedPickerId}`);
+              console.log(`📨 SNS push notification process completed for picker_${assignedPickerId}`);
             } else {
               // fallback: emit globally if no picker id available
               socketManager.emit('waveAssigned', {
