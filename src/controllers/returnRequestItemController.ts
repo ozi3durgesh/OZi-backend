@@ -693,7 +693,7 @@ export class ReturnRequestItemController {
         },
         include: [
           { model: Order, as: 'originalOrder', attributes: ['id', 'order_id', 'user_id', 'order_amount', 'created_at'] },
-          { model: Product, as: 'product', attributes: ['SKU', 'ProductName', 'Category', 'Brand', 'MRP', 'COST'] }
+          { model: Product, as: 'product', attributes: ['SKU', 'ProductName', 'Category', 'Brand', 'MRP', 'COST', 'EAN_UPC', 'ImageURL'] }
         ],
         order: [['created_at', 'DESC']],
         limit,
@@ -839,7 +839,7 @@ export class ReturnRequestItemController {
         where: { return_order_id: returnOrderId },
         include: [
           { model: Order, as: 'originalOrder', attributes: ['id', 'order_id', 'user_id', 'order_amount', 'created_at'] },
-          { model: Product, as: 'product', attributes: ['SKU', 'ProductName', 'Category', 'Brand', 'MRP', 'COST'] }
+          { model: Product, as: 'product', attributes: ['SKU', 'ProductName', 'Category', 'Brand', 'MRP', 'COST', 'EAN_UPC', 'ImageURL'] }
         ],
         order: [['created_at', 'ASC']]
       });
@@ -910,7 +910,7 @@ export class ReturnRequestItemController {
         where: { return_order_id: returnOrderId },
         include: [
           { model: Order, as: 'originalOrder', attributes: ['id', 'order_id', 'user_id', 'order_amount', 'created_at'] },
-          { model: Product, as: 'product', attributes: ['SKU', 'ProductName', 'Category', 'Brand', 'MRP', 'COST'] }
+          { model: Product, as: 'product', attributes: ['SKU', 'ProductName', 'Category', 'Brand', 'MRP', 'COST', 'EAN_UPC', 'ImageURL'] }
         ]
       });
 
@@ -1416,7 +1416,7 @@ export class ReturnRequestItemController {
         },
         include: [
           { model: Order, as: 'originalOrder', attributes: ['id', 'order_id', 'user_id'] },
-          { model: Product, as: 'product', attributes: ['SKU', 'ProductName', 'Category', 'Brand', 'MRP', 'COST'] }
+          { model: Product, as: 'product', attributes: ['SKU', 'ProductName', 'Category', 'Brand', 'MRP', 'COST', 'EAN_UPC', 'ImageURL'] }
         ]
       });
 
