@@ -899,6 +899,33 @@ export class PickingController {
         return ResponseHandler.error(res, 'scannedId, skuID, and binlocation are required', 400);
       }
 
+      // Resolve SKU from input (could be SKU or EAN)
+      let resolvedSku: string;
+      let foundBy: 'sku' | 'ean';
+      
+      // First, try to find by SKU directly
+      let product = await Product.findOne({
+        where: { SKU: skuID }
+      });
+      
+      if (product) {
+        resolvedSku = product.SKU;
+        foundBy = 'sku';
+      } else {
+        // If not found by SKU, try to find by EAN_UPC
+        product = await Product.findOne({
+          where: { EAN_UPC: skuID }
+        });
+        
+        if (product) {
+          resolvedSku = product.SKU;
+          foundBy = 'ean';
+        } else {
+          // Neither SKU nor EAN found
+          return ResponseHandler.error(res, `Both SKU and EAN not found for: ${skuID}`, 404);
+        }
+      }
+
       // Get wave to validate status and picker
       const wave = await PickingWave.findByPk(waveId);
       if (!wave) {
@@ -916,7 +943,7 @@ export class PickingController {
 
       // Find SKU scan in scanner_sku table
       const scannerSku = await ScannerSku.findOne({
-        where: { skuScanId: skuID }
+        where: { skuScanId: resolvedSku }
       });
 
       if (!scannerSku) {
@@ -925,6 +952,8 @@ export class PickingController {
           skuFound: false,
           scannedId,
           skuID,
+          resolvedSku,
+          foundBy,
           waveId: parseInt(waveId),
           error: 'INVALID_SKU_SCAN'
         });
@@ -937,6 +966,8 @@ export class PickingController {
           skuFound: false,
           scannedId,
           skuID,
+          resolvedSku,
+          foundBy,
           binlocation,
           expectedBinLocation: scannerSku.binLocationScanId,
           waveId: parseInt(waveId),
@@ -948,7 +979,7 @@ export class PickingController {
       const currentItem = await PicklistItem.findOne({
         where: { 
           waveId: parseInt(waveId),
-          sku: skuID,
+          sku: resolvedSku,
           binLocation: binlocation,
           status: ['PENDING', 'PICKING']
         }
@@ -960,6 +991,8 @@ export class PickingController {
           skuFound: false,
           scannedId,
           skuID,
+          resolvedSku,
+          foundBy,
           binlocation,
           waveId: parseInt(waveId),
           error: 'NO_MATCHING_PICKLIST_ITEM'
@@ -977,7 +1010,7 @@ export class PickingController {
       // Update inventory - increase picklist_quantity when items are picked
       try {
         const inventoryResult = await DirectInventoryService.updateInventory({
-          sku: skuID,
+          sku: resolvedSku,
           operation: INVENTORY_OPERATIONS.PICKLIST,
           quantity: currentItem.quantity, // Positive to increase picklist quantity
           referenceId: `PICK-WAVE-${waveId}`,
@@ -993,7 +1026,7 @@ export class PickingController {
         });
 
         if (!inventoryResult.success) {
-          console.error(`Failed to update inventory for SKU ${skuID}:`, inventoryResult.message);
+          console.error(`Failed to update inventory for SKU ${resolvedSku}:`, inventoryResult.message);
           // Don't fail the picking process, just log the error
         }
       } catch (inventoryError) {
@@ -1021,6 +1054,8 @@ export class PickingController {
         skuFound: true,
         scannedId,
         skuID,
+        resolvedSku,
+        foundBy,
         binlocation,
         skuData: scannerSku.sku,
         item: {

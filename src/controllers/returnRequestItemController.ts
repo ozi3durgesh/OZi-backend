@@ -1378,11 +1378,38 @@ export class ReturnRequestItemController {
 
       console.log(`🔍 Scanning SKU for putaway: ${sku_id} with return_item_id: ${return_item_id}`);
 
-      // Find the return request item by both SKU and return_item_id for precise identification
+      // Resolve SKU from input (could be SKU or EAN)
+      let resolvedSku: string;
+      let foundBy: 'sku' | 'ean';
+      
+      // First, try to find by SKU directly
+      let product = await Product.findOne({
+        where: { SKU: sku_id }
+      });
+      
+      if (product) {
+        resolvedSku = product.SKU;
+        foundBy = 'sku';
+      } else {
+        // If not found by SKU, try to find by EAN_UPC
+        product = await Product.findOne({
+          where: { EAN_UPC: sku_id }
+        });
+        
+        if (product) {
+          resolvedSku = product.SKU;
+          foundBy = 'ean';
+        } else {
+          // Neither SKU nor EAN found
+          return ResponseHandler.error(res, `Both SKU and EAN not found for: ${sku_id}`, 404);
+        }
+      }
+
+      // Find the return request item by both resolved SKU and return_item_id for precise identification
       const returnRequestItem = await ReturnRequestItem.findOne({
         where: { 
           id: return_item_id,
-          item_id: sku_id,
+          item_id: resolvedSku,
           grn_status: 'completed',
           putaway_status: { [require('sequelize').Op.or]: [null, 'pending'] },
           received_quantity: { [require('sequelize').Op.gt]: 0 }
@@ -1394,10 +1421,10 @@ export class ReturnRequestItemController {
       });
 
       if (!returnRequestItem) {
-        return ResponseHandler.error(res, `No return item found for SKU ${sku_id} with return_item_id ${return_item_id} that is ready for putaway`, 404);
+        return ResponseHandler.error(res, `No return item found for SKU ${resolvedSku} with return_item_id ${return_item_id} that is ready for putaway`, 404);
       }
 
-      console.log(`✅ Found return item for SKU ${sku_id} with return_item_id ${return_item_id}:`, {
+      console.log(`✅ Found return item for SKU ${resolvedSku} with return_item_id ${return_item_id}:`, {
         id: returnRequestItem.id,
         return_order_id: returnRequestItem.return_order_id,
         grn_status: returnRequestItem.grn_status,
@@ -1423,7 +1450,7 @@ export class ReturnRequestItemController {
       try {
         // Search scanner_bin table for existing SKU matches
         const scannerBinMatch = await ScannerBin.findOne({
-          where: sequelize.literal(`JSON_CONTAINS(sku, JSON_QUOTE('${sku_id}'))`)
+          where: sequelize.literal(`JSON_CONTAINS(sku, JSON_QUOTE('${resolvedSku}'))`)
         });
 
         if (scannerBinMatch) {
@@ -1488,7 +1515,7 @@ export class ReturnRequestItemController {
             console.log('✅ Using scanner_bin match:', suggestedBin);
           }
         } else {
-          console.log('❌ No scanner_bin match found for SKU:', sku_id);
+          console.log('❌ No scanner_bin match found for SKU:', resolvedSku);
         }
 
 
@@ -1583,12 +1610,14 @@ export class ReturnRequestItemController {
       return ResponseHandler.success(res, {
         message: 'Return SKU scanned successfully',
         skuId: sku_id,
+        resolvedSku: resolvedSku,
+        foundBy: foundBy,
         returnItemId: returnRequestItem.id,
         returnOrderId: returnRequestItem.return_order_id,
         availableQuantity: availableQuantity,
         scannedProductDetail: {
-          id: (returnRequestItem as any).product?.SKU || sku_id,
-          sku: (returnRequestItem as any).product?.SKU || sku_id,
+          id: (returnRequestItem as any).product?.SKU || resolvedSku,
+          sku: (returnRequestItem as any).product?.SKU || resolvedSku,
           productName: (returnRequestItem as any).product?.ProductName || 'Unknown Product',
           category: (returnRequestItem as any).product?.Category || 'Unknown',
           brand: (returnRequestItem as any).product?.Brand || 'Unknown',

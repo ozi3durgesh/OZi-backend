@@ -463,25 +463,44 @@ export class PutawayController {
         return;
       }
   
-      // Find product in product_master table
-      const product = await Product.findOne({
-        where: { SKU: sku_id },
+      // Resolve SKU from input (could be SKU or EAN)
+      let resolvedSku: string;
+      let foundBy: 'sku' | 'ean';
+      let product: any;
+      
+      // First, try to find by SKU directly
+      product = await Product.findOne({
+        where: { SKU: sku_id }
       });
-  
-      if (!product) {
-        res.status(404).json({
-          statusCode: 404,
-          success: false,
-          data: null,
-          error: 'Product not found',
+      
+      if (product) {
+        resolvedSku = product.SKU;
+        foundBy = 'sku';
+      } else {
+        // If not found by SKU, try to find by EAN_UPC
+        product = await Product.findOne({
+          where: { EAN_UPC: sku_id }
         });
-        return;
+        
+        if (product) {
+          resolvedSku = product.SKU;
+          foundBy = 'ean';
+        } else {
+          // Neither SKU nor EAN found
+          res.status(404).json({
+            statusCode: 404,
+            success: false,
+            data: null,
+            error: `Both SKU and EAN not found for: ${sku_id}`,
+          });
+          return;
+        }
       }
   
       // Check if SKU exists in the specific GRN line with QC passed quantity
       const grnLine = await GRNLine.findOne({
         where: {
-          sku_id: sku_id,
+          sku_id: resolvedSku,
           grn_id: grn_id,
           qc_pass_qty: {
             [Op.gt]: 0,
@@ -548,15 +567,15 @@ export class PutawayController {
         existingSkuScan = allScannerSkus.find((record: any) => {
           if (record.sku) {
             if (Array.isArray(record.sku)) {
-              return record.sku.some((item: any) => item.skuId === sku_id);
+              return record.sku.some((item: any) => item.skuId === resolvedSku);
             } else if (typeof record.sku === 'string') {
               try {
                 const parsedSku = JSON.parse(record.sku);
                 if (Array.isArray(parsedSku)) {
-                  return parsedSku.some((item: any) => item.skuId === sku_id);
+                  return parsedSku.some((item: any) => item.skuId === resolvedSku);
                 }
               } catch {
-                return record.sku === sku_id;
+                return record.sku === resolvedSku;
               }
             }
           }
@@ -791,7 +810,9 @@ export class PutawayController {
         data: {
           message: 'SKU scanned successfully and stored in scanned_sku table',
           skuId: sku_id,
-          skuScannedId: sku_id, // This is what gets stored in scanned_sku table
+          resolvedSku: resolvedSku,
+          foundBy: foundBy,
+          skuScannedId: resolvedSku, // This is what gets stored in scanned_sku table
           grnId: grnLine.grn_id,
           poId: (grnLine as any).GrnId?.po_id || 'N/A',
           availableQuantity: grnLine.qc_pass_qty,
