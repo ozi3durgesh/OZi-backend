@@ -555,7 +555,13 @@ export class Helpers {
                           device.snsEndpointArn,
                           "📦 New Wave Assigned",
                           `Wave #${waveId} has been assigned to you.`,
-                          { orderId: order.id.toString(), waveId: waveId.toString() }
+                          { 
+                            route: "/waves",
+                            orderId: order.id.toString(), 
+                            waveId: waveId.toString(),
+                            type: "wave_assigned",
+                            priority: "HIGH"
+                          }
                         );
                         console.log(`✅ Push notification sent successfully to device ${device.id}`);
                       } catch (pushError: any) {

@@ -89,11 +89,21 @@ export async function sendPushNotification(
     default: body,
     GCM: JSON.stringify({
       notification: { title, body },
-      data,
+      data: {
+        route: data.route || "/waves", // Default route for wave assignments
+        orderId: data.orderId || "",
+        waveId: data.waveId || "",
+        ...data // Include any additional custom data
+      },
     }),
     APNS: JSON.stringify({
       aps: { alert: { title, body }, sound: "default" },
-      data,
+      data: {
+        route: data.route || "/waves", // Default route for wave assignments
+        orderId: data.orderId || "",
+        waveId: data.waveId || "",
+        ...data // Include any additional custom data
+      },
     }),
   };
 
