@@ -28,6 +28,12 @@ const uploadImageToS3 = async (imageUrl: string, sku: string) => {
     const cleanImageUrl = cleanUrl(imageUrl);
     if (!cleanImageUrl) throw new Error('Empty image URL');
 
+    // Skip example.com URLs as they're not real images
+    if (cleanImageUrl.includes('example.com')) {
+      console.log(`⚠️ Skipping example.com URL for SKU ${sku}: ${cleanImageUrl}`);
+      return null;
+    }
+
     let fileExtension = '.jpg';
     try {
       const pathname = new URL(cleanImageUrl).pathname;
@@ -291,23 +297,23 @@ export const bulkUpdateProducts = async (req: Request, res: Response) => {
       });
 
       // Create logs for each failed record
-      // for (const error of validationResult.errors) {
-      //   const record = records[error.row - 1]; // Convert to 0-based index
-      //   if (record) {
-      //     const logId = await bulkImportLogger.createLog(createdBy, record, 'FAILED');
-      //     bulkImportLogger.addColumnError(
-      //       logId,
-      //       error.column,
-      //       error.value,
-      //       error.error,
-      //       error.description,
-      //       error.row
-      //     );
-      //   }
-      // }
+      for (const error of validationResult.errors) {
+        const record = records[error.row - 1]; // Convert to 0-based index
+        if (record) {
+          const logId = await bulkImportLogger.createLog(createdBy, record, 'FAILED');
+          bulkImportLogger.addColumnError(
+            logId,
+            error.column,
+            error.value,
+            error.error,
+            error.description,
+            error.row
+          );
+        }
+      }
 
       // Save all logs to database
-      // await bulkImportLogger.saveLogs();
+      await bulkImportLogger.saveLogs();
 
       return ResponseHandler.error(res, JSON.stringify({
         message: 'CSV validation failed',
@@ -332,23 +338,23 @@ export const bulkUpdateProducts = async (req: Request, res: Response) => {
       const existingSKUs = processedRecords.filter(r => r.isUpdate).map(r => r.data.SKU);
       if (existingSKUs.length > 0) {
         // Log errors for existing SKUs
-        // for (const sku of existingSKUs) {
-        //   const record = records.find(r => r.SKU === sku);
-        //   if (record) {
-        //     const logId = await bulkImportLogger.createLog(createdBy, record, 'FAILED');
-        //     bulkImportLogger.addColumnError(
-        //       logId,
-        //       'SKU',
-        //       sku,
-        //       'SKU_ALREADY_EXISTS',
-        //       `SKU ${sku} already exists in database. Use UPDATE mode to modify existing products.`,
-        //       0
-        //     );
-        //   }
-        // }
+        for (const sku of existingSKUs) {
+          const record = records.find(r => r.SKU === sku);
+          if (record) {
+            const logId = await bulkImportLogger.createLog(createdBy, record, 'FAILED');
+            bulkImportLogger.addColumnError(
+              logId,
+              'SKU',
+              sku,
+              'SKU_ALREADY_EXISTS',
+              `SKU ${sku} already exists in database. Use UPDATE mode to modify existing products.`,
+              0
+            );
+          }
+        }
         
         // Save logs
-        // await bulkImportLogger.saveLogs();
+        await bulkImportLogger.saveLogs();
         
         return ResponseHandler.error(res, JSON.stringify({
           message: 'CREATE NEW mode: Found existing SKUs in database',
@@ -372,23 +378,23 @@ export const bulkUpdateProducts = async (req: Request, res: Response) => {
       const nonExistingSKUs = processedRecords.filter(r => !r.isUpdate).map(r => r.data.SKU);
       if (nonExistingSKUs.length > 0) {
         // Log errors for non-existing SKUs
-        // for (const sku of nonExistingSKUs) {
-        //   const record = records.find(r => r.SKU === sku);
-        //   if (record) {
-        //     const logId = await bulkImportLogger.createLog(createdBy, record, 'FAILED');
-        //     bulkImportLogger.addColumnError(
-        //       logId,
-        //       'SKU',
-        //       sku,
-        //       'SKU_NOT_FOUND',
-        //       `SKU ${sku} not found in database. Use CREATE NEW mode to add new products.`,
-        //       0
-        //     );
-        //   }
-        // }
+        for (const sku of nonExistingSKUs) {
+          const record = records.find(r => r.SKU === sku);
+          if (record) {
+            const logId = await bulkImportLogger.createLog(createdBy, record, 'FAILED');
+            bulkImportLogger.addColumnError(
+              logId,
+              'SKU',
+              sku,
+              'SKU_NOT_FOUND',
+              `SKU ${sku} not found in database. Use CREATE NEW mode to add new products.`,
+              0
+            );
+          }
+        }
         
         // Save logs
-        // await bulkImportLogger.saveLogs();
+        await bulkImportLogger.saveLogs();
         
         return ResponseHandler.error(res, JSON.stringify({
           message: 'UPDATE mode: Found SKUs not in database',
@@ -438,15 +444,15 @@ export const bulkUpdateProducts = async (req: Request, res: Response) => {
           Brand: data.Brand,
           ModelName: data.ModelName || null,
           ModelNum: data.ModelNum,
-          MRP: data.MRP ? Number(data.MRP) : null,
-          COST: data.COST ? Number(data.COST) : null,
+          MRP: data.MRP ? parseFloat(data.MRP.toString()) : null,
+          COST: data.COST ? parseFloat(data.COST.toString()) : null,
           EAN_UPC: data.EAN_UPC || null,
           Color: data.Color || null,
           Size: data.Size || null,
-          Weight: data.Weight ? Number(data.Weight) : null,
-          Length: data.Length ? Number(data.Length) : null,
-          Height: data.Height ? Number(data.Height) : null,
-          Width: data.Width ? Number(data.Width) : null,
+          Weight: data.Weight ? parseFloat(data.Weight.toString()) : null,
+          Length: data.Length ? parseFloat(data.Length.toString()) : null,
+          Height: data.Height ? parseFloat(data.Height.toString()) : null,
+          Width: data.Width ? parseFloat(data.Width.toString()) : null,
           ImageURL: imageUrl,
           Status: data.Status || 'Active',
           CPId: data.CPId || null,
@@ -457,19 +463,19 @@ export const bulkUpdateProducts = async (req: Request, res: Response) => {
           AccountingSKU: data.AccountingSKU || null,
           AccountingUnit: data.AccountingUnit || null,
           Flammable: data.Flammable || 'No',
-          SPThreshold: data.SPThreshold ? Number(data.SPThreshold) : null,
-          InventoryThreshold: data.InventoryThreshold ? Number(data.InventoryThreshold) : null,
-          ERPSystemId: data.ERPSystemId ? Number(data.ERPSystemId) : null,
-          SyncTally: data.SyncTally ? Number(data.SyncTally) : null,
+          SPThreshold: data.SPThreshold ? parseInt(data.SPThreshold.toString()) : null,
+          InventoryThreshold: data.InventoryThreshold ? parseInt(data.InventoryThreshold.toString()) : null,
+          ERPSystemId: data.ERPSystemId ? parseInt(data.ERPSystemId.toString()) : null,
+          SyncTally: data.SyncTally ? parseInt(data.SyncTally.toString()) : null,
           ShelfLife: data.ShelfLife || null,
-          ShelfLifePercentage: data.ShelfLifePercentage ? Number(data.ShelfLifePercentage) : null,
-          ProductExpiryInDays: data.ProductExpiryInDays ? Number(data.ProductExpiryInDays) : null,
-          ReverseWeight: data.ReverseWeight ? Number(data.ReverseWeight) : null,
-          ReverseLength: data.ReverseLength ? Number(data.ReverseLength) : null,
-          ReverseHeight: data.ReverseHeight ? Number(data.ReverseHeight) : null,
-          ReverseWidth: data.ReverseWidth ? Number(data.ReverseWidth) : null,
+          ShelfLifePercentage: data.ShelfLifePercentage ? parseInt(data.ShelfLifePercentage.toString()) : null,
+          ProductExpiryInDays: data.ProductExpiryInDays ? parseInt(data.ProductExpiryInDays.toString()) : null,
+          ReverseWeight: data.ReverseWeight ? parseFloat(data.ReverseWeight.toString()) : null,
+          ReverseLength: data.ReverseLength ? parseFloat(data.ReverseLength.toString()) : null,
+          ReverseHeight: data.ReverseHeight ? parseFloat(data.ReverseHeight.toString()) : null,
+          ReverseWidth: data.ReverseWidth ? parseFloat(data.ReverseWidth.toString()) : null,
           ProductTaxRule: data.ProductTaxRule,
-          CESS: data.CESS ? Number(data.CESS) : null,
+          CESS: data.CESS ? parseFloat(data.CESS.toString()) : null,
           CreatedDate: new Date().toISOString(),
           LastUpdatedDate: new Date().toISOString(),
           SKUType: data.SKUType || null,
@@ -517,13 +523,13 @@ export const bulkUpdateProducts = async (req: Request, res: Response) => {
       console.log(`🎉 Bulk ${createNewMode ? 'CREATE' : 'UPDATE'} completed successfully: ${successCount} products processed`);
 
       // 10. Log successful operations
-      // for (const record of processedRecords) {
-      //   const logId = await bulkImportLogger.createLog(createdBy, record.data, 'SUCCESS');
-      //   // No column errors for successful operations
-      // }
+      for (const record of processedRecords) {
+        const logId = await bulkImportLogger.createLog(createdBy, record.data, 'SUCCESS');
+        // No column errors for successful operations
+      }
       
       // Save success logs
-      // await bulkImportLogger.saveLogs();
+      await bulkImportLogger.saveLogs();
 
       // 11. Clean up uploaded file
       fs.unlinkSync(req.file.path);
@@ -546,20 +552,20 @@ export const bulkUpdateProducts = async (req: Request, res: Response) => {
       console.error('❌ Database operation failed:', dbError);
       
       // Log database errors for all records
-      // for (const record of processedRecords) {
-      //   const logId = await bulkImportLogger.createLog(createdBy, record.data, 'FAILED');
-      //   bulkImportLogger.addColumnError(
-      //     logId,
-      //     'DATABASE',
-      //     null,
-      //     'DATABASE_ERROR',
-      //     `Database operation failed: ${dbError.message}`,
-      //     0
-      //   );
-      // }
+      for (const record of processedRecords) {
+        const logId = await bulkImportLogger.createLog(createdBy, record.data, 'FAILED');
+        bulkImportLogger.addColumnError(
+          logId,
+          'DATABASE',
+          null,
+          'DATABASE_ERROR',
+          `Database operation failed: ${dbError.message}`,
+          0
+        );
+      }
       
       // Save error logs
-      // await bulkImportLogger.saveLogs();
+      await bulkImportLogger.saveLogs();
       
       return ResponseHandler.error(res, JSON.stringify({
         message: 'Database operation failed',
@@ -722,13 +728,13 @@ export const getBulkImportLogsByUser = async (req: Request, res: Response) => {
     const { limit = 50 } = req.query;
     const bulkImportLogger = new BulkImportLoggerClass();
     
-    // const logs = await bulkImportLogger.getLogsByUser(userId, Number(limit));
+    const logs = await bulkImportLogger.getLogsByUser(userId, Number(limit));
     
     return ResponseHandler.success(res, {
       message: 'Bulk import logs retrieved successfully',
       data: {
-        logs: [],
-        count: 0
+        logs: logs,
+        count: logs.length
       }
     }, 200);
   } catch (error: any) {
@@ -748,13 +754,13 @@ export const getBulkImportLogsByStatus = async (req: Request, res: Response) => 
       return ResponseHandler.error(res, 'Invalid status. Must be SUCCESS or FAILED', 400);
     }
     
-    // const logs = await bulkImportLogger.getLogsByStatus(status as 'SUCCESS' | 'FAILED', Number(limit));
+    const logs = await bulkImportLogger.getLogsByStatus(status as 'SUCCESS' | 'FAILED', Number(limit));
     
     return ResponseHandler.success(res, {
       message: 'Bulk import logs retrieved successfully',
       data: {
-        logs: [],
-        count: 0,
+        logs: logs,
+        count: logs.length,
         status
       }
     }, 200);
@@ -770,15 +776,15 @@ export const getBulkImportLogById = async (req: Request, res: Response) => {
     const { id } = req.params;
     const bulkImportLogger = new BulkImportLoggerClass();
     
-    // const log = await bulkImportLogger.getLogById(Number(id));
+    const log = await bulkImportLogger.getLogById(Number(id));
     
-    // if (!log) {
-    //   return ResponseHandler.error(res, 'Bulk import log not found', 404);
-    // }
+    if (!log) {
+      return ResponseHandler.error(res, 'Bulk import log not found', 404);
+    }
     
     return ResponseHandler.success(res, {
       message: 'Bulk import log retrieved successfully',
-      data: null
+      data: log
     }, 200);
   } catch (error: any) {
     console.error('❌ Error fetching bulk import log by ID:', error);
