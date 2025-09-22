@@ -11,7 +11,7 @@ interface VendorAttributes {
   pincode?: string;
   pocName?: string;
   pocNumber?: string;
-  taxId: string;
+  gstNumber: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -30,7 +30,7 @@ class Vendor extends Model<VendorAttributes, VendorCreationAttributes>
   public pincode?: string;
   public pocName?: string;
   public pocNumber?: string;
-  public taxId!: string;
+  public gstNumber!: string;
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
 }
@@ -74,11 +74,11 @@ Vendor.init(
       type: DataTypes.STRING,
       field: 'poc_number',
     },
-    taxId: {
+    gstNumber: {
       type: DataTypes.STRING,
       allowNull: false,
       unique: true,
-      field: 'tax_id',
+      field: 'gst_number',
     },
   },
   {

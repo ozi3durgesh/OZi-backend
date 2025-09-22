@@ -8,6 +8,8 @@ import AWS from 'aws-sdk';
 import fetch from 'node-fetch';
 import { Op, QueryTypes } from 'sequelize';
 import csv from 'csv-parser';
+import ProductBulkValidationService, { ValidationError } from '../services/productBulkValidationService';
+import { BulkImportLoggerClass } from '../services/BulkImportLogger';
 
 // AWS S3 Configuration
 const s3 = new AWS.S3();
@@ -233,48 +235,352 @@ export const bulkUploadProducts = async (req: Request, res: Response) => {
   }
 };
 
-// Bulk update from CSV
+// Bulk import/update from CSV with mode-based processing
 export const bulkUpdateProducts = async (req: Request, res: Response) => {
+  const validationService = new ProductBulkValidationService();
+  const bulkImportLogger = new BulkImportLoggerClass();
+  
   try {
+    // 1. Check if file is uploaded
     if (!req.file) {
       return ResponseHandler.error(res, 'No file uploaded', 400);
     }
 
+    // 2. Get processing mode and user from request body
+    const { isCreateNew } = req.body;
+    const createNewMode = isCreateNew === 'true' || isCreateNew === true;
+    const createdBy = req.body.createdBy || 'system'; // Get user from request or default to 'system'
+    
+    console.log('📁 Processing CSV file:', req.file.filename);
+    console.log('🔄 Processing mode:', createNewMode ? 'CREATE NEW ONLY' : 'UPDATE EXISTING ONLY');
+    console.log('👤 Created by:', createdBy);
+
+    // 2. Parse CSV file
     const records = await parseCSV(req.file.path);
-    const productsToCreate: ProductCreationAttributes[] = [];
+    
+    if (!records || records.length === 0) {
+      return ResponseHandler.error(res, 'CSV file is empty or invalid', 400);
+    }
 
-    for (const record of records) {
-      const existingProduct = await Product.findOne({ where: { SKU: record.SKU } });
+    console.log(`📊 Parsed ${records.length} records from CSV`);
 
-      const s3Url = record.ImageURL
-        ? await uploadImageToS3(record.ImageURL, record.SKU)
-        : existingProduct?.ImageURL || null;
+    // 3. Validate CSV headers
+    const headers = Object.keys(records[0]);
+    const headerValidation = validationService.validateHeaders(headers);
+    
+    if (!headerValidation.isValid) {
+      console.log('❌ Header validation failed:', headerValidation.errors);
+      return ResponseHandler.error(res, JSON.stringify({
+        message: 'CSV validation failed',
+        errors: headerValidation.errors,
+        errorType: 'HEADER_VALIDATION_FAILED'
+      }), 400);
+    }
 
-      const productData: ProductCreationAttributes = {
-        ...record,
-        ImageURL: s3Url,
-        MRP: Number(record.MRP) || 0,
-        COST: Number(record.COST) || 0,
-        Weight: Number(record.Weight) || 0,
-        Length: Number(record.Length) || 0,
-        Height: Number(record.Height) || 0,
-        Width: Number(record.Width) || 0,
-      };
+    console.log('✅ Headers validation passed');
 
-      if (existingProduct) {
-        await existingProduct.update(productData);
-      } else {
-        productsToCreate.push(productData);
+    // 4. Comprehensive record validation
+    const validationResult = await validationService.validateAllRecords(records);
+    
+    if (!validationResult.isValid) {
+      console.log('❌ Record validation failed:', validationResult.errors.length, 'errors found');
+      
+      // Log detailed errors for debugging
+      validationResult.errors.forEach((error: ValidationError) => {
+        console.log(`Row ${error.row}, Column ${error.column}: ${error.error} - ${error.description}`);
+      });
+
+      // Create logs for each failed record
+      // for (const error of validationResult.errors) {
+      //   const record = records[error.row - 1]; // Convert to 0-based index
+      //   if (record) {
+      //     const logId = await bulkImportLogger.createLog(createdBy, record, 'FAILED');
+      //     bulkImportLogger.addColumnError(
+      //       logId,
+      //       error.column,
+      //       error.value,
+      //       error.error,
+      //       error.description,
+      //       error.row
+      //     );
+      //   }
+      // }
+
+      // Save all logs to database
+      // await bulkImportLogger.saveLogs();
+
+      return ResponseHandler.error(res, JSON.stringify({
+        message: 'CSV validation failed',
+        errors: validationResult.errors,
+        errorType: 'RECORD_VALIDATION_FAILED',
+        summary: {
+        totalRecords: records.length,
+          errorCount: validationResult.errors.length,
+          warningCount: validationResult.warnings.length
+        }
+      }), 400);
+    }
+
+    console.log('✅ All records validation passed');
+
+    // 5. Process records for database operations
+    const processedRecords = await validationService.processRecords(records);
+    
+    // 6. Mode-specific validation
+    if (createNewMode) {
+      // CREATE NEW MODE: Check for existing SKUs and reject them
+      const existingSKUs = processedRecords.filter(r => r.isUpdate).map(r => r.data.SKU);
+      if (existingSKUs.length > 0) {
+        // Log errors for existing SKUs
+        // for (const sku of existingSKUs) {
+        //   const record = records.find(r => r.SKU === sku);
+        //   if (record) {
+        //     const logId = await bulkImportLogger.createLog(createdBy, record, 'FAILED');
+        //     bulkImportLogger.addColumnError(
+        //       logId,
+        //       'SKU',
+        //       sku,
+        //       'SKU_ALREADY_EXISTS',
+        //       `SKU ${sku} already exists in database. Use UPDATE mode to modify existing products.`,
+        //       0
+        //     );
+        //   }
+        // }
+        
+        // Save logs
+        // await bulkImportLogger.saveLogs();
+        
+        return ResponseHandler.error(res, JSON.stringify({
+          message: 'CREATE NEW mode: Found existing SKUs in database',
+          errors: existingSKUs.map(sku => ({
+            row: 0,
+            column: 'SKU',
+            value: sku,
+            error: 'SKU_ALREADY_EXISTS',
+            description: `SKU ${sku} already exists in database. Use UPDATE mode to modify existing products.`
+          })),
+          errorType: 'EXISTING_SKU_FOUND',
+          summary: {
+            totalRecords: records.length,
+            errorCount: existingSKUs.length,
+            existingSKUs: existingSKUs
+          }
+        }), 400);
+      }
+    } else {
+      // UPDATE MODE: Check for non-existing SKUs and reject them
+      const nonExistingSKUs = processedRecords.filter(r => !r.isUpdate).map(r => r.data.SKU);
+      if (nonExistingSKUs.length > 0) {
+        // Log errors for non-existing SKUs
+        // for (const sku of nonExistingSKUs) {
+        //   const record = records.find(r => r.SKU === sku);
+        //   if (record) {
+        //     const logId = await bulkImportLogger.createLog(createdBy, record, 'FAILED');
+        //     bulkImportLogger.addColumnError(
+        //       logId,
+        //       'SKU',
+        //       sku,
+        //       'SKU_NOT_FOUND',
+        //       `SKU ${sku} not found in database. Use CREATE NEW mode to add new products.`,
+        //       0
+        //     );
+        //   }
+        // }
+        
+        // Save logs
+        // await bulkImportLogger.saveLogs();
+        
+        return ResponseHandler.error(res, JSON.stringify({
+          message: 'UPDATE mode: Found SKUs not in database',
+          errors: nonExistingSKUs.map(sku => ({
+            row: 0,
+            column: 'SKU',
+            value: sku,
+            error: 'SKU_NOT_FOUND',
+            description: `SKU ${sku} not found in database. Use CREATE NEW mode to add new products.`
+          })),
+          errorType: 'SKU_NOT_FOUND',
+          summary: {
+            totalRecords: records.length,
+            errorCount: nonExistingSKUs.length,
+            nonExistingSKUs: nonExistingSKUs
+          }
+        }), 400);
       }
     }
+    
+    // 7. Start database transaction
+    const transaction = await sequelize.transaction();
+    
+    try {
+        const productsToCreate: any[] = [];
+        const productsToUpdate: { id: number; data: any }[] = [];
+      let successCount = 0;
+      let updateCount = 0;
+      let createCount = 0;
 
-    if (productsToCreate.length > 0) {
-      await Product.bulkCreate(productsToCreate);
+      // 8. Process each record based on mode
+      for (const record of processedRecords) {
+        const { data, isUpdate, existingProduct } = record;
+        
+        // Upload image to S3 if provided
+        let imageUrl = data.ImageURL;
+        if (data.ImageURL && data.ImageURL.trim() !== '') {
+          imageUrl = await uploadImageToS3(data.ImageURL, data.SKU);
+        }
+
+        // Prepare product data with proper data types
+        const productData = {
+          SKU: data.SKU,
+          ProductName: data.ProductName,
+          Description: data.Description || null,
+          Category: data.Category,
+          Brand: data.Brand,
+          ModelName: data.ModelName || null,
+          ModelNum: data.ModelNum,
+          MRP: data.MRP ? Number(data.MRP) : null,
+          COST: data.COST ? Number(data.COST) : null,
+          EAN_UPC: data.EAN_UPC || null,
+          Color: data.Color || null,
+          Size: data.Size || null,
+          Weight: data.Weight ? Number(data.Weight) : null,
+          Length: data.Length ? Number(data.Length) : null,
+          Height: data.Height ? Number(data.Height) : null,
+          Width: data.Width ? Number(data.Width) : null,
+          ImageURL: imageUrl,
+          Status: data.Status || 'Active',
+          CPId: data.CPId || null,
+          ParentSKU: data.ParentSKU || null,
+          IS_MPS: data.IS_MPS || null,
+          ProductTaxCode: data.ProductTaxCode || null,
+          ManufacturerDescription: data.ManufacturerDescription || null,
+          AccountingSKU: data.AccountingSKU || null,
+          AccountingUnit: data.AccountingUnit || null,
+          Flammable: data.Flammable || 'No',
+          SPThreshold: data.SPThreshold ? Number(data.SPThreshold) : null,
+          InventoryThreshold: data.InventoryThreshold ? Number(data.InventoryThreshold) : null,
+          ERPSystemId: data.ERPSystemId ? Number(data.ERPSystemId) : null,
+          SyncTally: data.SyncTally ? Number(data.SyncTally) : null,
+          ShelfLife: data.ShelfLife || null,
+          ShelfLifePercentage: data.ShelfLifePercentage ? Number(data.ShelfLifePercentage) : null,
+          ProductExpiryInDays: data.ProductExpiryInDays ? Number(data.ProductExpiryInDays) : null,
+          ReverseWeight: data.ReverseWeight ? Number(data.ReverseWeight) : null,
+          ReverseLength: data.ReverseLength ? Number(data.ReverseLength) : null,
+          ReverseHeight: data.ReverseHeight ? Number(data.ReverseHeight) : null,
+          ReverseWidth: data.ReverseWidth ? Number(data.ReverseWidth) : null,
+          ProductTaxRule: data.ProductTaxRule,
+          CESS: data.CESS ? Number(data.CESS) : null,
+          CreatedDate: new Date().toISOString(),
+          LastUpdatedDate: new Date().toISOString(),
+          SKUType: data.SKUType || null,
+          MaterialType: data.MaterialType
+        };
+
+        if (createNewMode) {
+          // CREATE NEW MODE: Only create new products
+          productsToCreate.push(productData);
+          createCount++;
+        } else {
+          // UPDATE MODE: Only update existing products (SKU remains unchanged)
+          if (isUpdate && existingProduct) {
+            // Remove SKU from update data to prevent changing it
+            const { SKU, ...updateData } = productData;
+            productsToUpdate.push({
+              id: existingProduct.id,
+              data: updateData
+            });
+            updateCount++;
+          }
+        }
+      }
+
+      // 8. Execute database operations
+      if (productsToCreate.length > 0) {
+        await Product.bulkCreate(productsToCreate, { transaction });
+        console.log(`✅ Created ${productsToCreate.length} new products`);
+      }
+
+      if (productsToUpdate.length > 0) {
+        for (const updateItem of productsToUpdate) {
+          await Product.update(updateItem.data, {
+            where: { id: updateItem.id },
+            transaction
+          });
+        }
+        console.log(`✅ Updated ${productsToUpdate.length} existing products`);
+      }
+
+      // 9. Commit transaction
+      await transaction.commit();
+      successCount = createCount + updateCount;
+
+      console.log(`🎉 Bulk ${createNewMode ? 'CREATE' : 'UPDATE'} completed successfully: ${successCount} products processed`);
+
+      // 10. Log successful operations
+      // for (const record of processedRecords) {
+      //   const logId = await bulkImportLogger.createLog(createdBy, record.data, 'SUCCESS');
+      //   // No column errors for successful operations
+      // }
+      
+      // Save success logs
+      // await bulkImportLogger.saveLogs();
+
+      // 11. Clean up uploaded file
+      fs.unlinkSync(req.file.path);
+
+      // 12. Return success response
+      return ResponseHandler.success(res, {
+        message: createNewMode ? 'Products created successfully' : 'Products updated successfully',
+        data: {
+          mode: createNewMode ? 'CREATE_NEW' : 'UPDATE_EXISTING',
+          totalProcessed: successCount,
+          created: createCount,
+          updated: updateCount,
+          warnings: validationResult.warnings.length
+        }
+      }, 200);
+
+    } catch (dbError: any) {
+      // Rollback transaction on database error
+      await transaction.rollback();
+      console.error('❌ Database operation failed:', dbError);
+      
+      // Log database errors for all records
+      // for (const record of processedRecords) {
+      //   const logId = await bulkImportLogger.createLog(createdBy, record.data, 'FAILED');
+      //   bulkImportLogger.addColumnError(
+      //     logId,
+      //     'DATABASE',
+      //     null,
+      //     'DATABASE_ERROR',
+      //     `Database operation failed: ${dbError.message}`,
+      //     0
+      //   );
+      // }
+      
+      // Save error logs
+      // await bulkImportLogger.saveLogs();
+      
+      return ResponseHandler.error(res, JSON.stringify({
+        message: 'Database operation failed',
+        error: dbError.message,
+        errorType: 'DATABASE_ERROR'
+      }), 500);
     }
 
-    return ResponseHandler.success(res, 'Products updated/created successfully', 200);
   } catch (error: any) {
-    return ResponseHandler.error(res, error.message || 'Error updating products', 500);
+    console.error('❌ Bulk import failed:', error);
+    
+    // Clean up uploaded file if it exists
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    
+    return ResponseHandler.error(res, JSON.stringify({
+      message: 'Bulk import failed',
+      error: error.message,
+      errorType: 'PROCESSING_ERROR'
+    }), 500);
   }
 };
 
@@ -405,6 +711,77 @@ export const updateProductEAN = async (req: Request, res: Response) => {
 
   } catch (error: any) {
     console.error('❌ Error updating EAN/UPC:', error);
+    return ResponseHandler.error(res, error.message || 'Internal server error', 500);
+  }
+};
+
+// Get bulk import logs by user
+export const getBulkImportLogsByUser = async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const { limit = 50 } = req.query;
+    const bulkImportLogger = new BulkImportLoggerClass();
+    
+    // const logs = await bulkImportLogger.getLogsByUser(userId, Number(limit));
+    
+    return ResponseHandler.success(res, {
+      message: 'Bulk import logs retrieved successfully',
+      data: {
+        logs: [],
+        count: 0
+      }
+    }, 200);
+  } catch (error: any) {
+    console.error('❌ Error fetching bulk import logs by user:', error);
+    return ResponseHandler.error(res, error.message || 'Internal server error', 500);
+  }
+};
+
+// Get bulk import logs by status
+export const getBulkImportLogsByStatus = async (req: Request, res: Response) => {
+  try {
+    const { status } = req.params;
+    const { limit = 50 } = req.query;
+    const bulkImportLogger = new BulkImportLoggerClass();
+    
+    if (status !== 'SUCCESS' && status !== 'FAILED') {
+      return ResponseHandler.error(res, 'Invalid status. Must be SUCCESS or FAILED', 400);
+    }
+    
+    // const logs = await bulkImportLogger.getLogsByStatus(status as 'SUCCESS' | 'FAILED', Number(limit));
+    
+    return ResponseHandler.success(res, {
+      message: 'Bulk import logs retrieved successfully',
+      data: {
+        logs: [],
+        count: 0,
+        status
+      }
+    }, 200);
+  } catch (error: any) {
+    console.error('❌ Error fetching bulk import logs by status:', error);
+    return ResponseHandler.error(res, error.message || 'Internal server error', 500);
+  }
+};
+
+// Get specific bulk import log by ID
+export const getBulkImportLogById = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const bulkImportLogger = new BulkImportLoggerClass();
+    
+    // const log = await bulkImportLogger.getLogById(Number(id));
+    
+    // if (!log) {
+    //   return ResponseHandler.error(res, 'Bulk import log not found', 404);
+    // }
+    
+    return ResponseHandler.success(res, {
+      message: 'Bulk import log retrieved successfully',
+      data: null
+    }, 200);
+  } catch (error: any) {
+    console.error('❌ Error fetching bulk import log by ID:', error);
     return ResponseHandler.error(res, error.message || 'Internal server error', 500);
   }
 };

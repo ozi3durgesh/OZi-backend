@@ -7,10 +7,25 @@ import {
 } from 'sequelize';
 import sequelize from '../config/database.js';
 
-class Product extends Model<
-  InferAttributes<Product>,
-  InferCreationAttributes<Product>
+// Interface for column-specific error details
+export interface ColumnError {
+  column: string;
+  value: string | null;
+  error: string;
+  description: string;
+}
+
+export interface ErrorDetails {
+  row: number;
+  errors: ColumnError[];
+  sku?: string;
+}
+
+class BulkImportLog extends Model<
+  InferAttributes<BulkImportLog>,
+  InferCreationAttributes<BulkImportLog>
 > {
+  // All product_master columns (exact same structure)
   declare id: CreationOptional<number>;
   declare CPId: string | null;
   declare Status: string | null;
@@ -55,17 +70,24 @@ class Product extends Model<
   declare LastUpdatedDate: string | null;
   declare SKUType: string | null;
   declare MaterialType: string | null;
+  
+  // Additional logging fields
+  declare CreatedBy: string;
+  declare ImportStatus: 'SUCCESS' | 'FAILED';
+  declare ErrorDetails: ErrorDetails[] | null;
+  declare ImportDate: CreationOptional<Date>;
 }
 
-Product.init(
+BulkImportLog.init(
   {
+    // All product_master columns (exact same structure)
     id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
     CPId: { type: DataTypes.STRING, allowNull: true },
     Status: { type: DataTypes.STRING, allowNull: true },
     ModelNum: { type: DataTypes.STRING, allowNull: true },
     ModelName: { type: DataTypes.STRING, allowNull: true },
     Category: { type: DataTypes.STRING, allowNull: true },
-    SKU: { type: DataTypes.STRING, unique: true, allowNull: false },
+    SKU: { type: DataTypes.STRING, allowNull: false },
     ParentSKU: { type: DataTypes.STRING, allowNull: true },
     IS_MPS: { type: DataTypes.STRING, allowNull: true },
     ProductName: { type: DataTypes.STRING, allowNull: true },
@@ -103,16 +125,22 @@ Product.init(
     LastUpdatedDate: { type: DataTypes.STRING, allowNull: true },
     SKUType: { type: DataTypes.STRING, allowNull: true },
     MaterialType: { type: DataTypes.STRING, allowNull: true },
+    
+    // Additional logging fields
+    CreatedBy: { type: DataTypes.STRING, allowNull: false },
+    ImportStatus: { type: DataTypes.ENUM('SUCCESS', 'FAILED'), allowNull: false },
+    ErrorDetails: { type: DataTypes.JSON, allowNull: true },
+    ImportDate: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   },
   {
     sequelize,
-    modelName: 'Product',
-    tableName: 'product_master',
+    modelName: 'BulkImportLog',
+    tableName: 'bulk_import_logs',
     timestamps: false,
   }
 );
 
-// 👉 Export a helper type for creation
-export type ProductCreationAttributes = InferCreationAttributes<Product>;
+// Export helper types
+export type BulkImportLogCreationAttributes = InferCreationAttributes<BulkImportLog>;
 
-export default Product;
+export default BulkImportLog;

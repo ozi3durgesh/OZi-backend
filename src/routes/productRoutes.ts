@@ -1,6 +1,16 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { createProduct, updateProduct, getProducts, getProductBySKU, bulkUpdateProducts, updateProductEAN } from '../controllers/productsController';
+import { 
+  createProduct, 
+  updateProduct, 
+  getProducts, 
+  getProductBySKU, 
+  bulkUpdateProducts, 
+  updateProductEAN,
+  getBulkImportLogsByUser,
+  getBulkImportLogsByStatus,
+  getBulkImportLogById
+} from '../controllers/productsController';
 
 const router = Router();
 const upload = multer({ dest: 'uploads/' }); // saves file to uploads/
@@ -22,5 +32,10 @@ router.put('/products/:id', updateProduct);
 
 // Get product by SKU (parameterized route)
 router.get('/products/:sku', getProductBySKU);
+
+// Bulk import log endpoints
+router.get('/products/bulk/logs/user/:userId', getBulkImportLogsByUser);
+router.get('/products/bulk/logs/status/:status', getBulkImportLogsByStatus);
+router.get('/products/bulk/logs/:id', getBulkImportLogById);
 
 export default router;

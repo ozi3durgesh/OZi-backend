@@ -5,12 +5,12 @@ import { Op } from 'sequelize';
 
 export const createVendor = async (req: Request, res: Response) => {
   try {
-    const { businessName, businessAddress, city, state, pincode, pocName, pocNumber, taxId } = req.body;
+    const { businessName, businessAddress, city, state, pincode, pocName, pocNumber, gstNumber } = req.body;
 
-    // ✅ Check duplicate taxId
-    const existingVendor = await Vendor.findOne({ where: { taxId } });
+    // ✅ Check duplicate gstNumber
+    const existingVendor = await Vendor.findOne({ where: { gstNumber } });
     if (existingVendor) {
-      return ResponseHandler.error(res, 'Vendor with this Tax ID already exists.', 409);
+      return ResponseHandler.error(res, 'Vendor with this GST Number already exists.', 409);
     }
 
     // ✅ Find latest vendorId
@@ -45,7 +45,7 @@ export const createVendor = async (req: Request, res: Response) => {
       pincode,
       pocName,
       pocNumber,
-      taxId,
+      gstNumber,
     });
 
     return ResponseHandler.success(res, { message: 'Vendor created successfully!', data: newVendor }, 201);

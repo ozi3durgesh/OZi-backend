@@ -35,6 +35,7 @@ import PutawayAudit from './PutawayAudit';
 import Inventory from './Inventory';
 import InventoryLog from './InventoryLog';
 import UserDevice from './userDevice';
+import BulkImportLog from './BulkImportLog';
 
 // Set up associations
 Coupon.hasMany(CouponTranslation, {
@@ -276,4 +277,5 @@ export {
   Inventory,
   InventoryLog,
   UserDevice,
+  BulkImportLog,
 };
