@@ -107,18 +107,7 @@ export async function sendPushNotification(
     }),
   };
 
-  // Log the clean notification format that frontend will receive
-  const cleanNotificationFormat = {
-    notification: { title, body },
-    data: {
-      route: data.route || "/waves",
-      orderId: data.orderId || "",
-      waveId: data.waveId || "",
-      ...data
-    }
-  };
-  
-  console.log('📋 Frontend Notification Format:', JSON.stringify(cleanNotificationFormat, null, 2));
+  console.log('📋 Message payload:', JSON.stringify(message, null, 2));
 
   try {
     const publishParams = {
