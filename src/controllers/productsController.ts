@@ -11,10 +11,10 @@ import csv from 'csv-parser';
 import ProductBulkValidationService, { ValidationError } from '../services/productBulkValidationService';
 import { BulkImportLoggerClass } from '../services/BulkImportLogger';
 
-// AWS S3 Configuration
-const s3 = new AWS.S3();
-const BUCKET_NAME = 'oms-stage-storage'; // Your S3 bucket name
-const FOLDER_NAME = 'product-images'; // Folder inside S3
+// AWS S3 Configuration - COMMENTED OUT (No longer using AWS S3)
+// const s3 = new AWS.S3();
+// const BUCKET_NAME = 'oms-stage-storage'; // Your S3 bucket name
+// const FOLDER_NAME = 'product-images'; // Folder inside S3
 
 // ✅ Helper function: clean URL
 const cleanUrl = (url: string | undefined) => {
@@ -22,50 +22,50 @@ const cleanUrl = (url: string | undefined) => {
   return url.replace(/`/g, '').trim();
 };
 
-// ✅ Helper function: upload image to S3 with SKU as filename
-const uploadImageToS3 = async (imageUrl: string, sku: string) => {
-  try {
-    const cleanImageUrl = cleanUrl(imageUrl);
-    if (!cleanImageUrl) throw new Error('Empty image URL');
-
-    // Skip example.com URLs as they're not real images
-    if (cleanImageUrl.includes('example.com')) {
-      console.log(`⚠️ Skipping example.com URL for SKU ${sku}: ${cleanImageUrl}`);
-      return null;
-    }
-
-    let fileExtension = '.jpg';
-    try {
-      const pathname = new URL(cleanImageUrl).pathname;
-      fileExtension = path.extname(pathname) || '.jpg';
-    } catch {
-      fileExtension = '.jpg';
-    }
-
-    const fileName = `${sku}${fileExtension}`;
-
-    // Download image
-    const response = await fetch(cleanImageUrl);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch image: ${cleanImageUrl}`);
-    }
-    const buffer = await response.buffer();
-
-    // Upload to S3
-    const params = {
-      Bucket: BUCKET_NAME,
-      Key: `${FOLDER_NAME}/${fileName}`,
-      Body: buffer,
-      ContentType: response.headers.get('content-type') || 'image/jpeg',
-    };
-
-    const s3Response = await s3.upload(params).promise();
-    return s3Response.Location;
-  } catch (err: any) {
-    console.error(`❌ Image upload failed for ${imageUrl}`, err.message);
-    return null;
-  }
-};
+// ✅ Helper function: upload image to S3 with SKU as filename - COMMENTED OUT (No longer using AWS S3)
+// const uploadImageToS3 = async (imageUrl: string, sku: string) => {
+//   try {
+//     const cleanImageUrl = cleanUrl(imageUrl);
+//     if (!cleanImageUrl) throw new Error('Empty image URL');
+//
+//     // Skip example.com URLs as they're not real images
+//     if (cleanImageUrl.includes('example.com')) {
+//       console.log(`⚠️ Skipping example.com URL for SKU ${sku}: ${cleanImageUrl}`);
+//       return null;
+//     }
+//
+//     let fileExtension = '.jpg';
+//     try {
+//       const pathname = new URL(cleanImageUrl).pathname;
+//       fileExtension = path.extname(pathname) || '.jpg';
+//     } catch {
+//       fileExtension = '.jpg';
+//     }
+//
+//     const fileName = `${sku}${fileExtension}`;
+//
+//     // Download image
+//     const response = await fetch(cleanImageUrl);
+//     if (!response.ok) {
+//       throw new Error(`Failed to fetch image: ${cleanImageUrl}`);
+//     }
+//     const buffer = await response.buffer();
+//
+//     // Upload to S3
+//     const params = {
+//       Bucket: BUCKET_NAME,
+//       Key: `${FOLDER_NAME}/${fileName}`,
+//       Body: buffer,
+//       ContentType: response.headers.get('content-type') || 'image/jpeg',
+//     };
+//
+//     const s3Response = await s3.upload(params).promise();
+//     return s3Response.Location;
+//   } catch (err: any) {
+//     console.error(`❌ Image upload failed for ${imageUrl}`, err.message);
+//     return null;
+//   }
+// };
 
 // ✅ Parse CSV into JSON
 const parseCSV = (filePath: string): Promise<any[]> => {
@@ -91,7 +91,8 @@ export const createProduct = async (req: Request, res: Response) => {
       return ResponseHandler.error(res, `Product with SKU ${SKU} already exists`, 400);
     }
 
-    const imageUrl = await uploadImageToS3(ImageURL, SKU);
+    // Use ImageURL directly from request (no AWS S3 upload)
+    const imageUrl = cleanUrl(ImageURL);
 
     const product = await Product.create({
       SKU,
@@ -118,7 +119,8 @@ export const updateProduct = async (req: Request, res: Response) => {
 
     let updatedImageURL = product.ImageURL;
     if (ImageURL) {
-      updatedImageURL = await uploadImageToS3(ImageURL, SKU || product.SKU);
+      // Use ImageURL directly from request (no AWS S3 upload)
+      updatedImageURL = cleanUrl(ImageURL);
     }
 
     await product.update({
@@ -213,9 +215,8 @@ export const bulkUploadProducts = async (req: Request, res: Response) => {
     const productsToCreate: ProductCreationAttributes[] = [];
 
     for (const record of records) {
-      const s3Url = record.ImageURL
-        ? await uploadImageToS3(record.ImageURL, record.SKU)
-        : null;
+      // Use ImageURL directly from CSV (no AWS S3 upload)
+      const s3Url = record.ImageURL ? cleanUrl(record.ImageURL) : null;
 
       const productData: ProductCreationAttributes = {
         ...record,
@@ -429,10 +430,10 @@ export const bulkUpdateProducts = async (req: Request, res: Response) => {
       for (const record of processedRecords) {
         const { data, isUpdate, existingProduct } = record;
         
-        // Upload image to S3 if provided
+        // Use ImageURL directly from CSV (no AWS S3 upload)
         let imageUrl = data.ImageURL;
         if (data.ImageURL && data.ImageURL.trim() !== '') {
-          imageUrl = await uploadImageToS3(data.ImageURL, data.SKU);
+          imageUrl = cleanUrl(data.ImageURL);
         }
 
         // Prepare product data with proper data types
