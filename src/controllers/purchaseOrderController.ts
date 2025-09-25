@@ -21,9 +21,9 @@ const transporter = nodemailer.createTransport({
 
 // Approval Emails
 const approvalEmails: Record<string, string> = {
-  category_head: 'ozipurchaseorders@gmail.com',
-  admin: 'ankit.gupta@ozi.in',
-  creator: 'ozipurchaseorders@gmail.com'
+  category_head: 'durgesh.singh.sde@gmail.com',
+  admin: 'durgesh.singh@ozi.in',
+  creator: 'durgesh.sde@gmail.com'
 };
 
 const upload = multer({ storage: multer.memoryStorage() });
