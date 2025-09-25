@@ -51,7 +51,7 @@ const convertProductDetailKeys = (productData: any) => {
     reverseLength: productData.ReverseLength,
     reverseHeight: productData.ReverseHeight,
     reverseWidth: productData.ReverseWidth,
-    gst_number: productData.gst_number,
+    gst: productData.gst,
     cess: productData.CESS,
     createdDate: productData.CreatedDate,
     lastUpdatedDate: productData.LastUpdatedDate,

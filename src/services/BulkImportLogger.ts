@@ -55,7 +55,7 @@ export class BulkImportLogger {
         ReverseLength: productData.ReverseLength || null,
         ReverseHeight: productData.ReverseHeight || null,
         ReverseWidth: productData.ReverseWidth || null,
-        gst_number: productData.gst_number || null,
+        gst: productData.gst || null,
         CESS: productData.CESS || null,
         CreatedDate: productData.CreatedDate || null,
         LastUpdatedDate: productData.LastUpdatedDate || null,

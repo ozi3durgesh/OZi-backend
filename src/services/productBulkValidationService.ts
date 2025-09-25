@@ -37,7 +37,7 @@ export class ProductBulkValidationService {
     'Width',
     'MaterialType',
     'Flammable',
-    'gst_number'
+    'gst'
   ];
 
   private numericFields = [
@@ -84,7 +84,7 @@ export class ProductBulkValidationService {
     'ShelfLife',
     'SKUType',
     'MaterialType',
-    'gst_number'
+    'gst'
   ];
 
   private enumFields = {

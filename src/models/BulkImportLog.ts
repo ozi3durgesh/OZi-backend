@@ -64,7 +64,7 @@ class BulkImportLog extends Model<
   declare ReverseLength: number | null;
   declare ReverseHeight: number | null;
   declare ReverseWidth: number | null;
-  declare gst_number: string | null;
+  declare gst: string | null;
   declare CESS: number | null;
   declare CreatedDate: string | null;
   declare LastUpdatedDate: string | null;
@@ -119,7 +119,7 @@ BulkImportLog.init(
     ReverseLength: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
     ReverseHeight: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
     ReverseWidth: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
-    gst_number: { type: DataTypes.STRING, allowNull: true },
+    gst: { type: DataTypes.STRING, allowNull: true },
     CESS: { type: DataTypes.DECIMAL(5, 2), allowNull: true },
     CreatedDate: { type: DataTypes.STRING, allowNull: true },
     LastUpdatedDate: { type: DataTypes.STRING, allowNull: true },
