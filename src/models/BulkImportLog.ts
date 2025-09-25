@@ -38,7 +38,7 @@ class BulkImportLog extends Model<
   declare ProductName: string | null;
   declare Description: string | null;
   declare ManufacturerDescription: string | null;
-  declare ProductTaxCode: string | null;
+  declare hsn: string | null;
   declare ImageURL: string | null;
   declare MRP: number | null;
   declare COST: number | null;
@@ -64,7 +64,7 @@ class BulkImportLog extends Model<
   declare ReverseLength: number | null;
   declare ReverseHeight: number | null;
   declare ReverseWidth: number | null;
-  declare ProductTaxRule: string | null;
+  declare gst_number: string | null;
   declare CESS: number | null;
   declare CreatedDate: string | null;
   declare LastUpdatedDate: string | null;
@@ -93,7 +93,7 @@ BulkImportLog.init(
     ProductName: { type: DataTypes.STRING, allowNull: true },
     Description: { type: DataTypes.TEXT, allowNull: true },
     ManufacturerDescription: { type: DataTypes.TEXT, allowNull: true },
-    ProductTaxCode: { type: DataTypes.STRING, allowNull: true },
+    hsn: { type: DataTypes.STRING, allowNull: true },
     ImageURL: { type: DataTypes.TEXT, allowNull: true },
     MRP: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
     COST: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
@@ -119,7 +119,7 @@ BulkImportLog.init(
     ReverseLength: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
     ReverseHeight: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
     ReverseWidth: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
-    ProductTaxRule: { type: DataTypes.STRING, allowNull: true },
+    gst_number: { type: DataTypes.STRING, allowNull: true },
     CESS: { type: DataTypes.DECIMAL(5, 2), allowNull: true },
     CreatedDate: { type: DataTypes.STRING, allowNull: true },
     LastUpdatedDate: { type: DataTypes.STRING, allowNull: true },

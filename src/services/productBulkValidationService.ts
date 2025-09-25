@@ -37,7 +37,7 @@ export class ProductBulkValidationService {
     'Width',
     'MaterialType',
     'Flammable',
-    'ProductTaxRule'
+    'gst_number'
   ];
 
   private numericFields = [
@@ -76,7 +76,7 @@ export class ProductBulkValidationService {
     'CPId',
     'ParentSKU',
     'IS_MPS',
-    'ProductTaxCode',
+    'hsn',
     'ManufacturerDescription',
     'AccountingSKU',
     'AccountingUnit',
@@ -84,7 +84,7 @@ export class ProductBulkValidationService {
     'ShelfLife',
     'SKUType',
     'MaterialType',
-    'ProductTaxRule'
+    'gst_number'
   ];
 
   private enumFields = {
