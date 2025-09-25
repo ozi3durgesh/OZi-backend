@@ -647,8 +647,48 @@ export class GrnController {
       const { id } = req.params;
       const grn = await GRN.findByPk(id, {
         include: [
+          {
+            model: PurchaseOrder,
+            as: 'PO',
+            attributes: ['id', 'po_id', 'vendor_name', 'approval_status'],
+          },
+          {
+            model: GRNLine,
+            as: 'Line',
+            attributes: [
+              'id',
+              'sku_id',
+              'ordered_qty',
+              'received_qty',
+              'qc_pass_qty',
+              'qc_fail_qty',
+              'rtv_qty',
+              'held_qty',
+            ],
+            include: [
+              {
+                model: GRNBatch,
+                as: 'Batches',
+              },
+            ],
+          },
           { model: User, as: 'GrnCreatedBy', attributes: ['id', 'email'] },
           { model: User, as: 'ApprovedBy', attributes: ['id', 'email'] },
+          {
+            model: GRNPhoto,
+            as: 'Photos',
+            attributes: ['id', 'sku_id', 'url', 'reason', 'created_at'],
+          },
+        ],
+        order: [
+          [{ model: GRNLine, as: 'Line' }, 'id', 'ASC'],
+          [
+            { model: GRNLine, as: 'Line' },
+            { model: GRNBatch, as: 'Batches' },
+            'id',
+            'ASC',
+          ],
+          [{ model: GRNPhoto, as: 'Photos' }, 'created_at', 'DESC'],
         ],
       });
 
