@@ -10,6 +10,7 @@ import { Op, QueryTypes } from 'sequelize';
 import csv from 'csv-parser';
 import ProductBulkValidationService, { ValidationError } from '../services/productBulkValidationService';
 import { BulkImportLoggerClass } from '../services/BulkImportLogger';
+import ProductCSVProcessingService from '../services/productCSVProcessingService';
 
 // AWS S3 Configuration - COMMENTED OUT (No longer using AWS S3)
 // const s3 = new AWS.S3();
@@ -790,5 +791,70 @@ export const getBulkImportLogById = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('❌ Error fetching bulk import log by ID:', error);
     return ResponseHandler.error(res, error.message || 'Internal server error', 500);
+  }
+};
+
+// Process CSV for PO creation - Get enriched product data
+export const processCSVForPO = async (req: Request, res: Response) => {
+  const csvProcessingService = new ProductCSVProcessingService();
+  
+  try {
+    // 1. Check if file is uploaded
+    if (!req.file) {
+      return ResponseHandler.error(res, 'No CSV file uploaded', 400);
+    }
+
+    // 2. Get user information from request body
+    const createdBy = req.body.createdBy || 'system';
+    
+    console.log('📁 Processing CSV file for PO creation:', req.file.filename);
+    console.log('👤 Processed by:', createdBy);
+
+    // 3. Parse CSV file
+    const records = await parseCSV(req.file.path);
+    
+    if (!records || records.length === 0) {
+      return ResponseHandler.error(res, 'CSV file is empty or invalid', 400);
+    }
+
+    console.log(`📊 Parsed ${records.length} records from CSV`);
+
+    // 4. Process CSV using the service
+    const result = await csvProcessingService.processCSVFile(records);
+
+    // 5. Clean up uploaded file
+    fs.unlinkSync(req.file.path);
+
+    // 6. Return clean structured response
+    console.log(`📊 CSV processing completed: ${result.summary.successCount} successful, ${result.summary.errorCount} errors`);
+    
+    return ResponseHandler.success(res, {
+      success: true,
+      message: result.summary.errorCount === 0 
+        ? 'All products processed successfully' 
+        : `${result.summary.successCount} products processed successfully, ${result.summary.errorCount} errors found`,
+      data: result.data,
+      errors: result.errors.length > 0 ? result.errors : undefined,
+      summary: {
+        totalRows: result.summary.totalRows,
+        successCount: result.summary.successCount,
+        errorCount: result.summary.errorCount,
+        processedAt: result.summary.processedAt
+      }
+    }, 200);
+
+  } catch (error: any) {
+    console.error('❌ CSV processing failed:', error);
+    
+    // Clean up uploaded file if it exists
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    
+    return ResponseHandler.error(res, JSON.stringify({
+      message: 'CSV processing failed',
+      error: error.message,
+      errorType: 'PROCESSING_ERROR'
+    }), 500);
   }
 };

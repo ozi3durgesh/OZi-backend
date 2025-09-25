@@ -9,7 +9,8 @@ import {
   updateProductEAN,
   getBulkImportLogsByUser,
   getBulkImportLogsByStatus,
-  getBulkImportLogById
+  getBulkImportLogById,
+  processCSVForPO
 } from '../controllers/productsController';
 
 const router = Router();
@@ -37,5 +38,8 @@ router.get('/products/:sku', getProductBySKU);
 router.get('/products/bulk/logs/user/:userId', getBulkImportLogsByUser);
 router.get('/products/bulk/logs/status/:status', getBulkImportLogsByStatus);
 router.get('/products/bulk/logs/:id', getBulkImportLogById);
+
+// Process CSV for PO creation - Get enriched product data
+router.post('/products/csv-process', upload.single('file'), processCSVForPO);
 
 export default router;
