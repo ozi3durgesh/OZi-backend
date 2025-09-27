@@ -25,18 +25,19 @@ export interface ProcessedRecord {
 export class ProductBulkValidationService {
   private requiredFields = [
     'SKU',
-    'ProductName', 
-    'Category',
-    'Brand',
-    'ModelNum',
-    'COST',
     'MRP',
+    'COST',
     'Weight',
     'Length',
     'Height',
     'Width',
-    'MaterialType',
-    'Flammable',
+    'hsn',
+    'EAN_UPC',
+    'ProductName',
+    'ImageURL',
+    'Status',
+    'Category',
+    'Brand',
     'gst'
   ];
 
@@ -75,9 +76,7 @@ export class ProductBulkValidationService {
     'Status',
     'CPId',
     'ParentSKU',
-    'IS_MPS',
     'hsn',
-    'ManufacturerDescription',
     'AccountingSKU',
     'AccountingUnit',
     'Flammable',
@@ -89,8 +88,7 @@ export class ProductBulkValidationService {
 
   private enumFields = {
     'Flammable': ['Yes', 'No', 'Unknown'],
-    'Status': ['Active', 'Inactive', 'Pending'],
-    'IS_MPS': ['Y', 'N'],
+    'Status': ['active', 'inactive', 'draft', 'archived'],
     'SyncTally': ['0', '1']
   };
 
@@ -259,30 +257,35 @@ export class ProductBulkValidationService {
    * Validate field formats
    */
   private validateFormats(record: any, row: number, errors: ValidationError[]): void {
-    // SKU format validation (alphanumeric, reasonable length)
+    // SKU format validation (exactly 12 digits)
     if (record.SKU) {
       const sku = record.SKU.toString();
-      if (!/^[A-Za-z0-9_-]+$/.test(sku)) {
+      if (!/^\d{12}$/.test(sku)) {
         errors.push({
           row,
           column: 'SKU',
           value: sku,
           error: 'INVALID_SKU_FORMAT',
-          description: 'SKU must contain only alphanumeric characters, hyphens, and underscores'
-        });
-      }
-      if (sku.length > 50) {
-        errors.push({
-          row,
-          column: 'SKU',
-          value: sku,
-          error: 'SKU_TOO_LONG',
-          description: 'SKU cannot exceed 50 characters'
+          description: 'SKU must be exactly 12 digits'
         });
       }
     }
 
-    // EAN/UPC format validation (numeric, 8-14 digits)
+    // HSN format validation (4-8 digits)
+    if (record.hsn) {
+      const hsn = record.hsn.toString();
+      if (!/^\d{4,8}$/.test(hsn)) {
+        errors.push({
+          row,
+          column: 'hsn',
+          value: hsn,
+          error: 'INVALID_HSN_FORMAT',
+          description: 'HSN must be 4-8 digits'
+        });
+      }
+    }
+
+    // EAN/UPC format validation (8-14 digits)
     if (record.EAN_UPC) {
       const ean = record.EAN_UPC.toString();
       if (!/^\d{8,14}$/.test(ean)) {
@@ -293,6 +296,57 @@ export class ProductBulkValidationService {
           error: 'INVALID_EAN_FORMAT',
           description: 'EAN/UPC must be 8-14 digits'
         });
+      }
+    }
+
+    // ImageURL format validation (valid HTTP/HTTPS URL with image extension)
+    if (record.ImageURL) {
+      const imageUrl = record.ImageURL.toString();
+      const urlPattern = /^https?:\/\/.+/i;
+      const imageExtensionPattern = /\.(jpg|jpeg|png|gif|bmp|webp|svg)(\?.*)?$/i;
+      
+      if (!urlPattern.test(imageUrl)) {
+        errors.push({
+          row,
+          column: 'ImageURL',
+          value: imageUrl,
+          error: 'INVALID_IMAGE_URL',
+          description: 'ImageURL must be a valid HTTP/HTTPS URL'
+        });
+      } else if (!imageExtensionPattern.test(imageUrl)) {
+        errors.push({
+          row,
+          column: 'ImageURL',
+          value: imageUrl,
+          error: 'INVALID_IMAGE_EXTENSION',
+          description: 'ImageURL must have a valid image extension (jpg, jpeg, png, gif, bmp, webp, svg)'
+        });
+      }
+    }
+
+    // GST format validation (valid percentage)
+    if (record.gst) {
+      const gst = record.gst.toString();
+      const gstPattern = /^(\d+(?:\.\d+)?)%?$/;
+      if (!gstPattern.test(gst)) {
+        errors.push({
+          row,
+          column: 'gst',
+          value: gst,
+          error: 'INVALID_GST_FORMAT',
+          description: 'GST must be a valid percentage (e.g., 18 or 18%)'
+        });
+      } else {
+        const numericValue = parseFloat(gst.replace('%', ''));
+        if (numericValue < 0 || numericValue > 100) {
+          errors.push({
+            row,
+            column: 'gst',
+            value: gst,
+            error: 'INVALID_GST_RANGE',
+            description: 'GST must be between 0 and 100'
+          });
+        }
       }
     }
   }

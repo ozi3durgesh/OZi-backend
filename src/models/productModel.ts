@@ -19,10 +19,8 @@ class Product extends Model<
   declare Category: string | null;
   declare SKU: string;
   declare ParentSKU: string | null;
-  declare IS_MPS: string | null;
   declare ProductName: string | null;
   declare Description: string | null;
-  declare ManufacturerDescription: string | null;
   declare hsn: string | null;
   declare ImageURL: string | null;
   declare MRP: number | null;
@@ -67,10 +65,8 @@ Product.init(
     Category: { type: DataTypes.STRING, allowNull: true },
     SKU: { type: DataTypes.STRING, unique: true, allowNull: false },
     ParentSKU: { type: DataTypes.STRING, allowNull: true },
-    IS_MPS: { type: DataTypes.STRING, allowNull: true },
     ProductName: { type: DataTypes.STRING, allowNull: true },
     Description: { type: DataTypes.TEXT, allowNull: true },
-    ManufacturerDescription: { type: DataTypes.TEXT, allowNull: true },
     hsn: { type: DataTypes.STRING, allowNull: true },
     ImageURL: { type: DataTypes.TEXT, allowNull: true },
     MRP: { type: DataTypes.DECIMAL(10, 2), allowNull: true },

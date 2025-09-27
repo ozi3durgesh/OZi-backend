@@ -87,6 +87,87 @@ export const createProduct = async (req: Request, res: Response) => {
   try {
     const { SKU, ImageURL, ...rest } = req.body;
 
+    // Validation errors array
+    const validationErrors: string[] = [];
+
+    // Required fields validation
+    const requiredFields = [
+      'SKU', 'MRP', 'COST', 'Weight', 'Length', 'Height', 'Width', 
+      'hsn', 'EAN_UPC', 'ProductName', 'ImageURL', 'Status', 'Category', 'Brand', 'gst'
+    ];
+
+    for (const field of requiredFields) {
+      if (!req.body[field] || req.body[field].toString().trim() === '') {
+        validationErrors.push(`${field} is required`);
+      }
+    }
+
+    // SKU format validation (exactly 12 digits)
+    if (SKU && !/^\d{12}$/.test(SKU.toString())) {
+      validationErrors.push('SKU must be exactly 12 digits');
+    }
+
+    // HSN format validation (4-8 digits)
+    if (req.body.hsn && !/^\d{4,8}$/.test(req.body.hsn.toString())) {
+      validationErrors.push('HSN must be 4-8 digits');
+    }
+
+    // EAN/UPC format validation (8-14 digits)
+    if (req.body.EAN_UPC && !/^\d{8,14}$/.test(req.body.EAN_UPC.toString())) {
+      validationErrors.push('EAN/UPC must be 8-14 digits');
+    }
+
+    // ImageURL format validation
+    if (ImageURL) {
+      const urlPattern = /^https?:\/\/.+/i;
+      const imageExtensionPattern = /\.(jpg|jpeg|png|gif|bmp|webp|svg)(\?.*)?$/i;
+      
+      if (!urlPattern.test(ImageURL)) {
+        validationErrors.push('ImageURL must be a valid HTTP/HTTPS URL');
+      } else if (!imageExtensionPattern.test(ImageURL)) {
+        validationErrors.push('ImageURL must have a valid image extension (jpg, jpeg, png, gif, bmp, webp, svg)');
+      }
+    }
+
+    // Status validation
+    if (req.body.Status && !['active', 'inactive', 'draft', 'archived'].includes(req.body.Status)) {
+      validationErrors.push('Status must be active, inactive, draft, or archived');
+    }
+
+    // GST format validation
+    if (req.body.gst) {
+      const gstPattern = /^(\d+(?:\.\d+)?)%?$/;
+      if (!gstPattern.test(req.body.gst.toString())) {
+        validationErrors.push('GST must be a valid percentage (e.g., 18 or 18%)');
+      } else {
+        const numericValue = parseFloat(req.body.gst.toString().replace('%', ''));
+        if (numericValue < 0 || numericValue > 100) {
+          validationErrors.push('GST must be between 0 and 100');
+        }
+      }
+    }
+
+    // Numeric fields validation
+    const numericFields = ['MRP', 'COST', 'Weight', 'Length', 'Height', 'Width'];
+    for (const field of numericFields) {
+      if (req.body[field] !== undefined && req.body[field] !== null && req.body[field] !== '') {
+        const value = Number(req.body[field]);
+        if (isNaN(value) || value < 0) {
+          validationErrors.push(`${field} must be a valid positive number`);
+        }
+      }
+    }
+
+    // Flammable validation
+    if (req.body.Flammable && !['Yes', 'No', 'Unknown'].includes(req.body.Flammable)) {
+      validationErrors.push('Flammable must be Yes, No, or Unknown');
+    }
+
+    // Return validation errors if any
+    if (validationErrors.length > 0) {
+      return ResponseHandler.error(res, `Validation failed: ${validationErrors.join(', ')}`, 400);
+    }
+
     const existingProduct = await Product.findOne({ where: { SKU } });
     if (existingProduct) {
       return ResponseHandler.error(res, `Product with SKU ${SKU} already exists`, 400);
