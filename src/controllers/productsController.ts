@@ -9,7 +9,6 @@ import fetch from 'node-fetch';
 import { Op, QueryTypes } from 'sequelize';
 import csv from 'csv-parser';
 import ProductBulkValidationService, { ValidationError } from '../services/productBulkValidationService';
-import { BulkImportLoggerClass } from '../services/BulkImportLogger';
 import ProductCSVProcessingService from '../services/productCSVProcessingService';
 
 // AWS S3 Configuration - COMMENTED OUT (No longer using AWS S3)
@@ -327,7 +326,6 @@ export const bulkUploadProducts = async (req: Request, res: Response) => {
 // Bulk import/update from CSV with mode-based processing
 export const bulkUpdateProducts = async (req: Request, res: Response) => {
   const validationService = new ProductBulkValidationService();
-  const bulkImportLogger = new BulkImportLoggerClass();
   
   try {
     // 1. Check if file is uploaded
@@ -379,25 +377,6 @@ export const bulkUpdateProducts = async (req: Request, res: Response) => {
         console.log(`Row ${error.row}, Column ${error.column}: ${error.error} - ${error.description}`);
       });
 
-      // Create logs for each failed record
-      for (const error of validationResult.errors) {
-        const record = records[error.row - 1]; // Convert to 0-based index
-        if (record) {
-          const logId = await bulkImportLogger.createLog(createdBy, record, 'FAILED');
-          bulkImportLogger.addColumnError(
-            logId,
-            error.column,
-            error.value,
-            error.error,
-            error.description,
-            error.row
-          );
-        }
-      }
-
-      // Save all logs to database
-      await bulkImportLogger.saveLogs();
-
       return ResponseHandler.error(res, JSON.stringify({
         message: 'CSV validation failed',
         errors: validationResult.errors,
@@ -421,23 +400,7 @@ export const bulkUpdateProducts = async (req: Request, res: Response) => {
       const existingSKUs = processedRecords.filter(r => r.isUpdate).map(r => r.data.SKU);
       if (existingSKUs.length > 0) {
         // Log errors for existing SKUs
-        for (const sku of existingSKUs) {
-          const record = records.find(r => r.SKU === sku);
-          if (record) {
-            const logId = await bulkImportLogger.createLog(createdBy, record, 'FAILED');
-            bulkImportLogger.addColumnError(
-              logId,
-              'SKU',
-              sku,
-              'SKU_ALREADY_EXISTS',
-              `SKU ${sku} already exists in database. Use UPDATE mode to modify existing products.`,
-              0
-            );
-          }
-        }
-        
-        // Save logs
-        await bulkImportLogger.saveLogs();
+        console.log('❌ Found existing SKUs in CREATE NEW mode:', existingSKUs);
         
         return ResponseHandler.error(res, JSON.stringify({
           message: 'CREATE NEW mode: Found existing SKUs in database',
@@ -461,23 +424,7 @@ export const bulkUpdateProducts = async (req: Request, res: Response) => {
       const nonExistingSKUs = processedRecords.filter(r => !r.isUpdate).map(r => r.data.SKU);
       if (nonExistingSKUs.length > 0) {
         // Log errors for non-existing SKUs
-        for (const sku of nonExistingSKUs) {
-          const record = records.find(r => r.SKU === sku);
-          if (record) {
-            const logId = await bulkImportLogger.createLog(createdBy, record, 'FAILED');
-            bulkImportLogger.addColumnError(
-              logId,
-              'SKU',
-              sku,
-              'SKU_NOT_FOUND',
-              `SKU ${sku} not found in database. Use CREATE NEW mode to add new products.`,
-              0
-            );
-          }
-        }
-        
-        // Save logs
-        await bulkImportLogger.saveLogs();
+        console.log('❌ Found non-existing SKUs in UPDATE mode:', nonExistingSKUs);
         
         return ResponseHandler.error(res, JSON.stringify({
           message: 'UPDATE mode: Found SKUs not in database',
@@ -532,17 +479,15 @@ export const bulkUpdateProducts = async (req: Request, res: Response) => {
           EAN_UPC: data.EAN_UPC || null,
           Color: data.Color || null,
           Size: data.Size || null,
-          Weight: data.Weight ? parseFloat(data.Weight.toString()) : null,
-          Length: data.Length ? parseFloat(data.Length.toString()) : null,
-          Height: data.Height ? parseFloat(data.Height.toString()) : null,
-          Width: data.Width ? parseFloat(data.Width.toString()) : null,
+          Weight: data.Weight ? parseInt(data.Weight.toString()) : null,
+          Length: data.Length ? parseInt(data.Length.toString()) : null,
+          Height: data.Height ? parseInt(data.Height.toString()) : null,
+          Width: data.Width ? parseInt(data.Width.toString()) : null,
           ImageURL: imageUrl,
-          Status: data.Status || 'Active',
+          Status: data.Status || 'active',
           CPId: data.CPId || null,
           ParentSKU: data.ParentSKU || null,
-          IS_MPS: data.IS_MPS || null,
           hsn: data.hsn || null,
-          ManufacturerDescription: data.ManufacturerDescription || null,
           AccountingSKU: data.AccountingSKU || null,
           AccountingUnit: data.AccountingUnit || null,
           Flammable: data.Flammable || 'No',
@@ -553,10 +498,10 @@ export const bulkUpdateProducts = async (req: Request, res: Response) => {
           ShelfLife: data.ShelfLife || null,
           ShelfLifePercentage: data.ShelfLifePercentage ? parseInt(data.ShelfLifePercentage.toString()) : null,
           ProductExpiryInDays: data.ProductExpiryInDays ? parseInt(data.ProductExpiryInDays.toString()) : null,
-          ReverseWeight: data.ReverseWeight ? parseFloat(data.ReverseWeight.toString()) : null,
-          ReverseLength: data.ReverseLength ? parseFloat(data.ReverseLength.toString()) : null,
-          ReverseHeight: data.ReverseHeight ? parseFloat(data.ReverseHeight.toString()) : null,
-          ReverseWidth: data.ReverseWidth ? parseFloat(data.ReverseWidth.toString()) : null,
+          ReverseWeight: data.ReverseWeight ? parseInt(data.ReverseWeight.toString()) : null,
+          ReverseLength: data.ReverseLength ? parseInt(data.ReverseLength.toString()) : null,
+          ReverseHeight: data.ReverseHeight ? parseInt(data.ReverseHeight.toString()) : null,
+          ReverseWidth: data.ReverseWidth ? parseInt(data.ReverseWidth.toString()) : null,
           gst: data.gst,
           CESS: data.CESS ? parseFloat(data.CESS.toString()) : null,
           CreatedDate: new Date().toISOString(),
@@ -606,13 +551,7 @@ export const bulkUpdateProducts = async (req: Request, res: Response) => {
       console.log(`🎉 Bulk ${createNewMode ? 'CREATE' : 'UPDATE'} completed successfully: ${successCount} products processed`);
 
       // 10. Log successful operations
-      for (const record of processedRecords) {
-        const logId = await bulkImportLogger.createLog(createdBy, record.data, 'SUCCESS');
-        // No column errors for successful operations
-      }
-      
-      // Save success logs
-      await bulkImportLogger.saveLogs();
+      console.log(`✅ Successfully processed ${successCount} products`);
 
       // 11. Clean up uploaded file
       fs.unlinkSync(req.file.path);
@@ -634,21 +573,8 @@ export const bulkUpdateProducts = async (req: Request, res: Response) => {
       await transaction.rollback();
       console.error('❌ Database operation failed:', dbError);
       
-      // Log database errors for all records
-      for (const record of processedRecords) {
-        const logId = await bulkImportLogger.createLog(createdBy, record.data, 'FAILED');
-        bulkImportLogger.addColumnError(
-          logId,
-          'DATABASE',
-          null,
-          'DATABASE_ERROR',
-          `Database operation failed: ${dbError.message}`,
-          0
-        );
-      }
-      
-      // Save error logs
-      await bulkImportLogger.saveLogs();
+      // Log database errors
+      console.error('❌ Database operation failed for all records:', dbError.message);
       
       return ResponseHandler.error(res, JSON.stringify({
         message: 'Database operation failed',
@@ -809,9 +735,8 @@ export const getBulkImportLogsByUser = async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
     const { limit = 50 } = req.query;
-    const bulkImportLogger = new BulkImportLoggerClass();
-    
-    const logs = await bulkImportLogger.getLogsByUser(userId, Number(limit));
+    // Bulk import logging has been removed - return empty result
+    const logs = [];
     
     return ResponseHandler.success(res, {
       message: 'Bulk import logs retrieved successfully',
@@ -831,13 +756,8 @@ export const getBulkImportLogsByStatus = async (req: Request, res: Response) => 
   try {
     const { status } = req.params;
     const { limit = 50 } = req.query;
-    const bulkImportLogger = new BulkImportLoggerClass();
-    
-    if (status !== 'SUCCESS' && status !== 'FAILED') {
-      return ResponseHandler.error(res, 'Invalid status. Must be SUCCESS or FAILED', 400);
-    }
-    
-    const logs = await bulkImportLogger.getLogsByStatus(status as 'SUCCESS' | 'FAILED', Number(limit));
+    // Bulk import logging has been removed - return empty result
+    const logs = [];
     
     return ResponseHandler.success(res, {
       message: 'Bulk import logs retrieved successfully',
@@ -857,17 +777,10 @@ export const getBulkImportLogsByStatus = async (req: Request, res: Response) => 
 export const getBulkImportLogById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const bulkImportLogger = new BulkImportLoggerClass();
-    
-    const log = await bulkImportLogger.getLogById(Number(id));
-    
-    if (!log) {
-      return ResponseHandler.error(res, 'Bulk import log not found', 404);
-    }
-    
+    // Bulk import logging has been removed - return empty result
     return ResponseHandler.success(res, {
-      message: 'Bulk import log retrieved successfully',
-      data: log
+      message: 'Bulk import log feature has been removed',
+      data: null
     }, 200);
   } catch (error: any) {
     console.error('❌ Error fetching bulk import log by ID:', error);
