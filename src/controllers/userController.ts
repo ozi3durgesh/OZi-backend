@@ -407,18 +407,12 @@ export class UserController {
       // Convert isActive boolean to availabilityStatus
       const newAvailabilityStatus = isActive ? 'available' : 'off-shift';
 
-      // Check if status is already set to the requested value
-      if (user.availabilityStatus === newAvailabilityStatus) {
-        const statusText = isActive ? 'available' : 'off-shift';
-        return ResponseHandler.error(res, `Availability status is already ${statusText}`, 400);
-      }
-
       // Special handling for off-shift users trying to go available
       if (user.availabilityStatus === 'off-shift' && isActive) {
         console.log(`Off-shift user ${user.email} attempting to go available`);
       }
 
-      // Update only the availability status, not isActive
+      // Update only the availability status, not isActive (idempotent operation)
       user.availabilityStatus = newAvailabilityStatus;
       await user.save();
 
