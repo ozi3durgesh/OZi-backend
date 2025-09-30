@@ -25,6 +25,12 @@ router.post('/assign',
   PickingController.assignWaveToPicker
 );
 
+router.post('/reassign', 
+  authenticate, 
+  hasPermission('picking:assign_manage'), 
+  PickingController.reassignWaveToPicker
+);
+
 router.get('/available', 
   authenticate, 
   hasPermission('picking:view'), 

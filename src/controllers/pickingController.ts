@@ -7,6 +7,9 @@ import Product from '../models/productModel';
 import { Sequelize, Op } from 'sequelize';
 import DirectInventoryService from '../services/DirectInventoryService';
 import { INVENTORY_OPERATIONS } from '../config/inventoryConstants';
+import { socketManager } from '../utils/socketManager';
+import { sendPushNotification } from '../services/snsService';
+import UserDevice from '../models/userDevice';
 
 interface AuthRequest extends Request {
   user?: any;
@@ -522,14 +525,7 @@ export class PickingController {
         return ResponseHandler.error(res, 'Picker does not have picking permissions', 403);
       }
 
-      // Check if picker can handle more waves (max 20)
-      const pickerWaves = await PickingWave.count({
-        where: { pickerId: picker.id, status: ['ASSIGNED', 'PICKING'] }
-      });
-
-      if (pickerWaves >= 20) {
-        return ResponseHandler.error(res, 'Picker has reached maximum wave limit (20)', 400);
-      }
+      // Wave limit check removed - pickers can now handle unlimited waves
 
       console.log(`Assigning wave ${waveId} to picker ${picker.id} (${picker.email})`);
 
@@ -557,6 +553,188 @@ export class PickingController {
 
     } catch (error) {
       console.error('Assign wave to picker error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+  /**
+   * Manually reassign a wave to a different picker
+   */
+  static async reassignWaveToPicker(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { waveId, newPickerId, reason } = req.body;
+
+      console.log(`🔄 Reassignment request: waveId=${waveId}, newPickerId=${newPickerId}, reason=${reason}`);
+
+      if (!waveId || !newPickerId) {
+        return ResponseHandler.error(res, 'Wave ID and new picker ID are required', 400);
+      }
+
+      // Validate wave exists and is currently assigned
+      const wave = await PickingWave.findByPk(waveId);
+      if (!wave) {
+        return ResponseHandler.error(res, 'Wave not found', 404);
+      }
+
+      if (!wave.pickerId) {
+        return ResponseHandler.error(res, 'Wave is not currently assigned to any picker', 400);
+      }
+
+      if (wave.status === 'COMPLETED' || wave.status === 'CANCELLED') {
+        return ResponseHandler.error(res, `Cannot reassign wave with status: ${wave.status}`, 400);
+      }
+
+      const oldPickerId = wave.pickerId;
+
+      // Validate new picker exists and has picking permissions
+      const newPicker = await User.findByPk(newPickerId, {
+        attributes: ['id', 'email', 'availabilityStatus', 'isActive', 'roleId']
+      });
+
+      if (!newPicker) {
+        return ResponseHandler.error(res, 'New picker not found', 404);
+      }
+
+      // Check if new picker is available
+      if (newPicker.availabilityStatus !== 'available') {
+        return ResponseHandler.error(res, `New picker is not available. Current status: ${newPicker.availabilityStatus}`, 400);
+      }
+
+      // Check if new picker has picking permissions (roleId 4 = wh_staff_2 has picking permissions)
+      if (newPicker.roleId !== 4) {
+        return ResponseHandler.error(res, 'New picker does not have picking permissions', 403);
+      }
+
+      // Wave limit check removed - pickers can now handle unlimited waves
+
+      // Prevent reassigning to the same picker
+      if (oldPickerId === newPickerId) {
+        return ResponseHandler.error(res, 'Cannot reassign wave to the same picker', 400);
+      }
+
+      console.log(`🔄 Reassigning wave ${waveId} from picker ${oldPickerId} to picker ${newPickerId} (${newPicker.email})`);
+
+      // Update wave with new assignment
+      await wave.update({
+        pickerId: newPickerId,
+        assignedAt: new Date(),
+        // Keep the wave status as ASSIGNED or PICKING, don't reset to GENERATED
+        status: wave.status === 'PICKING' ? 'PICKING' : 'ASSIGNED'
+      });
+
+      console.log(`✅ Successfully reassigned wave ${waveId} to picker ${newPicker.email}`);
+
+      // WebSocket and push notification modules are already imported at the top
+
+      // 🔥 Emit event to new assigned picker
+      socketManager.emitToPicker(Number(newPickerId), 'waveReassigned', {
+        waveId: wave.id,
+        waveNumber: wave.waveNumber,
+        orderId: wave.orderId,
+        assignment: {
+          waveId: wave.id,
+          waveNumber: wave.waveNumber,
+          pickerId: newPickerId,
+          pickerEmail: newPicker.email,
+          assignedAt: wave.assignedAt,
+          priority: wave.priority,
+          reason: reason || 'Manual reassignment'
+        }
+      });
+      console.log(`📨 Emitted waveReassigned to new picker_${newPickerId}`);
+
+      // 🔥 Emit event to old picker to notify about reassignment
+      socketManager.emitToPicker(Number(oldPickerId), 'waveUnassigned', {
+        waveId: wave.id,
+        waveNumber: wave.waveNumber,
+        orderId: wave.orderId,
+        reason: reason || 'Wave reassigned to another picker',
+        reassignedTo: {
+          pickerId: newPickerId,
+          pickerEmail: newPicker.email
+        }
+      });
+      console.log(`📨 Emitted waveUnassigned to old picker_${oldPickerId}`);
+
+      // 👉 Send Push Notification to new picker
+      console.log(`🔍 Looking up new picker ${newPickerId} for push notification...`);
+      const newPickerWithDevices = await User.findByPk(newPickerId, {
+        include: [{ model: UserDevice, as: "devices" }],
+      });
+
+      if (newPickerWithDevices && (newPickerWithDevices as any).devices && (newPickerWithDevices as any).devices.length > 0) {
+        console.log(`📱 Found ${(newPickerWithDevices as any).devices.length} device(s) for new picker ${newPickerId}`);
+        
+        for (const device of (newPickerWithDevices as any).devices) {
+          if (device.snsEndpointArn) {
+            try {
+              await sendPushNotification(
+                device.snsEndpointArn,
+                "📦 Wave Reassigned to You",
+                `Wave #${wave.waveNumber} has been reassigned to you.`,
+                { 
+                  route: "/waves",
+                  waveId: waveId.toString(),
+                  type: "wave_reassigned",
+                  priority: wave.priority,
+                  reason: reason || 'Manual reassignment'
+                }
+              );
+              console.log(`✅ Push notification sent to new picker device ${device.id}`);
+            } catch (pushError: any) {
+              console.error(`❌ Failed to send push notification to new picker device ${device.id}:`, pushError.message);
+            }
+          }
+        }
+      }
+
+      // 👉 Send Push Notification to old picker
+      console.log(`🔍 Looking up old picker ${oldPickerId} for push notification...`);
+      const oldPickerWithDevices = await User.findByPk(oldPickerId, {
+        include: [{ model: UserDevice, as: "devices" }],
+      });
+
+      if (oldPickerWithDevices && (oldPickerWithDevices as any).devices && (oldPickerWithDevices as any).devices.length > 0) {
+        console.log(`📱 Found ${(oldPickerWithDevices as any).devices.length} device(s) for old picker ${oldPickerId}`);
+        
+        for (const device of (oldPickerWithDevices as any).devices) {
+          if (device.snsEndpointArn) {
+            try {
+              await sendPushNotification(
+                device.snsEndpointArn,
+                "📦 Wave Unassigned",
+                `Wave #${wave.waveNumber} has been reassigned to another picker.`,
+                { 
+                  route: "/waves",
+                  waveId: waveId.toString(),
+                  type: "wave_unassigned",
+                  reason: reason || 'Wave reassigned to another picker'
+                }
+              );
+              console.log(`✅ Push notification sent to old picker device ${device.id}`);
+            } catch (pushError: any) {
+              console.error(`❌ Failed to send push notification to old picker device ${device.id}:`, pushError.message);
+            }
+          }
+        }
+      }
+
+      return ResponseHandler.success(res, {
+        message: 'Wave reassigned successfully',
+        reassignment: {
+          waveId: wave.id,
+          waveNumber: wave.waveNumber,
+          oldPickerId: oldPickerId,
+          newPickerId: newPickerId,
+          newPickerEmail: newPicker.email,
+          reassignedAt: wave.assignedAt,
+          reason: reason || 'Manual reassignment',
+          priority: wave.priority
+        }
+      });
+
+    } catch (error) {
+      console.error('Reassign wave to picker error:', error);
       return ResponseHandler.error(res, 'Internal server error', 500);
     }
   }
