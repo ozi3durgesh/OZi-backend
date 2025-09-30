@@ -1214,8 +1214,57 @@ export class PickingController {
         return ResponseHandler.error(res, 'You are not assigned to this wave', 403);
       }
 
+      // Check if there are any picklist items with DEFAULT-BIN location for this SKU
+      const defaultBinItems = await PicklistItem.findAll({
+        where: { 
+          waveId: parseInt(waveId),
+          sku: resolvedSku,
+          binLocation: 'DEFAULT-BIN',
+          status: ['PENDING', 'PICKING']
+        }
+      });
 
-      // Find SKU scan in scanner_sku table
+      const hasDefaultBinItems = defaultBinItems.length > 0;
+
+      // If there are DEFAULT-BIN items, bypass strict validation
+      if (hasDefaultBinItems) {
+        console.log(`DEFAULT-BIN bypass: Allowing SKU scan for ${resolvedSku} at bin location ${binlocation}`);
+        
+        // Find the first DEFAULT-BIN item to update
+        const currentItem = defaultBinItems[0];
+        
+        // Update item status to PICKED
+        await currentItem.update({
+          status: 'PICKED',
+          pickedQuantity: currentItem.quantity,
+          pickedAt: new Date(),
+          pickedBy: pickerId
+        });
+
+        return ResponseHandler.success(res, {
+          message: 'DEFAULT-BIN item picked successfully - bypassing strict validation',
+          skuFound: true,
+          scannedId,
+          skuID,
+          resolvedSku,
+          foundBy,
+          binlocation,
+          defaultBinBypass: true,
+          pickedItem: {
+            id: currentItem.id,
+            sku: currentItem.sku,
+            productName: currentItem.productName,
+            quantity: currentItem.quantity,
+            pickedQuantity: currentItem.pickedQuantity,
+            status: currentItem.status,
+            scanSequence: currentItem.scanSequence,
+            binLocation: currentItem.binLocation
+          },
+          waveId: parseInt(waveId)
+        });
+      }
+
+      // Find SKU scan in scanner_sku table (only for non-DEFAULT-BIN items)
       const scannerSku = await ScannerSku.findOne({
         where: { skuScanId: resolvedSku }
       });
