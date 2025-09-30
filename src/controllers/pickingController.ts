@@ -10,6 +10,7 @@ import { INVENTORY_OPERATIONS } from '../config/inventoryConstants';
 import { socketManager } from '../utils/socketManager';
 import { sendPushNotification } from '../services/snsService';
 import UserDevice from '../models/userDevice';
+import { PICKING_CONSTANTS } from '../config/pickingConstants';
 
 interface AuthRequest extends Request {
   user?: any;
@@ -168,7 +169,7 @@ export class PickingController {
                   where: { skuScanId: skuString }
                 });
 
-                let binLocation = 'DEFAULT-BIN'; // Default bin location
+                let binLocation: string = PICKING_CONSTANTS.DEFAULT_BIN_LOCATION; // Default bin location
                 let productName = `Product-${skuString}`;
 
                 if (scannerSku) {
@@ -182,10 +183,69 @@ export class PickingController {
                   if (scannerBin) {
                     binLocation = scannerBin.binLocationScanId;
                   } else {
-                    console.warn(`Bin location not found for SKU ${skuString}. Using default bin location.`);
+                    console.warn(`${PICKING_CONSTANTS.LOG_MESSAGES.BIN_LOCATION_NOT_FOUND.replace('SKU', `SKU ${skuString}`)}`);
+                    
+                    // iii. Category-based fallback: Get SKU category from product_master
+                    const product = await Product.findOne({
+                      where: { [PICKING_CONSTANTS.COLUMNS.SKU]: skuString },
+                      attributes: [PICKING_CONSTANTS.COLUMNS.CATEGORY]
+                    });
+
+                    if (product && product.Category) {
+                      console.log(`Found product category "${product.Category}" for SKU ${skuString}. Checking bin_locations.`);
+                      
+                      // Find bin location by category mapping
+                      const { BinLocation } = await import('../models/index.js');
+                      const categoryBasedBin = await BinLocation.findOne({
+                        where: Sequelize.and(
+                          { [PICKING_CONSTANTS.COLUMNS.STATUS]: PICKING_CONSTANTS.STATUS.ACTIVE },
+                          Sequelize.literal(`JSON_CONTAINS(category_mapping, JSON_QUOTE('${product.Category}'))`)
+                        ),
+                        order: PICKING_CONSTANTS.QUERY_OPTIONS.ORDER_BY_ID_ASC // Get first matching bin
+                      });
+
+                      if (categoryBasedBin) {
+                        binLocation = categoryBasedBin.get('bin_code');
+                        console.log(`✅ Found category-based bin location: ${binLocation} for category "${product.Category}"`);
+                      } else {
+                        console.warn(`No active bin found for category "${product.Category}". Using default bin location.`);
+                      }
+                    } else {
+                      console.warn(`No category found for SKU ${skuString}. Using default bin location.`);
+                    }
                   }
                 } else {
-                  console.warn(`SKU ${skuString} not found in scanner system. Using default bin location.`);
+                  console.warn(`${PICKING_CONSTANTS.LOG_MESSAGES.SKU_NOT_FOUND_IN_SCANNER.replace('SKU', `SKU ${skuString}`)}`);
+                  
+                  // iii. Category-based fallback: Get SKU category from product_master
+                  const product = await Product.findOne({
+                    where: { SKU: skuString },
+                    attributes: ['Category']
+                  });
+
+                  if (product && product.Category) {
+                    console.log(`Found product category "${product.Category}" for SKU ${skuString}. Checking bin_locations.`);
+                    
+                      // Find bin location by category mapping using MySQL JSON_CONTAINS
+                      const { BinLocation } = await import('../models/index.js');
+                      const { Sequelize } = require('sequelize');
+                      const categoryBasedBin = await BinLocation.findOne({
+                        where: Sequelize.and(
+                          { [PICKING_CONSTANTS.COLUMNS.STATUS]: PICKING_CONSTANTS.STATUS.ACTIVE },
+                          Sequelize.literal(`JSON_CONTAINS(category_mapping, JSON_QUOTE('${product.Category}'))`)
+                        ),
+                        order: PICKING_CONSTANTS.QUERY_OPTIONS.ORDER_BY_ID_ASC // Get first matching bin
+                      });
+
+                    if (categoryBasedBin) {
+                      binLocation = categoryBasedBin.bin_code;
+                      console.log(`✅ Found category-based bin location: ${binLocation} for category "${product.Category}"`);
+                    } else {
+                      console.warn(`No active bin found for category "${product.Category}". Using default bin location.`);
+                    }
+                  } else {
+                    console.warn(`No category found for SKU ${skuString}. Using default bin location.`);
+                  }
                 }
 
                 const picklistItem = await PicklistItem.create({
@@ -238,7 +298,7 @@ export class PickingController {
                     orderId: orderData.id,
                     sku: skuString,
                     productName: `Product-${skuString}`,
-                    binLocation: 'DEFAULT-BIN',
+                    binLocation: PICKING_CONSTANTS.DEFAULT_BIN_LOCATION,
                     quantity: quantity,
                     scanSequence: Math.floor(Math.random() * 100) + 1,
                     fefoBatch: fefoRequired ? `BATCH-${Date.now()}` : undefined,
@@ -1798,7 +1858,7 @@ export class PickingController {
                 where: { skuScanId: skuString }
               });
 
-              let binLocation = 'DEFAULT-BIN';
+              let binLocation: string = PICKING_CONSTANTS.DEFAULT_BIN_LOCATION;
               let productName = `Product-${skuString}`;
 
               if (scannerSku) {
@@ -1810,6 +1870,71 @@ export class PickingController {
 
                 if (scannerBin) {
                   binLocation = scannerBin.binLocationScanId;
+                } else {
+                  console.warn(`Bin location not found for SKU ${skuString}. Checking category-based fallback.`);
+                  
+                  // iii. Category-based fallback: Get SKU category from product_master
+                  const product = await Product.findOne({
+                    where: { SKU: skuString },
+                    attributes: ['Category']
+                  });
+
+                  if (product && product.Category) {
+                    console.log(`Found product category "${product.Category}" for SKU ${skuString}. Checking bin_locations.`);
+                    
+                      // Find bin location by category mapping using MySQL JSON_CONTAINS
+                      const { BinLocation } = await import('../models/index.js');
+                      const { Sequelize } = require('sequelize');
+                      const categoryBasedBin = await BinLocation.findOne({
+                        where: Sequelize.and(
+                          { [PICKING_CONSTANTS.COLUMNS.STATUS]: PICKING_CONSTANTS.STATUS.ACTIVE },
+                          Sequelize.literal(`JSON_CONTAINS(category_mapping, JSON_QUOTE('${product.Category}'))`)
+                        ),
+                        order: PICKING_CONSTANTS.QUERY_OPTIONS.ORDER_BY_ID_ASC // Get first matching bin
+                      });
+
+                    if (categoryBasedBin) {
+                      binLocation = categoryBasedBin.bin_code;
+                      console.log(`✅ Found category-based bin location: ${binLocation} for category "${product.Category}"`);
+                    } else {
+                      console.warn(`No active bin found for category "${product.Category}". Using default bin location.`);
+                    }
+                  } else {
+                    console.warn(`No category found for SKU ${skuString}. Using default bin location.`);
+                  }
+                }
+              } else {
+                console.warn(`SKU ${skuString} not found in scanner system. Checking category-based fallback.`);
+                
+                // iii. Category-based fallback: Get SKU category from product_master
+                const product = await Product.findOne({
+                  where: { SKU: skuString },
+                  attributes: ['Category']
+                });
+
+                if (product && product.Category) {
+                  console.log(`Found product category "${product.Category}" for SKU ${skuString}. Checking bin_locations.`);
+                  
+                  // Find bin location by category mapping
+                  const { BinLocation } = await import('../models/index.js');
+                  const categoryBasedBin = await BinLocation.findOne({
+                    where: {
+                      category_mapping: {
+                        [require('sequelize').Op.contains]: [product.Category]
+                      },
+                      status: 'active'
+                    },
+                    order: [['id', 'ASC']] // Get first matching bin
+                  });
+
+                  if (categoryBasedBin) {
+                    binLocation = categoryBasedBin.bin_code;
+                    console.log(`✅ Found category-based bin location: ${binLocation} for category "${product.Category}"`);
+                  } else {
+                    console.warn(`No active bin found for category "${product.Category}". Using default bin location.`);
+                  }
+                } else {
+                  console.warn(`No category found for SKU ${skuString}. Using default bin location.`);
                 }
               }
 
@@ -1863,7 +1988,7 @@ export class PickingController {
                     orderId: orderData.id,
                     sku: skuString,
                     productName: `Product-${skuString}`,
-                    binLocation: 'DEFAULT-BIN',
+                    binLocation: PICKING_CONSTANTS.DEFAULT_BIN_LOCATION,
                     quantity: quantity,
                     scanSequence: Math.floor(Math.random() * 100) + 1,
                     fefoBatch: false ? `BATCH-${Date.now()}` : undefined,
@@ -1969,7 +2094,7 @@ export class PickingController {
                 where: { skuScanId: item.sku.toString() }
               });
 
-              let binLocation = 'DEFAULT-BIN'; // Default bin location
+              let binLocation: string = PICKING_CONSTANTS.DEFAULT_BIN_LOCATION; // Default bin location
               let productName = `Product-${item.sku}`;
 
               if (scannerSku) {
@@ -1983,10 +2108,71 @@ export class PickingController {
                 if (scannerBin) {
                   binLocation = scannerBin.binLocationScanId;
                 } else {
-                  console.warn(`Bin location not found for SKU ${item.sku}. Using default bin location.`);
+                  console.warn(`Bin location not found for SKU ${item.sku}. Checking category-based fallback.`);
+                  
+                  // iii. Category-based fallback: Get SKU category from product_master
+                  const product = await Product.findOne({
+                    where: { SKU: item.sku.toString() },
+                    attributes: ['Category']
+                  });
+
+                  if (product && product.Category) {
+                    console.log(`Found product category "${product.Category}" for SKU ${item.sku}. Checking bin_locations.`);
+                    
+                      // Find bin location by category mapping using MySQL JSON_CONTAINS
+                      const { BinLocation } = await import('../models/index.js');
+                      const { Sequelize } = require('sequelize');
+                      const categoryBasedBin = await BinLocation.findOne({
+                        where: Sequelize.and(
+                          { [PICKING_CONSTANTS.COLUMNS.STATUS]: PICKING_CONSTANTS.STATUS.ACTIVE },
+                          Sequelize.literal(`JSON_CONTAINS(category_mapping, JSON_QUOTE('${product.Category}'))`)
+                        ),
+                        order: PICKING_CONSTANTS.QUERY_OPTIONS.ORDER_BY_ID_ASC // Get first matching bin
+                      });
+
+                    if (categoryBasedBin) {
+                      binLocation = categoryBasedBin.bin_code;
+                      console.log(`✅ Found category-based bin location: ${binLocation} for category "${product.Category}"`);
+                    } else {
+                      console.warn(`No active bin found for category "${product.Category}". Using default bin location.`);
+                    }
+                  } else {
+                    console.warn(`No category found for SKU ${item.sku}. Using default bin location.`);
+                  }
                 }
               } else {
-                console.warn(`SKU ${item.sku} not found in scanner system. Using default bin location.`);
+                console.warn(`SKU ${item.sku} not found in scanner system. Checking category-based fallback.`);
+                
+                // iii. Category-based fallback: Get SKU category from product_master
+                const product = await Product.findOne({
+                  where: { SKU: item.sku.toString() },
+                  attributes: ['Category']
+                });
+
+                if (product && product.Category) {
+                  console.log(`Found product category "${product.Category}" for SKU ${item.sku}. Checking bin_locations.`);
+                  
+                  // Find bin location by category mapping
+                  const { BinLocation } = await import('../models/index.js');
+                  const categoryBasedBin = await BinLocation.findOne({
+                    where: {
+                      category_mapping: {
+                        [require('sequelize').Op.contains]: [product.Category]
+                      },
+                      status: 'active'
+                    },
+                    order: [['id', 'ASC']] // Get first matching bin
+                  });
+
+                  if (categoryBasedBin) {
+                    binLocation = categoryBasedBin.bin_code;
+                    console.log(`✅ Found category-based bin location: ${binLocation} for category "${product.Category}"`);
+                  } else {
+                    console.warn(`No active bin found for category "${product.Category}". Using default bin location.`);
+                  }
+                } else {
+                  console.warn(`No category found for SKU ${item.sku}. Using default bin location.`);
+                }
               }
 
               const picklistItem = await PicklistItem.create({
@@ -2014,7 +2200,7 @@ export class PickingController {
                   orderId: orderData.id,
                   sku: item.sku.toString(),
                   productName: `Product-${item.sku}`,
-                  binLocation: 'DEFAULT-BIN',
+                  binLocation: PICKING_CONSTANTS.DEFAULT_BIN_LOCATION,
                   quantity: quantity,
                   scanSequence: Math.floor(Math.random() * 100) + 1,
                   fefoBatch: wave.fefoRequired ? `BATCH-${Date.now()}` : undefined,
