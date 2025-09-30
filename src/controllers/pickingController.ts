@@ -1052,7 +1052,43 @@ export class PickingController {
         return ResponseHandler.error(res, 'You are not assigned to this wave', 403);
       }
 
-      // Check if scannedId and binlocation match
+      // Check if there are any picklist items with DEFAULT-BIN location for this SKU
+      const defaultBinItems = await PicklistItem.findAll({
+        where: { 
+          waveId: parseInt(waveId),
+          sku: skuID,
+          binLocation: 'DEFAULT-BIN',
+          status: ['PENDING', 'PICKING']
+        }
+      });
+
+      const hasDefaultBinItems = defaultBinItems.length > 0;
+
+      // If there are DEFAULT-BIN items, bypass strict validation
+      if (hasDefaultBinItems) {
+        console.log(`DEFAULT-BIN bypass: Allowing scan for SKU ${skuID} at bin location ${binlocation}`);
+        
+        return ResponseHandler.success(res, {
+          message: 'DEFAULT-BIN item validated successfully - bypassing strict validation',
+          binLocationFound: true,
+          scannedId,
+          skuID,
+          binlocation,
+          defaultBinBypass: true,
+          picklistItems: defaultBinItems.map(item => ({
+            id: item.id,
+            sku: item.sku,
+            productName: item.productName,
+            quantity: item.quantity,
+            status: item.status,
+            scanSequence: item.scanSequence,
+            binLocation: item.binLocation
+          })),
+          waveId: parseInt(waveId)
+        });
+      }
+
+      // Check if scannedId and binlocation match (only for non-DEFAULT-BIN items)
       if (scannedId !== binlocation) {
         return ResponseHandler.error(res, 'Scanned ID and bin location do not match', 400);
       }
