@@ -1088,47 +1088,17 @@ export class PickingController {
         });
       }
 
-      // Check if scannedId and binlocation match (only for non-DEFAULT-BIN items)
-      if (scannedId !== binlocation) {
-        return ResponseHandler.error(res, 'Scanned ID and bin location do not match', 400);
-      }
+      // Removed strict validation - now accepts any bin location
+      console.log(`Allowing scan for SKU ${skuID} at bin location ${binlocation} (validation bypassed)`);
 
-      // Find bin location in scanner_bin table
-      const scannerBin = await ScannerBin.findOne({
-        where: { binLocationScanId: binlocation }
-      });
+      // Removed scanner bin validation - now accepts any bin location and SKU combination
+      console.log(`Bypassing scanner bin validation for SKU ${skuID} at bin location ${binlocation}`);
 
-      if (!scannerBin) {
-        return ResponseHandler.success(res, {
-          message: 'Bin location not found in system',
-          binLocationFound: false,
-          scannedId,
-          binlocation,
-          waveId: parseInt(waveId),
-          error: 'INVALID_BIN_LOCATION'
-        });
-      }
-
-      // Check if SKU exists in the bin location's SKU array
-      const skuExists = scannerBin.sku.includes(skuID);
-      
-      if (!skuExists) {
-        return ResponseHandler.success(res, {
-          message: 'SKU not found at this bin location',
-          binLocationFound: false,
-          scannedId,
-          skuID,
-          binlocation,
-          waveId: parseInt(waveId),
-          error: 'SKU_NOT_FOUND_AT_LOCATION'
-        });
-      }
-
-      // Find picklist items with matching bin location
+      // Find picklist items with matching SKU (regardless of bin location)
       const picklistItems = await PicklistItem.findAll({
         where: { 
           waveId: parseInt(waveId),
-          binLocation: binlocation,
+          sku: skuID,
           status: ['PENDING', 'PICKING']
         }
       });
@@ -1136,20 +1106,20 @@ export class PickingController {
       const binLocationFound = picklistItems.length > 0;
 
       return ResponseHandler.success(res, {
-        message: binLocationFound ? 'Bin location and SKU validated successfully' : 'Bin location validated but no picklist items found',
+        message: binLocationFound ? 'SKU validated successfully - all validations bypassed' : 'SKU validated but no picklist items found',
         binLocationFound,
         scannedId,
         skuID,
         binlocation,
-        availableSkus: scannerBin.sku,
-        totalSkusAtLocation: scannerBin.sku.length,
+        validationBypassed: true,
         picklistItems: picklistItems.map(item => ({
           id: item.id,
           sku: item.sku,
           productName: item.productName,
           quantity: item.quantity,
           status: item.status,
-          scanSequence: item.scanSequence
+          scanSequence: item.scanSequence,
+          binLocation: item.binLocation
         })),
         waveId: parseInt(waveId)
       });
@@ -1282,21 +1252,8 @@ export class PickingController {
         });
       }
 
-      // Check if binlocation matches the binLocationScanId in scanner_sku table
-      if (scannerSku.binLocationScanId !== binlocation) {
-        return ResponseHandler.success(res, {
-          message: 'Bin location does not match SKU scan location',
-          skuFound: false,
-          scannedId,
-          skuID,
-          resolvedSku,
-          foundBy,
-          binlocation,
-          expectedBinLocation: scannerSku.binLocationScanId,
-          waveId: parseInt(waveId),
-          error: 'BIN_LOCATION_MISMATCH'
-        });
-      }
+      // Removed strict bin location validation - now accepts any bin location
+      console.log(`Allowing SKU scan for ${resolvedSku} at bin location ${binlocation} (validation bypassed)`);
 
       // Find picklist item with matching SKU and bin location
       const currentItem = await PicklistItem.findOne({
