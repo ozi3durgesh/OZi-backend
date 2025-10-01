@@ -133,11 +133,18 @@ export class PutawayController {
         grnData.skuIds.add(grnLine.sku_id);
         
         // Store QC details for this SKU
+        const orderedQty = grnLine.ordered_qty || 0;
+        const qcPassQty = grnLine.qc_pass_qty || 0;
+        const qcRejectedQty = grnLine.rejected_qty || 0;
+        const remainingQty = orderedQty - (qcPassQty + qcRejectedQty);
+        
         grnData.skuQcDetails.set(grnLine.sku_id, {
-          qcPassQty: grnLine.qc_pass_qty || 0,
-          qcRejectedQty: grnLine.rejected_qty || 0,
+          orderedQty: orderedQty,
+          qcPassQty: qcPassQty,
+          qcRejectedQty: qcRejectedQty,
           qcFailedQty: grnLine.qc_fail_qty || 0,
-          receivedQty: grnLine.received_qty || 0
+          receivedQty: grnLine.received_qty || 0,
+          remainingQuantity: remainingQty >= 0 ? remainingQty : 0
         });
         
         // Only add to quantity for pending or partial items
@@ -181,18 +188,22 @@ export class PutawayController {
               });
               
               const qcDetails = grnData.skuQcDetails.get(skuId) || {
+                orderedQty: 0,
                 qcPassQty: 0,
                 qcRejectedQty: 0,
                 qcFailedQty: 0,
-                receivedQty: 0
+                receivedQty: 0,
+                remainingQuantity: 0
               };
               
               return {
                 ...convertProductDetailKeys(product?.dataValues || {}),
+                orderedQty: qcDetails.orderedQty,
                 qcPassQty: qcDetails.qcPassQty,
                 qcRejectedQty: qcDetails.qcRejectedQty,
                 qcFailedQty: qcDetails.qcFailedQty,
-                receivedQty: qcDetails.receivedQty
+                receivedQty: qcDetails.receivedQty,
+                remainingQuantity: qcDetails.remainingQuantity
               };
             })
           );
