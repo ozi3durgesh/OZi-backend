@@ -96,6 +96,8 @@ export class PutawayController {
 
       // Group GRN lines by GRN ID to get unique GRNs with detailed SKU information
       const grnMap = new Map();
+      // Track SKU details across all GRNs for remaining quantity calculation
+      const skuPoTracker = new Map(); // Key: "poId-skuId", Value: { orderedQty, totalPutAway, totalRejected }
       
       allGrnLines.forEach((grnLine: any) => {
         const grnId = grnLine.grn_id;
@@ -137,8 +139,9 @@ export class PutawayController {
         const receivedQty = grnLine.received_qty || 0;
         const qcPassQty = grnLine.qc_pass_qty || 0;
         const qcRejectedQty = grnLine.rejected_qty || 0;
-        // remainingQuantity = items received in this GRN that are still pending QC
-        const remainingQty = receivedQty - (qcPassQty + qcRejectedQty);
+        
+        // Calculate items put away: received - qc_pass (remaining) - rejected
+        const itemsPutAway = receivedQty - qcPassQty - qcRejectedQty;
         
         grnData.skuQcDetails.set(grnLine.sku_id, {
           orderedQty: orderedQty,
@@ -146,8 +149,22 @@ export class PutawayController {
           qcPassQty: qcPassQty,
           qcRejectedQty: qcRejectedQty,
           qcFailedQty: grnLine.qc_fail_qty || 0,
-          remainingQuantity: remainingQty >= 0 ? remainingQty : 0
+          itemsPutAway: itemsPutAway >= 0 ? itemsPutAway : 0,
+          poId: grn?.po_id
         });
+        
+        // Track across all GRNs for this PO and SKU
+        const poSkuKey = `${grn?.po_id}-${grnLine.sku_id}`;
+        if (!skuPoTracker.has(poSkuKey)) {
+          skuPoTracker.set(poSkuKey, {
+            orderedQty: orderedQty,
+            totalPutAway: 0,
+            totalRejected: 0
+          });
+        }
+        const tracker = skuPoTracker.get(poSkuKey);
+        tracker.totalPutAway += itemsPutAway >= 0 ? itemsPutAway : 0;
+        tracker.totalRejected += qcRejectedQty;
         
         // Only add to quantity for pending or partial items
         if (grnLine.putaway_status === 'pending' || grnLine.putaway_status === 'partial') {
@@ -195,8 +212,20 @@ export class PutawayController {
                 qcRejectedQty: 0,
                 qcFailedQty: 0,
                 receivedQty: 0,
-                remainingQuantity: 0
+                itemsPutAway: 0,
+                poId: null
               };
+              
+              // Calculate remaining quantity across all GRNs for this PO-SKU combination
+              const poSkuKey = `${qcDetails.poId}-${skuId}`;
+              const tracker = skuPoTracker.get(poSkuKey) || {
+                orderedQty: qcDetails.orderedQty,
+                totalPutAway: 0,
+                totalRejected: 0
+              };
+              
+              // remainingQuantity = orderedQty - (items put away across all GRNs + rejected across all GRNs)
+              const remainingQuantity = tracker.orderedQty - (tracker.totalPutAway + tracker.totalRejected);
               
               return {
                 ...convertProductDetailKeys(product?.dataValues || {}),
@@ -205,7 +234,7 @@ export class PutawayController {
                 qcRejectedQty: qcDetails.qcRejectedQty,
                 qcFailedQty: qcDetails.qcFailedQty,
                 receivedQty: qcDetails.receivedQty,
-                remainingQuantity: qcDetails.remainingQuantity
+                remainingQuantity: remainingQuantity >= 0 ? remainingQuantity : 0
               };
             })
           );
