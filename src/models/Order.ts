@@ -10,6 +10,7 @@ class Order extends Model<OrderAttributes, OrderCreationAttributes> {
   declare user_id: number;
   declare delivery_man_id?: number | null;
   declare return_item_id?: string | null;
+  declare order_status: string;
 }
 
 Order.init({
