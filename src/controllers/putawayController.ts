@@ -101,11 +101,22 @@ export class PutawayController {
         const grnId = grnLine.grn_id;
         const grn = grnLine.GrnId;
         
+        // Skip SKUs that haven't gone through GRN flow or have been rejected/ignored
+        // Only include SKUs with qc_pass_qty > 0 OR received_qty > 0 (processed SKUs)
+        // This excludes: rejected SKUs (qc_pass_qty = 0) and ignored/unprocessed SKUs
+        const isValidSku = grnLine.received_qty > 0 && 
+                          !(grnLine.received_qty === 0 && grnLine.rejected_qty > 0);
+        
+        if (!isValidSku) {
+          return; // Skip this SKU
+        }
+        
         if (!grnMap.has(grnId)) {
           grnMap.set(grnId, {
             grn: grnId,
             poId: grn?.po_id || 'N/A',
             skuIds: new Set(), // Store individual SKU IDs
+            skuQcDetails: new Map(), // Store QC details for each SKU
             quantity: 0,
             grnDate: grn?.created_at ? grn.created_at.toLocaleDateString() : 'N/A',
             status: 'pending', // Default status, will be updated based on SKU statuses
@@ -117,8 +128,17 @@ export class PutawayController {
         
         const grnData = grnMap.get(grnId);
         
-        // Always include SKU IDs regardless of status
+        // Only include SKU IDs that have gone through GRN create flow
+        // and have not been fully rejected or ignored
         grnData.skuIds.add(grnLine.sku_id);
+        
+        // Store QC details for this SKU
+        grnData.skuQcDetails.set(grnLine.sku_id, {
+          qcPassQty: grnLine.qc_pass_qty || 0,
+          qcRejectedQty: grnLine.rejected_qty || 0,
+          qcFailedQty: grnLine.qc_fail_qty || 0,
+          receivedQty: grnLine.received_qty || 0
+        });
         
         // Only add to quantity for pending or partial items
         if (grnLine.putaway_status === 'pending' || grnLine.putaway_status === 'partial') {
@@ -149,16 +169,46 @@ export class PutawayController {
         delete grnData.hasPending;
       });
 
-      // Convert Map to Array and format the response
-      let allPutawayList = Array.from(grnMap.values()).map(grnData => ({
-        grn: grnData.grn,
-        poId: grnData.poId,
-        sku: grnData.skuIds.size, // Count of unique SKUs
-        sku_id: Array.from(grnData.skuIds), // Array of SKU IDs
-        quantity: grnData.quantity,
-        grnDate: grnData.grnDate,
-        status: grnData.status, // GRN status
-      }));
+      // Convert Map to Array and fetch product details
+      let allPutawayList = await Promise.all(
+        Array.from(grnMap.values()).map(async (grnData) => {
+          // Fetch product details for all SKUs in this GRN
+          const skuArray = Array.from(grnData.skuIds) as string[];
+          const productDetails = await Promise.all(
+            skuArray.map(async (skuId) => {
+              const product = await Product.findOne({
+                where: { SKU: skuId }
+              });
+              
+              const qcDetails = grnData.skuQcDetails.get(skuId) || {
+                qcPassQty: 0,
+                qcRejectedQty: 0,
+                qcFailedQty: 0,
+                receivedQty: 0
+              };
+              
+              return {
+                ...convertProductDetailKeys(product?.dataValues || {}),
+                qcPassQty: qcDetails.qcPassQty,
+                qcRejectedQty: qcDetails.qcRejectedQty,
+                qcFailedQty: qcDetails.qcFailedQty,
+                receivedQty: qcDetails.receivedQty
+              };
+            })
+          );
+
+          return {
+            grn: grnData.grn,
+            poId: grnData.poId,
+            sku: grnData.skuIds.size, // Count of unique SKUs
+            sku_id: skuArray, // Array of SKU IDs
+            productDetails: productDetails, // Array of product details with QC info
+            quantity: grnData.quantity,
+            grnDate: grnData.grnDate,
+            status: grnData.status, // GRN status
+          };
+        })
+      );
 
       // Apply status filter to the grouped results if specified
       if (statusFilter) {
