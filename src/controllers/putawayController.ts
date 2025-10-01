@@ -134,16 +134,18 @@ export class PutawayController {
         
         // Store QC details for this SKU
         const orderedQty = grnLine.ordered_qty || 0;
+        const receivedQty = grnLine.received_qty || 0;
         const qcPassQty = grnLine.qc_pass_qty || 0;
         const qcRejectedQty = grnLine.rejected_qty || 0;
-        const remainingQty = orderedQty - (qcPassQty + qcRejectedQty);
+        // remainingQuantity = items received in this GRN that are still pending QC
+        const remainingQty = receivedQty - (qcPassQty + qcRejectedQty);
         
         grnData.skuQcDetails.set(grnLine.sku_id, {
           orderedQty: orderedQty,
+          receivedQty: receivedQty,
           qcPassQty: qcPassQty,
           qcRejectedQty: qcRejectedQty,
           qcFailedQty: grnLine.qc_fail_qty || 0,
-          receivedQty: grnLine.received_qty || 0,
           remainingQuantity: remainingQty >= 0 ? remainingQty : 0
         });
         
