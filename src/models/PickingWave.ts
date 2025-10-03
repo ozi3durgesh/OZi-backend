@@ -78,7 +78,7 @@ PickingWave.init({
     defaultValue: 'MEDIUM',
   },
   pickerId: { type: DataTypes.INTEGER, allowNull: true, references: { model: 'Users', key: 'id' } },
-  riderId: { type: DataTypes.INTEGER, allowNull: true, references: { model: 'Users', key: 'id' } },
+  riderId: { type: DataTypes.INTEGER, allowNull: true, references: { model: 'riders', key: 'id' } },
   riderAssignedAt: { type: DataTypes.DATE, allowNull: true },
   photoPath: { type: DataTypes.STRING, allowNull: true },
   assignedAt: { type: DataTypes.DATE, allowNull: true },
