@@ -235,6 +235,9 @@ export class AuthController {
         return ResponseHandler.error(res, 'Invalid credentials', 401);
       }
 
+      // Update user availability status to 'available' on login
+      await user.update({ availabilityStatus: 'available' });
+
       // Fetch user's FC assignments
       const userFCs = await UserFulfillmentCenter.findAll({
         where: { 
@@ -529,6 +532,12 @@ export class AuthController {
           return ResponseHandler.error(res, 'Invalid refresh token', 401);
         }
       }
+
+      // Update user availability status to 'off-shift' on logout
+      await user.update({ availabilityStatus: 'off-shift' });
+      
+      // Refresh user data to get updated availability status
+      await user.reload();
 
       return ResponseHandler.success(res, {
         message: 'Successfully logged out',
