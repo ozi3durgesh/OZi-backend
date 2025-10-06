@@ -16,22 +16,11 @@
     "start": "node dist/server.js",
     "format": "prettier --write .",
     "init-rbac": "tsx src/script/initializeRBAC.ts",
-    "test-rbac": "tsx src/script/testRBAC.ts",
-    "test-registration": "tsx src/script/testRegistration.ts",
     "debug-permissions": "tsx src/script/debugPermissions.ts",
     "debug-roles": "tsx src/script/debugRoles.ts",
-    "test-simple-registration": "tsx src/script/testSimpleRegistration.ts",
-    "test-full-registration": "tsx src/script/testFullRegistration.ts",
     "db:fix": "tsx src/script/fixDatabaseSchema.ts",
     "db:validate": "tsx src/script/validateDatabaseSchema.ts",
-    "script:fix-order-ids": "tsx src/script/fixExistingOrderIds.ts",
-    "test-warehouse": "tsx src/script/testWarehouseModule.ts",
-    "test-new-scanning": "tsx src/script/testNewScanningFlow.ts",
-    "init-scanner": "tsx src/script/initScannerTables.ts",
-    "update-bin-locations": "tsx src/script/updateBinLocationsTable.ts",
-    "test-scanner-lookup": "tsx src/script/testScannerLookup.ts",
-    "test-ecommorder": "tsx src/script/testEcommorder.ts",
-    "test-timestamp": "node test-timestamp-issue.js"
+    "init-scanner": "tsx src/script/initScannerTables.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.884.0",

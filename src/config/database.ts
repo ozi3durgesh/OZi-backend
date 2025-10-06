@@ -320,8 +320,7 @@ export const connectDatabase = async (): Promise<void> => {
     
     // Setup inventory system if not already initialized
     try {
-      const { setupInventorySystem } = await import('../script/setupInventorySystem.js');
-      await setupInventorySystem();
+      console.log('ℹ️ Inventory system setup skipped (script removed)');
     } catch (inventoryError) {
       console.log('ℹ️ Inventory system setup skipped (may already exist)');
     }

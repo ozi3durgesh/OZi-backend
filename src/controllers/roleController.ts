@@ -34,12 +34,36 @@ export class RoleController {
     try {
       const { roleId, permissionIds } = req.body;
 
+      console.log('Assign permissions request:', { roleId, permissionIds });
+
       if (!roleId || !permissionIds || !Array.isArray(permissionIds)) {
         return ResponseHandler.error(res, 'Role ID and permission IDs array are required', 400);
       }
 
+      // Validate that the role exists
+      const role = await Role.findByPk(roleId);
+      if (!role) {
+        console.error(`Role with ID ${roleId} not found`);
+        return ResponseHandler.error(res, `Role with ID ${roleId} not found`, 404);
+      }
+
+      // Validate that all permissions exist
+      const existingPermissions = await Permission.findAll({
+        where: { id: permissionIds }
+      });
+
+      if (existingPermissions.length !== permissionIds.length) {
+        const foundPermissionIds = existingPermissions.map(p => p.id);
+        const missingPermissionIds = permissionIds.filter(id => !foundPermissionIds.includes(id));
+        console.error(`Permissions not found: ${missingPermissionIds.join(', ')}`);
+        return ResponseHandler.error(res, `Permissions not found: ${missingPermissionIds.join(', ')}`, 404);
+      }
+
+      console.log('Validations passed, proceeding with assignment');
+
       // First remove all existing permissions for this role
-      await RolePermission.destroy({ where: { roleId } });
+      const deletedCount = await RolePermission.destroy({ where: { roleId } });
+      console.log(`Removed ${deletedCount} existing permissions for role ${roleId}`);
 
       // Add new permissions
       const rolePermissions = permissionIds.map(permissionId => ({
@@ -47,7 +71,8 @@ export class RoleController {
         permissionId,
       }));
 
-      await RolePermission.bulkCreate(rolePermissions as any);
+      const createdPermissions = await RolePermission.bulkCreate(rolePermissions as any);
+      console.log(`Created ${createdPermissions.length} new role permissions`);
 
       const updatedRole = await Role.findByPk(roleId, {
         include: [Permission],
@@ -56,6 +81,11 @@ export class RoleController {
       return ResponseHandler.success(res, updatedRole);
     } catch (error) {
       console.error('Assign permissions error:', error);
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : String(error),
+        name: error instanceof Error ? error.name : 'Unknown',
+        stack: error instanceof Error ? error.stack : undefined
+      });
       return ResponseHandler.error(res, 'Internal server error', 500);
     }
   }
