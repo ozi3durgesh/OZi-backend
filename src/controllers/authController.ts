@@ -106,7 +106,8 @@ export class AuthController {
       if (fulfillmentCenters && Array.isArray(fulfillmentCenters) && fulfillmentCenters.length > 0) {
         console.log('🔗 Creating FC assignments for user:', user.id);
         
-        for (const fcId of fulfillmentCenters) {
+        for (let i = 0; i < fulfillmentCenters.length; i++) {
+          const fcId = fulfillmentCenters[i];
           try {
             // Validate FC exists
             const fc = await FulfillmentCenter.findByPk(fcId);
@@ -115,8 +116,21 @@ export class AuthController {
               continue;
             }
 
-            // Get role for this FC (default to STAFF if not specified)
-            const fcRole = fcRoles?.[fcId] || 'STAFF';
+            // Get role for this FC and map it to valid database role
+            const inputRole = fcRoles?.[fcId] || 'STAFF';
+            const roleMapping: { [key: string]: 'MANAGER' | 'SUPERVISOR' | 'OPERATOR' | 'PICKER' | 'PACKER' | 'VIEWER' } = {
+              'STAFF': 'OPERATOR',
+              'MANAGER': 'MANAGER', 
+              'SUPERVISOR': 'SUPERVISOR',
+              'OPERATOR': 'OPERATOR',
+              'PICKER': 'PICKER',
+              'PACKER': 'PACKER',
+              'VIEWER': 'VIEWER'
+            };
+            const fcRole = roleMapping[inputRole] || 'OPERATOR';
+            
+            // Set first FC as default, or if user specified a default FC, use that
+            const isDefault = i === 0; // First FC becomes default
             
             await UserFulfillmentCenter.create({
               user_id: user.id,
@@ -124,12 +138,12 @@ export class AuthController {
               role: fcRole,
               assigned_date: new Date(),
               is_active: true,
-              is_default: fulfillmentCenters.length === 1, // Set as default if only one FC
+              is_default: isDefault,
               created_by: user.id, // Self-assigned during registration
               updated_by: user.id,
             });
 
-            console.log(`✅ Assigned user ${user.id} to FC ${fcId} with role ${fcRole}`);
+            console.log(`✅ Assigned user ${user.id} to FC ${fcId} with role ${fcRole} (default: ${isDefault})`);
           } catch (error) {
             console.error(`❌ Error assigning user to FC ${fcId}:`, error);
             // Continue with other FCs even if one fails
@@ -259,7 +273,7 @@ export class AuthController {
       });
 
       const availableFcs = userFCs.map(ufc => ufc.fc_id);
-      const defaultFC = userFCs.find(ufc => ufc.is_default);
+      const defaultFC = userFCs.find(ufc => ufc.is_default) || userFCs[0]; // Fallback to first FC if no default
 
       const accessToken = await JwtUtils.generateAccessToken(user, defaultFC?.fc_id, availableFcs);
       const refreshToken = await JwtUtils.generateRefreshToken(user);
