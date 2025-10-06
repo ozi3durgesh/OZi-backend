@@ -53,6 +53,9 @@ export const assignUserToFulfillmentCenter = async (req: AuthRequest, res: Respo
     const newAssignment = await UserFulfillmentCenter.create({
       ...assignmentData,
       created_by: userId,
+      is_active: true,
+      assigned_date: assignmentData.assigned_date || new Date(),
+      is_default: assignmentData.is_default !== undefined ? assignmentData.is_default : false,
     });
 
     const createdAssignment = await UserFulfillmentCenter.findByPk(newAssignment.id, {

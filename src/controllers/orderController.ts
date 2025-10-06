@@ -123,7 +123,7 @@ export class OrderController {
   }
 
   // FC-based filtering methods
-  private static async getOrdersByFC(fcId: number, whereClause: any = {}): Promise<any[]> {
+  private static async getOrdersByFCInternal(fcId: number, whereClause: any = {}): Promise<any[]> {
     const fcFilteredWhere = FCQueryBuilder.addOrderFCFilter(whereClause, fcId);
     return await Order.findAll({
       where: fcFilteredWhere,
@@ -131,7 +131,7 @@ export class OrderController {
     });
   }
 
-  private static async getOrderByIdAndFC(orderId: number, fcId: number): Promise<any> {
+  private static async getOrderByIdAndFCInternal(orderId: number, fcId: number): Promise<any> {
     const fcFilteredWhere = FCQueryBuilder.addOrderFCFilter({ id: orderId }, fcId);
     return await Order.findOne({
       where: fcFilteredWhere
@@ -1274,7 +1274,7 @@ export class OrderController {
         whereClause.status = status;
       }
 
-      const orders = await OrderController.getOrdersByFC(fcId, whereClause);
+      const orders = await OrderController.getOrdersByFCInternal(fcId, whereClause);
       
       return ResponseHandler.success(res, {
         message: 'Orders retrieved successfully',
@@ -1297,7 +1297,7 @@ export class OrderController {
         return ResponseHandler.error(res, 'Order ID is required', 400);
       }
 
-      const order = await OrderController.getOrderByIdAndFC(parseInt(id), fcId);
+      const order = await OrderController.getOrderByIdAndFCInternal(parseInt(id), fcId);
       
       if (!order) {
         return ResponseHandler.error(res, 'Order not found or access denied', 404);
@@ -1340,7 +1340,7 @@ export class OrderController {
         return ResponseHandler.error(res, 'Order not found or no changes made', 404);
       }
 
-      const updatedOrder = await OrderController.getOrderByIdAndFC(parseInt(id), fcId);
+      const updatedOrder = await OrderController.getOrderByIdAndFCInternal(parseInt(id), fcId);
       
       return ResponseHandler.success(res, {
         message: 'Order updated successfully',

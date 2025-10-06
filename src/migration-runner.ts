@@ -1,7 +1,7 @@
 // FC Migration Runner
 // This runs the FC mapping migration when the server starts
 
-import { sequelize } from './config/database';
+import sequelize from './config/database';
 
 export async function runFCMigration() {
   console.log('🚀 Starting FC mapping migration...');
@@ -43,14 +43,14 @@ export async function runFCMigration() {
           console.log(`ℹ️ fc_id already exists in ${table} table`);
         }
       } catch (error) {
-        console.log(`ℹ️ ${table}: ${error.message}`);
+        console.log(`ℹ️ ${table}: ${(error as Error).message}`);
       }
     }
 
     console.log('🎉 FC mapping migration completed successfully!');
     
   } catch (error) {
-    console.error('❌ Migration failed:', error.message);
+    console.error('❌ Migration failed:', (error as Error).message);
   }
 }
 

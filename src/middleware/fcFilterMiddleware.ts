@@ -179,7 +179,7 @@ export const fcResourceValidator = (modelName: string, fcField: string = 'fc_id'
       }
 
       // Import the model dynamically
-      const models = await import('../models');
+      const models = await import('../models/index.js');
       const Model = (models as any)[modelName];
 
       if (!Model) {

@@ -60,6 +60,7 @@ const sequelize = new Sequelize({
 });
 
 export default sequelize;
+export { QueryTypes };
 
 const createReturnTables = async (): Promise<void> => {
   try {

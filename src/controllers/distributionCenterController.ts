@@ -29,6 +29,13 @@ export const createDistributionCenter = async (req: AuthRequest, res: Response) 
     const newDC = await DistributionCenter.create({
       ...dcData,
       created_by: userId,
+      status: 'ACTIVE',
+      current_utilization_percentage: 0,
+      integration_status: 'PENDING',
+      country: dcData.country || 'India',
+      is_auto_assignment_enabled: dcData.is_auto_assignment_enabled !== undefined ? dcData.is_auto_assignment_enabled : true,
+      max_orders_per_day: dcData.max_orders_per_day || 1000,
+      sla_hours: dcData.sla_hours || 24,
     });
 
     const createdDC = await DistributionCenter.findByPk(newDC.id, {

@@ -72,6 +72,8 @@ export interface UserCreationAttributes {
   roleId?: number;
   isActive?: boolean;
   availabilityStatus?: 'available' | 'break' | 'off-shift';
+  name?: string;
+  phone?: string;
 }
 
 // Add these to your existing types/index.ts file
@@ -272,6 +274,7 @@ export interface OrderCreationAttributes {
   order_type: string;
   checked?: number;
   store_id: number;
+  fc_id?: number;
   created_at?: number;
   updated_at?: number;
   delivery_charge?: number;
@@ -921,6 +924,7 @@ export interface GRNAttributes {
   created_by: number;
   closeReason?: string | null;
   approved_by?: number | null;
+  fc_id?: number;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -1091,6 +1095,7 @@ export interface AuthRequest extends Request {
     permissions: string[];
     availabilityStatus: 'available' | 'break' | 'off-shift';
     createdAt: Date;
+    currentFcId?: number;
   };
   body: any;
   params: any;

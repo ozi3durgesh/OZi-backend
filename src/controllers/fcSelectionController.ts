@@ -6,7 +6,7 @@ import FulfillmentCenter from '../models/FulfillmentCenter';
 import DistributionCenter from '../models/DistributionCenter';
 import { JwtUtils } from '../utils/jwt';
 import { AuthRequest, FulfillmentCenterSelectionResponse } from '../types';
-import sequelize from '../config/database';
+import sequelize, { QueryTypes } from '../config/database';
 
 export const selectFulfillmentCenter = async (req: AuthRequest, res: Response) => {
   try {
@@ -134,18 +134,18 @@ export const debugFcQuery = async (req: AuthRequest, res: Response) => {
       ORDER BY ufc.is_default DESC, ufc.assigned_date DESC
     `, {
       replacements: { userId },
-      type: sequelize.QueryTypes.SELECT
+      type: QueryTypes.SELECT
     });
 
     console.log('Debug: Raw query results:', results);
-    console.log('Debug: Results count:', results.length);
+    console.log('Debug: Results count:', Array.isArray(results) ? results.length : 0);
 
     return ResponseHandler.success(res, {
       message: 'Debug query results',
       data: {
         userId,
-        resultsCount: results.length,
-        results: results
+        resultsCount: Array.isArray(results) ? results.length : 0,
+        results: Array.isArray(results) ? results : []
       }
     });
 
@@ -186,7 +186,7 @@ export const getAvailableFulfillmentCenters = async (req: AuthRequest, res: Resp
       ORDER BY ufc.is_default DESC, ufc.assigned_date DESC
     `, {
       replacements: { userId },
-      type: sequelize.QueryTypes.SELECT
+      type: QueryTypes.SELECT
     });
 
     // Ensure results is an array
@@ -213,7 +213,7 @@ export const getAvailableFulfillmentCenters = async (req: AuthRequest, res: Resp
 
   } catch (error) {
     console.error('❌ Error fetching available Fulfillment Centers:', error);
-    console.error('❌ Error stack:', error.stack);
+    console.error('❌ Error stack:', (error as Error).stack);
     return ResponseHandler.error(res, 'Failed to fetch available Fulfillment Centers', 500);
   }
 };

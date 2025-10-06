@@ -35,6 +35,13 @@ export const createFulfillmentCenter = async (req: AuthRequest, res: Response) =
     const newFC = await FulfillmentCenter.create({
       ...fcData,
       created_by: userId,
+      status: 'ACTIVE',
+      current_utilization_percentage: 0,
+      integration_status: 'PENDING',
+      country: fcData.country || 'India',
+      is_auto_assignment_enabled: fcData.is_auto_assignment_enabled !== undefined ? fcData.is_auto_assignment_enabled : true,
+      max_orders_per_day: fcData.max_orders_per_day || 1000,
+      sla_hours: fcData.sla_hours || 24,
     });
 
     const createdFC = await FulfillmentCenter.findByPk(newFC.id, {
