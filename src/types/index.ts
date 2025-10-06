@@ -40,6 +40,8 @@ export interface JwtPayload {
   permissions: string[];
   currentFcId?: number; // Current selected FC ID
   availableFcs?: number[]; // Available FC IDs for the user
+  name?: string; // User's name
+  phone?: string; // User's phone number
   exp?: number; // JWT expiration timestamp
   iat?: number; // JWT issued at timestamp
 }

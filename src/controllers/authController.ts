@@ -458,6 +458,8 @@ export class AuthController {
           'isActive',
           'availabilityStatus',
           'createdAt',
+          'name',
+          'phone',
         ],
       });
 
@@ -541,6 +543,8 @@ export class AuthController {
             : [],
           availabilityStatus: user.availabilityStatus,
           createdAt: user.createdAt,
+          name: user.name,
+          phone: user.phone,
         },
       });
     } catch (error) {

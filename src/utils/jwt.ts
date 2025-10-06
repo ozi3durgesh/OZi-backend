@@ -19,7 +19,7 @@ export class JwtUtils {
           include: ['Permissions'],
         }
       ],
-      attributes: ['id', 'email']
+      attributes: ['id', 'email', 'name', 'phone']
     });
 
     if (!userWithPermissions) {
@@ -36,7 +36,9 @@ export class JwtUtils {
       role: (userWithPermissions as any).Role?.name || '',
       permissions,
       currentFcId,
-      availableFcs
+      availableFcs,
+      name: (userWithPermissions as any).name,
+      phone: (userWithPermissions as any).phone
     };
 
     const options: jwt.SignOptions = {
