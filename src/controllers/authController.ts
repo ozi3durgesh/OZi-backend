@@ -8,7 +8,7 @@ import { ResponseHandler } from '../middleware/responseHandler';
 export class AuthController {
   static async register(req: Request, res: Response): Promise<Response> {
     try {
-      const { email, password, roleId, roleName, adminSecret, fulfillmentCenters, fcRoles } = req.body;
+      const { email, password, roleId, roleName, adminSecret, fulfillmentCenters, fcRoles, name, phone } = req.body;
 
       if (!email || !password) {
         return ResponseHandler.error(
@@ -98,6 +98,8 @@ export class AuthController {
         roleId: finalRoleId,
         isActive: true,
         availabilityStatus: 'available',
+        name: name || null,
+        phone: phone || null,
       });
 
       // Handle FC assignments if provided
@@ -153,6 +155,8 @@ export class AuthController {
           'isActive',
           'availabilityStatus',
           'createdAt',
+          'name',
+          'phone',
         ],
       });
 
@@ -171,6 +175,8 @@ export class AuthController {
               : [],
             availabilityStatus: user.availabilityStatus,
             createdAt: user.createdAt,
+            name: user.name,
+            phone: user.phone,
           },
           accessToken,
           refreshToken,
@@ -212,6 +218,8 @@ export class AuthController {
           'isActive',
           'availabilityStatus',
           'createdAt',
+          'name',
+          'phone',
         ],
       });
 
@@ -264,6 +272,8 @@ export class AuthController {
             : [],
           availabilityStatus: user.availabilityStatus,
           createdAt: user.createdAt,
+          name: user.name,
+          phone: user.phone,
           availableFcs: availableFcs,
           currentFcId: defaultFC?.fc_id || null,
           fulfillmentCenter: defaultFC ? {
@@ -311,6 +321,8 @@ export class AuthController {
           'isActive',
           'availabilityStatus',
           'createdAt',
+          'name',
+          'phone',
         ],
       });
 
@@ -335,6 +347,8 @@ export class AuthController {
             : [],
           availabilityStatus: user.availabilityStatus,
           createdAt: user.createdAt,
+          name: user.name,
+          phone: user.phone,
         },
         accessToken: newAccessToken,
         refreshToken: newRefreshToken,
@@ -355,6 +369,8 @@ export class AuthController {
           permissions: req.user.permissions,
           availabilityStatus: req.user.availabilityStatus,
           createdAt: req.user.createdAt,
+          name: req.user.name,
+          phone: req.user.phone,
         },
       });
     } catch (error) {
