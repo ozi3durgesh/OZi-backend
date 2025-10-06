@@ -23,6 +23,9 @@ class GRN
   declare approved_by: number | null;
   declare created_at: Date;
   declare updated_at: Date;
+  
+  // FC mapping
+  declare fc_id?: number;
 }
 
 GRN.init(
@@ -80,6 +83,18 @@ GRN.init(
       type: DataTypes.DATE,
       allowNull: false,
       defaultValue: DataTypes.NOW,
+    },
+    
+    // FC mapping
+    fc_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'fulfillment_centers',
+        key: 'id'
+      },
+      onUpdate: 'CASCADE',
+      onDelete: 'SET NULL'
     },
   },
   {

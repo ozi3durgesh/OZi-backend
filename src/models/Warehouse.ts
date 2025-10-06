@@ -42,6 +42,9 @@ export interface WarehouseAttributes {
   lms_warehouse_id?: string;
   integration_status: 'PENDING' | 'COMPLETED' | 'FAILED';
   
+  // FC mapping
+  fc_id?: number;
+  
   // Audit Fields
   created_by: number;
   updated_by?: number;
@@ -97,6 +100,9 @@ class Warehouse extends Model<WarehouseAttributes, WarehouseCreationAttributes> 
   // Integration Details
   public lms_warehouse_id?: string;
   public integration_status!: 'PENDING' | 'COMPLETED' | 'FAILED';
+  
+  // FC mapping
+  public fc_id?: number;
   
   // Audit Fields
   public created_by!: number;
@@ -224,6 +230,16 @@ Warehouse.init(
       type: DataTypes.ENUM('PENDING', 'COMPLETED', 'FAILED'),
       allowNull: false,
       defaultValue: 'PENDING',
+    },
+    fc_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'fulfillment_centers',
+        key: 'id'
+      },
+      onUpdate: 'CASCADE',
+      onDelete: 'SET NULL'
     },
     created_by: {
       type: DataTypes.INTEGER,

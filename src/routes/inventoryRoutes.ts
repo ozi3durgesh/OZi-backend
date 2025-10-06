@@ -1,11 +1,13 @@
 import express from 'express';
 import { InventoryController } from '../controllers/inventoryController';
 import { authenticate } from '../middleware/auth';
+import { FCFilterMiddlewareFactory } from '../middleware/fcFilterMiddleware';
 
 const router = express.Router();
 
-// Apply authentication middleware to all routes
+// Apply authentication and FC filtering to all inventory routes
 router.use(authenticate);
+router.use(FCFilterMiddlewareFactory.createInventoryFilter());
 
 /**
  * @route POST /api/inventory/update

@@ -11,8 +11,14 @@ import {
   getPOByToken,
   getPOInventorySummary
 } from "../controllers/purchaseOrderController";
+import { FCFilterMiddlewareFactory } from "../middleware/fcFilterMiddleware";
+import { authenticate, hasPermission } from "../middleware/auth";
 
 const router = Router();
+
+// Apply authentication and FC filtering to all routes
+router.use(authenticate);
+router.use(FCFilterMiddlewareFactory.createPOFilter());
 
 /**
  * Routes

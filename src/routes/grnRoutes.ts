@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { authenticate } from '../middleware/auth';
+import { FCFilterMiddlewareFactory } from '../middleware/fcFilterMiddleware';
 import { GrnController } from '../controllers/grnController';
 import { GrnLineController } from '../controllers/grnLineController';
 import { GrnBatchController } from '../controllers/grnBatchController';
@@ -8,8 +9,9 @@ import { S3Service } from '../services/s3Service';
 
 const router = Router();
 
-// Apply authentication middleware to all warehouse routes
+// Apply authentication and FC filtering to all GRN routes
 router.use(authenticate);
+router.use(FCFilterMiddlewareFactory.createGRNFilter());
 
 router.get('/');
 

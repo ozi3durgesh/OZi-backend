@@ -1,11 +1,13 @@
 import { Router } from 'express';
 import { WarehouseController } from '../controllers/warehouseController';
 import { authenticate } from '../middleware/auth';
+import { FCFilterMiddlewareFactory } from '../middleware/fcFilterMiddleware';
 
 const router = Router();
 
-// Apply authentication middleware to all warehouse routes
+// Apply authentication and FC filtering to all warehouse routes
 router.use(authenticate);
+router.use(FCFilterMiddlewareFactory.createWarehouseFilter());
 
 // Warehouse Management Routes
 router.post('/', WarehouseController.createWarehouse);

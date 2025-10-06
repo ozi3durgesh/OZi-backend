@@ -4,6 +4,7 @@ import Coupon from '../models/Coupon';
 import CouponTranslation from '../models/CouponTranslation';
 
 import { ResponseHandler } from '../middleware/responseHandler';
+import { FCQueryBuilder, FCValidator, FCContextHelper } from '../middleware/fcFilter';
 import { CartItem } from '../types';
 import sequelize from '../config/database';
 import { generateSimpleOrderId } from '../utils/orderIdGenerator';
@@ -119,6 +120,26 @@ export class OrderController {
     }
 
     return { isValid: true };
+  }
+
+  // FC-based filtering methods
+  private static async getOrdersByFC(fcId: number, whereClause: any = {}): Promise<any[]> {
+    const fcFilteredWhere = FCQueryBuilder.addOrderFCFilter(whereClause, fcId);
+    return await Order.findAll({
+      where: fcFilteredWhere,
+      order: [['createdAt', 'DESC']]
+    });
+  }
+
+  private static async getOrderByIdAndFC(orderId: number, fcId: number): Promise<any> {
+    const fcFilteredWhere = FCQueryBuilder.addOrderFCFilter({ id: orderId }, fcId);
+    return await Order.findOne({
+      where: fcFilteredWhere
+    });
+  }
+
+  private static async validateOrderFC(orderId: number, fcId: number): Promise<boolean> {
+    return await FCValidator.validateOrderFC(orderId, fcId);
   }
 
   // Helper method to validate and apply coupon
@@ -659,6 +680,7 @@ export class OrderController {
     try {
       const orderData: OrderRequest = req.body;
       const userId = req.user?.id;
+      const fcId = FCContextHelper.getCurrentFCId(req);
 
       // Basic validation - For testing purposes, use a default user ID if none provided
       if (!userId) {
@@ -791,6 +813,7 @@ export class OrderController {
         order_id: orderId,
         user_id: finalUserId,
         store_id: orderData.store_id,
+        fc_id: fcId, // Add FC context to order
         order_amount: finalOrderAmount,
         tax_amount: taxAmount,
         payment_method: orderData.payment_method,
@@ -1236,6 +1259,96 @@ export class OrderController {
 
     } catch (error) {
       console.error('Debug track order error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+  // FC-based order retrieval methods
+  static async getOrdersByFC(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const fcId = FCContextHelper.getCurrentFCId(req);
+      const { status, limit = 50, offset = 0 } = req.query;
+
+      let whereClause: any = {};
+      if (status) {
+        whereClause.status = status;
+      }
+
+      const orders = await OrderController.getOrdersByFC(fcId, whereClause);
+      
+      return ResponseHandler.success(res, {
+        message: 'Orders retrieved successfully',
+        data: orders,
+        count: orders.length,
+        fc_id: fcId
+      });
+    } catch (error) {
+      console.error('Get orders by FC error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+  static async getOrderByIdAndFC(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { id } = req.params;
+      const fcId = FCContextHelper.getCurrentFCId(req);
+
+      if (!id) {
+        return ResponseHandler.error(res, 'Order ID is required', 400);
+      }
+
+      const order = await OrderController.getOrderByIdAndFC(parseInt(id), fcId);
+      
+      if (!order) {
+        return ResponseHandler.error(res, 'Order not found or access denied', 404);
+      }
+
+      return ResponseHandler.success(res, {
+        message: 'Order retrieved successfully',
+        data: order,
+        fc_id: fcId
+      });
+    } catch (error) {
+      console.error('Get order by ID and FC error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
+  static async updateOrderByFC(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { id } = req.params;
+      const fcId = FCContextHelper.getCurrentFCId(req);
+      const updateData = req.body;
+
+      if (!id) {
+        return ResponseHandler.error(res, 'Order ID is required', 400);
+      }
+
+      // Validate that order belongs to FC
+      const isValidFC = await OrderController.validateOrderFC(parseInt(id), fcId);
+      if (!isValidFC) {
+        return ResponseHandler.error(res, 'Order not found or access denied', 404);
+      }
+
+      // Update order with FC context
+      const [updatedRowsCount] = await Order.update(
+        { ...updateData, fc_id: fcId },
+        { where: { id: parseInt(id), fc_id: fcId } }
+      );
+
+      if (updatedRowsCount === 0) {
+        return ResponseHandler.error(res, 'Order not found or no changes made', 404);
+      }
+
+      const updatedOrder = await OrderController.getOrderByIdAndFC(parseInt(id), fcId);
+      
+      return ResponseHandler.success(res, {
+        message: 'Order updated successfully',
+        data: updatedOrder,
+        fc_id: fcId
+      });
+    } catch (error) {
+      console.error('Update order by FC error:', error);
       return ResponseHandler.error(res, 'Internal server error', 500);
     }
   }

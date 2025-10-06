@@ -53,6 +53,7 @@ class Product extends Model<
   declare LastUpdatedDate: string | null;
   declare SKUType: string | null;
   declare MaterialType: string | null;
+  declare fc_id?: number;
 }
 
 Product.init(
@@ -99,6 +100,7 @@ Product.init(
     LastUpdatedDate: { type: DataTypes.STRING, allowNull: true },
     SKUType: { type: DataTypes.STRING, allowNull: true },
     MaterialType: { type: DataTypes.STRING, allowNull: true },
+    fc_id: { type: DataTypes.INTEGER, allowNull: true, references: { model: 'fulfillment_centers', key: 'id' } },
   },
   {
     sequelize,

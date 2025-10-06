@@ -48,6 +48,14 @@ const User = sequelize.define<UserInstance>('User', {
     allowNull: false,
     defaultValue: 'available',
   },
+  phone: {
+    type: DataTypes.STRING(20),
+    allowNull: true,
+  },
+  name: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+  },
   createdAt: {
     type: DataTypes.DATE,
     allowNull: false,

@@ -11,6 +11,7 @@ interface InventoryAttributes {
   return_try_and_buy_quantity: number;
   return_other_quantity: number;
   total_available_quantity: number;
+  fc_id?: number;
   created_at: Date;
   updated_at: Date;
 }
@@ -27,6 +28,7 @@ class Inventory extends Model<InventoryAttributes, InventoryCreationAttributes> 
   public return_try_and_buy_quantity!: number;
   public return_other_quantity!: number;
   public total_available_quantity!: number;
+  public fc_id?: number;
   public created_at!: Date;
   public updated_at!: Date;
 
@@ -111,6 +113,16 @@ Inventory.init(
       allowNull: false,
       defaultValue: 0,
       // Removed min: 0 constraint to allow negative values (overallocated items)
+    },
+    fc_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'fulfillment_centers',
+        key: 'id'
+      },
+      onUpdate: 'CASCADE',
+      onDelete: 'SET NULL'
     },
     created_at: {
       type: DataTypes.DATE,

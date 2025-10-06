@@ -32,6 +32,7 @@ Order.init({
   order_type: { type: DataTypes.STRING(50), allowNull: false },
   checked: { type: DataTypes.TINYINT, defaultValue: 0, allowNull: false },
   store_id: { type: DataTypes.INTEGER, allowNull: false },
+  fc_id: { type: DataTypes.INTEGER, allowNull: true, references: { model: 'fulfillment_centers', key: 'id' } },
   created_at: { type: DataTypes.BIGINT, allowNull: false },
   updated_at: { type: DataTypes.BIGINT, allowNull: false },
   delivery_charge: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00, allowNull: false },

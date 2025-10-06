@@ -38,6 +38,9 @@ interface PurchaseOrderAttributes {
   pi_url?: string;
   final_delivery_date?: Date;
 
+  // FC mapping
+  fc_id?: number;
+
   products?: POProduct[];
 }
 
@@ -90,6 +93,9 @@ class PurchaseOrder
   declare pi_url?: string;
   declare final_delivery_date?: Date;
 
+  // FC mapping
+  declare fc_id?: number;
+
   declare products?: POProduct[];
 }
 
@@ -137,6 +143,18 @@ PurchaseOrder.init(
     // ✅ Added back
     pi_url: { type: DataTypes.STRING },
     final_delivery_date: { type: DataTypes.DATE },
+
+    // FC mapping
+    fc_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'fulfillment_centers',
+        key: 'id'
+      },
+      onUpdate: 'CASCADE',
+      onDelete: 'SET NULL'
+    },
   },
   {
     sequelize,

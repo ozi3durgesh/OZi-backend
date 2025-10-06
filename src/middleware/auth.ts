@@ -87,7 +87,9 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
         ? user.Role.Permissions.map(p => `${p.module}:${p.action}`)
         : [],
       availabilityStatus: user.availabilityStatus,
-      createdAt: user.createdAt
+      createdAt: user.createdAt,
+      currentFcId: payload.currentFcId,
+      availableFcs: payload.availableFcs
     };
 
     next();
@@ -143,3 +145,32 @@ export const checkAvailability = (req: Request, res: Response, next: NextFunctio
     ResponseHandler.error(res, 'Availability check failed', 500);
   }
 };
+
+export const checkFulfillmentCenterAccess = (req: Request, res: Response, next: NextFunction): void => {
+  try {
+    if (!req.user) {
+      ResponseHandler.error(res, 'Authentication required', 401);
+      return;
+    }
+
+    const currentFcId = req.user.currentFcId;
+    const availableFcs = req.user.availableFcs || [];
+
+    if (!currentFcId) {
+      ResponseHandler.error(res, 'No Fulfillment Center selected. Please select a Fulfillment Center first.', 403);
+      return;
+    }
+
+    if (!availableFcs.includes(currentFcId)) {
+      ResponseHandler.error(res, 'Access denied to current Fulfillment Center', 403);
+      return;
+    }
+
+    next();
+  } catch (error) {
+    console.error('FC access check error:', error);
+    ResponseHandler.error(res, 'FC access check failed', 500);
+  }
+};
+
+export const authenticateToken = authenticate;

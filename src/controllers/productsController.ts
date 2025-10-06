@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import Product, { ProductCreationAttributes } from '../models/productModel';
 import { ResponseHandler } from '../middleware/responseHandler';
+import { FCQueryBuilder, FCValidator, FCContextHelper } from '../middleware/fcFilter';
 import sequelize from '../config/database';
 import fs from 'fs';
 import path from 'path';
@@ -250,12 +251,12 @@ export const getProductBySKU = async (req: Request, res: Response) => {
 // Get products (pagination + filters)
 export const getProducts = async (req: Request, res: Response) => {
   try {
-    const { page = 1, limit = 20, status, search } = req.query;
+    const { page = 1, limit = 20, Status, search } = req.query;
     const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
 
     const whereClause: any = {};
-    if (status) {
-      whereClause.Status = status;
+    if (Status) {
+      whereClause.Status = Status;
     }
     if (search) {
       whereClause[Op.or] = [
@@ -269,6 +270,7 @@ export const getProducts = async (req: Request, res: Response) => {
       where: whereClause,
       limit: parseInt(limit.toString()),
       offset,
+      order: [['id', 'DESC']]
     });
 
     return ResponseHandler.success(res, {
@@ -281,6 +283,7 @@ export const getProducts = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
+    console.error('Get products error:', error);
     return ResponseHandler.error(res, error.message || 'Error fetching products', 500);
   }
 };
@@ -850,5 +853,144 @@ export const processCSVForPO = async (req: Request, res: Response) => {
       error: error.message,
       errorType: 'PROCESSING_ERROR'
     }), 500);
+  }
+};
+
+// FC-based product methods
+export const getProductsByFC = async (req: Request, res: Response) => {
+  try {
+    const fcId = FCContextHelper.getCurrentFCId(req);
+    const { page = 1, limit = 50, search, Status } = req.query;
+
+    let whereClause: any = {};
+    if (search) {
+      whereClause[Op.or] = [
+        { ProductName: { [Op.like]: `%${search}%` } },
+        { SKU: { [Op.like]: `%${search}%` } },
+        { EAN_UPC: { [Op.like]: `%${search}%` } }
+      ];
+    }
+    if (Status) {
+      whereClause.Status = Status;
+    }
+
+    const fcFilteredWhere = FCQueryBuilder.addProductFCFilter(whereClause, fcId);
+
+    const offset = (Number(page) - 1) * Number(limit);
+    const products = await Product.findAndCountAll({
+      where: fcFilteredWhere,
+      limit: Number(limit),
+      offset,
+      order: [['id', 'DESC']]
+    });
+
+    return ResponseHandler.success(res, {
+      message: 'Products retrieved successfully',
+      data: products.rows,
+      pagination: {
+        total: products.count,
+        page: Number(page),
+        limit: Number(limit),
+        totalPages: Math.ceil(products.count / Number(limit))
+      },
+      fc_id: fcId
+    });
+  } catch (error) {
+    console.error('Get products by FC error:', error);
+    return ResponseHandler.error(res, 'Internal server error', 500);
+  }
+};
+
+export const getProductByIdAndFC = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const fcId = FCContextHelper.getCurrentFCId(req);
+
+    if (!id) {
+      return ResponseHandler.error(res, 'Product ID is required', 400);
+    }
+
+    const fcFilteredWhere = FCQueryBuilder.addProductFCFilter({ id: parseInt(id) }, fcId);
+    const product = await Product.findOne({
+      where: fcFilteredWhere
+    });
+
+    if (!product) {
+      return ResponseHandler.error(res, 'Product not found or access denied', 404);
+    }
+
+    return ResponseHandler.success(res, {
+      message: 'Product retrieved successfully',
+      data: product,
+      fc_id: fcId
+    });
+  } catch (error) {
+    console.error('Get product by ID and FC error:', error);
+    return ResponseHandler.error(res, 'Internal server error', 500);
+  }
+};
+
+export const updateProductByFC = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const fcId = FCContextHelper.getCurrentFCId(req);
+    const updateData = req.body;
+
+    if (!id) {
+      return ResponseHandler.error(res, 'Product ID is required', 400);
+    }
+
+    // Validate that product belongs to FC
+    const isValidFC = await FCValidator.validateProductFC(parseInt(id), fcId);
+    if (!isValidFC) {
+      return ResponseHandler.error(res, 'Product not found or access denied', 404);
+    }
+
+    // Update product with FC context
+    const [updatedRowsCount] = await Product.update(
+      { ...updateData, fc_id: fcId },
+      { where: { id: parseInt(id), fc_id: fcId } }
+    );
+
+    if (updatedRowsCount === 0) {
+      return ResponseHandler.error(res, 'Product not found or no changes made', 404);
+    }
+
+    const updatedProduct = await Product.findOne({
+      where: { id: parseInt(id), fc_id: fcId }
+    });
+
+    return ResponseHandler.success(res, {
+      message: 'Product updated successfully',
+      data: updatedProduct,
+      fc_id: fcId
+    });
+  } catch (error) {
+    console.error('Update product by FC error:', error);
+    return ResponseHandler.error(res, 'Internal server error', 500);
+  }
+};
+
+export const createProductByFC = async (req: Request, res: Response) => {
+  try {
+    const fcId = FCContextHelper.getCurrentFCId(req);
+    const productData = req.body;
+
+    // Add FC context to product data
+    const productWithFC = {
+      ...productData,
+      fc_id: fcId
+    };
+
+    const product = await Product.create(productWithFC);
+
+    return ResponseHandler.success(res, {
+      message: 'Product created successfully',
+      data: product,
+      fc_id: fcId
+    }, 201);
+  } catch (error) {
+    console.error('Create product by FC error:', error);
+    return ResponseHandler.error(res, 'Internal server error', 500);
   }
 };

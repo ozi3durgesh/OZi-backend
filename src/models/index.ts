@@ -36,6 +36,9 @@ import Inventory from './Inventory';
 import InventoryLog from './InventoryLog';
 import UserDevice from './userDevice';
 import BulkImportLog from './BulkImportLog';
+import DistributionCenter from './DistributionCenter';
+import FulfillmentCenter from './FulfillmentCenter';
+import UserFulfillmentCenter from './UserFulfillmentCenter';
 
 // Set up associations
 Coupon.hasMany(CouponTranslation, {
@@ -239,6 +242,69 @@ InventoryLog.belongsTo(Inventory, { foreignKey: 'sku', targetKey: 'sku', as: 'In
 User.hasMany(UserDevice, { foreignKey: 'userId', as: 'devices' });
 UserDevice.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 
+// Distribution Center and Fulfillment Center Associations
+DistributionCenter.hasMany(FulfillmentCenter, {
+  foreignKey: 'dc_id',
+  as: 'FulfillmentCenters',
+});
+
+FulfillmentCenter.belongsTo(DistributionCenter, {
+  foreignKey: 'dc_id',
+  as: 'DistributionCenter',
+});
+
+// User-FulfillmentCenter associations
+User.hasMany(UserFulfillmentCenter, {
+  foreignKey: 'user_id',
+  as: 'UserFulfillmentCenters',
+});
+
+FulfillmentCenter.hasMany(UserFulfillmentCenter, {
+  foreignKey: 'fc_id',
+  as: 'UserFulfillmentCenters',
+});
+
+UserFulfillmentCenter.belongsTo(User, {
+  foreignKey: 'user_id',
+  as: 'User',
+});
+
+UserFulfillmentCenter.belongsTo(FulfillmentCenter, {
+  foreignKey: 'fc_id',
+  as: 'FulfillmentCenter',
+});
+
+// Creator/Updater associations for DC/FC
+DistributionCenter.belongsTo(User, {
+  foreignKey: 'created_by',
+  as: 'CreatedBy',
+});
+
+DistributionCenter.belongsTo(User, {
+  foreignKey: 'updated_by',
+  as: 'UpdatedBy',
+});
+
+FulfillmentCenter.belongsTo(User, {
+  foreignKey: 'created_by',
+  as: 'CreatedBy',
+});
+
+FulfillmentCenter.belongsTo(User, {
+  foreignKey: 'updated_by',
+  as: 'UpdatedBy',
+});
+
+UserFulfillmentCenter.belongsTo(User, {
+  foreignKey: 'created_by',
+  as: 'CreatedBy',
+});
+
+UserFulfillmentCenter.belongsTo(User, {
+  foreignKey: 'updated_by',
+  as: 'UpdatedBy',
+});
+
 // Return system associations are defined in individual model files
 
 export {
@@ -278,4 +344,7 @@ export {
   InventoryLog,
   UserDevice,
   BulkImportLog,
+  DistributionCenter,
+  FulfillmentCenter,
+  UserFulfillmentCenter,
 };

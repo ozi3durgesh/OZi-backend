@@ -12,6 +12,7 @@ interface VendorAttributes {
   pocName?: string;
   pocNumber?: string;
   gstNumber: string;
+  fc_id?: number;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -31,6 +32,7 @@ class Vendor extends Model<VendorAttributes, VendorCreationAttributes>
   public pocName?: string;
   public pocNumber?: string;
   public gstNumber!: string;
+  public fc_id?: number;
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
 }
@@ -79,6 +81,16 @@ Vendor.init(
       allowNull: false,
       unique: true,
       field: 'gst_number',
+    },
+    fc_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'fulfillment_centers',
+        key: 'id'
+      },
+      onUpdate: 'CASCADE',
+      onDelete: 'SET NULL'
     },
   },
   {

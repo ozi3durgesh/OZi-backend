@@ -27,6 +27,7 @@ import { rawRiderRouter } from './routes/rawRiderRoutes';
 import { rawPickerRouter } from './routes/rawPickerRoutes';
 import inventoryRoutes from './routes/inventoryRoutes';
 import deliveryManRoutes from './routes/deliveryManRoutes';
+import fcSelectionRoutes from './routes/fcSelectionRoutes';
 
 const app = express();
 
@@ -55,6 +56,9 @@ app.use('/api/packing', packingRoutes);
 app.use('/api/handover', handoverRoutes);
 app.use('/api/warehouses', warehouseRoutes);
 app.use('/api/grn', grnRoutes);
+
+// FC Selection routes must come BEFORE vendor/product routes to avoid FC filtering middleware
+app.use('/api/fc-selection', fcSelectionRoutes);
 
 app.use('/api', vendorRoutes);
 app.use('/api', productRoutes);

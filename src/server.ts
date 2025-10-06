@@ -5,6 +5,7 @@ import { autoInitializeRBAC } from './config/autoInit';
 import http from 'http';
 import { Server } from 'socket.io';
 import { socketManager } from './utils/socketManager';
+import { runFCMigration } from './migration-runner';
 
 dotenv.config();
 const PORT = process.env.PORT || 3000;
@@ -12,6 +13,9 @@ const PORT = process.env.PORT || 3000;
 const startServer = async () => {
   try {
     await connectDatabase();
+    
+    // Run FC mapping migration
+    await runFCMigration();
     
     // Initialize RBAC system with updated permissions
     await autoInitializeRBAC();

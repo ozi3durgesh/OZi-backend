@@ -38,6 +38,8 @@ export interface JwtPayload {
   email: string;
   role: string;
   permissions: string[];
+  currentFcId?: number; // Current selected FC ID
+  availableFcs?: number[]; // Available FC IDs for the user
   exp?: number; // JWT expiration timestamp
   iat?: number; // JWT issued at timestamp
 }
@@ -166,6 +168,7 @@ export interface OrderAttributes {
   order_type: string;
   checked: number;
   store_id: number;
+  fc_id?: number;
   created_at: number;
   updated_at: number;
   delivery_charge: number;
@@ -1098,4 +1101,201 @@ export interface AuthRequest extends Request {
 export interface VersionCheckRequest extends Request {
   user?: any;
   headers: any;
+}
+
+// Distribution Center and Fulfillment Center Types
+export interface DistributionCenterAttributes {
+  id: number;
+  dc_code: string;
+  name: string;
+  type: 'MAIN' | 'REGIONAL' | 'LOCAL';
+  status: 'ACTIVE' | 'INACTIVE' | 'UNDER_MAINTENANCE';
+  address: string;
+  city: string;
+  state: string;
+  country: string;
+  pincode: string;
+  latitude?: number;
+  longitude?: number;
+  contact_person?: string;
+  contact_email?: string;
+  contact_phone?: string;
+  emergency_contact?: string;
+  operational_hours?: any;
+  capacity_sqft?: number;
+  storage_capacity_units?: number;
+  current_utilization_percentage: number;
+  services_offered?: any;
+  supported_fulfillment_types?: any;
+  is_auto_assignment_enabled: boolean;
+  max_orders_per_day: number;
+  sla_hours: number;
+  lms_dc_id?: string;
+  integration_status: 'PENDING' | 'COMPLETED' | 'FAILED';
+  created_by: number;
+  updated_by?: number;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface DistributionCenterCreationAttributes
+  extends Omit<DistributionCenterAttributes, 'id' | 'created_at' | 'updated_at'> {}
+
+export interface FulfillmentCenterAttributes {
+  id: number;
+  fc_code: string;
+  name: string;
+  dc_id: number;
+  type: 'MAIN' | 'SATELLITE' | 'STOREFRONT' | 'DISTRIBUTION';
+  status: 'ACTIVE' | 'INACTIVE' | 'UNDER_MAINTENANCE';
+  address: string;
+  city: string;
+  state: string;
+  country: string;
+  pincode: string;
+  latitude?: number;
+  longitude?: number;
+  contact_person?: string;
+  contact_email?: string;
+  contact_phone?: string;
+  emergency_contact?: string;
+  operational_hours?: any;
+  capacity_sqft?: number;
+  storage_capacity_units?: number;
+  current_utilization_percentage: number;
+  services_offered?: any;
+  supported_fulfillment_types?: any;
+  is_auto_assignment_enabled: boolean;
+  max_orders_per_day: number;
+  sla_hours: number;
+  lms_fc_id?: string;
+  integration_status: 'PENDING' | 'COMPLETED' | 'FAILED';
+  created_by: number;
+  updated_by?: number;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface FulfillmentCenterCreationAttributes
+  extends Omit<FulfillmentCenterAttributes, 'id' | 'created_at' | 'updated_at'> {}
+
+export interface UserFulfillmentCenterAttributes {
+  id: number;
+  user_id: number;
+  fc_id: number;
+  role: 'MANAGER' | 'SUPERVISOR' | 'OPERATOR' | 'PICKER' | 'PACKER' | 'VIEWER';
+  assigned_date: Date;
+  end_date?: Date;
+  is_active: boolean;
+  is_default: boolean;
+  created_by: number;
+  updated_by?: number;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface UserFulfillmentCenterCreationAttributes
+  extends Omit<UserFulfillmentCenterAttributes, 'id' | 'created_at' | 'updated_at'> {}
+
+// API Request/Response Types for DC/FC
+export interface CreateDistributionCenterRequest {
+  dc_code: string;
+  name: string;
+  type: 'MAIN' | 'REGIONAL' | 'LOCAL';
+  address: string;
+  city: string;
+  state: string;
+  country?: string;
+  pincode: string;
+  latitude?: number;
+  longitude?: number;
+  contact_person?: string;
+  contact_email?: string;
+  contact_phone?: string;
+  emergency_contact?: string;
+  operational_hours?: any;
+  capacity_sqft?: number;
+  storage_capacity_units?: number;
+  services_offered?: any;
+  supported_fulfillment_types?: any;
+  is_auto_assignment_enabled?: boolean;
+  max_orders_per_day?: number;
+  sla_hours?: number;
+  lms_dc_id?: string;
+}
+
+export interface CreateFulfillmentCenterRequest {
+  fc_code: string;
+  name: string;
+  dc_id: number;
+  type: 'MAIN' | 'SATELLITE' | 'STOREFRONT' | 'DISTRIBUTION';
+  address: string;
+  city: string;
+  state: string;
+  country?: string;
+  pincode: string;
+  latitude?: number;
+  longitude?: number;
+  contact_person?: string;
+  contact_email?: string;
+  contact_phone?: string;
+  emergency_contact?: string;
+  operational_hours?: any;
+  capacity_sqft?: number;
+  storage_capacity_units?: number;
+  services_offered?: any;
+  supported_fulfillment_types?: any;
+  is_auto_assignment_enabled?: boolean;
+  max_orders_per_day?: number;
+  sla_hours?: number;
+  lms_fc_id?: string;
+}
+
+export interface AssignUserToFulfillmentCenterRequest {
+  user_id: number;
+  fc_id: number;
+  role: 'MANAGER' | 'SUPERVISOR' | 'OPERATOR' | 'PICKER' | 'PACKER' | 'VIEWER';
+  assigned_date?: Date;
+  end_date?: Date;
+  is_default?: boolean;
+}
+
+export interface UserFulfillmentCenterResponse {
+  id: number;
+  user: {
+    id: number;
+    email: string;
+    name?: string;
+    phone?: string;
+  };
+  fulfillment_center: {
+    id: number;
+    fc_code: string;
+    name: string;
+    dc_id: number;
+    distribution_center: {
+      id: number;
+      dc_code: string;
+      name: string;
+    };
+  };
+  role: string;
+  assigned_date: Date;
+  end_date?: Date;
+  is_active: boolean;
+  is_default: boolean;
+}
+
+export interface FulfillmentCenterSelectionResponse {
+  id: number;
+  fc_code: string;
+  name: string;
+  dc_id: number;
+  distribution_center: {
+    id: number;
+    dc_code: string;
+    name: string;
+  };
+  role: string;
+  is_default: boolean;
 }

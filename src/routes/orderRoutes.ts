@@ -1,6 +1,8 @@
 // routes/orderRoutes.ts
 import { Router } from 'express';
 import { OrderController } from '../controllers/orderController';
+import { authenticate } from '../middleware/auth';
+import { FCFilterMiddlewareFactory } from '../middleware/fcFilterMiddleware';
 
 const router = Router();
 
@@ -22,6 +24,11 @@ router.get('/coupon/:coupon_code',
 router.post('/cancel', OrderController.cancelOrder);
 router.get('/track', OrderController.trackOrder);
 router.post('/refund-request', OrderController.refundRequest);
+
+// FC-filtered order routes (require authentication and FC context)
+router.get('/fc/orders', authenticate, FCFilterMiddlewareFactory.createOrderFilter(), OrderController.getOrdersByFC);
+router.get('/fc/:id', authenticate, FCFilterMiddlewareFactory.createOrderFilter(), OrderController.getOrderByIdAndFC);
+router.put('/fc/:id', authenticate, FCFilterMiddlewareFactory.createOrderFilter(), OrderController.updateOrderByFC);
 
 // Parameterized routes - must come after specific routes
 router.get('/:id', 

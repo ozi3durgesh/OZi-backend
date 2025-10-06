@@ -5,7 +5,7 @@ import { User } from '../models';
 import { UserAttributes } from '../types';
 
 export class JwtUtils {
-  static async generateAccessToken(user: any): Promise<string> {
+  static async generateAccessToken(user: any, currentFcId?: number, availableFcs?: number[]): Promise<string> {
     const secret = process.env.JWT_ACCESS_SECRET;
     if (!secret) {
       throw new Error('JWT_ACCESS_SECRET is not defined');
@@ -34,7 +34,9 @@ export class JwtUtils {
       userId: user.id,
       email: user.email,
       role: (userWithPermissions as any).Role?.name || '',
-      permissions
+      permissions,
+      currentFcId,
+      availableFcs
     };
 
     const options: jwt.SignOptions = {
@@ -42,6 +44,10 @@ export class JwtUtils {
     };
 
     return jwt.sign(payload, secret, options);
+  }
+
+  static async generateAccessTokenWithFC(user: any, currentFcId: number, availableFcs: number[]): Promise<string> {
+    return this.generateAccessToken(user, currentFcId, availableFcs);
   }
 
   static async generateRefreshToken(user: any): Promise<string> {

@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
+import { authenticate, checkFulfillmentCenterAccess } from '../middleware/auth';
+import { FCFilterMiddlewareFactory } from '../middleware/fcFilterMiddleware';
 import { 
   createProduct, 
   updateProduct, 
@@ -10,16 +12,22 @@ import {
   getBulkImportLogsByUser,
   getBulkImportLogsByStatus,
   getBulkImportLogById,
-  processCSVForPO
+  processCSVForPO,
+  getProductsByFC
 } from '../controllers/productsController';
 
 const router = Router();
 const upload = multer({ dest: 'uploads/' }); // saves file to uploads/
 
+// Apply authentication and FC filtering to all product routes
+router.use(authenticate);
+router.use(FCFilterMiddlewareFactory.createProductFilter());
+
 // Create product
 router.post('/products', createProduct);
 
-// Get products
+// Get products (FC-filtered) - temporarily commented out
+// router.get('/products', authenticate, fcFilterMiddleware, getProductsByFC);
 router.get('/products', getProducts);
 
 // Bulk insert/update via CSV upload
@@ -41,5 +49,11 @@ router.get('/products/bulk/logs/:id', getBulkImportLogById);
 
 // Process CSV for PO creation - Get enriched product data
 router.post('/products/csv-process', upload.single('file'), processCSVForPO);
+
+// FC-filtered product routes - temporarily commented out
+// router.get('/products/fc/products', authenticate, fcFilterMiddleware, getProductsByFC);
+// router.get('/products/fc/:id', authenticate, fcFilterMiddleware, getProductByIdAndFC);
+// router.put('/products/fc/:id', authenticate, fcFilterMiddleware, updateProductByFC);
+// router.post('/products/fc/create', authenticate, fcFilterMiddleware, createProductByFC);
 
 export default router;

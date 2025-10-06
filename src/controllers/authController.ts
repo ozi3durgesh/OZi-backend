@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import { User, Role, TokenBlacklist } from '../models';
+import { User, Role, TokenBlacklist, UserFulfillmentCenter, FulfillmentCenter, DistributionCenter } from '../models';
 import { JwtUtils } from '../utils/jwt';
 import { ValidationUtils } from '../utils/validation';
 import { ResponseHandler } from '../middleware/responseHandler';
@@ -8,7 +8,7 @@ import { ResponseHandler } from '../middleware/responseHandler';
 export class AuthController {
   static async register(req: Request, res: Response): Promise<Response> {
     try {
-      const { email, password, roleId, roleName, adminSecret } = req.body;
+      const { email, password, roleId, roleName, adminSecret, fulfillmentCenters, fcRoles } = req.body;
 
       if (!email || !password) {
         return ResponseHandler.error(
@@ -99,6 +99,41 @@ export class AuthController {
         isActive: true,
         availabilityStatus: 'available',
       });
+
+      // Handle FC assignments if provided
+      if (fulfillmentCenters && Array.isArray(fulfillmentCenters) && fulfillmentCenters.length > 0) {
+        console.log('🔗 Creating FC assignments for user:', user.id);
+        
+        for (const fcId of fulfillmentCenters) {
+          try {
+            // Validate FC exists
+            const fc = await FulfillmentCenter.findByPk(fcId);
+            if (!fc) {
+              console.warn(`⚠️ FC ${fcId} not found, skipping assignment`);
+              continue;
+            }
+
+            // Get role for this FC (default to STAFF if not specified)
+            const fcRole = fcRoles?.[fcId] || 'STAFF';
+            
+            await UserFulfillmentCenter.create({
+              user_id: user.id,
+              fc_id: fcId,
+              role: fcRole,
+              assigned_date: new Date(),
+              is_active: true,
+              is_default: fulfillmentCenters.length === 1, // Set as default if only one FC
+              created_by: user.id, // Self-assigned during registration
+              updated_by: user.id,
+            });
+
+            console.log(`✅ Assigned user ${user.id} to FC ${fcId} with role ${fcRole}`);
+          } catch (error) {
+            console.error(`❌ Error assigning user to FC ${fcId}:`, error);
+            // Continue with other FCs even if one fails
+          }
+        }
+      }
 
       const accessToken = await JwtUtils.generateAccessToken(user);
       const refreshToken = await JwtUtils.generateRefreshToken(user);
@@ -192,7 +227,30 @@ export class AuthController {
         return ResponseHandler.error(res, 'Invalid credentials', 401);
       }
 
-      const accessToken = await JwtUtils.generateAccessToken(user);
+      // Fetch user's FC assignments
+      const userFCs = await UserFulfillmentCenter.findAll({
+        where: { 
+          user_id: user.id,
+          is_active: true 
+        },
+        include: [
+          {
+            model: FulfillmentCenter,
+            as: 'FulfillmentCenter',
+            include: [
+              {
+                model: DistributionCenter,
+                as: 'DistributionCenter',
+              }
+            ]
+          }
+        ]
+      });
+
+      const availableFcs = userFCs.map(ufc => ufc.fc_id);
+      const defaultFC = userFCs.find(ufc => ufc.is_default);
+
+      const accessToken = await JwtUtils.generateAccessToken(user, defaultFC?.fc_id, availableFcs);
       const refreshToken = await JwtUtils.generateRefreshToken(user);
 
       return ResponseHandler.success(res, {
@@ -206,6 +264,19 @@ export class AuthController {
             : [],
           availabilityStatus: user.availabilityStatus,
           createdAt: user.createdAt,
+          availableFcs: availableFcs,
+          currentFcId: defaultFC?.fc_id || null,
+          fulfillmentCenter: defaultFC ? {
+            id: defaultFC.FulfillmentCenter.id,
+            fc_code: defaultFC.FulfillmentCenter.fc_code,
+            name: defaultFC.FulfillmentCenter.name,
+            dc_id: defaultFC.FulfillmentCenter.dc_id,
+            distribution_center: {
+              id: defaultFC.FulfillmentCenter.DistributionCenter.id,
+              dc_code: defaultFC.FulfillmentCenter.DistributionCenter.dc_code,
+              name: defaultFC.FulfillmentCenter.DistributionCenter.name
+            }
+          } : null,
         },
         accessToken,
         refreshToken,
