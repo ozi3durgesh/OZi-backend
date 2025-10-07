@@ -1,6 +1,9 @@
 // controllers/handoverController.ts
 import { Request, Response } from 'express';
-import { Handover, PackingJob, Rider, User, PackingEvent, PickingWave, PicklistItem, ScannerSku } from '../models';
+import { Handover, Rider, User, PickingWave, PicklistItem, ScannerSku } from '../models';
+// ⚠️ WARNING: PackingJob and PackingEvent tables have been dropped - this functionality is broken
+import PackingJob from '../models/PackingJob'; // Direct import (table dropped)
+import PackingEvent from '../models/PackingEvent'; // Direct import (table dropped)
 import { LMSIntegration } from '../utils/lmsIntegration';
 import { 
   AssignRiderRequest, 

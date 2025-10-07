@@ -2,16 +2,16 @@
 import User from './User';
 import Order from './Order';
 import Coupon from './Coupon';
-import CouponTranslation from './CouponTranslation';
+// Removed: CouponTranslation (table dropped)
 import Role from './Role';
 import Permission from './Permission';
 import RolePermission from './RolePermission';
 import PickingWave from './PickingWave';
 import PicklistItem from './PicklistItem';
 import PickingException from './PickingException';
-import PackingJob from './PackingJob';
+// Removed: PackingJob (table dropped)
 import Handover from './Handover';
-import PackingEvent from './PackingEvent';
+// Removed: PackingEvent (table dropped)
 import Warehouse from './Warehouse';
 import WarehouseZone from './WarehouseZone';
 import WarehouseStaffAssignment from './WarehouseStaffAssignment';
@@ -24,35 +24,24 @@ import GRNLine from './GrnLine';
 import GRNBatch from './GrnBatch';
 import GRNPhoto from './GrnPhoto';
 import PurchaseOrder from './PurchaseOrder';
-import EcomLog from './EcomLog';
+// Removed: EcomLog (table dropped)
 import Product from './productModel';
 import ProductMaster from './productModel';
 import POProduct from './POProduct';
 import TokenBlacklist from './TokenBlacklist';
 import ReturnRequestItem from './ReturnRequestItem';
-import PutawayTask from './PutawayTask';
-import PutawayAudit from './PutawayAudit';
+// Removed: PutawayTask (table dropped)
+// Removed: PutawayAudit (table dropped)
 import Inventory from './Inventory';
 import InventoryLog from './InventoryLog';
-import UserDevice from './userDevice';
+// Removed: UserDevice (table dropped)
 import BulkImportLog from './BulkImportLog';
 import DistributionCenter from './DistributionCenter';
 import FulfillmentCenter from './FulfillmentCenter';
 import UserFulfillmentCenter from './UserFulfillmentCenter';
 
 // Set up associations
-Coupon.hasMany(CouponTranslation, {
-  foreignKey: 'translationable_id',
-  as: 'translations',
-  scope: {
-    translationable_type: 'App\\Models\\Coupon',
-  },
-});
-
-CouponTranslation.belongsTo(Coupon, {
-  foreignKey: 'translationable_id',
-  as: 'coupon',
-});
+// Removed: Coupon-CouponTranslation associations (CouponTranslation table dropped)
 
 // User-Role associations
 User.belongsTo(Role, { foreignKey: 'roleId', as: 'Role' });
@@ -114,16 +103,7 @@ User.hasMany(PickingException, {
   as: 'AssignedExceptions',
 });
 
-// Packing and Handover associations
-PickingWave.hasMany(PackingJob, { foreignKey: 'waveId', as: 'PackingJobs' });
-PackingJob.belongsTo(PickingWave, { foreignKey: 'waveId', as: 'Wave' });
-
-PackingJob.belongsTo(User, { foreignKey: 'packerId', as: 'Packer' });
-User.hasMany(PackingJob, { foreignKey: 'packerId', as: 'PackingJobs' });
-
-PackingJob.hasOne(Handover, { foreignKey: 'jobId', as: 'Handover' });
-Handover.belongsTo(PackingJob, { foreignKey: 'jobId', as: 'Job' });
-
+// Removed: Packing and Handover associations (PackingJob and PackingEvent tables dropped)
 Handover.belongsTo(Rider, { foreignKey: 'riderId', as: 'Rider' });
 Rider.hasMany(Handover, { foreignKey: 'riderId', as: 'Handovers' });
 
@@ -132,12 +112,6 @@ User.hasMany(Handover, {
   foreignKey: 'cancellationBy',
   as: 'CancelledHandovers',
 });
-
-PackingJob.hasMany(PackingEvent, { foreignKey: 'jobId', as: 'Events' });
-PackingEvent.belongsTo(PackingJob, { foreignKey: 'jobId', as: 'Job' });
-
-PackingEvent.belongsTo(User, { foreignKey: 'userId', as: 'User' });
-User.hasMany(PackingEvent, { foreignKey: 'userId', as: 'PackingEvents' });
 
 // Warehouse associations
 Warehouse.belongsTo(User, {
@@ -169,8 +143,7 @@ User.hasMany(WarehouseStaffAssignment, {
   as: 'StaffAssignments',
 });
 
-Order.hasMany(EcomLog, { foreignKey: 'order_id', as: 'ecomLogs' });
-EcomLog.belongsTo(Order, { foreignKey: 'order_id', as: 'order' });
+// Removed: EcomLog associations (ecom_logs table dropped)
 
 // Scanner associations
 ScannerBin.hasMany(ScannerSku, {
@@ -223,24 +196,13 @@ GRNPhoto.belongsTo(GRN, { foreignKey: 'grn_id', as: 'GRN' });
 PurchaseOrder.hasMany(GRNPhoto, { foreignKey: 'po_id', as: 'Photos' });
 GRNPhoto.belongsTo(PurchaseOrder, { foreignKey: 'po_id', as: 'PurchaseOrder' });
 
-// Putaway associations
-PutawayTask.belongsTo(GRN, { foreignKey: 'grn_id', as: 'GRN' });
-PutawayTask.belongsTo(GRNLine, { foreignKey: 'grn_line_id', as: 'GRNLine' });
-PutawayTask.belongsTo(User, { foreignKey: 'assigned_to', as: 'AssignedTo' });
-PutawayTask.belongsTo(User, { foreignKey: 'created_by', as: 'CreatedBy' });
-
-PutawayAudit.belongsTo(PutawayTask, { foreignKey: 'putaway_task_id', as: 'PutawayTask' });
-PutawayAudit.belongsTo(User, { foreignKey: 'performed_by', as: 'PerformedBy' });
-
-PutawayTask.hasMany(PutawayAudit, { foreignKey: 'putaway_task_id', as: 'AuditLogs' });
+// Removed: Putaway associations (putaway_tasks and putaway_audit tables dropped)
 
 // Inventory associations
 Inventory.hasMany(InventoryLog, { foreignKey: 'sku', sourceKey: 'sku', as: 'Logs' });
 InventoryLog.belongsTo(Inventory, { foreignKey: 'sku', targetKey: 'sku', as: 'Inventory' });
 
-// User-Device associations for push notifications
-User.hasMany(UserDevice, { foreignKey: 'userId', as: 'devices' });
-UserDevice.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+// Removed: User-Device associations (user_device table dropped)
 
 // Distribution Center and Fulfillment Center Associations
 DistributionCenter.hasMany(FulfillmentCenter, {
@@ -311,23 +273,23 @@ export {
   User,
   Order,
   Coupon,
-  CouponTranslation,
+  // Removed: CouponTranslation (table dropped)
   Role,
   Permission,
   RolePermission,
   PickingWave,
   PicklistItem,
   PickingException,
-  PackingJob,
+  // Removed: PackingJob (table dropped)
   Handover,
-  PackingEvent,
+  // Removed: PackingEvent (table dropped)
   Warehouse,
   WarehouseZone,
   WarehouseStaffAssignment,
   Rider,
   ScannerBin,
   ScannerSku,
-  EcomLog,
+  // Removed: EcomLog (table dropped)
   Product,
   BinLocation,
   GRN,
@@ -337,12 +299,12 @@ export {
   PurchaseOrder,
   POProduct,
   TokenBlacklist,
-  PutawayTask,
-  PutawayAudit,
+  // Removed: PutawayTask (table dropped)
+  // Removed: PutawayAudit (table dropped)
   ReturnRequestItem,
   Inventory,
   InventoryLog,
-  UserDevice,
+  // Removed: UserDevice (table dropped)
   BulkImportLog,
   DistributionCenter,
   FulfillmentCenter,
