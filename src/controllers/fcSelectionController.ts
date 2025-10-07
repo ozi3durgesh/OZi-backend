@@ -40,6 +40,18 @@ export const selectFulfillmentCenter = async (req: AuthRequest, res: Response) =
       return ResponseHandler.error(res, 'Access denied to this Fulfillment Center', 403);
     }
 
+    // Update is_default flag: Set false for all user's FCs, then true for selected FC
+    // This ensures the user's selection is persisted across login sessions
+    await UserFulfillmentCenter.update(
+      { is_default: false, updated_by: userId },
+      { where: { user_id: userId, is_active: true } }
+    );
+
+    await UserFulfillmentCenter.update(
+      { is_default: true, updated_by: userId },
+      { where: { user_id: userId, fc_id, is_active: true } }
+    );
+
     // Generate new tokens with FC context
     const user = await User.findByPk(userId);
     if (!user) {
