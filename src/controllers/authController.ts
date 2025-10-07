@@ -1,10 +1,6 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import { User, Role, TokenBlacklist } from '../models';
-// Direct imports for FC/DC (tables exist but not in main models export)
-import UserFulfillmentCenter from '../models/UserFulfillmentCenter';
-import FulfillmentCenter from '../models/FulfillmentCenter';
-import DistributionCenter from '../models/DistributionCenter';
+import { User, Role, TokenBlacklist, UserFulfillmentCenter, FulfillmentCenter, DistributionCenter } from '../models';
 import { JwtUtils } from '../utils/jwt';
 import { ValidationUtils } from '../utils/validation';
 import { ResponseHandler } from '../middleware/responseHandler';
@@ -106,10 +102,53 @@ export class AuthController {
         phone: phone || null,
       });
 
-      // Removed: FC assignment functionality (FC/DC tables dropped - per user request 2025-10-07)
-      // FC assignments are no longer supported
-      if (fulfillmentCenters) {
-        console.warn('⚠️  FC assignments requested but FC tables have been dropped');
+      // Handle FC assignments if provided
+      if (fulfillmentCenters && Array.isArray(fulfillmentCenters) && fulfillmentCenters.length > 0) {
+        console.log('🔗 Creating FC assignments for user:', user.id);
+        
+        for (let i = 0; i < fulfillmentCenters.length; i++) {
+          const fcId = fulfillmentCenters[i];
+          try {
+            // Validate FC exists
+            const fc = await FulfillmentCenter.findByPk(fcId);
+            if (!fc) {
+              console.warn(`⚠️ FC ${fcId} not found, skipping assignment`);
+              continue;
+            }
+
+            // Get role for this FC and map it to valid database role
+            const inputRole = fcRoles?.[fcId] || 'STAFF';
+            const roleMapping: { [key: string]: 'MANAGER' | 'SUPERVISOR' | 'OPERATOR' | 'PICKER' | 'PACKER' | 'VIEWER' } = {
+              'STAFF': 'OPERATOR',
+              'MANAGER': 'MANAGER', 
+              'SUPERVISOR': 'SUPERVISOR',
+              'OPERATOR': 'OPERATOR',
+              'PICKER': 'PICKER',
+              'PACKER': 'PACKER',
+              'VIEWER': 'VIEWER'
+            };
+            const fcRole = roleMapping[inputRole] || 'OPERATOR';
+            
+            // Set first FC as default, or if user specified a default FC, use that
+            const isDefault = i === 0; // First FC becomes default
+            
+            await UserFulfillmentCenter.create({
+              user_id: user.id,
+              fc_id: fcId,
+              role: fcRole,
+              assigned_date: new Date(),
+              is_active: true,
+              is_default: isDefault,
+              created_by: user.id, // Self-assigned during registration
+              updated_by: user.id,
+            });
+
+            console.log(`✅ Assigned user ${user.id} to FC ${fcId} with role ${fcRole} (default: ${isDefault})`);
+          } catch (error) {
+            console.error(`❌ Error assigning user to FC ${fcId}:`, error);
+            // Continue with other FCs even if one fails
+          }
+        }
       }
 
       const accessToken = await JwtUtils.generateAccessToken(user);
@@ -303,8 +342,142 @@ export class AuthController {
   }
 
   static async selectDc(req: any, res: Response): Promise<Response> {
-    // Removed: selectDc functionality (FC/DC tables dropped - per user request 2025-10-07)
-    return ResponseHandler.error(res, 'FC/DC functionality has been disabled', 501);
+    try {
+      const { dcId } = req.body;
+
+      if (!dcId) {
+        return ResponseHandler.error(res, 'DC ID is required', 400);
+      }
+
+      const user = req.user;
+      if (!user) {
+        return ResponseHandler.error(res, 'User not authenticated', 401);
+      }
+
+      // Fetch user's FC assignments to verify DC access
+      const userFCs = await UserFulfillmentCenter.findAll({
+        where: { 
+          user_id: user.id,
+          is_active: true 
+        },
+        include: [
+          {
+            model: FulfillmentCenter,
+            as: 'FulfillmentCenter',
+            include: [
+              {
+                model: DistributionCenter,
+                as: 'DistributionCenter',
+              }
+            ]
+          }
+        ]
+      });
+
+      if (userFCs.length === 0) {
+        return ResponseHandler.error(res, 'No fulfillment centers assigned to user', 403);
+      }
+
+      // Check if user has access to the selected DC
+      const hasAccessToDc = userFCs.some(ufc => ufc.FulfillmentCenter.dc_id === dcId);
+      
+      if (!hasAccessToDc) {
+        return ResponseHandler.error(res, 'User does not have access to the selected DC', 403);
+      }
+
+      // Get all FCs within the selected DC
+      const fcsInDc = userFCs.filter(ufc => ufc.FulfillmentCenter.dc_id === dcId);
+      const availableFcIds = fcsInDc.map(ufc => ufc.fc_id);
+      
+      // Set default FC within the selected DC (use is_default if available, otherwise first FC)
+      const defaultFC = fcsInDc.find(ufc => ufc.is_default) || fcsInDc[0];
+
+      // Get the DC details
+      const selectedDc = fcsInDc[0].FulfillmentCenter.DistributionCenter;
+
+      // Get full user data with role and permissions
+      const fullUser = await User.findByPk(user.id, {
+        include: [
+          {
+            association: 'Role',
+            include: ['Permissions'],
+          },
+        ],
+        attributes: [
+          'id',
+          'email',
+          'roleId',
+          'isActive',
+          'availabilityStatus',
+          'createdAt',
+          'name',
+          'phone',
+        ],
+      });
+
+      if (!fullUser) {
+        return ResponseHandler.error(res, 'User not found', 404);
+      }
+
+      // Generate new access token with DC context
+      const accessToken = await JwtUtils.generateAccessToken(
+        fullUser, 
+        defaultFC?.fc_id, 
+        availableFcIds,
+        dcId
+      );
+      const refreshToken = await JwtUtils.generateRefreshToken(fullUser);
+
+      // Prepare available FCs with full details
+      const availableFcs = fcsInDc.map(ufc => ({
+        id: ufc.FulfillmentCenter.id,
+        fc_code: ufc.FulfillmentCenter.fc_code,
+        name: ufc.FulfillmentCenter.name,
+        dc_id: ufc.FulfillmentCenter.dc_id,
+        distribution_center: {
+          id: ufc.FulfillmentCenter.DistributionCenter.id,
+          dc_code: ufc.FulfillmentCenter.DistributionCenter.dc_code,
+          name: ufc.FulfillmentCenter.DistributionCenter.name
+        }
+      }));
+
+      return ResponseHandler.success(res, {
+        message: 'DC selected successfully',
+        user: {
+          id: fullUser.id,
+          email: fullUser.email,
+          roleId: fullUser.roleId,
+          role: fullUser.Role?.name || '',
+          permissions: fullUser.Role?.Permissions
+            ? fullUser.Role.Permissions.map((p) => `${p.module}:${p.action}`)
+            : [],
+          availabilityStatus: fullUser.availabilityStatus,
+          createdAt: fullUser.createdAt,
+          name: fullUser.name,
+          phone: fullUser.phone,
+          currentDcId: dcId,
+          currentFcId: defaultFC?.fc_id || null,
+          availableFcs: availableFcs,
+          distributionCenter: {
+            id: selectedDc.id,
+            dc_code: selectedDc.dc_code,
+            name: selectedDc.name
+          },
+          fulfillmentCenter: defaultFC ? {
+            id: defaultFC.FulfillmentCenter.id,
+            fc_code: defaultFC.FulfillmentCenter.fc_code,
+            name: defaultFC.FulfillmentCenter.name,
+            dc_id: defaultFC.FulfillmentCenter.dc_id,
+          } : null,
+        },
+        accessToken,
+        refreshToken,
+        redirectTo: '/dc/dashboard', // Frontend can use this to redirect to DC dashboard
+      });
+    } catch (error) {
+      console.error('Select DC error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
   }
 
   static async refreshToken(req: Request, res: Response): Promise<Response> {

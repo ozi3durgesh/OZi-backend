@@ -27,11 +27,10 @@ import { rawRiderRouter } from './routes/rawRiderRoutes';
 import { rawPickerRouter } from './routes/rawPickerRoutes';
 import inventoryRoutes from './routes/inventoryRoutes';
 import deliveryManRoutes from './routes/deliveryManRoutes';
-// Removed: FC/DC routes (tables dropped - per user request 2025-10-07)
-// import fcSelectionRoutes from './routes/fcSelectionRoutes';
-// import fulfillmentCenterRoutes from './routes/fulfillmentCenterRoutes';
-// import distributionCenterRoutes from './routes/distributionCenterRoutes';
-// import userFulfillmentCenterRoutes from './routes/userFulfillmentCenterRoutes';
+import fcSelectionRoutes from './routes/fcSelectionRoutes';
+import fulfillmentCenterRoutes from './routes/fulfillmentCenterRoutes';
+import distributionCenterRoutes from './routes/distributionCenterRoutes';
+import userFulfillmentCenterRoutes from './routes/userFulfillmentCenterRoutes';
 
 const app = express();
 
@@ -61,11 +60,13 @@ app.use('/api/handover', handoverRoutes);
 app.use('/api/warehouses', warehouseRoutes);
 app.use('/api/grn', grnRoutes);
 
-// Removed: FC/DC routes (tables dropped - per user request 2025-10-07)
-// app.use('/api/fc-selection', fcSelectionRoutes);
-// app.use('/api/distribution-centers', distributionCenterRoutes);
-// app.use('/api/fulfillment-centers', fulfillmentCenterRoutes);
-// app.use('/api/user-fulfillment-centers', userFulfillmentCenterRoutes);
+// FC Selection routes must come BEFORE vendor/product routes to avoid FC filtering middleware
+app.use('/api/fc-selection', fcSelectionRoutes);
+
+// FC and DC Management routes (no FC filtering middleware applied)
+app.use('/api/distribution-centers', distributionCenterRoutes);
+app.use('/api/fulfillment-centers', fulfillmentCenterRoutes);
+app.use('/api/user-fulfillment-centers', userFulfillmentCenterRoutes);
 
 app.use('/api', vendorRoutes);
 app.use('/api', productRoutes);

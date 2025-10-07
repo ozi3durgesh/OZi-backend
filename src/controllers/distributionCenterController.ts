@@ -1,9 +1,7 @@
 import { Request, Response } from 'express';
 import { Op } from 'sequelize';
 import { ResponseHandler } from '../middleware/responseHandler';
-import { User } from '../models';
-// ⚠️ WARNING: DistributionCenter table has been dropped - this controller is non-functional
-import DistributionCenter from '../models/DistributionCenter'; // Direct import (table dropped)
+import { DistributionCenter, User } from '../models';
 import { 
   CreateDistributionCenterRequest, 
   DistributionCenterAttributes,

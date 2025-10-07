@@ -2,16 +2,16 @@
 import User from './User';
 import Order from './Order';
 import Coupon from './Coupon';
-// Removed: CouponTranslation (table dropped)
+import CouponTranslation from './CouponTranslation';
 import Role from './Role';
 import Permission from './Permission';
 import RolePermission from './RolePermission';
 import PickingWave from './PickingWave';
 import PicklistItem from './PicklistItem';
 import PickingException from './PickingException';
-// Removed: PackingJob (table dropped)
+import PackingJob from './PackingJob';
 import Handover from './Handover';
-// Removed: PackingEvent (table dropped)
+import PackingEvent from './PackingEvent';
 import Warehouse from './Warehouse';
 import WarehouseZone from './WarehouseZone';
 import WarehouseStaffAssignment from './WarehouseStaffAssignment';
@@ -24,24 +24,35 @@ import GRNLine from './GrnLine';
 import GRNBatch from './GrnBatch';
 import GRNPhoto from './GrnPhoto';
 import PurchaseOrder from './PurchaseOrder';
-// Removed: EcomLog (table dropped)
+import EcomLog from './EcomLog';
 import Product from './productModel';
 import ProductMaster from './productModel';
 import POProduct from './POProduct';
 import TokenBlacklist from './TokenBlacklist';
 import ReturnRequestItem from './ReturnRequestItem';
-// Removed: PutawayTask (table dropped)
-// Removed: PutawayAudit (table dropped)
+import PutawayTask from './PutawayTask';
+import PutawayAudit from './PutawayAudit';
 import Inventory from './Inventory';
 import InventoryLog from './InventoryLog';
-// Removed: UserDevice (table dropped)
+import UserDevice from './userDevice';
 import BulkImportLog from './BulkImportLog';
-// Removed: DistributionCenter (table dropped - per user request 2025-10-07)
-// Removed: FulfillmentCenter (table dropped - per user request 2025-10-07)
-// Removed: UserFulfillmentCenter (table dropped - per user request 2025-10-07)
+import DistributionCenter from './DistributionCenter';
+import FulfillmentCenter from './FulfillmentCenter';
+import UserFulfillmentCenter from './UserFulfillmentCenter';
 
 // Set up associations
-// Removed: Coupon-CouponTranslation associations (CouponTranslation table dropped)
+Coupon.hasMany(CouponTranslation, {
+  foreignKey: 'translationable_id',
+  as: 'translations',
+  scope: {
+    translationable_type: 'App\\Models\\Coupon',
+  },
+});
+
+CouponTranslation.belongsTo(Coupon, {
+  foreignKey: 'translationable_id',
+  as: 'coupon',
+});
 
 // User-Role associations
 User.belongsTo(Role, { foreignKey: 'roleId', as: 'Role' });
@@ -103,7 +114,16 @@ User.hasMany(PickingException, {
   as: 'AssignedExceptions',
 });
 
-// Removed: Packing and Handover associations (PackingJob and PackingEvent tables dropped)
+// Packing and Handover associations
+PickingWave.hasMany(PackingJob, { foreignKey: 'waveId', as: 'PackingJobs' });
+PackingJob.belongsTo(PickingWave, { foreignKey: 'waveId', as: 'Wave' });
+
+PackingJob.belongsTo(User, { foreignKey: 'packerId', as: 'Packer' });
+User.hasMany(PackingJob, { foreignKey: 'packerId', as: 'PackingJobs' });
+
+PackingJob.hasOne(Handover, { foreignKey: 'jobId', as: 'Handover' });
+Handover.belongsTo(PackingJob, { foreignKey: 'jobId', as: 'Job' });
+
 Handover.belongsTo(Rider, { foreignKey: 'riderId', as: 'Rider' });
 Rider.hasMany(Handover, { foreignKey: 'riderId', as: 'Handovers' });
 
@@ -112,6 +132,12 @@ User.hasMany(Handover, {
   foreignKey: 'cancellationBy',
   as: 'CancelledHandovers',
 });
+
+PackingJob.hasMany(PackingEvent, { foreignKey: 'jobId', as: 'Events' });
+PackingEvent.belongsTo(PackingJob, { foreignKey: 'jobId', as: 'Job' });
+
+PackingEvent.belongsTo(User, { foreignKey: 'userId', as: 'User' });
+User.hasMany(PackingEvent, { foreignKey: 'userId', as: 'PackingEvents' });
 
 // Warehouse associations
 Warehouse.belongsTo(User, {
@@ -143,7 +169,8 @@ User.hasMany(WarehouseStaffAssignment, {
   as: 'StaffAssignments',
 });
 
-// Removed: EcomLog associations (ecom_logs table dropped)
+Order.hasMany(EcomLog, { foreignKey: 'order_id', as: 'ecomLogs' });
+EcomLog.belongsTo(Order, { foreignKey: 'order_id', as: 'order' });
 
 // Scanner associations
 ScannerBin.hasMany(ScannerSku, {
@@ -196,15 +223,87 @@ GRNPhoto.belongsTo(GRN, { foreignKey: 'grn_id', as: 'GRN' });
 PurchaseOrder.hasMany(GRNPhoto, { foreignKey: 'po_id', as: 'Photos' });
 GRNPhoto.belongsTo(PurchaseOrder, { foreignKey: 'po_id', as: 'PurchaseOrder' });
 
-// Removed: Putaway associations (putaway_tasks and putaway_audit tables dropped)
+// Putaway associations
+PutawayTask.belongsTo(GRN, { foreignKey: 'grn_id', as: 'GRN' });
+PutawayTask.belongsTo(GRNLine, { foreignKey: 'grn_line_id', as: 'GRNLine' });
+PutawayTask.belongsTo(User, { foreignKey: 'assigned_to', as: 'AssignedTo' });
+PutawayTask.belongsTo(User, { foreignKey: 'created_by', as: 'CreatedBy' });
+
+PutawayAudit.belongsTo(PutawayTask, { foreignKey: 'putaway_task_id', as: 'PutawayTask' });
+PutawayAudit.belongsTo(User, { foreignKey: 'performed_by', as: 'PerformedBy' });
+
+PutawayTask.hasMany(PutawayAudit, { foreignKey: 'putaway_task_id', as: 'AuditLogs' });
 
 // Inventory associations
 Inventory.hasMany(InventoryLog, { foreignKey: 'sku', sourceKey: 'sku', as: 'Logs' });
 InventoryLog.belongsTo(Inventory, { foreignKey: 'sku', targetKey: 'sku', as: 'Inventory' });
 
-// Removed: User-Device associations (user_device table dropped)
+// User-Device associations for push notifications
+User.hasMany(UserDevice, { foreignKey: 'userId', as: 'devices' });
+UserDevice.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 
-// Removed: FC/DC/UserFC associations (tables dropped - per user request 2025-10-07)
+// Distribution Center and Fulfillment Center Associations
+DistributionCenter.hasMany(FulfillmentCenter, {
+  foreignKey: 'dc_id',
+  as: 'FulfillmentCenters',
+});
+
+FulfillmentCenter.belongsTo(DistributionCenter, {
+  foreignKey: 'dc_id',
+  as: 'DistributionCenter',
+});
+
+// User-FulfillmentCenter associations
+User.hasMany(UserFulfillmentCenter, {
+  foreignKey: 'user_id',
+  as: 'UserFulfillmentCenters',
+});
+
+FulfillmentCenter.hasMany(UserFulfillmentCenter, {
+  foreignKey: 'fc_id',
+  as: 'UserFulfillmentCenters',
+});
+
+UserFulfillmentCenter.belongsTo(User, {
+  foreignKey: 'user_id',
+  as: 'User',
+});
+
+UserFulfillmentCenter.belongsTo(FulfillmentCenter, {
+  foreignKey: 'fc_id',
+  as: 'FulfillmentCenter',
+});
+
+// Creator/Updater associations for DC/FC
+DistributionCenter.belongsTo(User, {
+  foreignKey: 'created_by',
+  as: 'CreatedBy',
+});
+
+DistributionCenter.belongsTo(User, {
+  foreignKey: 'updated_by',
+  as: 'UpdatedBy',
+});
+
+FulfillmentCenter.belongsTo(User, {
+  foreignKey: 'created_by',
+  as: 'CreatedBy',
+});
+
+FulfillmentCenter.belongsTo(User, {
+  foreignKey: 'updated_by',
+  as: 'UpdatedBy',
+});
+
+UserFulfillmentCenter.belongsTo(User, {
+  foreignKey: 'created_by',
+  as: 'CreatedBy',
+});
+
+UserFulfillmentCenter.belongsTo(User, {
+  foreignKey: 'updated_by',
+  as: 'UpdatedBy',
+});
 
 // Return system associations are defined in individual model files
 
@@ -212,23 +311,23 @@ export {
   User,
   Order,
   Coupon,
-  // Removed: CouponTranslation (table dropped)
+  CouponTranslation,
   Role,
   Permission,
   RolePermission,
   PickingWave,
   PicklistItem,
   PickingException,
-  // Removed: PackingJob (table dropped)
+  PackingJob,
   Handover,
-  // Removed: PackingEvent (table dropped)
+  PackingEvent,
   Warehouse,
   WarehouseZone,
   WarehouseStaffAssignment,
   Rider,
   ScannerBin,
   ScannerSku,
-  // Removed: EcomLog (table dropped)
+  EcomLog,
   Product,
   BinLocation,
   GRN,
@@ -238,14 +337,14 @@ export {
   PurchaseOrder,
   POProduct,
   TokenBlacklist,
-  // Removed: PutawayTask (table dropped)
-  // Removed: PutawayAudit (table dropped)
+  PutawayTask,
+  PutawayAudit,
   ReturnRequestItem,
   Inventory,
   InventoryLog,
-  // Removed: UserDevice (table dropped)
+  UserDevice,
   BulkImportLog,
-  // Removed: DistributionCenter (table dropped - per user request 2025-10-07)
-  // Removed: FulfillmentCenter (table dropped - per user request 2025-10-07)
-  // Removed: UserFulfillmentCenter (table dropped - per user request 2025-10-07)
+  DistributionCenter,
+  FulfillmentCenter,
+  UserFulfillmentCenter,
 };

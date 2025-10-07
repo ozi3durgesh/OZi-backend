@@ -1,8 +1,6 @@
 // controllers/packingController.ts
 import { Request, Response } from 'express';
-import { PickingWave } from '../models';
-// ⚠️ WARNING: PackingJob table has been dropped - this functionality is broken
-import PackingJob from '../models/PackingJob'; // Direct import (table dropped)
+import { PickingWave, PackingJob } from '../models';
 import Rider from '../models/Rider'; // ✅ Import Rider model
 import { ResponseHandler } from '../middleware/responseHandler';
 import sequelize from '../config/database';
