@@ -272,10 +272,21 @@ export class AuthController {
         ]
       });
 
-      const availableFcs = userFCs.map(ufc => ufc.fc_id);
+      const availableFcIds = userFCs.map(ufc => ufc.fc_id);
+      const availableFcs = userFCs.map(ufc => ({
+        id: ufc.FulfillmentCenter.id,
+        fc_code: ufc.FulfillmentCenter.fc_code,
+        name: ufc.FulfillmentCenter.name,
+        dc_id: ufc.FulfillmentCenter.dc_id,
+        distribution_center: {
+          id: ufc.FulfillmentCenter.DistributionCenter.id,
+          dc_code: ufc.FulfillmentCenter.DistributionCenter.dc_code,
+          name: ufc.FulfillmentCenter.DistributionCenter.name
+        }
+      }));
       const defaultFC = userFCs.find(ufc => ufc.is_default) || userFCs[0]; // Fallback to first FC if no default
 
-      const accessToken = await JwtUtils.generateAccessToken(user, defaultFC?.fc_id, availableFcs);
+      const accessToken = await JwtUtils.generateAccessToken(user, defaultFC?.fc_id, availableFcIds);
       const refreshToken = await JwtUtils.generateRefreshToken(user);
 
       return ResponseHandler.success(res, {
