@@ -284,6 +284,21 @@ export class AuthController {
           name: ufc.FulfillmentCenter.DistributionCenter.name
         }
       }));
+
+      // Extract unique distribution centers
+      const dcMap = new Map();
+      userFCs.forEach(ufc => {
+        const dc = ufc.FulfillmentCenter.DistributionCenter;
+        if (!dcMap.has(dc.id)) {
+          dcMap.set(dc.id, {
+            id: dc.id,
+            dc_code: dc.dc_code,
+            name: dc.name
+          });
+        }
+      });
+      const availableDcs = Array.from(dcMap.values());
+
       const defaultFC = userFCs.find(ufc => ufc.is_default) || userFCs[0]; // Fallback to first FC if no default
 
       const accessToken = await JwtUtils.generateAccessToken(user, defaultFC?.fc_id, availableFcIds);
@@ -303,6 +318,7 @@ export class AuthController {
           name: user.name,
           phone: user.phone,
           availableFcs: availableFcs,
+          availableDcs: availableDcs,
           currentFcId: defaultFC?.fc_id || null,
           fulfillmentCenter: defaultFC ? {
             id: defaultFC.FulfillmentCenter.id,
