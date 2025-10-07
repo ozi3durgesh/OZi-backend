@@ -341,6 +341,145 @@ export class AuthController {
     }
   }
 
+  static async selectDc(req: any, res: Response): Promise<Response> {
+    try {
+      const { dcId } = req.body;
+
+      if (!dcId) {
+        return ResponseHandler.error(res, 'DC ID is required', 400);
+      }
+
+      const user = req.user;
+      if (!user) {
+        return ResponseHandler.error(res, 'User not authenticated', 401);
+      }
+
+      // Fetch user's FC assignments to verify DC access
+      const userFCs = await UserFulfillmentCenter.findAll({
+        where: { 
+          user_id: user.id,
+          is_active: true 
+        },
+        include: [
+          {
+            model: FulfillmentCenter,
+            as: 'FulfillmentCenter',
+            include: [
+              {
+                model: DistributionCenter,
+                as: 'DistributionCenter',
+              }
+            ]
+          }
+        ]
+      });
+
+      if (userFCs.length === 0) {
+        return ResponseHandler.error(res, 'No fulfillment centers assigned to user', 403);
+      }
+
+      // Check if user has access to the selected DC
+      const hasAccessToDc = userFCs.some(ufc => ufc.FulfillmentCenter.dc_id === dcId);
+      
+      if (!hasAccessToDc) {
+        return ResponseHandler.error(res, 'User does not have access to the selected DC', 403);
+      }
+
+      // Get all FCs within the selected DC
+      const fcsInDc = userFCs.filter(ufc => ufc.FulfillmentCenter.dc_id === dcId);
+      const availableFcIds = fcsInDc.map(ufc => ufc.fc_id);
+      
+      // Set default FC within the selected DC (use is_default if available, otherwise first FC)
+      const defaultFC = fcsInDc.find(ufc => ufc.is_default) || fcsInDc[0];
+
+      // Get the DC details
+      const selectedDc = fcsInDc[0].FulfillmentCenter.DistributionCenter;
+
+      // Get full user data with role and permissions
+      const fullUser = await User.findByPk(user.id, {
+        include: [
+          {
+            association: 'Role',
+            include: ['Permissions'],
+          },
+        ],
+        attributes: [
+          'id',
+          'email',
+          'roleId',
+          'isActive',
+          'availabilityStatus',
+          'createdAt',
+          'name',
+          'phone',
+        ],
+      });
+
+      if (!fullUser) {
+        return ResponseHandler.error(res, 'User not found', 404);
+      }
+
+      // Generate new access token with DC context
+      const accessToken = await JwtUtils.generateAccessToken(
+        fullUser, 
+        defaultFC?.fc_id, 
+        availableFcIds,
+        dcId
+      );
+      const refreshToken = await JwtUtils.generateRefreshToken(fullUser);
+
+      // Prepare available FCs with full details
+      const availableFcs = fcsInDc.map(ufc => ({
+        id: ufc.FulfillmentCenter.id,
+        fc_code: ufc.FulfillmentCenter.fc_code,
+        name: ufc.FulfillmentCenter.name,
+        dc_id: ufc.FulfillmentCenter.dc_id,
+        distribution_center: {
+          id: ufc.FulfillmentCenter.DistributionCenter.id,
+          dc_code: ufc.FulfillmentCenter.DistributionCenter.dc_code,
+          name: ufc.FulfillmentCenter.DistributionCenter.name
+        }
+      }));
+
+      return ResponseHandler.success(res, {
+        message: 'DC selected successfully',
+        user: {
+          id: fullUser.id,
+          email: fullUser.email,
+          roleId: fullUser.roleId,
+          role: fullUser.Role?.name || '',
+          permissions: fullUser.Role?.Permissions
+            ? fullUser.Role.Permissions.map((p) => `${p.module}:${p.action}`)
+            : [],
+          availabilityStatus: fullUser.availabilityStatus,
+          createdAt: fullUser.createdAt,
+          name: fullUser.name,
+          phone: fullUser.phone,
+          currentDcId: dcId,
+          currentFcId: defaultFC?.fc_id || null,
+          availableFcs: availableFcs,
+          distributionCenter: {
+            id: selectedDc.id,
+            dc_code: selectedDc.dc_code,
+            name: selectedDc.name
+          },
+          fulfillmentCenter: defaultFC ? {
+            id: defaultFC.FulfillmentCenter.id,
+            fc_code: defaultFC.FulfillmentCenter.fc_code,
+            name: defaultFC.FulfillmentCenter.name,
+            dc_id: defaultFC.FulfillmentCenter.dc_id,
+          } : null,
+        },
+        accessToken,
+        refreshToken,
+        redirectTo: '/dc/dashboard', // Frontend can use this to redirect to DC dashboard
+      });
+    } catch (error) {
+      console.error('Select DC error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
+    }
+  }
+
   static async refreshToken(req: Request, res: Response): Promise<Response> {
     try {
       const { refreshToken } = req.body;

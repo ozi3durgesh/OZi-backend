@@ -17,6 +17,7 @@ router.get('/test', (req, res) => {
 router.get('/system-status', AuthController.checkSystemStatus);
 router.post('/register', AuthController.register);
 router.post('/login', AuthController.login);
+router.post('/select-dc', authenticate, AuthController.selectDc);
 router.post('/refresh-token', AuthController.refreshToken);
 router.post('/logout', authenticate, AuthController.logout);
 router.post('/logout-all', authenticate, AuthController.logoutAll);

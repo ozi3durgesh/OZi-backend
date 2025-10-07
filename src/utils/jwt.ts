@@ -5,7 +5,7 @@ import { User } from '../models';
 import { UserAttributes } from '../types';
 
 export class JwtUtils {
-  static async generateAccessToken(user: any, currentFcId?: number, availableFcs?: number[]): Promise<string> {
+  static async generateAccessToken(user: any, currentFcId?: number, availableFcs?: number[], currentDcId?: number): Promise<string> {
     const secret = process.env.JWT_ACCESS_SECRET;
     if (!secret) {
       throw new Error('JWT_ACCESS_SECRET is not defined');
@@ -36,6 +36,7 @@ export class JwtUtils {
       role: (userWithPermissions as any).Role?.name || '',
       permissions,
       currentFcId,
+      currentDcId,
       availableFcs,
       name: (userWithPermissions as any).name,
       phone: (userWithPermissions as any).phone

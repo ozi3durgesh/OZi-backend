@@ -39,6 +39,7 @@ export interface JwtPayload {
   role: string;
   permissions: string[];
   currentFcId?: number; // Current selected FC ID
+  currentDcId?: number; // Current selected DC ID
   availableFcs?: number[]; // Available FC IDs for the user
   name?: string; // User's name
   phone?: string; // User's phone number
