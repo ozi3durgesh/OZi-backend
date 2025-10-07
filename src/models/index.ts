@@ -36,9 +36,9 @@ import Inventory from './Inventory';
 import InventoryLog from './InventoryLog';
 // Removed: UserDevice (table dropped)
 import BulkImportLog from './BulkImportLog';
-import DistributionCenter from './DistributionCenter';
-import FulfillmentCenter from './FulfillmentCenter';
-import UserFulfillmentCenter from './UserFulfillmentCenter';
+// Removed: DistributionCenter (table dropped - per user request 2025-10-07)
+// Removed: FulfillmentCenter (table dropped - per user request 2025-10-07)
+// Removed: UserFulfillmentCenter (table dropped - per user request 2025-10-07)
 
 // Set up associations
 // Removed: Coupon-CouponTranslation associations (CouponTranslation table dropped)
@@ -204,68 +204,7 @@ InventoryLog.belongsTo(Inventory, { foreignKey: 'sku', targetKey: 'sku', as: 'In
 
 // Removed: User-Device associations (user_device table dropped)
 
-// Distribution Center and Fulfillment Center Associations
-DistributionCenter.hasMany(FulfillmentCenter, {
-  foreignKey: 'dc_id',
-  as: 'FulfillmentCenters',
-});
-
-FulfillmentCenter.belongsTo(DistributionCenter, {
-  foreignKey: 'dc_id',
-  as: 'DistributionCenter',
-});
-
-// User-FulfillmentCenter associations
-User.hasMany(UserFulfillmentCenter, {
-  foreignKey: 'user_id',
-  as: 'UserFulfillmentCenters',
-});
-
-FulfillmentCenter.hasMany(UserFulfillmentCenter, {
-  foreignKey: 'fc_id',
-  as: 'UserFulfillmentCenters',
-});
-
-UserFulfillmentCenter.belongsTo(User, {
-  foreignKey: 'user_id',
-  as: 'User',
-});
-
-UserFulfillmentCenter.belongsTo(FulfillmentCenter, {
-  foreignKey: 'fc_id',
-  as: 'FulfillmentCenter',
-});
-
-// Creator/Updater associations for DC/FC
-DistributionCenter.belongsTo(User, {
-  foreignKey: 'created_by',
-  as: 'CreatedBy',
-});
-
-DistributionCenter.belongsTo(User, {
-  foreignKey: 'updated_by',
-  as: 'UpdatedBy',
-});
-
-FulfillmentCenter.belongsTo(User, {
-  foreignKey: 'created_by',
-  as: 'CreatedBy',
-});
-
-FulfillmentCenter.belongsTo(User, {
-  foreignKey: 'updated_by',
-  as: 'UpdatedBy',
-});
-
-UserFulfillmentCenter.belongsTo(User, {
-  foreignKey: 'created_by',
-  as: 'CreatedBy',
-});
-
-UserFulfillmentCenter.belongsTo(User, {
-  foreignKey: 'updated_by',
-  as: 'UpdatedBy',
-});
+// Removed: FC/DC/UserFC associations (tables dropped - per user request 2025-10-07)
 
 // Return system associations are defined in individual model files
 
@@ -306,7 +245,7 @@ export {
   InventoryLog,
   // Removed: UserDevice (table dropped)
   BulkImportLog,
-  DistributionCenter,
-  FulfillmentCenter,
-  UserFulfillmentCenter,
+  // Removed: DistributionCenter (table dropped - per user request 2025-10-07)
+  // Removed: FulfillmentCenter (table dropped - per user request 2025-10-07)
+  // Removed: UserFulfillmentCenter (table dropped - per user request 2025-10-07)
 };

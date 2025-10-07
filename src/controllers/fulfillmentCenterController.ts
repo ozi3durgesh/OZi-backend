@@ -1,7 +1,10 @@
 import { Request, Response } from 'express';
 import { Op } from 'sequelize';
 import { ResponseHandler } from '../middleware/responseHandler';
-import { FulfillmentCenter, DistributionCenter, User } from '../models';
+import { User } from '../models';
+// ⚠️ WARNING: FulfillmentCenter and DistributionCenter tables have been dropped - this controller is non-functional
+import FulfillmentCenter from '../models/FulfillmentCenter'; // Direct import (table dropped)
+import DistributionCenter from '../models/DistributionCenter'; // Direct import (table dropped)
 import { 
   CreateFulfillmentCenterRequest, 
   FulfillmentCenterAttributes,
