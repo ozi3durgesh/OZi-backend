@@ -132,17 +132,17 @@ export const debugFcQuery = async (req: AuthRequest, res: Response) => {
         ufc.role,
         ufc.is_default,
         fc.id as fc_id,
-        fc.code as fc_code,
+        fc.fc_code as fc_code,
         fc.name as fc_name,
         fc.dc_id,
-        dc.code as dc_code,
+        dc.dc_code as dc_code,
         dc.name as dc_name
       FROM UserFulfillmentCenters ufc
-      JOIN fulfillment_centers fc ON ufc.fc_id = fc.id
-      JOIN distribution_centers dc ON fc.dc_id = dc.id
+      JOIN FulfillmentCenters fc ON ufc.fc_id = fc.id
+      JOIN DistributionCenters dc ON fc.dc_id = dc.id
       WHERE ufc.user_id = :userId 
         AND ufc.is_active = 1 
-        AND fc.status = 'active'
+        AND fc.status = 'ACTIVE'
       ORDER BY ufc.is_default DESC, ufc.assigned_date DESC
     `, {
       replacements: { userId },
@@ -177,45 +177,41 @@ export const getAvailableFulfillmentCenters = async (req: AuthRequest, res: Resp
     console.log('🔍 Fetching FCs for user:', userId);
     console.log('🔍 User object:', req.user);
 
-    // Use raw SQL query to avoid Sequelize association issues
-    const results = await sequelize.query(`
-      SELECT 
-        ufc.id as assignment_id,
-        ufc.role,
-        ufc.is_default,
-        fc.id as fc_id,
-        fc.code as fc_code,
-        fc.name as fc_name,
-        fc.dc_id,
-        dc.code as dc_code,
-        dc.name as dc_name
-      FROM UserFulfillmentCenters ufc
-      JOIN fulfillment_centers fc ON ufc.fc_id = fc.id
-      JOIN distribution_centers dc ON fc.dc_id = dc.id
-      WHERE ufc.user_id = :userId 
-        AND ufc.is_active = 1 
-        AND fc.status = 'active'
-      ORDER BY ufc.is_default DESC, ufc.assigned_date DESC
-    `, {
-      replacements: { userId },
-      type: QueryTypes.SELECT
+    // Use Sequelize models to automatically handle table names
+    const userAssignments = await UserFulfillmentCenter.findAll({
+      where: { 
+        user_id: userId,
+        is_active: true
+      },
+      include: [
+        { 
+          model: FulfillmentCenter, 
+          as: 'FulfillmentCenter',
+          where: { status: 'ACTIVE' },
+          include: [
+            { 
+              model: DistributionCenter, 
+              as: 'DistributionCenter',
+              attributes: ['id', 'dc_code', 'name']
+            }
+          ]
+        }
+      ],
+      order: [['is_default', 'DESC'], ['assigned_date', 'DESC']]
     });
 
-    // Ensure results is an array
-    const resultsArray = Array.isArray(results) ? results : [results];
-
-    const fcSelections: FulfillmentCenterSelectionResponse[] = resultsArray.map((row: any) => ({
-      id: row.fc_id,
-      fc_code: row.fc_code,
-      name: row.fc_name,
-      dc_id: row.dc_id,
+    const fcSelections: FulfillmentCenterSelectionResponse[] = userAssignments.map((assignment: any) => ({
+      id: assignment.FulfillmentCenter.id,
+      fc_code: assignment.FulfillmentCenter.fc_code,
+      name: assignment.FulfillmentCenter.name,
+      dc_id: assignment.FulfillmentCenter.dc_id,
       distribution_center: {
-        id: row.dc_id,
-        dc_code: row.dc_code,
-        name: row.dc_name
+        id: assignment.FulfillmentCenter.DistributionCenter.id,
+        dc_code: assignment.FulfillmentCenter.DistributionCenter.dc_code,
+        name: assignment.FulfillmentCenter.DistributionCenter.name
       },
-      role: row.role,
-      is_default: row.is_default
+      role: assignment.role,
+      is_default: assignment.is_default
     }));
 
     return ResponseHandler.success(res, {
