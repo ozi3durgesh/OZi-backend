@@ -1,7 +1,10 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { User, Role, TokenBlacklist } from '../models';
-// Removed: UserFulfillmentCenter, FulfillmentCenter, DistributionCenter (tables dropped - per user request 2025-10-07)
+// Direct imports for FC/DC (tables exist but not in main models export)
+import UserFulfillmentCenter from '../models/UserFulfillmentCenter';
+import FulfillmentCenter from '../models/FulfillmentCenter';
+import DistributionCenter from '../models/DistributionCenter';
 import { JwtUtils } from '../utils/jwt';
 import { ValidationUtils } from '../utils/validation';
 import { ResponseHandler } from '../middleware/responseHandler';
@@ -210,8 +213,56 @@ export class AuthController {
       // Update user availability status to 'available' on login
       await user.update({ availabilityStatus: 'available' });
 
-      // Removed: FC assignment logic (FC/DC tables dropped - per user request 2025-10-07)
-      const accessToken = await JwtUtils.generateAccessToken(user);
+      // Fetch user's FC assignments
+      const userFCs = await UserFulfillmentCenter.findAll({
+        where: { 
+          user_id: user.id,
+          is_active: true 
+        },
+        include: [
+          {
+            model: FulfillmentCenter,
+            as: 'FulfillmentCenter',
+            include: [
+              {
+                model: DistributionCenter,
+                as: 'DistributionCenter',
+              }
+            ]
+          }
+        ]
+      });
+
+      const availableFcIds = userFCs.map(ufc => ufc.fc_id);
+      const availableFcs = userFCs.map(ufc => ({
+        id: ufc.FulfillmentCenter.id,
+        fc_code: ufc.FulfillmentCenter.fc_code,
+        name: ufc.FulfillmentCenter.name,
+        dc_id: ufc.FulfillmentCenter.dc_id,
+        distribution_center: {
+          id: ufc.FulfillmentCenter.DistributionCenter.id,
+          dc_code: ufc.FulfillmentCenter.DistributionCenter.dc_code,
+          name: ufc.FulfillmentCenter.DistributionCenter.name
+        }
+      }));
+
+      // Extract unique distribution centers
+      const dcMap = new Map();
+      userFCs.forEach(ufc => {
+        const dc = ufc.FulfillmentCenter.DistributionCenter;
+        if (!dcMap.has(dc.id)) {
+          dcMap.set(dc.id, {
+            id: dc.id,
+            dc_code: dc.dc_code,
+            name: dc.name
+          });
+        }
+      });
+      const availableDcs = Array.from(dcMap.values());
+
+      const defaultFC = userFCs.find(ufc => ufc.is_default) || userFCs[0]; // Fallback to first FC if no default
+
+      const accessToken = await JwtUtils.generateAccessToken(user, defaultFC?.fc_id, availableFcIds);
       const refreshToken = await JwtUtils.generateRefreshToken(user);
 
       return ResponseHandler.success(res, {
@@ -227,7 +278,20 @@ export class AuthController {
           createdAt: user.createdAt,
           name: user.name,
           phone: user.phone,
-          // Removed: availableFcs, availableDcs, currentFcId, fulfillmentCenter
+          availableFcs: availableFcs,
+          availableDcs: availableDcs,
+          currentFcId: defaultFC?.fc_id || null,
+          fulfillmentCenter: defaultFC ? {
+            id: defaultFC.FulfillmentCenter.id,
+            fc_code: defaultFC.FulfillmentCenter.fc_code,
+            name: defaultFC.FulfillmentCenter.name,
+            dc_id: defaultFC.FulfillmentCenter.dc_id,
+            distribution_center: {
+              id: defaultFC.FulfillmentCenter.DistributionCenter.id,
+              dc_code: defaultFC.FulfillmentCenter.DistributionCenter.dc_code,
+              name: defaultFC.FulfillmentCenter.DistributionCenter.name
+            }
+          } : null,
         },
         accessToken,
         refreshToken,
