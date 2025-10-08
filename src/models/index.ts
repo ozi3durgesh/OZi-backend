@@ -40,6 +40,10 @@ import DistributionCenter from './DistributionCenter';
 import FulfillmentCenter from './FulfillmentCenter';
 import UserFulfillmentCenter from './UserFulfillmentCenter';
 import VendorDC from './VendorDC';
+import ParentProductMasterDC from './ParentProductMasterDC';
+import DCPurchaseOrder from './DCPurchaseOrder';
+import DCPOProduct from './DCPOProduct';
+import DCPOApproval from './DCPOApproval';
 
 // Set up associations
 Coupon.hasMany(CouponTranslation, {
@@ -332,6 +336,111 @@ User.hasMany(VendorDC, {
   as: 'CreatedVendorsDC',
 });
 
+// ParentProductMasterDC associations
+ParentProductMasterDC.belongsTo(DistributionCenter, {
+  foreignKey: 'dc_id',
+  as: 'DistributionCenter',
+});
+
+ParentProductMasterDC.belongsTo(FulfillmentCenter, {
+  foreignKey: 'fc_id',
+  as: 'FulfillmentCenter',
+});
+
+DistributionCenter.hasMany(ParentProductMasterDC, {
+  foreignKey: 'dc_id',
+  as: 'ParentProducts',
+});
+
+// DCPurchaseOrder associations
+DCPurchaseOrder.belongsTo(VendorDC, {
+  foreignKey: 'vendorId',
+  as: 'Vendor',
+});
+
+DCPurchaseOrder.belongsTo(DistributionCenter, {
+  foreignKey: 'dcId',
+  as: 'DistributionCenter',
+});
+
+DCPurchaseOrder.belongsTo(User, {
+  foreignKey: 'createdBy',
+  as: 'CreatedBy',
+});
+
+DCPurchaseOrder.belongsTo(User, {
+  foreignKey: 'updatedBy',
+  as: 'UpdatedBy',
+});
+
+DCPurchaseOrder.belongsTo(User, {
+  foreignKey: 'approvedBy',
+  as: 'ApprovedBy',
+});
+
+DCPurchaseOrder.belongsTo(User, {
+  foreignKey: 'rejectedBy',
+  as: 'RejectedBy',
+});
+
+DCPurchaseOrder.hasMany(DCPOProduct, {
+  foreignKey: 'dcPOId',
+  as: 'Products',
+});
+
+DCPurchaseOrder.hasMany(DCPOApproval, {
+  foreignKey: 'dcPOId',
+  as: 'Approvals',
+});
+
+// DCPOProduct associations
+DCPOProduct.belongsTo(DCPurchaseOrder, {
+  foreignKey: 'dcPOId',
+  as: 'PurchaseOrder',
+});
+
+DCPOProduct.belongsTo(ParentProductMasterDC, {
+  foreignKey: 'productId',
+  as: 'Product',
+});
+
+// DCPOApproval associations
+DCPOApproval.belongsTo(DCPurchaseOrder, {
+  foreignKey: 'dcPOId',
+  as: 'PurchaseOrder',
+});
+
+DCPOApproval.belongsTo(User, {
+  foreignKey: 'approverId',
+  as: 'Approver',
+});
+
+// Reverse associations
+VendorDC.hasMany(DCPurchaseOrder, {
+  foreignKey: 'vendorId',
+  as: 'PurchaseOrders',
+});
+
+DistributionCenter.hasMany(DCPurchaseOrder, {
+  foreignKey: 'dcId',
+  as: 'PurchaseOrders',
+});
+
+User.hasMany(DCPurchaseOrder, {
+  foreignKey: 'createdBy',
+  as: 'CreatedPurchaseOrders',
+});
+
+User.hasMany(DCPOApproval, {
+  foreignKey: 'approverId',
+  as: 'Approvals',
+});
+
+ParentProductMasterDC.hasMany(DCPOProduct, {
+  foreignKey: 'productId',
+  as: 'POProducts',
+});
+
 // Return system associations are defined in individual model files
 
 export {
@@ -375,4 +484,8 @@ export {
   FulfillmentCenter,
   UserFulfillmentCenter,
   VendorDC,
+  ParentProductMasterDC,
+  DCPurchaseOrder,
+  DCPOProduct,
+  DCPOApproval,
 };

@@ -21,7 +21,8 @@
     "db:fix": "tsx src/script/fixDatabaseSchema.ts",
     "db:validate": "tsx src/script/validateDatabaseSchema.ts",
     "init-scanner": "tsx src/script/initScannerTables.ts",
-    "migrate:vendor-dc": "tsx src/script/runVendorDcMigration.ts"
+    "migrate:vendor-dc": "tsx src/script/runVendorDcMigration.ts",
+    "migrate:dc-po": "tsx src/script/runDCPOMigration.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.884.0",

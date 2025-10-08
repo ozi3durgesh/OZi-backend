@@ -33,6 +33,7 @@ import distributionCenterRoutes from './routes/distributionCenterRoutes';
 import userFulfillmentCenterRoutes from './routes/userFulfillmentCenterRoutes';
 import parentProductRoutesDC from './routes/DC/parentProductRoutesDC';
 import dcVendorRoutes from './routes/DC/vendorRoutes';
+import dcPORoutes from './routes/DC/dcPORoutes';
 
 const app = express();
 
@@ -73,6 +74,7 @@ app.use('/api/user-fulfillment-centers', userFulfillmentCenterRoutes);
 // DC-specific routes (Distribution Center context)
 app.use('/api/dc', dcVendorRoutes);
 app.use('/api/dc', parentProductRoutesDC);
+app.use('/api/dc', dcPORoutes);
 
 app.use('/api', vendorRoutes);
 app.use('/api', productRoutes);
