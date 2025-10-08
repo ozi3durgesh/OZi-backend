@@ -173,4 +173,49 @@ export const checkFulfillmentCenterAccess = (req: Request, res: Response, next: 
   }
 };
 
+/**
+ * Middleware to check if user has specific role(s)
+ * @param allowedRoles - String or array of allowed role names (e.g., 'admin' or ['admin', 'manager'])
+ */
+export const hasRole = (allowedRoles: string | string[]) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    try {
+      if (!req.user) {
+        ResponseHandler.error(res, 'Authentication required', 401);
+        return;
+      }
+
+      const userRole = req.user.role;
+      const rolesArray = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
+      
+      // Check if user has one of the allowed roles
+      const hasRequiredRole = rolesArray.includes(userRole);
+      
+      if (!hasRequiredRole) {
+        ResponseHandler.error(
+          res, 
+          `Access denied. Required role(s): ${rolesArray.join(', ')}. Your role: ${userRole}`, 
+          403
+        );
+        return;
+      }
+
+      next();
+    } catch (error) {
+      console.error('Role check error:', error);
+      ResponseHandler.error(res, 'Role check failed', 500);
+    }
+  };
+};
+
+/**
+ * Middleware specifically for admin-only routes
+ */
+export const isAdmin = hasRole('admin');
+
+/**
+ * Middleware for routes that require admin or manager roles
+ */
+export const isAdminOrManager = hasRole(['admin', 'manager']);
+
 export const authenticateToken = authenticate;

@@ -39,6 +39,7 @@ import BulkImportLog from './BulkImportLog';
 import DistributionCenter from './DistributionCenter';
 import FulfillmentCenter from './FulfillmentCenter';
 import UserFulfillmentCenter from './UserFulfillmentCenter';
+import VendorDC from './VendorDC';
 
 // Set up associations
 Coupon.hasMany(CouponTranslation, {
@@ -305,6 +306,32 @@ UserFulfillmentCenter.belongsTo(User, {
   as: 'UpdatedBy',
 });
 
+// VendorDC associations
+VendorDC.belongsTo(DistributionCenter, {
+  foreignKey: 'dc_id',
+  as: 'DistributionCenter',
+});
+
+VendorDC.belongsTo(User, {
+  foreignKey: 'created_by',
+  as: 'CreatedBy',
+});
+
+VendorDC.belongsTo(User, {
+  foreignKey: 'updated_by',
+  as: 'UpdatedBy',
+});
+
+DistributionCenter.hasMany(VendorDC, {
+  foreignKey: 'dc_id',
+  as: 'Vendors',
+});
+
+User.hasMany(VendorDC, {
+  foreignKey: 'created_by',
+  as: 'CreatedVendorsDC',
+});
+
 // Return system associations are defined in individual model files
 
 export {
@@ -347,4 +374,5 @@ export {
   DistributionCenter,
   FulfillmentCenter,
   UserFulfillmentCenter,
+  VendorDC,
 };

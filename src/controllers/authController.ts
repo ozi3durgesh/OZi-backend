@@ -8,7 +8,7 @@ import { ResponseHandler } from '../middleware/responseHandler';
 export class AuthController {
   static async register(req: Request, res: Response): Promise<Response> {
     try {
-      const { email, password, roleId, roleName, adminSecret, fulfillmentCenters, fcRoles, name, phone } = req.body;
+      const { email, password, role, roleId, roleName, adminSecret, fulfillmentCenters, fcRoles, name, phone } = req.body;
 
       if (!email || !password) {
         return ResponseHandler.error(
@@ -36,15 +36,15 @@ export class AuthController {
       const totalUsers = await User.count();
       const isFirstUser = totalUsers === 0;
 
-      // Determine role based on roleName or roleId
-      let finalRoleId = roleId;
+      // Determine role based on roleName, roleId, or role (for backward compatibility)
+      let finalRoleId = roleId || role;
       if (roleName) {
-        const role = await Role.findOne({ where: { name: roleName } });
-        if (!role) {
+        const foundRole = await Role.findOne({ where: { name: roleName } });
+        if (!foundRole) {
           return ResponseHandler.error(res, 'Invalid role name', 400);
         }
-        finalRoleId = role.id;
-      } else if (!roleId) {
+        finalRoleId = foundRole.id;
+      } else if (!finalRoleId) {
         // Default to WH Staff 1 if no role specified
         const defaultRole = await Role.findOne({
           where: { name: 'wh_staff_1' },
@@ -56,8 +56,8 @@ export class AuthController {
 
       // Validate role exists
       if (finalRoleId) {
-        const role = await Role.findByPk(finalRoleId);
-        if (!role) {
+        const roleRecord = await Role.findByPk(finalRoleId);
+        if (!roleRecord) {
           return ResponseHandler.error(res, 'Invalid role ID', 400);
         }
       }

@@ -20,7 +20,8 @@
     "debug-roles": "tsx src/script/debugRoles.ts",
     "db:fix": "tsx src/script/fixDatabaseSchema.ts",
     "db:validate": "tsx src/script/validateDatabaseSchema.ts",
-    "init-scanner": "tsx src/script/initScannerTables.ts"
+    "init-scanner": "tsx src/script/initScannerTables.ts",
+    "migrate:vendor-dc": "tsx src/script/runVendorDcMigration.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.884.0",
