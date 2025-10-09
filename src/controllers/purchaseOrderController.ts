@@ -1,5 +1,4 @@
 import { Request, Response } from 'express';
-import nodemailer from 'nodemailer';
 import PurchaseOrder from '../models/PurchaseOrder';
 import POProduct from '../models/POProduct';
 import Product from '../models/productModel';
@@ -10,20 +9,15 @@ import multer from "multer";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import DirectInventoryService from '../services/DirectInventoryService';
 import { INVENTORY_OPERATIONS } from '../config/inventoryConstants';
+import { EmailService } from '../services/emailService';
 
 dotenv.config();
 
-// Nodemailer transporter
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
-});
-
 // Approval Emails
 const approvalEmails: Record<string, string> = {
-  category_head: 'durgesh.singh.sde@gmail.com',
+  category_head: 'durgesh.singh@ozi.in',
   admin: 'durgesh.singh@ozi.in',
-  creator: 'durgesh.sde@gmail.com'
+  creator: 'durgesh.singh@ozi.in'
 };
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -65,37 +59,39 @@ function decryptApprovalToken(token: string) {
 
 /** Send Approval Email */
 async function sendApprovalEmail(po: any, role: 'category_head' | 'admin' | 'creator') {
-  let productLines = '';
-  for (const p of po.products ?? []) {
-    productLines += `${p.product} | SKU: ${p.sku_id} | Units: ${p.units} | MRP: ₹${p.mrp} | SP: ₹${p.sp} | Amount: ₹${p.amount}\n`;
-  }
-
   let approvalLink = '';
   if (role !== 'creator') {
     const token = generateApprovalToken(po.id, role, 60);
     approvalLink = `${process.env.APP_BASE_URL_FRONTEND}/po-approval/${encodeURIComponent(token)}`;
   }
 
-  const mailOptions: any = {
-    from: process.env.EMAIL_USER,
-    to: approvalEmails[role],
-    subject: `PO ${po.po_id} - ${role === 'creator' ? 'Purchase Order' : 'Approval Request'}`,
-    text: `Dear ${role.replace('_', ' ')},
+  // Prepare products data for email
+  const products = po.products?.map((p: any) => ({
+    productName: p.product,
+    sku: p.sku_id,
+    quantity: p.units,
+    unitPrice: p.mrp,
+    totalAmount: p.amount
+  })) || [];
 
-Vendor: ${po.vendor_name}
-PO Amount: ₹${po.total_amount}
-PO ID: ${po.po_id}
+  // Send email using new EmailService
+  const success = await EmailService.sendDCApprovalEmail(
+    [approvalEmails[role]],
+    po.po_id,
+    po.vendor_name,
+    'N/A', // DC name not available in regular PO
+    po.total_amount,
+    'Normal', // Priority not available in regular PO
+    products,
+    approvalLink,
+    role
+  );
 
-PO Raised kindely find the details below:
-
-${role !== 'creator' ? `Approval Link: ${approvalLink}` : 'Please check the PO and submit PI details.'}
-
-Thanks,
-Ozi Technologies`
-  };
-
-  await transporter.sendMail(mailOptions);
-  console.log(`Email sent to ${role}: ${approvalEmails[role]}`);
+  if (success) {
+    console.log(`Email sent to ${role}: ${approvalEmails[role]}`);
+  } else {
+    console.error(`Failed to send email to ${role}: ${approvalEmails[role]}`);
+  }
 }
 
 /** Create Draft or Final PO */

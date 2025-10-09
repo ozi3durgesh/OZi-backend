@@ -1,5 +1,4 @@
 import { Op } from 'sequelize';
-import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import DCPurchaseOrder, { DCPurchaseOrderCreationAttributes } from '../../models/DCPurchaseOrder';
 import DCPOProduct, { DCPOProductCreationAttributes } from '../../models/DCPOProduct';
@@ -8,6 +7,7 @@ import VendorDC from '../../models/VendorDC';
 import ParentProductMasterDC from '../../models/ParentProductMasterDC';
 import { DistributionCenter, User } from '../../models';
 import { DC_PO_CONSTANTS } from '../../constants/dcPOConstants';
+import { EmailService } from '../emailService';
 
 interface DCPOFilters {
   search?: string;
@@ -34,14 +34,6 @@ interface CreateDCPOData {
 }
 
 export class DCPOService {
-  // Nodemailer transporter
-  private static transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
-    }
-  });
 
   /**
    * Generate unique PO ID
@@ -318,40 +310,32 @@ export class DCPOService {
    * Send approval email
    */
   static async sendApprovalEmail(po: any, role: 'category_head' | 'admin' | 'creator') {
-    let productLines = '';
-    for (const p of po.Products ?? []) {
-      productLines += `${p.productName} | SKU: ${p.sku} | Qty: ${p.quantity} | Unit Price: ₹${p.unitPrice} | Total: ₹${p.totalAmount}\n`;
-    }
-
     let approvalLink = '';
     // Generate approval token for all roles including creator
     const token = this.generateApprovalToken(po.id, role);
     approvalLink = `${process.env.APP_BASE_URL_FRONTEND}/dc-po-approval/${encodeURIComponent(token)}`;
 
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: DC_PO_CONSTANTS.EMAIL.APPROVAL_EMAILS[role],
-      subject: `${DC_PO_CONSTANTS.EMAIL.SUBJECT_PREFIX} ${po.poId} - ${role === 'creator' ? 'Purchase Order Created' : 'Approval Request'}`,
-      text: `Dear ${role.replace('_', ' ').toUpperCase()},
+    // Get recipient email
+    const recipientEmail = DC_PO_CONSTANTS.EMAIL.APPROVAL_EMAILS[role];
+    
+    // Send email using new EmailService
+    const success = await EmailService.sendDCApprovalEmail(
+      [recipientEmail],
+      po.poId,
+      po.Vendor?.businessName || 'N/A',
+      po.DistributionCenter?.name || 'N/A',
+      po.totalAmount,
+      po.priority,
+      po.Products ?? [],
+      approvalLink,
+      role
+    );
 
-DC Purchase Order Details:
-PO ID: ${po.poId}
-Vendor: ${po.Vendor?.businessName || 'N/A'}
-Distribution Center: ${po.DistributionCenter?.name || 'N/A'}
-Total Amount: ₹${po.totalAmount}
-Priority: ${po.priority}
-
-Products:
-${productLines}
-
-Approval Link: ${approvalLink}
-
-Thanks,
-Ozi Technologies`
-    };
-
-    await this.transporter.sendMail(mailOptions);
-    console.log(`Email sent to ${role}: ${DC_PO_CONSTANTS.EMAIL.APPROVAL_EMAILS[role]}`);
+    if (success) {
+      console.log(`Email sent to ${role}: ${recipientEmail}`);
+    } else {
+      console.error(`Failed to send email to ${role}: ${recipientEmail}`);
+    }
   }
 
   /**
