@@ -333,4 +333,28 @@ export class DCPOController {
       return ResponseHandler.error(res, error.message || 'Failed to get approval details', error.statusCode || 500);
     }
   }
+
+  /**
+   * Get complete product details for a DC Purchase Order
+   */
+  static async getDCPOProductDetails(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { id } = req.params;
+
+      if (!id) {
+        return ResponseHandler.error(res, 'Purchase Order ID is required', 400);
+      }
+
+      const productDetails = await DCPOService.getDCPOProductDetails(parseInt(id));
+
+      return ResponseHandler.success(res, {
+        message: 'Product details retrieved successfully',
+        data: productDetails,
+      });
+
+    } catch (error: any) {
+      console.error('Get DC-PO product details error:', error);
+      return ResponseHandler.error(res, error.message || 'Failed to fetch product details', error.statusCode || 500);
+    }
+  }
 }

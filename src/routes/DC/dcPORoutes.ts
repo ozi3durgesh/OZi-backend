@@ -21,6 +21,9 @@ router.get('/purchase-orders', DCPOController.getDCPOs);
 // Get DC Purchase Order by ID (Authenticated users)
 router.get('/purchase-orders/:id', DCPOController.getDCPOById);
 
+// Get complete product details for a DC Purchase Order (Authenticated users)
+router.get('/purchase-orders/:id/products', DCPOController.getDCPOProductDetails);
+
 // Update DC Purchase Order (Admin only, only if status is DRAFT)
 router.put('/purchase-orders/:id', isAdmin, DCPOController.updateDCPO);
 

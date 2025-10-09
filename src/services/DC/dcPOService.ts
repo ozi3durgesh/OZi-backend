@@ -635,4 +635,111 @@ Ozi Technologies`
     await po.destroy();
     return true;
   }
+
+  /**
+   * Get complete product details for a DC Purchase Order
+   */
+  static async getDCPOProductDetails(poId: number): Promise<any> {
+    const po: any = await DCPurchaseOrder.findByPk(poId, {
+      include: [
+        {
+          model: VendorDC,
+          as: 'Vendor',
+          attributes: ['id', 'vendorId', 'businessName', 'pocName', 'pocEmail', 'businessAddress', 'city', 'state'],
+        },
+        {
+          model: DistributionCenter,
+          as: 'DistributionCenter',
+          attributes: ['id', 'dc_code', 'name', 'city', 'state', 'address'],
+        },
+        {
+          model: User,
+          as: 'CreatedBy',
+          attributes: ['id', 'email', 'name'],
+        },
+        {
+          model: DCPOProduct,
+          as: 'Products',
+          include: [
+            {
+              model: ParentProductMasterDC,
+              as: 'Product',
+              attributes: [
+                'id', 'SKU', 'ProductName', 'Description', 'Category', 'Brand', 
+                'MRP', 'COST', 'hsn', 'EAN_UPC', 'Color', 'Size', 'Weight', 
+                'Length', 'Height', 'Width', 'Flammable', 'SPThreshold', 
+                'InventoryThreshold', 'ShelfLife', 'ShelfLifePercentage', 
+                'ProductExpiryInDays', 'gst', 'CESS', 'ImageURL', 'Status',
+                'CreatedDate', 'LastUpdatedDate'
+              ],
+            },
+          ],
+        },
+        {
+          model: DCPOApproval,
+          as: 'Approvals',
+          include: [
+            {
+              model: User,
+              as: 'Approver',
+              attributes: ['id', 'email', 'name'],
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!po) {
+      const error: any = new Error(DC_PO_CONSTANTS.ERRORS.PO_NOT_FOUND);
+      error.statusCode = 404;
+      throw error;
+    }
+
+    // Calculate summary statistics
+    const productSummary = {
+      totalProducts: po.Products?.length || 0,
+      totalQuantity: po.Products?.reduce((sum: number, product: any) => sum + product.quantity, 0) || 0,
+      totalAmount: po.totalAmount,
+      averageUnitPrice: po.Products?.length > 0 ? 
+        po.totalAmount / (po.Products.reduce((sum: number, product: any) => sum + product.quantity, 0)) : 0,
+      categories: [...new Set(po.Products?.map((p: any) => p.Product?.Category).filter(Boolean) || [])],
+      brands: [...new Set(po.Products?.map((p: any) => p.Product?.Brand).filter(Boolean) || [])],
+    };
+
+    // Add calculated fields to each product
+    const productsWithCalculations = (po.Products || []).map((product: any) => ({
+      ...product.toJSON(),
+      Product: {
+        ...product.Product?.toJSON(),
+        // Add calculated fields
+        totalOrderedValue: product.quantity * product.unitPrice,
+        marginAmount: product.unitPrice - (product.Product?.COST || 0),
+        marginPercentage: product.Product?.COST ? 
+          ((product.unitPrice - product.Product.COST) / product.Product.COST * 100) : 0,
+        savingsFromMRP: (product.Product?.MRP || 0) - product.unitPrice,
+        savingsPercentage: product.Product?.MRP ? 
+          ((product.Product.MRP - product.unitPrice) / product.Product.MRP * 100) : 0,
+      }
+    }));
+
+    return {
+      purchaseOrder: {
+        id: po.id,
+        poId: po.poId,
+        status: po.status,
+        priority: po.priority,
+        totalAmount: po.totalAmount,
+        description: po.description,
+        notes: po.notes,
+        createdAt: po.createdAt,
+        updatedAt: po.updatedAt,
+        Vendor: po.Vendor,
+        DistributionCenter: po.DistributionCenter,
+        CreatedBy: po.CreatedBy,
+        Approvals: po.Approvals,
+      },
+      products: productsWithCalculations,
+      summary: productSummary,
+    };
+  }
 }
