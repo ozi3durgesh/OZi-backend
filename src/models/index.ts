@@ -44,6 +44,10 @@ import ParentProductMasterDC from './ParentProductMasterDC';
 import DCPurchaseOrder from './DCPurchaseOrder';
 import DCPOProduct from './DCPOProduct';
 import DCPOApproval from './DCPOApproval';
+import DCGrn from './DCGrn.model';
+import DCGrnLine from './DCGrnLine';
+import DCGrnBatch from './DCGrnBatch';
+import DCGrnPhoto from './DCGrnPhoto';
 
 // Set up associations
 Coupon.hasMany(CouponTranslation, {
@@ -441,6 +445,33 @@ ParentProductMasterDC.hasMany(DCPOProduct, {
   as: 'POProducts',
 });
 
+// DC-GRN associations
+DCGrn.belongsTo(DCPurchaseOrder, { foreignKey: 'dc_po_id', as: 'DCPO' });
+DCGrn.belongsTo(User, { foreignKey: 'created_by', as: 'CreatedBy' });
+DCGrn.belongsTo(User, { foreignKey: 'approved_by', as: 'ApprovedBy' });
+DCGrn.belongsTo(DistributionCenter, { foreignKey: 'dc_id', as: 'DistributionCenter' });
+
+// DC-GRN Line associations
+DCGrn.hasMany(DCGrnLine, { foreignKey: 'dc_grn_id', as: 'Lines' });
+DCGrnLine.belongsTo(DCGrn, { foreignKey: 'dc_grn_id', as: 'DCGrn' });
+
+// DC-GRN Batch associations
+DCGrnLine.hasMany(DCGrnBatch, { foreignKey: 'dc_grn_line_id', as: 'Batches' });
+DCGrnBatch.belongsTo(DCGrnLine, { foreignKey: 'dc_grn_line_id', as: 'Line' });
+
+// DC-GRN Photo associations
+DCGrn.hasMany(DCGrnPhoto, { foreignKey: 'dc_grn_id', as: 'Photos' });
+DCGrnPhoto.belongsTo(DCGrn, { foreignKey: 'dc_grn_id', as: 'DCGrn' });
+
+DCPurchaseOrder.hasMany(DCGrnPhoto, { foreignKey: 'dc_po_id', as: 'DCGrnPhotos' });
+DCGrnPhoto.belongsTo(DCPurchaseOrder, { foreignKey: 'dc_po_id', as: 'DCPurchaseOrder' });
+
+// Reverse associations
+DCPurchaseOrder.hasMany(DCGrn, { foreignKey: 'dc_po_id', as: 'DCGrns' });
+User.hasMany(DCGrn, { foreignKey: 'created_by', as: 'CreatedDCGrns' });
+User.hasMany(DCGrn, { foreignKey: 'approved_by', as: 'ApprovedDCGrns' });
+DistributionCenter.hasMany(DCGrn, { foreignKey: 'dc_id', as: 'DCGrns' });
+
 // Return system associations are defined in individual model files
 
 export {
@@ -488,4 +519,8 @@ export {
   DCPurchaseOrder,
   DCPOProduct,
   DCPOApproval,
+  DCGrn,
+  DCGrnLine,
+  DCGrnBatch,
+  DCGrnPhoto,
 };
