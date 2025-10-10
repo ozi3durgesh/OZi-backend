@@ -23,6 +23,19 @@ class DCPOProduct extends Model<
   declare cost: number | null;
   declare description: string | null;
   declare notes: string | null;
+  declare hsn: string | null;
+  declare ean_upc: string | null;
+  declare weight: number | null;
+  declare length: number | null;
+  declare height: number | null;
+  declare width: number | null;
+  declare inventory_threshold: number | null;
+  declare gst: number | null;
+  declare cess: number | null;
+  declare image_url: string | null;
+  declare brand_id: number | null;
+  declare category_id: number | null;
+  declare status: number | null;
   declare createdAt: CreationOptional<Date>;
   declare updatedAt: CreationOptional<Date>;
 }
@@ -46,7 +59,7 @@ DCPOProduct.init(
       type: DataTypes.INTEGER,
       allowNull: false,
       references: {
-        model: 'parent_product_master_dc',
+        model: 'parent_product_master',
         key: 'id',
       },
     },
@@ -87,6 +100,58 @@ DCPOProduct.init(
     },
     notes: {
       type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    hsn: {
+      type: DataTypes.STRING(8),
+      allowNull: true,
+    },
+    ean_upc: {
+      type: DataTypes.STRING(14),
+      allowNull: true,
+    },
+    weight: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+    },
+    length: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+    },
+    height: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+    },
+    width: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+    },
+    inventory_threshold: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    gst: {
+      type: DataTypes.DECIMAL(5, 2),
+      allowNull: true,
+    },
+    cess: {
+      type: DataTypes.DECIMAL(5, 2),
+      allowNull: true,
+    },
+    image_url: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    brand_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    category_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    status: {
+      type: DataTypes.INTEGER,
       allowNull: true,
     },
     createdAt: {

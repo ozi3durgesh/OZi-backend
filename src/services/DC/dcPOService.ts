@@ -93,14 +93,14 @@ export class DCPOService {
       throw error;
     }
 
-    // Validate products exist
-    const productIds = data.products.map(p => p.productId);
+    // Validate products exist by catalogue_id
+    const catalogueIds = data.products.map(p => p.productId.toString());
     const products = await ParentProductMasterDC.findAll({
-      where: { id: { [Op.in]: productIds } }
+      where: { catalogue_id: { [Op.in]: catalogueIds } }
     });
 
-    if (products.length !== productIds.length) {
-      const error: any = new Error(DC_PO_CONSTANTS.ERRORS.PRODUCT_REQUIRED);
+    if (products.length !== catalogueIds.length) {
+      const error: any = new Error(`Products not found. Requested: ${catalogueIds.join(', ')}, Found: ${products.map(p => p.catalogue_id).join(', ')}`);
       error.statusCode = 400;
       throw error;
     }
@@ -108,21 +108,38 @@ export class DCPOService {
     // Calculate total amount
     let totalAmount = 0;
     const validatedProducts = data.products.map(productData => {
-      const product = products.find(p => p.id === productData.productId);
+      const product = products.find(p => p.catalogue_id.toString() === productData.productId.toString());
+      if (!product) {
+        throw new Error(`Product with catalogue_id ${productData.productId} not found`);
+      }
       const productTotal = productData.quantity * productData.unitPrice;
       totalAmount += productTotal;
 
       return {
-        productId: productData.productId,
-        sku: product!.catalogue_id,
-        productName: product!.name || 'Unknown Product',
+        productId: product.id, // Use the actual database ID
+        sku: product.catalogue_id,
+        productName: product.name || 'Unknown Product',
         quantity: productData.quantity,
         unitPrice: productData.unitPrice,
         totalAmount: productTotal,
-        mrp: product!.mrp,
-        cost: product!.cost,
-        description: productData.description,
+        mrp: product.mrp,
+        cost: product.cost,
+        description: productData.description || product.description,
         notes: productData.notes,
+        // Additional product details from parent_product_master
+        hsn: product.hsn,
+        ean_upc: product.ean_upc,
+        weight: product.weight,
+        length: product.length,
+        height: product.height,
+        width: product.width,
+        inventory_threshold: product.inventory_threshold,
+        gst: product.gst,
+        cess: product.cess,
+        image_url: product.image_url,
+        brand_id: product.brand_id,
+        category_id: product.category_id,
+        status: product.status,
       };
     });
 
@@ -147,8 +164,30 @@ export class DCPOService {
       validatedProducts.map(productData =>
         DCPOProduct.create({
           dcPOId: newPO.id,
-          ...productData,
-        } as DCPOProductCreationAttributes)
+          productId: productData.productId,
+          sku: productData.sku,
+          productName: productData.productName,
+          quantity: productData.quantity,
+          unitPrice: productData.unitPrice,
+          totalAmount: productData.totalAmount,
+          mrp: productData.mrp,
+          cost: productData.cost,
+          description: productData.description,
+          notes: productData.notes,
+          hsn: productData.hsn,
+          ean_upc: productData.ean_upc,
+          weight: productData.weight,
+          length: productData.length,
+          height: productData.height,
+          width: productData.width,
+          inventory_threshold: productData.inventory_threshold,
+          gst: productData.gst,
+          cess: productData.cess,
+          image_url: productData.image_url,
+          brand_id: productData.brand_id,
+          category_id: productData.category_id,
+          status: productData.status,
+        })
       )
     );
 
@@ -180,7 +219,7 @@ export class DCPOService {
             {
               model: ParentProductMasterDC,
               as: 'Product',
-              attributes: ['id', 'SKU', 'ProductName', 'MRP', 'COST'],
+              attributes: ['id', 'catalogue_id', 'name', 'mrp', 'cost'],
             },
           ],
         },
@@ -551,7 +590,7 @@ export class DCPOService {
             {
               model: ParentProductMasterDC,
               as: 'Product',
-              attributes: ['id', 'SKU', 'ProductName', 'MRP', 'COST', 'hsn', 'Brand'],
+              attributes: ['id', 'catalogue_id', 'name', 'mrp', 'cost', 'hsn', 'brand_id'],
             },
           ],
         },
@@ -649,12 +688,10 @@ export class DCPOService {
               model: ParentProductMasterDC,
               as: 'Product',
               attributes: [
-                'id', 'SKU', 'ProductName', 'Description', 'Category', 'Brand', 
-                'MRP', 'COST', 'hsn', 'EAN_UPC', 'Color', 'Size', 'Weight', 
-                'Length', 'Height', 'Width', 'Flammable', 'SPThreshold', 
-                'InventoryThreshold', 'ShelfLife', 'ShelfLifePercentage', 
-                'ProductExpiryInDays', 'gst', 'CESS', 'ImageURL', 'Status',
-                'CreatedDate', 'LastUpdatedDate'
+                'id', 'catalogue_id', 'name', 'description', 'category_id', 'brand_id', 
+                'mrp', 'cost', 'hsn', 'ean_upc', 'weight', 'length', 'height', 'width', 
+                'inventory_threshold', 'gst', 'cess', 'image_url', 'status',
+                'createdAt', 'updatedAt'
               ],
             },
           ],
@@ -697,12 +734,12 @@ export class DCPOService {
         ...product.Product?.toJSON(),
         // Add calculated fields
         totalOrderedValue: product.quantity * product.unitPrice,
-        marginAmount: product.unitPrice - (product.Product?.COST || 0),
-        marginPercentage: product.Product?.COST ? 
-          ((product.unitPrice - product.Product.COST) / product.Product.COST * 100) : 0,
-        savingsFromMRP: (product.Product?.MRP || 0) - product.unitPrice,
-        savingsPercentage: product.Product?.MRP ? 
-          ((product.Product.MRP - product.unitPrice) / product.Product.MRP * 100) : 0,
+        marginAmount: product.unitPrice - (product.Product?.cost || 0),
+        marginPercentage: product.Product?.cost ? 
+          ((product.unitPrice - product.Product.cost) / product.Product.cost * 100) : 0,
+        savingsFromMRP: (product.Product?.mrp || 0) - product.unitPrice,
+        savingsPercentage: product.Product?.mrp ? 
+          ((product.Product.mrp - product.unitPrice) / product.Product.mrp * 100) : 0,
       }
     }));
 

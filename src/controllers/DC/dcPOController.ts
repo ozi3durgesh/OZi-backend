@@ -36,7 +36,7 @@ export class DCPOController {
       // Validate products array
       for (const product of products) {
         if (!product.productId || !product.quantity || !product.unitPrice) {
-          return ResponseHandler.error(res, 'Each product must have productId, quantity, and unitPrice', 400);
+          return ResponseHandler.error(res, 'Each product must have productId (catalogue_id), quantity, and unitPrice', 400);
         }
 
         if (product.quantity < DC_PO_CONSTANTS.VALIDATION.MIN_QUANTITY || 
