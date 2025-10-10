@@ -244,7 +244,7 @@ export const getParentProductByCatalogueId = async (req: Request, res: Response)
         {
           model: Brand,
           as: 'Brand',
-          attributes: ['id', 'name', 'logo_url']
+          attributes: ['id', 'name', 'image']
         }
       ]
     });
@@ -295,7 +295,7 @@ export const getParentProducts = async (req: Request, res: Response) => {
         {
           model: Brand,
           as: 'Brand',
-          attributes: ['id', 'name', 'logo_url']
+          attributes: ['id', 'name', 'image']
         }
       ]
     });
@@ -329,7 +329,7 @@ export const getParentProductById = async (req: Request, res: Response) => {
         {
           model: Brand,
           as: 'Brand',
-          attributes: ['id', 'name', 'logo_url']
+          attributes: ['id', 'name', 'image']
         }
       ]
     });
