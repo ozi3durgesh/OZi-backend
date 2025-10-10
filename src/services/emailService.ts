@@ -65,13 +65,35 @@ export class EmailService {
   ): Promise<boolean> {
     let productLines = '';
     for (const product of products) {
+      // Handle both direct product objects and Sequelize model instances
+      const productName = product.productName || product.dataValues?.productName || 'N/A';
+      const catalogueId = product.sku || product.dataValues?.sku || product.Product?.catalogue_id || 'N/A';
+      const quantity = product.quantity || product.dataValues?.quantity || 'N/A';
+      const unitPrice = product.unitPrice || product.dataValues?.unitPrice || 'N/A';
+      const totalAmount = product.totalAmount || product.dataValues?.totalAmount || 'N/A';
+      const hsn = product.hsn || product.dataValues?.hsn || product.Product?.hsn || 'N/A';
+      const eanUpc = product.ean_upc || product.dataValues?.ean_upc || product.Product?.ean_upc || 'N/A';
+      const weight = product.weight || product.dataValues?.weight || product.Product?.weight || 'N/A';
+      const dimensions = `${product.length || product.dataValues?.length || product.Product?.length || 'N/A'} x ${product.width || product.dataValues?.width || product.Product?.width || 'N/A'} x ${product.height || product.dataValues?.height || product.Product?.height || 'N/A'}`;
+      const mrp = product.mrp || product.dataValues?.mrp || product.Product?.mrp || 'N/A';
+      const cost = product.cost || product.dataValues?.cost || product.Product?.cost || 'N/A';
+      const gst = product.gst || product.dataValues?.gst || product.Product?.gst || 'N/A';
+      const description = product.description || product.dataValues?.description || product.Product?.description || 'N/A';
+      
       productLines += `
         <tr>
-          <td>${product.productName || product.product}</td>
-          <td>${product.sku || product.sku_id}</td>
-          <td>${product.quantity || product.units}</td>
-          <td>₹${product.unitPrice || product.mrp}</td>
-          <td>₹${product.totalAmount || product.amount}</td>
+          <td>${productName}</td>
+          <td>${catalogueId}</td>
+          <td>${quantity}</td>
+          <td>₹${unitPrice}</td>
+          <td>₹${totalAmount}</td>
+          <td>${hsn}</td>
+          <td>${eanUpc}</td>
+          <td>${weight} kg</td>
+          <td>${dimensions}</td>
+          <td>₹${mrp}</td>
+          <td>₹${cost}</td>
+          <td>${gst}%</td>
         </tr>
       `;
     }
@@ -86,9 +108,10 @@ export class EmailService {
           .header { background-color: #f4f4f4; padding: 20px; text-align: center; }
           .content { padding: 20px; }
           .po-details { background-color: #f9f9f9; padding: 15px; margin: 15px 0; border-radius: 5px; }
-          .products-table { width: 100%; border-collapse: collapse; margin: 15px 0; }
-          .products-table th, .products-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-          .products-table th { background-color: #f2f2f2; }
+          .products-table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 12px; }
+          .products-table th, .products-table td { border: 1px solid #ddd; padding: 6px; text-align: left; }
+          .products-table th { background-color: #f2f2f2; font-weight: bold; }
+          .products-table td { word-wrap: break-word; }
           .approval-link { background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 15px 0; }
           .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; }
         </style>
@@ -116,10 +139,17 @@ export class EmailService {
               <thead>
                 <tr>
                   <th>Product Name</th>
-                  <th>SKU</th>
+                  <th>Catalogue ID</th>
                   <th>Quantity</th>
                   <th>Unit Price</th>
                   <th>Total</th>
+                  <th>HSN</th>
+                  <th>EAN/UPC</th>
+                  <th>Weight</th>
+                  <th>Dimensions (L×W×H)</th>
+                  <th>MRP</th>
+                  <th>Cost</th>
+                  <th>GST%</th>
                 </tr>
               </thead>
               <tbody>

@@ -361,8 +361,8 @@ export class DCPOService {
     const success = await EmailService.sendDCApprovalEmail(
       [recipientEmail],
       po.poId,
-      po.Vendor?.businessName || 'N/A',
-      po.DistributionCenter?.name || 'N/A',
+      po.Vendor?.businessName || po.Vendor?.dataValues?.businessName || 'N/A',
+      po.DistributionCenter?.name || po.DistributionCenter?.dataValues?.name || 'N/A',
       po.totalAmount,
       po.priority,
       po.Products ?? [],
