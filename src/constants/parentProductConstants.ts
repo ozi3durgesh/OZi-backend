@@ -1,58 +1,49 @@
-// Parent Product Master DC Constants
+// Parent Product Master Constants
 
 export const PARENT_PRODUCT_STATUS = {
-  ACTIVE: 'active',
-  INACTIVE: 'inactive',
-  DRAFT: 'draft',
-  ARCHIVED: 'archived',
-} as const;
-
-export const PARENT_PRODUCT_FLAMMABLE_OPTIONS = {
-  YES: 'Yes',
-  NO: 'No',
-  UNKNOWN: 'Unknown',
+  INACTIVE: 0,
+  ACTIVE: 1,
 } as const;
 
 export const PARENT_PRODUCT_REQUIRED_FIELDS = [
-  'SKU',
-  'MRP',
-  'COST',
-  'Weight',
-  'Length',
-  'Height',
-  'Width',
+  'name',
+  'status',
+  'category_id',
+  'catalogue_id',
+  'description',
   'hsn',
-  'EAN_UPC',
-  'ProductName',
-  'ImageURL',
-  'Status',
-  'Category',
-  'Brand',
+  'image_url',
+  'mrp',
+  'cost',
+  'ean_upc',
+  'brand_id',
+  'weight',
+  'length',
+  'height',
+  'width',
+  'inventory_threshold',
   'gst',
+  'cess',
+  'dc_id',
 ] as const;
 
 export const PARENT_PRODUCT_NUMERIC_FIELDS = [
-  'MRP',
-  'COST',
-  'Weight',
-  'Length',
-  'Height',
-  'Width',
-  'ReverseWeight',
-  'ReverseLength',
-  'ReverseHeight',
-  'ReverseWidth',
-  'SPThreshold',
-  'InventoryThreshold',
-  'ERPSystemId',
-  'SyncTally',
-  'ShelfLifePercentage',
-  'ProductExpiryInDays',
-  'CESS',
+  'mrp',
+  'cost',
+  'weight',
+  'length',
+  'height',
+  'width',
+  'inventory_threshold',
+  'gst',
+  'cess',
+  'category_id',
+  'brand_id',
+  'dc_id',
 ] as const;
 
 export const PARENT_PRODUCT_VALIDATION_PATTERNS = {
-  SKU: /^\d{12}$/,
+  CATALOGUE_ID: /^\d{7}$/,
   HSN: /^\d{4,8}$/,
   EAN_UPC: /^\d{8,14}$/,
   IMAGE_URL: /^https?:\/\/.+/i,
@@ -62,19 +53,22 @@ export const PARENT_PRODUCT_VALIDATION_PATTERNS = {
 
 export const PARENT_PRODUCT_ERROR_MESSAGES = {
   REQUIRED_FIELD: (field: string) => `${field} is required`,
-  INVALID_SKU_FORMAT: 'SKU must be exactly 12 digits',
+  INVALID_CATALOGUE_ID_FORMAT: 'Catalogue ID must be exactly 7 digits',
   INVALID_HSN_FORMAT: 'HSN must be 4-8 digits',
   INVALID_EAN_FORMAT: 'EAN/UPC must be 8-14 digits',
-  INVALID_IMAGE_URL: 'ImageURL must be a valid HTTP/HTTPS URL',
-  INVALID_IMAGE_EXTENSION: 'ImageURL must have a valid image extension (jpg, jpeg, png, gif, bmp, webp, svg)',
-  INVALID_STATUS: 'Status must be active, inactive, draft, or archived',
+  INVALID_IMAGE_URL: 'Image URL must be a valid HTTP/HTTPS URL',
+  INVALID_IMAGE_EXTENSION: 'Image URL must have a valid image extension (jpg, jpeg, png, gif, bmp, webp, svg)',
+  INVALID_STATUS: 'Status must be 0 (inactive) or 1 (active)',
   INVALID_GST_FORMAT: 'GST must be a valid percentage (e.g., 18 or 18%)',
   INVALID_GST_RANGE: 'GST must be between 0 and 100',
   INVALID_NUMERIC_FIELD: (field: string) => `${field} must be a valid positive number`,
-  INVALID_FLAMMABLE: 'Flammable must be Yes, No, or Unknown',
-  SKU_ALREADY_EXISTS: (sku: string) => `Parent product with SKU ${sku} already exists`,
+  COST_MUST_BE_LESS_THAN_MRP: 'Cost must be less than MRP',
+  CATALOGUE_ID_ALREADY_EXISTS: (catalogueId: string) => `Parent product with catalogue ID ${catalogueId} already exists`,
   PRODUCT_NOT_FOUND: 'Parent product not found',
   VALIDATION_FAILED: 'Validation failed',
+  BRAND_NOT_FOUND: 'Brand not found',
+  CATEGORY_NOT_FOUND: 'Category not found',
+  DC_ACCESS_DENIED: 'Only DC users can create parent products',
 } as const;
 
 export const PARENT_PRODUCT_SUCCESS_MESSAGES = {
@@ -85,7 +79,6 @@ export const PARENT_PRODUCT_SUCCESS_MESSAGES = {
 } as const;
 
 export const PARENT_PRODUCT_DEFAULT_VALUES = {
-  FLAMMABLE: PARENT_PRODUCT_FLAMMABLE_OPTIONS.NO,
   STATUS: PARENT_PRODUCT_STATUS.ACTIVE,
 } as const;
 

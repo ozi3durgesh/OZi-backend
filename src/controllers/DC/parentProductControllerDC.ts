@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import ParentProductMasterDC, { ParentProductMasterDCCreationAttributes } from '../../models/ParentProductMasterDC';
+import Brand from '../../models/Brand';
 import { ResponseHandler } from '../../middleware/responseHandler';
 import { Op } from 'sequelize';
 import {
@@ -9,7 +10,6 @@ import {
   PARENT_PRODUCT_ERROR_MESSAGES,
   PARENT_PRODUCT_SUCCESS_MESSAGES,
   PARENT_PRODUCT_STATUS,
-  PARENT_PRODUCT_FLAMMABLE_OPTIONS,
   PARENT_PRODUCT_PAGINATION,
 } from '../../constants/parentProductConstants';
 
@@ -19,20 +19,31 @@ const cleanUrl = (url: string | undefined) => {
   return url.replace(/`/g, '').trim();
 };
 
+// DC Auth validation helper
+const validateDCAccess = (req: any): boolean => {
+  const user = req.user;
+  if (!user) return false;
+  
+  // Check if user has DC access - either through role or currentDcId
+  return (user.role && user.role.toLowerCase().includes('dc')) || 
+         (user.currentDcId && user.currentDcId > 0) ||
+         (user.role && user.role.toLowerCase() === 'admin'); // Admin users have DC access
+};
+
 // Validation helper function
 const validateParentProduct = (data: any): string[] => {
   const validationErrors: string[] = [];
 
   // Required fields validation
   for (const field of PARENT_PRODUCT_REQUIRED_FIELDS) {
-    if (!data[field] || data[field].toString().trim() === '') {
+    if (data[field] === undefined || data[field] === null || data[field] === '') {
       validationErrors.push(PARENT_PRODUCT_ERROR_MESSAGES.REQUIRED_FIELD(field));
     }
   }
 
-  // SKU format validation (exactly 12 digits)
-  if (data.SKU && !PARENT_PRODUCT_VALIDATION_PATTERNS.SKU.test(data.SKU.toString())) {
-    validationErrors.push(PARENT_PRODUCT_ERROR_MESSAGES.INVALID_SKU_FORMAT);
+  // Catalogue ID format validation (exactly 7 digits)
+  if (data.catalogue_id && !PARENT_PRODUCT_VALIDATION_PATTERNS.CATALOGUE_ID.test(data.catalogue_id.toString())) {
+    validationErrors.push(PARENT_PRODUCT_ERROR_MESSAGES.INVALID_CATALOGUE_ID_FORMAT);
   }
 
   // HSN format validation (4-8 digits)
@@ -41,23 +52,24 @@ const validateParentProduct = (data: any): string[] => {
   }
 
   // EAN/UPC format validation (8-14 digits)
-  if (data.EAN_UPC && !PARENT_PRODUCT_VALIDATION_PATTERNS.EAN_UPC.test(data.EAN_UPC.toString())) {
+  if (data.ean_upc && !PARENT_PRODUCT_VALIDATION_PATTERNS.EAN_UPC.test(data.ean_upc.toString())) {
     validationErrors.push(PARENT_PRODUCT_ERROR_MESSAGES.INVALID_EAN_FORMAT);
   }
 
-  // ImageURL format validation
-  if (data.ImageURL) {
-    if (!PARENT_PRODUCT_VALIDATION_PATTERNS.IMAGE_URL.test(data.ImageURL)) {
+  // Image URL format validation
+  if (data.image_url) {
+    if (!PARENT_PRODUCT_VALIDATION_PATTERNS.IMAGE_URL.test(data.image_url)) {
       validationErrors.push(PARENT_PRODUCT_ERROR_MESSAGES.INVALID_IMAGE_URL);
-    } else if (!PARENT_PRODUCT_VALIDATION_PATTERNS.IMAGE_EXTENSION.test(data.ImageURL)) {
+    } else if (!PARENT_PRODUCT_VALIDATION_PATTERNS.IMAGE_EXTENSION.test(data.image_url)) {
       validationErrors.push(PARENT_PRODUCT_ERROR_MESSAGES.INVALID_IMAGE_EXTENSION);
     }
   }
 
-  // Status validation
-  const validStatuses = Object.values(PARENT_PRODUCT_STATUS);
-  if (data.Status && !validStatuses.includes(data.Status)) {
-    validationErrors.push(PARENT_PRODUCT_ERROR_MESSAGES.INVALID_STATUS);
+  // Status validation (0 or 1)
+  if (data.status !== undefined && data.status !== null) {
+    if (![0, 1].includes(Number(data.status))) {
+      validationErrors.push(PARENT_PRODUCT_ERROR_MESSAGES.INVALID_STATUS);
+    }
   }
 
   // GST format validation
@@ -82,10 +94,11 @@ const validateParentProduct = (data: any): string[] => {
     }
   }
 
-  // Flammable validation
-  const validFlammableOptions = Object.values(PARENT_PRODUCT_FLAMMABLE_OPTIONS);
-  if (data.Flammable && !validFlammableOptions.includes(data.Flammable)) {
-    validationErrors.push(PARENT_PRODUCT_ERROR_MESSAGES.INVALID_FLAMMABLE);
+  // Cost must be less than MRP validation
+  if (data.cost && data.mrp) {
+    if (Number(data.cost) >= Number(data.mrp)) {
+      validationErrors.push(PARENT_PRODUCT_ERROR_MESSAGES.COST_MUST_BE_LESS_THAN_MRP);
+    }
   }
 
   return validationErrors;
@@ -94,7 +107,12 @@ const validateParentProduct = (data: any): string[] => {
 // Create parent product
 export const createParentProduct = async (req: Request, res: Response) => {
   try {
-    const { SKU, ImageURL, ...rest } = req.body;
+    // Check DC access
+    if (!validateDCAccess(req)) {
+      return ResponseHandler.error(res, PARENT_PRODUCT_ERROR_MESSAGES.DC_ACCESS_DENIED, 403);
+    }
+
+    const { image_url, ...rest } = req.body;
 
     // Validation errors array
     const validationErrors = validateParentProduct(req.body);
@@ -108,26 +126,31 @@ export const createParentProduct = async (req: Request, res: Response) => {
       );
     }
 
-    // Check if parent product with same SKU already exists
-    const existingProduct = await ParentProductMasterDC.findOne({ where: { SKU } });
+    // Check if brand exists
+    const brand = await Brand.findByPk(req.body.brand_id);
+    if (!brand) {
+      return ResponseHandler.error(res, PARENT_PRODUCT_ERROR_MESSAGES.BRAND_NOT_FOUND, 400);
+    }
+
+    // Check if parent product with same catalogue_id already exists
+    const existingProduct = await ParentProductMasterDC.findOne({ where: { catalogue_id: req.body.catalogue_id } });
     if (existingProduct) {
       return ResponseHandler.error(
         res,
-        PARENT_PRODUCT_ERROR_MESSAGES.SKU_ALREADY_EXISTS(SKU),
+        PARENT_PRODUCT_ERROR_MESSAGES.CATALOGUE_ID_ALREADY_EXISTS(req.body.catalogue_id),
         400
       );
     }
 
-    // Clean and use ImageURL directly from request
-    const imageUrl = cleanUrl(ImageURL);
+    // Clean and use image_url directly from request
+    const imageUrl = cleanUrl(image_url);
 
     // Create parent product
     const parentProduct = await ParentProductMasterDC.create({
-      SKU,
-      ImageURL: imageUrl,
-      CreatedDate: new Date().toISOString(),
-      LastUpdatedDate: new Date().toISOString(),
       ...rest,
+      image_url: imageUrl,
+      createdBy: req.user.id,
+      updatedBy: req.user.id,
     } as ParentProductMasterDCCreationAttributes);
 
     return ResponseHandler.success(res, parentProduct, 201);
@@ -138,25 +161,66 @@ export const createParentProduct = async (req: Request, res: Response) => {
 
 // Update parent product
 export const updateParentProduct = async (req: Request, res: Response) => {
-  const { id } = req.params;
-  const { SKU, ImageURL, ...rest } = req.body;
-
   try {
+    // Check DC access
+    if (!validateDCAccess(req)) {
+      return ResponseHandler.error(res, PARENT_PRODUCT_ERROR_MESSAGES.DC_ACCESS_DENIED, 403);
+    }
+
+    const { id } = req.params;
+    const { image_url, ...rest } = req.body;
+
     const parentProduct = await ParentProductMasterDC.findByPk(id);
     if (!parentProduct) {
       return ResponseHandler.error(res, PARENT_PRODUCT_ERROR_MESSAGES.PRODUCT_NOT_FOUND, 404);
     }
 
-    let updatedImageURL = parentProduct.ImageURL;
-    if (ImageURL) {
-      updatedImageURL = cleanUrl(ImageURL);
+    // Validation errors array
+    const validationErrors = validateParentProduct(req.body);
+
+    // Return validation errors if any
+    if (validationErrors.length > 0) {
+      return ResponseHandler.error(
+        res,
+        `${PARENT_PRODUCT_ERROR_MESSAGES.VALIDATION_FAILED}: ${validationErrors.join(', ')}`,
+        400
+      );
+    }
+
+    // Check if brand exists (if brand_id is being updated)
+    if (req.body.brand_id) {
+      const brand = await Brand.findByPk(req.body.brand_id);
+      if (!brand) {
+        return ResponseHandler.error(res, PARENT_PRODUCT_ERROR_MESSAGES.BRAND_NOT_FOUND, 400);
+      }
+    }
+
+    // Check if catalogue_id already exists (if catalogue_id is being updated)
+    if (req.body.catalogue_id && req.body.catalogue_id !== parentProduct.catalogue_id) {
+      const existingProduct = await ParentProductMasterDC.findOne({ 
+        where: { 
+          catalogue_id: req.body.catalogue_id,
+          id: { [Op.ne]: id }
+        } 
+      });
+      if (existingProduct) {
+        return ResponseHandler.error(
+          res,
+          PARENT_PRODUCT_ERROR_MESSAGES.CATALOGUE_ID_ALREADY_EXISTS(req.body.catalogue_id),
+          400
+        );
+      }
+    }
+
+    let updatedImageUrl = parentProduct.image_url;
+    if (image_url) {
+      updatedImageUrl = cleanUrl(image_url) || parentProduct.image_url;
     }
 
     await parentProduct.update({
-      SKU,
-      ImageURL: updatedImageURL,
-      LastUpdatedDate: new Date().toISOString(),
       ...rest,
+      image_url: updatedImageUrl,
+      updatedBy: req.user.id,
     });
 
     return ResponseHandler.success(res, parentProduct);
@@ -165,17 +229,24 @@ export const updateParentProduct = async (req: Request, res: Response) => {
   }
 };
 
-// Get parent product by SKU
-export const getParentProductBySKU = async (req: Request, res: Response) => {
-  const { sku } = req.params;
+// Get parent product by catalogue ID
+export const getParentProductByCatalogueId = async (req: Request, res: Response) => {
+  const { catalogueId } = req.params;
   const { page = PARENT_PRODUCT_PAGINATION.DEFAULT_PAGE, limit = PARENT_PRODUCT_PAGINATION.DEFAULT_LIMIT } = req.query;
   const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
 
   try {
     const { count, rows } = await ParentProductMasterDC.findAndCountAll({
-      where: { SKU: sku },
+      where: { catalogue_id: catalogueId },
       limit: parseInt(limit.toString()),
       offset,
+      include: [
+        {
+          model: Brand,
+          as: 'Brand',
+          attributes: ['id', 'name', 'logo_url']
+        }
+      ]
     });
 
     if (count === 0) {
@@ -199,18 +270,19 @@ export const getParentProductBySKU = async (req: Request, res: Response) => {
 // Get parent products (pagination + filters)
 export const getParentProducts = async (req: Request, res: Response) => {
   try {
-    const { page = PARENT_PRODUCT_PAGINATION.DEFAULT_PAGE, limit = PARENT_PRODUCT_PAGINATION.DEFAULT_LIMIT, Status, search } = req.query;
+    const { page = PARENT_PRODUCT_PAGINATION.DEFAULT_PAGE, limit = PARENT_PRODUCT_PAGINATION.DEFAULT_LIMIT, status, search } = req.query;
     const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
 
     const whereClause: any = {};
-    if (Status) {
-      whereClause.Status = Status;
+    if (status !== undefined) {
+      whereClause.status = status;
     }
     if (search) {
       whereClause[Op.or] = [
-        { SKU: { [Op.like]: `%${search}%` } },
-        { ProductName: { [Op.like]: `%${search}%` } },
-        { ModelNum: { [Op.like]: `%${search}%` } },
+        { catalogue_id: { [Op.like]: `%${search}%` } },
+        { name: { [Op.like]: `%${search}%` } },
+        { hsn: { [Op.like]: `%${search}%` } },
+        { ean_upc: { [Op.like]: `%${search}%` } },
       ];
     }
 
@@ -219,6 +291,13 @@ export const getParentProducts = async (req: Request, res: Response) => {
       limit: parseInt(limit.toString()),
       offset,
       order: [['id', 'DESC']],
+      include: [
+        {
+          model: Brand,
+          as: 'Brand',
+          attributes: ['id', 'name', 'logo_url']
+        }
+      ]
     });
 
     return ResponseHandler.success(res, {
@@ -245,7 +324,15 @@ export const getParentProductById = async (req: Request, res: Response) => {
       return ResponseHandler.error(res, 'Parent product ID is required', 400);
     }
 
-    const parentProduct = await ParentProductMasterDC.findByPk(id);
+    const parentProduct = await ParentProductMasterDC.findByPk(id, {
+      include: [
+        {
+          model: Brand,
+          as: 'Brand',
+          attributes: ['id', 'name', 'logo_url']
+        }
+      ]
+    });
 
     if (!parentProduct) {
       return ResponseHandler.error(res, PARENT_PRODUCT_ERROR_MESSAGES.PRODUCT_NOT_FOUND, 404);
@@ -264,6 +351,11 @@ export const getParentProductById = async (req: Request, res: Response) => {
 // Delete parent product
 export const deleteParentProduct = async (req: Request, res: Response) => {
   try {
+    // Check DC access
+    if (!validateDCAccess(req)) {
+      return ResponseHandler.error(res, PARENT_PRODUCT_ERROR_MESSAGES.DC_ACCESS_DENIED, 403);
+    }
+
     const { id } = req.params;
 
     if (!id) {
@@ -284,6 +376,117 @@ export const deleteParentProduct = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Delete parent product error:', error);
     return ResponseHandler.error(res, error.message || 'Internal server error', 500);
+  }
+};
+
+// Bulk upload parent products via Excel
+export const bulkUploadParentProducts = async (req: Request, res: Response) => {
+  try {
+    // Check DC access
+    if (!validateDCAccess(req)) {
+      return ResponseHandler.error(res, PARENT_PRODUCT_ERROR_MESSAGES.DC_ACCESS_DENIED, 403);
+    }
+
+    if (!req.file) {
+      return ResponseHandler.error(res, 'Excel file is required', 400);
+    }
+
+    const multer = require('multer');
+    const xlsx = require('xlsx');
+    const path = require('path');
+
+    // Read Excel file
+    const workbook = xlsx.readFile(req.file.path);
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const data = xlsx.utils.sheet_to_json(worksheet);
+
+    if (data.length === 0) {
+      return ResponseHandler.error(res, 'Excel file is empty', 400);
+    }
+
+    const results = {
+      success: 0,
+      failed: 0,
+      errors: [] as any[]
+    };
+
+    // Process each row
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      const rowNumber = i + 2; // +2 because Excel starts from row 1 and we skip header
+
+      try {
+        // Validate required fields
+        const validationErrors = validateParentProduct(row);
+        if (validationErrors.length > 0) {
+          results.failed++;
+          results.errors.push({
+            row: rowNumber,
+            errors: validationErrors,
+            data: row
+          });
+          continue;
+        }
+
+        // Check if brand exists
+        const brand = await Brand.findByPk(row.brand_id);
+        if (!brand) {
+          results.failed++;
+          results.errors.push({
+            row: rowNumber,
+            errors: [PARENT_PRODUCT_ERROR_MESSAGES.BRAND_NOT_FOUND],
+            data: row
+          });
+          continue;
+        }
+
+        // Check if catalogue_id already exists
+        const existingProduct = await ParentProductMasterDC.findOne({ 
+          where: { catalogue_id: row.catalogue_id } 
+        });
+        if (existingProduct) {
+          results.failed++;
+          results.errors.push({
+            row: rowNumber,
+            errors: [PARENT_PRODUCT_ERROR_MESSAGES.CATALOGUE_ID_ALREADY_EXISTS(row.catalogue_id)],
+            data: row
+          });
+          continue;
+        }
+
+        // Create parent product
+        await ParentProductMasterDC.create({
+          ...row,
+          image_url: cleanUrl(row.image_url),
+          createdBy: req.user.id,
+          updatedBy: req.user.id,
+        } as ParentProductMasterDCCreationAttributes);
+
+        results.success++;
+
+      } catch (error: any) {
+        results.failed++;
+        results.errors.push({
+          row: rowNumber,
+          errors: [error.message],
+          data: row
+        });
+      }
+    }
+
+    // Clean up uploaded file
+    const fs = require('fs');
+    fs.unlinkSync(req.file.path);
+
+    return ResponseHandler.success(res, {
+      message: `Bulk upload completed. Success: ${results.success}, Failed: ${results.failed}`,
+      results
+    });
+
+  } catch (error: any) {
+    console.error('Bulk upload error:', error);
+    return ResponseHandler.error(res, error.message || 'Error during bulk upload', 500);
   }
 };
 

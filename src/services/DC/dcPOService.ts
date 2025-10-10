@@ -114,13 +114,13 @@ export class DCPOService {
 
       return {
         productId: productData.productId,
-        sku: product!.SKU,
-        productName: product!.ProductName || 'Unknown Product',
+        sku: product!.catalogue_id,
+        productName: product!.name || 'Unknown Product',
         quantity: productData.quantity,
         unitPrice: productData.unitPrice,
         totalAmount: productTotal,
-        mrp: product!.MRP,
-        cost: product!.COST,
+        mrp: product!.mrp,
+        cost: product!.cost,
         description: productData.description,
         notes: productData.notes,
       };

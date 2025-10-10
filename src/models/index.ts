@@ -41,6 +41,7 @@ import FulfillmentCenter from './FulfillmentCenter';
 import UserFulfillmentCenter from './UserFulfillmentCenter';
 import VendorDC from './VendorDC';
 import ParentProductMasterDC from './ParentProductMasterDC';
+import Brand from './Brand';
 import DCPurchaseOrder from './DCPurchaseOrder';
 import DCPOProduct from './DCPOProduct';
 import DCPOApproval from './DCPOApproval';
@@ -346,14 +347,39 @@ ParentProductMasterDC.belongsTo(DistributionCenter, {
   as: 'DistributionCenter',
 });
 
-ParentProductMasterDC.belongsTo(FulfillmentCenter, {
-  foreignKey: 'fc_id',
-  as: 'FulfillmentCenter',
+ParentProductMasterDC.belongsTo(Brand, {
+  foreignKey: 'brand_id',
+  as: 'Brand',
+});
+
+ParentProductMasterDC.belongsTo(User, {
+  foreignKey: 'createdBy',
+  as: 'CreatedBy',
+});
+
+ParentProductMasterDC.belongsTo(User, {
+  foreignKey: 'updatedBy',
+  as: 'UpdatedBy',
 });
 
 DistributionCenter.hasMany(ParentProductMasterDC, {
   foreignKey: 'dc_id',
   as: 'ParentProducts',
+});
+
+Brand.hasMany(ParentProductMasterDC, {
+  foreignKey: 'brand_id',
+  as: 'ParentProducts',
+});
+
+User.hasMany(ParentProductMasterDC, {
+  foreignKey: 'createdBy',
+  as: 'CreatedParentProducts',
+});
+
+User.hasMany(ParentProductMasterDC, {
+  foreignKey: 'updatedBy',
+  as: 'UpdatedParentProducts',
 });
 
 // DCPurchaseOrder associations
@@ -516,6 +542,7 @@ export {
   UserFulfillmentCenter,
   VendorDC,
   ParentProductMasterDC,
+  Brand,
   DCPurchaseOrder,
   DCPOProduct,
   DCPOApproval,
