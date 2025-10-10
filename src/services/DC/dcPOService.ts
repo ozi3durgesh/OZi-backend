@@ -117,7 +117,7 @@ export class DCPOService {
 
       return {
         productId: product.id, // Use the actual database ID
-        sku: product.catalogue_id,
+        sku: product.catalogue_id, // Store catalogue_id in sku field
         productName: product.name || 'Unknown Product',
         quantity: productData.quantity,
         unitPrice: productData.unitPrice,
@@ -762,5 +762,120 @@ export class DCPOService {
       products: productsWithCalculations,
       summary: productSummary,
     };
+  }
+
+  /**
+   * Creator upload PI and set delivery date
+   */
+  static async uploadPIAndSetDeliveryDate(poId: number, data: {
+    expectedDeliveryDate: Date;
+    piNotes?: string;
+    piFileUrl?: string;
+    updatedBy: number;
+  }) {
+    const po = await DCPurchaseOrder.findByPk(poId);
+
+    if (!po) {
+      const error: any = new Error(DC_PO_CONSTANTS.ERRORS.PO_NOT_FOUND);
+      error.statusCode = 404;
+      throw error;
+    }
+
+    // Only allow if status is PENDING_CREATOR_REVIEW
+    if (po.status !== DC_PO_CONSTANTS.STATUS.PENDING_CREATOR_REVIEW) {
+      const error: any = new Error('Purchase Order is not in the correct status for PI upload');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // Update PO with PI details and delivery date
+    await po.update({
+      status: DC_PO_CONSTANTS.STATUS.APPROVED,
+      final_delivery_date: data.expectedDeliveryDate,
+      pi_notes: data.piNotes,
+      pi_file_url: data.piFileUrl,
+      updatedBy: data.updatedBy,
+      approvedAt: new Date(),
+    });
+
+    // Send final notification email to all stakeholders
+    await this.sendFinalNotificationEmail(poId);
+
+    // Return updated PO with associations
+    return await this.getDCPOById(poId);
+  }
+
+  /**
+   * Send final notification email to all stakeholders
+   */
+  static async sendFinalNotificationEmail(poId: number) {
+    try {
+      // Get the complete PO with all associations
+      const po = await DCPurchaseOrder.findByPk(poId, {
+        include: [
+          {
+            model: VendorDC,
+            as: 'Vendor',
+            attributes: ['id', 'businessName', 'pocName', 'pocEmail', 'businessAddress']
+          },
+          {
+            model: DistributionCenter,
+            as: 'DistributionCenter',
+            attributes: ['id', 'name', 'city', 'state', 'address']
+          },
+          {
+            model: User,
+            as: 'CreatedBy',
+            attributes: ['id', 'name', 'email']
+          },
+          {
+            model: DCPOProduct,
+            as: 'Products',
+            include: [
+              {
+                model: ParentProductMasterDC,
+                as: 'Product',
+                attributes: ['id', 'catalogue_id', 'name', 'mrp', 'cost', 'hsn', 'brand_id']
+              }
+            ]
+          }
+        ]
+      });
+
+      if (!po) {
+        console.error('PO not found for final notification email');
+        return;
+      }
+
+      // Get all stakeholder emails
+      const stakeholderEmails = [
+        DC_PO_CONSTANTS.EMAIL.APPROVAL_EMAILS.admin,
+        DC_PO_CONSTANTS.EMAIL.APPROVAL_EMAILS.category_head,
+        DC_PO_CONSTANTS.EMAIL.APPROVAL_EMAILS.creator
+      ];
+
+      // Send final notification email
+      const success = await EmailService.sendDCFinalNotificationEmail(
+        stakeholderEmails,
+        po.poId,
+        (po as any).Vendor?.businessName || 'N/A',
+        (po as any).DistributionCenter?.name || 'N/A',
+        po.totalAmount,
+        po.priority,
+        po.final_delivery_date,
+        po.pi_notes,
+        po.pi_file_url,
+        (po as any).Products ?? []
+      );
+
+      if (success) {
+        console.log(`Final notification email sent to all stakeholders for PO: ${po.poId}`);
+      } else {
+        console.error(`Failed to send final notification email for PO: ${po.poId}`);
+      }
+
+    } catch (error) {
+      console.error('Error sending final notification email:', error);
+    }
   }
 }

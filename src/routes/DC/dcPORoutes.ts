@@ -1,8 +1,25 @@
 import { Router } from 'express';
 import { authenticate, isAdmin } from '../../middleware/auth';
 import { DCPOController } from '../../controllers/DC/dcPOController';
+import multer from 'multer';
 
 const router = Router();
+
+// Configure multer for file uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    // Accept PDF files
+    if (file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed') as any, false);
+    }
+  }
+});
 
 // All routes require authentication
 router.use(authenticate);
@@ -29,6 +46,9 @@ router.put('/purchase-orders/:id', isAdmin, DCPOController.updateDCPO);
 
 // Submit DC Purchase Order for approval (Admin only)
 router.post('/purchase-orders/:id/submit', isAdmin, DCPOController.submitForApproval);
+
+// Creator upload PI and set delivery date (Authenticated users)
+router.post('/purchase-orders/:id/upload-pi', upload.single('piFile'), DCPOController.uploadPIAndSetDeliveryDate);
 
 // Delete DC Purchase Order (Admin only, only if status is DRAFT)
 router.delete('/purchase-orders/:id', isAdmin, DCPOController.deleteDCPO);

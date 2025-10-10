@@ -357,4 +357,55 @@ export class DCPOController {
       return ResponseHandler.error(res, error.message || 'Failed to fetch product details', error.statusCode || 500);
     }
   }
+
+  /**
+   * Creator upload PI and set delivery date
+   */
+  static async uploadPIAndSetDeliveryDate(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { id } = req.params;
+      const { expectedDeliveryDate, piNotes } = req.body;
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return ResponseHandler.error(res, 'User authentication required', 401);
+      }
+
+      if (!id) {
+        return ResponseHandler.error(res, 'Purchase Order ID is required', 400);
+      }
+
+      if (!expectedDeliveryDate) {
+        return ResponseHandler.error(res, 'Expected delivery date is required', 400);
+      }
+
+      // Handle file upload if present
+      let piFileUrl: string | undefined = undefined;
+      if (req.file) {
+        // Upload file to S3
+        const { S3Service } = await import('../../services/s3Service.js');
+        piFileUrl = await S3Service.uploadFile(
+          req.file.buffer,
+          `dc-po-pi/${id}/${Date.now()}-${req.file.originalname}`,
+          'dc-po-documents'
+        );
+      }
+
+      const po = await DCPOService.uploadPIAndSetDeliveryDate(parseInt(id), {
+        expectedDeliveryDate: new Date(expectedDeliveryDate),
+        piNotes,
+        piFileUrl,
+        updatedBy: userId,
+      });
+
+      return ResponseHandler.success(res, {
+        message: 'PI uploaded and delivery date set successfully',
+        data: po,
+      });
+
+    } catch (error: any) {
+      console.error('Upload PI and set delivery date error:', error);
+      return ResponseHandler.error(res, error.message || 'Failed to upload PI and set delivery date', error.statusCode || 500);
+    }
+  }
 }

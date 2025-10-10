@@ -25,6 +25,9 @@ class DCPurchaseOrder extends Model<
   declare approvedAt: Date | null;
   declare rejectedAt: Date | null;
   declare rejectionReason: string | null;
+  declare final_delivery_date: Date | null;
+  declare pi_notes: string | null;
+  declare pi_file_url: string | null;
   declare createdBy: number;
   declare updatedBy: number | null;
   declare createdAt: CreationOptional<Date>;
@@ -115,6 +118,18 @@ DCPurchaseOrder.init(
       allowNull: true,
     },
     rejectionReason: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    final_delivery_date: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    pi_notes: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    pi_file_url: {
       type: DataTypes.TEXT,
       allowNull: true,
     },
