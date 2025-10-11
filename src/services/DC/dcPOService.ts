@@ -117,7 +117,7 @@ export class DCPOService {
 
       return {
         productId: product.id, // Use the actual database ID
-        sku: product.catalogue_id, // Store catalogue_id in sku field
+        catalogue_id: product.catalogue_id, // Store catalogue_id in catalogue_id field
         productName: product.name || 'Unknown Product',
         quantity: productData.quantity,
         unitPrice: productData.unitPrice,
@@ -165,7 +165,7 @@ export class DCPOService {
         DCPOProduct.create({
           dcPOId: newPO.id,
           productId: productData.productId,
-          sku: productData.sku,
+          catalogue_id: productData.catalogue_id,
           productName: productData.productName,
           quantity: productData.quantity,
           unitPrice: productData.unitPrice,

@@ -14,7 +14,7 @@ class DCPOProduct extends Model<
   declare id: CreationOptional<number>;
   declare dcPOId: number;
   declare productId: number;
-  declare sku: string;
+  declare catalogue_id: string;
   declare productName: string;
   declare quantity: number;
   declare unitPrice: number;
@@ -63,7 +63,7 @@ DCPOProduct.init(
         key: 'id',
       },
     },
-    sku: {
+    catalogue_id: {
       type: DataTypes.STRING(50),
       allowNull: false,
     },

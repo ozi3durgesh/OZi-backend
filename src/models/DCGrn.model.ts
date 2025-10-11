@@ -78,7 +78,7 @@ DCGrn.init(
       type: DataTypes.INTEGER,
       allowNull: true,
       references: {
-        model: 'distribution_centers',
+        model: 'DistributionCenters',
         key: 'id'
       },
       onUpdate: 'CASCADE',

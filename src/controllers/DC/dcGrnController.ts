@@ -58,7 +58,7 @@ export class DCGrnController {
       // Format products for GRN creation
       const productsForGRN = (dcPO as any).Products?.map((product: any) => ({
         product_id: product.id,
-        sku_id: product.sku,
+        sku_id: product.catalogue_id,
         product_name: product.productName,
         ordered_qty: product.quantity,
         unit_price: product.unitPrice,
