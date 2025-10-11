@@ -96,7 +96,13 @@ export class DCPOService {
     // Validate products exist by catalogue_id
     const catalogueIds = data.products.map(p => p.productId.toString());
     const products = await ParentProductMasterDC.findAll({
-      where: { catalogue_id: { [Op.in]: catalogueIds } }
+      where: { catalogue_id: { [Op.in]: catalogueIds } },
+      attributes: [
+        'id', 'name', 'status', 'category_id', 'catalogue_id', 'description', 
+        'hsn', 'image_url', 'mrp', 'ean_upc', 'brand_id', 'weight', 'length', 
+        'height', 'width', 'inventory_threshold', 'gst', 'cess', 'createdBy', 
+        'updatedBy', 'createdAt', 'updatedAt'
+      ]
     });
 
     if (products.length !== catalogueIds.length) {
@@ -123,7 +129,7 @@ export class DCPOService {
         unitPrice: productData.unitPrice,
         totalAmount: productTotal,
         mrp: product.mrp,
-        cost: product.cost,
+        cost: productData.unitPrice, // Use unitPrice as cost since cost column is removed
         description: productData.description || product.description,
         notes: productData.notes,
         // Additional product details from parent_product_master
@@ -171,7 +177,7 @@ export class DCPOService {
           unitPrice: productData.unitPrice,
           totalAmount: productData.totalAmount,
           mrp: productData.mrp,
-          cost: productData.cost,
+          cost: productData.unitPrice, // Use unitPrice as cost since cost column is removed
           description: productData.description,
           notes: productData.notes,
           hsn: productData.hsn,
@@ -219,7 +225,7 @@ export class DCPOService {
             {
               model: ParentProductMasterDC,
               as: 'Product',
-              attributes: ['id', 'catalogue_id', 'name', 'mrp', 'cost'],
+              attributes: ['id', 'catalogue_id', 'name', 'mrp'],
             },
           ],
         },
@@ -528,7 +534,7 @@ export class DCPOService {
         {
           model: DCPOProduct,
           as: 'Products',
-          attributes: ['id', 'sku', 'productName', 'quantity', 'unitPrice', 'totalAmount'],
+          attributes: ['id', 'catalogue_id', 'productName', 'quantity', 'unitPrice', 'totalAmount'],
         },
       ],
       limit,
@@ -590,7 +596,7 @@ export class DCPOService {
             {
               model: ParentProductMasterDC,
               as: 'Product',
-              attributes: ['id', 'catalogue_id', 'name', 'mrp', 'cost', 'hsn', 'brand_id'],
+              attributes: ['id', 'catalogue_id', 'name', 'mrp', 'hsn', 'brand_id'],
             },
           ],
         },
@@ -689,7 +695,7 @@ export class DCPOService {
               as: 'Product',
               attributes: [
                 'id', 'catalogue_id', 'name', 'description', 'category_id', 'brand_id', 
-                'mrp', 'cost', 'hsn', 'ean_upc', 'weight', 'length', 'height', 'width', 
+                'mrp', 'hsn', 'ean_upc', 'weight', 'length', 'height', 'width', 
                 'inventory_threshold', 'gst', 'cess', 'image_url', 'status',
                 'createdAt', 'updatedAt'
               ],
@@ -734,9 +740,9 @@ export class DCPOService {
         ...product.Product?.toJSON(),
         // Add calculated fields
         totalOrderedValue: product.quantity * product.unitPrice,
-        marginAmount: product.unitPrice - (product.Product?.cost || 0),
-        marginPercentage: product.Product?.cost ? 
-          ((product.unitPrice - product.Product.cost) / product.Product.cost * 100) : 0,
+        marginAmount: product.unitPrice - (product.cost || 0), // Use product.cost from DCPOProduct
+        marginPercentage: product.cost ? 
+          ((product.unitPrice - product.cost) / product.cost * 100) : 0,
         savingsFromMRP: (product.Product?.mrp || 0) - product.unitPrice,
         savingsPercentage: product.Product?.mrp ? 
           ((product.Product.mrp - product.unitPrice) / product.Product.mrp * 100) : 0,
@@ -835,7 +841,7 @@ export class DCPOService {
               {
                 model: ParentProductMasterDC,
                 as: 'Product',
-                attributes: ['id', 'catalogue_id', 'name', 'mrp', 'cost', 'hsn', 'brand_id']
+                attributes: ['id', 'catalogue_id', 'name', 'mrp', 'hsn', 'brand_id']
               }
             ]
           }

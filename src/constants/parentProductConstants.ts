@@ -24,12 +24,10 @@ export const PARENT_PRODUCT_REQUIRED_FIELDS = [
   'inventory_threshold',
   'gst',
   'cess',
-  'dc_id',
 ] as const;
 
 export const PARENT_PRODUCT_NUMERIC_FIELDS = [
   'mrp',
-  'cost',
   'weight',
   'length',
   'height',
@@ -39,7 +37,6 @@ export const PARENT_PRODUCT_NUMERIC_FIELDS = [
   'cess',
   'category_id',
   'brand_id',
-  'dc_id',
 ] as const;
 
 export const PARENT_PRODUCT_VALIDATION_PATTERNS = {

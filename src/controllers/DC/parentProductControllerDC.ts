@@ -94,12 +94,7 @@ const validateParentProduct = (data: any): string[] => {
     }
   }
 
-  // Cost must be less than MRP validation
-  if (data.cost && data.mrp) {
-    if (Number(data.cost) >= Number(data.mrp)) {
-      validationErrors.push(PARENT_PRODUCT_ERROR_MESSAGES.COST_MUST_BE_LESS_THAN_MRP);
-    }
-  }
+  // Cost validation removed since cost column is removed from parent_product_master
 
   return validationErrors;
 };
@@ -150,7 +145,7 @@ export const createParentProduct = async (req: Request, res: Response) => {
       ...rest,
       image_url: imageUrl,
       createdBy: req.user.id,
-      updatedBy: req.user.id,
+      updatedBy: [req.user.id], // Initialize as array
     } as ParentProductMasterDCCreationAttributes);
 
     return ResponseHandler.success(res, parentProduct, 201);

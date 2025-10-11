@@ -342,10 +342,7 @@ User.hasMany(VendorDC, {
 });
 
 // ParentProductMasterDC associations
-ParentProductMasterDC.belongsTo(DistributionCenter, {
-  foreignKey: 'dc_id',
-  as: 'DistributionCenter',
-});
+// dc_id association removed since dc_id column was removed
 
 ParentProductMasterDC.belongsTo(Brand, {
   foreignKey: 'brand_id',
@@ -362,10 +359,10 @@ ParentProductMasterDC.belongsTo(User, {
   as: 'UpdatedBy',
 });
 
-DistributionCenter.hasMany(ParentProductMasterDC, {
-  foreignKey: 'dc_id',
-  as: 'ParentProducts',
-});
+// DistributionCenter.hasMany(ParentProductMasterDC, {
+//   foreignKey: 'dc_id',
+//   as: 'ParentProducts',
+// }); // Removed since dc_id column was removed from ParentProductMasterDC
 
 Brand.hasMany(ParentProductMasterDC, {
   foreignKey: 'brand_id',

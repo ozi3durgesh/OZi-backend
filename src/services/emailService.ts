@@ -67,7 +67,7 @@ export class EmailService {
     for (const product of products) {
       // Handle both direct product objects and Sequelize model instances
       const productName = product.productName || product.dataValues?.productName || 'N/A';
-      const catalogueId = product.sku || product.dataValues?.sku || product.Product?.catalogue_id || 'N/A';
+      const catalogueId = product.catalogue_id || product.dataValues?.catalogue_id || product.Product?.catalogue_id || 'N/A';
       const quantity = product.quantity || product.dataValues?.quantity || 'N/A';
       const unitPrice = product.unitPrice || product.dataValues?.unitPrice || 'N/A';
       const totalAmount = product.totalAmount || product.dataValues?.totalAmount || 'N/A';
@@ -76,7 +76,7 @@ export class EmailService {
       const weight = product.weight || product.dataValues?.weight || product.Product?.weight || 'N/A';
       const dimensions = `${product.length || product.dataValues?.length || product.Product?.length || 'N/A'} x ${product.width || product.dataValues?.width || product.Product?.width || 'N/A'} x ${product.height || product.dataValues?.height || product.Product?.height || 'N/A'}`;
       const mrp = product.mrp || product.dataValues?.mrp || product.Product?.mrp || 'N/A';
-      const cost = product.cost || product.dataValues?.cost || product.Product?.cost || 'N/A';
+      const cost = product.unitPrice || product.dataValues?.unitPrice || product.Product?.unitPrice || 'N/A'; // Use unitPrice as cost
       const gst = product.gst || product.dataValues?.gst || product.Product?.gst || 'N/A';
       const description = product.description || product.dataValues?.description || product.Product?.description || 'N/A';
       
@@ -205,7 +205,7 @@ export class EmailService {
     for (const product of products) {
       // Handle both direct product objects and Sequelize model instances
       const productName = product.productName || product.dataValues?.productName || 'N/A';
-      const catalogueId = product.sku || product.dataValues?.sku || product.Product?.catalogue_id || 'N/A';
+      const catalogueId = product.catalogue_id || product.dataValues?.catalogue_id || product.Product?.catalogue_id || 'N/A';
       const quantity = product.quantity || product.dataValues?.quantity || 'N/A';
       const unitPrice = product.unitPrice || product.dataValues?.unitPrice || 'N/A';
       const totalAmount = product.totalAmount || product.dataValues?.totalAmount || 'N/A';
@@ -214,7 +214,7 @@ export class EmailService {
       const weight = product.weight || product.dataValues?.weight || product.Product?.weight || 'N/A';
       const dimensions = `${product.length || product.dataValues?.length || product.Product?.length || 'N/A'} x ${product.width || product.dataValues?.width || product.Product?.width || 'N/A'} x ${product.height || product.dataValues?.height || product.Product?.height || 'N/A'}`;
       const mrp = product.mrp || product.dataValues?.mrp || product.Product?.mrp || 'N/A';
-      const cost = product.cost || product.dataValues?.cost || product.Product?.cost || 'N/A';
+      const cost = product.unitPrice || product.dataValues?.unitPrice || product.Product?.unitPrice || 'N/A'; // Use unitPrice as cost
       const gst = product.gst || product.dataValues?.gst || product.Product?.gst || 'N/A';
       
       productLines += `

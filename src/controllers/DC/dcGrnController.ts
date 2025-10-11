@@ -26,7 +26,7 @@ export class DCGrnController {
               {
                 model: ParentProductMasterDC,
                 as: 'Product',
-                attributes: ['id', 'SKU', 'ProductName', 'Description', 'Category', 'Brand', 'MRP', 'COST', 'EAN_UPC']
+                attributes: ['id', 'catalogue_id', 'name', 'description', 'mrp', 'ean_upc']
               }
             ]
           },
@@ -64,7 +64,7 @@ export class DCGrnController {
         unit_price: product.unitPrice,
         total_amount: product.totalAmount,
         mrp: product.mrp,
-        cost: product.cost,
+        cost: product.unitPrice, // Use unitPrice as cost since cost column is removed
         description: product.description,
         notes: product.notes,
         product_details: product.Product

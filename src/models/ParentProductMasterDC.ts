@@ -20,7 +20,6 @@ class ParentProductMasterDC extends Model<
   declare hsn: string;
   declare image_url: string;
   declare mrp: number;
-  declare cost: number;
   declare ean_upc: string;
   declare brand_id: number;
   declare weight: number;
@@ -32,9 +31,8 @@ class ParentProductMasterDC extends Model<
   declare cess: number;
   declare createdAt: CreationOptional<Date>;
   declare updatedAt: CreationOptional<Date>;
-  declare dc_id: number;
   declare createdBy: number;
-  declare updatedBy: number;
+  declare updatedBy: number[];
 }
 
 ParentProductMasterDC.init(
@@ -55,7 +53,6 @@ ParentProductMasterDC.init(
     hsn: { type: DataTypes.STRING(8), allowNull: false },
     image_url: { type: DataTypes.TEXT, allowNull: false },
     mrp: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
-    cost: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
     ean_upc: { type: DataTypes.STRING(14), allowNull: false },
     brand_id: { type: DataTypes.INTEGER, allowNull: false, references: { model: 'Brands', key: 'id' } },
     weight: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
@@ -65,9 +62,8 @@ ParentProductMasterDC.init(
     inventory_threshold: { type: DataTypes.INTEGER, allowNull: false },
     gst: { type: DataTypes.DECIMAL(5, 2), allowNull: false },
     cess: { type: DataTypes.DECIMAL(5, 2), allowNull: false },
-    dc_id: { type: DataTypes.INTEGER, allowNull: false, references: { model: 'DistributionCenters', key: 'id' } },
     createdBy: { type: DataTypes.INTEGER, allowNull: false, references: { model: 'Users', key: 'id' } },
-    updatedBy: { type: DataTypes.INTEGER, allowNull: false, references: { model: 'Users', key: 'id' } },
+    updatedBy: { type: DataTypes.JSON, allowNull: false, defaultValue: [] },
     createdAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
     updatedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   },
@@ -77,14 +73,27 @@ ParentProductMasterDC.init(
     tableName: 'parent_product_master',
     timestamps: true,
     validate: {
-      costLessThanMrp() {
-        if ((this as any).cost >= (this as any).mrp) {
-          throw new Error('Cost must be less than MRP');
+      updatedByIsArray() {
+        if (!Array.isArray((this as any).updatedBy)) {
+          throw new Error('updatedBy must be an array');
         }
       }
     }
   }
 );
+
+// Add hooks to handle updatedBy array
+ParentProductMasterDC.addHook('beforeUpdate', (instance: any) => {
+  // If updatedBy is provided in the update data, append it to the existing array
+  if (instance.changed('updatedBy') && instance.dataValues.updatedBy) {
+    const currentUpdatedBy = instance._previousDataValues.updatedBy || [];
+    if (Array.isArray(currentUpdatedBy)) {
+      instance.setDataValue('updatedBy', [...currentUpdatedBy, instance.dataValues.updatedBy]);
+    } else {
+      instance.setDataValue('updatedBy', [instance.dataValues.updatedBy]);
+    }
+  }
+});
 
 // Export helper type for creation
 export type ParentProductMasterDCCreationAttributes = InferCreationAttributes<ParentProductMasterDC>;
