@@ -213,7 +213,7 @@ export class DCSkuSplittingService {
         status: splittingStatus.status,
         remaining_quantity: splittingStatus.remainingQuantity,
         total_split_quantity: splittingStatus.totalSplitQuantity
-      };
+      } as any;
     }
 
     // Check if SKU is unique globally (for different PO/catalogue combinations)
@@ -239,24 +239,24 @@ export class DCSkuSplittingService {
       po_id: poId,
       name: product.productName,
       status: 1,
-      category_id: product.Product?.category_id || 0,
+      category_id: product.category_id || 0,
       sku,
       received_quantity: product.quantity,
       sku_splitted_quantity: skuSplittedQuantity,
       catalogue_id: catalogueId,
-      description: product.description || product.Product?.description || '',
-      hsn: product.hsn || product.Product?.hsn || '',
-      image_url: product.image_url || product.Product?.image_url || '',
-      mrp: product.mrp || product.Product?.mrp || 0,
-      ean_upc: product.ean_upc || product.Product?.ean_upc || '',
-      brand_id: product.brand_id || product.Product?.brand_id || 0,
-      weight: product.weight || product.Product?.weight || 0,
-      length: product.length || product.Product?.length || 0,
-      height: product.height || product.Product?.height || 0,
-      width: product.width || product.Product?.width || 0,
-      inventory_threshold: product.inventory_threshold || product.Product?.inventory_threshold || 0,
-      gst: product.gst || product.Product?.gst || 0,
-      cess: product.cess || product.Product?.cess || 0,
+      description: product.description || '',
+      hsn: product.hsn || '',
+      image_url: product.image_url || '',
+      mrp: product.mrp || 0,
+      ean_upc: product.ean_upc || '',
+      brand_id: product.brand_id || 0,
+      weight: product.weight || 0,
+      length: product.length || 0,
+      height: product.height || 0,
+      width: product.width || 0,
+      inventory_threshold: product.inventory_threshold || 0,
+      gst: product.gst || 0,
+      cess: product.cess || 0,
       createdBy,
       updatedBy: JSON.stringify([createdBy])
     };
@@ -361,7 +361,7 @@ export class DCSkuSplittingService {
       ]
     });
 
-    const results = [];
+    const results: any[] = [];
 
     for (const product of products) {
       const splittingStatus = await this.getSkuSplittingStatus(poId, product.catalogue_id);

@@ -60,8 +60,8 @@ export class DCSkuSplittingController {
           sku: result.sku,
           sku_splitted_quantity: result.sku_splitted_quantity,
           status: result.status,
-          remaining_quantity: result.remaining_quantity,
-          total_split_quantity: result.total_split_quantity
+          remaining_quantity: (result as any).remaining_quantity,
+          total_split_quantity: (result as any).total_split_quantity
         }
       });
 
@@ -289,7 +289,7 @@ export class DCSkuSplittingController {
         return ResponseHandler.error(res, 'Product not found for the given PO and catalogue ID', 404);
       }
 
-      const categoryId = product.category_id || product.Product?.category_id || 0;
+      const categoryId = product.category_id || 0;
 
       return ResponseHandler.success(res, {
         message: 'Product category retrieved successfully',
