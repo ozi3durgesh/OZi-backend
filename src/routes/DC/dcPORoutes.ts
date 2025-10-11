@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticate, isAdmin } from '../../middleware/auth';
 import { DCPOController } from '../../controllers/DC/dcPOController';
+import dcSkuSplittingRoutes from './dcSkuSplittingRoutes';
 import multer from 'multer';
 
 const router = Router();
@@ -59,5 +60,8 @@ router.get('/approval/:token', DCPOController.getApprovalDetails);
 
 // Process approval/rejection via token (public route for email links)
 router.post('/approval/:token', DCPOController.processApproval);
+
+// SKU Splitting routes
+router.use('/', dcSkuSplittingRoutes);
 
 export default router;

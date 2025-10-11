@@ -8,6 +8,7 @@ import ParentProductMasterDC from '../../models/ParentProductMasterDC';
 import { DistributionCenter, User } from '../../models';
 import { DC_PO_CONSTANTS } from '../../constants/dcPOConstants';
 import { EmailService } from '../emailService';
+import { DCSkuSplittingService } from './dcSkuSplittingService';
 
 interface DCPOFilters {
   search?: string;
@@ -733,20 +734,47 @@ export class DCPOService {
       brands: [...new Set(po.Products?.map((p: any) => p.Product?.Brand).filter(Boolean) || [])],
     };
 
-    // Add calculated fields to each product
-    const productsWithCalculations = (po.Products || []).map((product: any) => ({
-      ...product.toJSON(),
-      Product: {
-        ...product.Product?.toJSON(),
-        // Add calculated fields
-        totalOrderedValue: product.quantity * product.unitPrice,
-        marginAmount: product.unitPrice - (product.cost || 0), // Use product.cost from DCPOProduct
-        marginPercentage: product.cost ? 
-          ((product.unitPrice - product.cost) / product.cost * 100) : 0,
-        savingsFromMRP: (product.Product?.mrp || 0) - product.unitPrice,
-        savingsPercentage: product.Product?.mrp ? 
-          ((product.Product.mrp - product.unitPrice) / product.Product.mrp * 100) : 0,
+    // Add calculated fields and SKU splitting status to each product
+    const productsWithCalculations = await Promise.all((po.Products || []).map(async (product: any) => {
+      let skuSplittingStatus: any = null;
+      
+      // Only get SKU splitting status for approved POs
+      if (po.status === 'APPROVED') {
+        try {
+          skuSplittingStatus = await DCSkuSplittingService.getSkuSplittingStatus(poId, product.catalogue_id);
+        } catch (error) {
+          console.warn(`Failed to get SKU splitting status for product ${product.catalogue_id}:`, error);
+          // Set default status if there's an error
+          skuSplittingStatus = {
+            status: 'pending',
+            totalSplitQuantity: 0,
+            remainingQuantity: product.quantity,
+            splitSkusCount: 0
+          };
+        }
       }
+
+      return {
+        ...product.toJSON(),
+        Product: {
+          ...product.Product?.toJSON(),
+          // Add calculated fields
+          totalOrderedValue: product.quantity * product.unitPrice,
+          marginAmount: product.unitPrice - (product.cost || 0), // Use product.cost from DCPOProduct
+          marginPercentage: product.cost ? 
+            ((product.unitPrice - product.cost) / product.cost * 100) : 0,
+          savingsFromMRP: (product.Product?.mrp || 0) - product.unitPrice,
+          savingsPercentage: product.Product?.mrp ? 
+            ((product.Product.mrp - product.unitPrice) / product.Product.mrp * 100) : 0,
+        },
+        // Add SKU splitting information
+        sku_splitting_status: skuSplittingStatus?.status || null,
+        sku_splitting_summary: skuSplittingStatus ? {
+          total_split_quantity: skuSplittingStatus.totalSplitQuantity,
+          remaining_quantity: skuSplittingStatus.remainingQuantity,
+          split_skus_count: skuSplittingStatus.splitSkusCount
+        } : null
+      };
     }));
 
     return {

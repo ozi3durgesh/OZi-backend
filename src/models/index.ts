@@ -49,6 +49,7 @@ import DCGrn from './DCGrn.model';
 import DCGrnLine from './DCGrnLine';
 import DCGrnBatch from './DCGrnBatch';
 import DCGrnPhoto from './DCGrnPhoto';
+import DCSkuSplitted from './DCSkuSplitted';
 
 // Set up associations
 Coupon.hasMany(CouponTranslation, {
@@ -489,6 +490,27 @@ DCGrnPhoto.belongsTo(DCGrn, { foreignKey: 'dc_grn_id', as: 'DCGrn' });
 DCPurchaseOrder.hasMany(DCGrnPhoto, { foreignKey: 'dc_po_id', as: 'DCGrnPhotos' });
 DCGrnPhoto.belongsTo(DCPurchaseOrder, { foreignKey: 'dc_po_id', as: 'DCPurchaseOrder' });
 
+// DCSkuSplitted associations
+DCSkuSplitted.belongsTo(DCPurchaseOrder, {
+  foreignKey: 'po_id',
+  as: 'PurchaseOrder',
+});
+
+DCSkuSplitted.belongsTo(User, {
+  foreignKey: 'createdBy',
+  as: 'CreatedBy',
+});
+
+DCPurchaseOrder.hasMany(DCSkuSplitted, {
+  foreignKey: 'po_id',
+  as: 'SkuSplitted',
+});
+
+User.hasMany(DCSkuSplitted, {
+  foreignKey: 'createdBy',
+  as: 'CreatedSkuSplitted',
+});
+
 // Reverse associations
 DCPurchaseOrder.hasMany(DCGrn, { foreignKey: 'dc_po_id', as: 'DCGrns' });
 User.hasMany(DCGrn, { foreignKey: 'created_by', as: 'CreatedDCGrns' });
@@ -547,4 +569,5 @@ export {
   DCGrnLine,
   DCGrnBatch,
   DCGrnPhoto,
+  DCSkuSplitted,
 };
