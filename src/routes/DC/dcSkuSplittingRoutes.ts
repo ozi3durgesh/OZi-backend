@@ -67,4 +67,21 @@ router.post('/sku-splitting/validate-sku', DCSkuSplittingController.validateSku)
  */
 router.get('/purchase-orders/:poId/product-category/:catalogueId', DCSkuSplittingController.getProductCategory);
 
+/**
+ * @route GET /api/dc/sku-splitting/ready-for-grn
+ * @desc Get SKU splits ready for GRN with pagination
+ * @access Authenticated
+ * @query page - Page number (default: 1)
+ * @query limit - Items per page (default: 10, max: 100)
+ */
+router.get('/sku-splitting/ready-for-grn', DCSkuSplittingController.getSkuSplitsReadyForGrn);
+
+/**
+ * @route POST /api/dc/grn/create-flow
+ * @desc Create DC GRN from SKU splits
+ * @access Authenticated
+ * @body { poId: number, lines: Array, closeReason?: string, status: string }
+ */
+router.post('/grn/create-flow', DCSkuSplittingController.createDCGrnFlow);
+
 export default router;

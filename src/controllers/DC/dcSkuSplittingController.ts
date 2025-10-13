@@ -305,4 +305,132 @@ export class DCSkuSplittingController {
       return ResponseHandler.error(res, error.message || 'Failed to get product category', 500);
     }
   }
+
+  /**
+   * Get SKU splits ready for GRN with pagination
+   * GET /api/dc/sku-splitting/ready-for-grn?page=1&limit=10
+   */
+  static async getSkuSplitsReadyForGrn(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+
+      // Validate pagination parameters
+      if (page < 1) {
+        return ResponseHandler.error(res, 'Page number must be greater than 0', 400);
+      }
+      if (limit < 1 || limit > 100) {
+        return ResponseHandler.error(res, 'Limit must be between 1 and 100', 400);
+      }
+
+      const result = await DCSkuSplittingService.getSkuSplitsReadyForGrn(page, limit);
+
+      return ResponseHandler.success(res, {
+        message: 'SKU splits ready for GRN retrieved successfully',
+        data: {
+          sku_splits: result.skuSplits,
+          pagination: {
+            total_count: result.totalCount,
+            total_pages: result.totalPages,
+            current_page: result.currentPage,
+            has_next_page: result.hasNextPage,
+            has_prev_page: result.hasPrevPage,
+            limit: limit
+          }
+        }
+      });
+
+    } catch (error: any) {
+      console.error('Get SKU splits ready for GRN error:', error);
+      return ResponseHandler.error(res, error.message || 'Failed to fetch SKU splits ready for GRN', 500);
+    }
+  }
+
+  /**
+   * Create DC GRN from SKU splits
+   * POST /api/dc/grn/create-flow
+   */
+  static async createDCGrnFlow(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return ResponseHandler.error(res, 'User authentication required', 401);
+      }
+
+      const { poId, lines, closeReason, status } = req.body;
+
+      // Validation
+      if (!poId || !Number.isInteger(poId) || poId <= 0) {
+        return ResponseHandler.error(res, 'Valid PO ID is required', 400);
+      }
+
+      if (!lines || !Array.isArray(lines) || lines.length === 0) {
+        return ResponseHandler.error(res, 'Lines array is required and must not be empty', 400);
+      }
+
+      if (!status || !['partial', 'completed', 'closed', 'pending-qc', 'variance-review', 'rtv-initiated'].includes(status)) {
+        return ResponseHandler.error(res, 'Valid status is required', 400);
+      }
+
+      // Validate each line
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        
+        if (!line.skuId || typeof line.skuId !== 'string') {
+          return ResponseHandler.error(res, `Line ${i + 1}: skuId is required and must be a string`, 400);
+        }
+
+        if (!Number.isInteger(line.orderedQty) || line.orderedQty <= 0) {
+          return ResponseHandler.error(res, `Line ${i + 1}: orderedQty must be a positive integer`, 400);
+        }
+
+        if (!Number.isInteger(line.receivedQty) || line.receivedQty < 0) {
+          return ResponseHandler.error(res, `Line ${i + 1}: receivedQty must be a non-negative integer`, 400);
+        }
+
+        if (!Number.isInteger(line.qcPassQty) || line.qcPassQty < 0) {
+          return ResponseHandler.error(res, `Line ${i + 1}: qcPassQty must be a non-negative integer`, 400);
+        }
+
+        if (line.receivedQty > line.orderedQty) {
+          return ResponseHandler.error(res, `Line ${i + 1}: receivedQty cannot exceed orderedQty`, 400);
+        }
+
+        if (line.qcPassQty > line.receivedQty) {
+          return ResponseHandler.error(res, `Line ${i + 1}: qcPassQty cannot exceed receivedQty`, 400);
+        }
+
+        // Validate batches if provided
+        if (line.batches && Array.isArray(line.batches)) {
+          for (let j = 0; j < line.batches.length; j++) {
+            const batch = line.batches[j];
+            if (!batch.batchNo || !batch.expiry || !Number.isInteger(batch.qty) || batch.qty <= 0) {
+              return ResponseHandler.error(res, `Line ${i + 1}, Batch ${j + 1}: batchNo, expiry, and qty are required`, 400);
+            }
+          }
+        }
+      }
+
+      const result = await DCSkuSplittingService.createDCGrnFromSkuSplits({
+        poId,
+        lines,
+        closeReason,
+        status
+      }, userId);
+
+      return ResponseHandler.success(res, {
+        message: result.message,
+        data: {
+          grn_id: result.grnId,
+          po_id: poId,
+          status: status,
+          lines_processed: lines.length
+        }
+      });
+
+    } catch (error: any) {
+      console.error('Create DC GRN flow error:', error);
+      return ResponseHandler.error(res, error.message || 'Failed to create DC GRN', 500);
+    }
+  }
 }

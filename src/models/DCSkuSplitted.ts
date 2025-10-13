@@ -35,6 +35,10 @@ class DCSkuSplitted extends Model<
   declare cess: number;
   declare createdBy: number;
   declare updatedBy: string;
+  declare ready_for_grn: number;
+  declare grn_completed: number;
+  declare splitting_of_product: 'partially' | 'completely';
+  declare number_of_grn_done: number;
   declare createdAt: CreationOptional<Date>;
   declare updatedAt: CreationOptional<Date>;
 }
@@ -166,6 +170,26 @@ DCSkuSplitted.init(
     updatedBy: {
       type: DataTypes.JSON,
       allowNull: false,
+    },
+    ready_for_grn: {
+      type: DataTypes.TINYINT,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    grn_completed: {
+      type: DataTypes.TINYINT,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    splitting_of_product: {
+      type: DataTypes.ENUM('partially', 'completely'),
+      allowNull: false,
+      defaultValue: 'partially',
+    },
+    number_of_grn_done: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
     },
     createdAt: {
       type: DataTypes.DATE,

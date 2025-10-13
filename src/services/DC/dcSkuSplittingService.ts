@@ -3,6 +3,11 @@ import DCSkuSplitted from '../../models/DCSkuSplitted';
 import DCPurchaseOrder from '../../models/DCPurchaseOrder';
 import DCPOProduct from '../../models/DCPOProduct';
 import ParentProductMasterDC from '../../models/ParentProductMasterDC';
+import DCGrn from '../../models/DCGrn.model';
+import DCGrnLine from '../../models/DCGrnLine';
+import DCGrnBatch from '../../models/DCGrnBatch';
+import DCGrnPhoto from '../../models/DCGrnPhoto';
+import sequelize from '../../config/database';
 import { DC_PO_CONSTANTS } from '../../constants/dcPOConstants';
 
 export interface SkuSplittingStatus {
@@ -201,9 +206,13 @@ export class DCSkuSplittingService {
 
       await existingSkuSplit.update({
         sku_splitted_quantity: newQuantity,
-        updatedBy: JSON.stringify([...JSON.parse(existingSkuSplit.updatedBy), createdBy])
+        updatedBy: JSON.stringify([...JSON.parse(existingSkuSplit.updatedBy), createdBy]),
+        ready_for_grn: 1 // Ensure it's ready for GRN after update
       });
 
+      // Update splitting status for this PO and catalogue_id
+      await this.updateSplittingStatus(poId, catalogueId);
+      
       // Get updated splitting status
       const splittingStatus = await this.getSkuSplittingStatus(poId, catalogueId);
 
@@ -258,10 +267,18 @@ export class DCSkuSplittingService {
       gst: product.gst || 0,
       cess: product.cess || 0,
       createdBy,
-      updatedBy: JSON.stringify([createdBy])
+      updatedBy: JSON.stringify([createdBy]),
+      ready_for_grn: 1, // Set to 1 when SKU split is created
+      grn_completed: 0,
+      splitting_of_product: 'partially' as const,
+      number_of_grn_done: 0
     };
 
     const skuSplit = await DCSkuSplitted.create(skuSplitData);
+    
+    // Update splitting status for this PO and catalogue_id
+    await this.updateSplittingStatus(poId, catalogueId);
+    
     return skuSplit;
   }
 
@@ -293,14 +310,15 @@ export class DCSkuSplittingService {
     const totalSplitQuantity = splitSkus.reduce((sum, sku) => sum + sku.sku_splitted_quantity, 0);
     const remainingQuantity = product.quantity - totalSplitQuantity;
 
+    // Use the splitting_of_product field from the database instead of calculating
     let splittingStatus: 'pending' | 'partial' | 'completed';
     
-    if (totalSplitQuantity === 0) {
+    if (splitSkus.length === 0) {
       splittingStatus = 'pending';
-    } else if (totalSplitQuantity < product.quantity) {
-      splittingStatus = 'partial';
     } else {
-      splittingStatus = 'completed';
+      // Use the splitting_of_product field from the first SKU split (they should all be the same)
+      const firstSku = splitSkus[0];
+      splittingStatus = firstSku.splitting_of_product === 'completely' ? 'completed' : 'partial';
     }
 
     return {
@@ -417,5 +435,277 @@ export class DCSkuSplittingService {
     }
 
     throw new Error('Unable to generate unique SKU after multiple attempts');
+  }
+
+  /**
+   * Update GRN status fields for a SKU split
+   */
+  static async updateGrnStatus(skuSplitId: number, grnQuantity: number): Promise<void> {
+    const skuSplit = await DCSkuSplitted.findByPk(skuSplitId);
+    if (!skuSplit) {
+      throw new Error('SKU split not found');
+    }
+
+    // Update number_of_grn_done
+    const newGrnDone = skuSplit.number_of_grn_done + grnQuantity;
+    
+    // Calculate ready_for_grn: 0 when number_of_grn_done == received_quantity, 1 otherwise
+    const readyForGrn = skuSplit.received_quantity === newGrnDone ? 0 : 1;
+    
+    // Calculate grn_completed: 1 when received_quantity == number_of_grn_done
+    const grnCompleted = skuSplit.received_quantity === newGrnDone ? 1 : 0;
+
+    await skuSplit.update({
+      number_of_grn_done: newGrnDone,
+      ready_for_grn: readyForGrn,
+      grn_completed: grnCompleted
+    });
+  }
+
+  /**
+   * Update splitting_of_product status for a PO and catalogue_id
+   */
+  static async updateSplittingStatus(poId: number, catalogueId: string): Promise<void> {
+    console.log(`🔄 Updating splitting status for PO: ${poId}, Catalogue: ${catalogueId}`);
+    
+    // Get all SKU splits for this PO and catalogue_id
+    const skuSplits = await DCSkuSplitted.findAll({
+      where: {
+        po_id: poId,
+        catalogue_id: catalogueId
+      }
+    });
+
+    console.log(`📊 Found ${skuSplits.length} SKU splits`);
+    if (skuSplits.length === 0) return;
+
+    // Get the original product quantity
+    const product = await DCPOProduct.findOne({
+      where: {
+        dcPOId: poId,
+        catalogue_id: catalogueId
+      }
+    });
+
+    if (!product) {
+      console.log(`❌ Product not found for PO: ${poId}, Catalogue: ${catalogueId}`);
+      return;
+    }
+
+    const totalSkuSplittedQuantity = skuSplits.reduce((sum, sku) => sum + sku.sku_splitted_quantity, 0);
+    const splittingStatus = totalSkuSplittedQuantity === product.quantity ? 'completely' : 'partially';
+    
+    console.log(`📈 Product quantity: ${product.quantity}, Total split quantity: ${totalSkuSplittedQuantity}, Status: ${splittingStatus}`);
+
+    // Update all SKU splits for this PO and catalogue_id
+    const [affectedRows] = await DCSkuSplitted.update(
+      { splitting_of_product: splittingStatus },
+      {
+        where: {
+          po_id: poId,
+          catalogue_id: catalogueId
+        }
+      }
+    );
+    
+    console.log(`✅ Updated ${affectedRows} rows with splitting status: ${splittingStatus}`);
+  }
+
+  /**
+   * Get SKU splits ready for GRN with pagination
+   * ready_for_grn = 1 by default, becomes 0 when number_of_grn_done == received_quantity
+   */
+  static async getSkuSplitsReadyForGrn(page: number = 1, limit: number = 10): Promise<{
+    skuSplits: any[];
+    totalCount: number;
+    totalPages: number;
+    currentPage: number;
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+  }> {
+    const offset = (page - 1) * limit;
+
+    const { count, rows: skuSplits } = await DCSkuSplitted.findAndCountAll({
+      where: {
+        ready_for_grn: 1
+      },
+      order: [['createdAt', 'ASC']],
+      limit,
+      offset
+    });
+
+    const totalPages = Math.ceil(count / limit);
+    const hasNextPage = page < totalPages;
+    const hasPrevPage = page > 1;
+
+    return {
+      skuSplits,
+      totalCount: count,
+      totalPages,
+      currentPage: page,
+      hasNextPage,
+      hasPrevPage
+    };
+  }
+
+  /**
+   * Update ready_for_grn status based on current GRN progress
+   * This should be called after GRN processing to update the status
+   */
+  static async updateReadyForGrnStatus(skuSplitId: number): Promise<void> {
+    const skuSplit = await DCSkuSplitted.findByPk(skuSplitId);
+    if (!skuSplit) {
+      throw new Error('SKU split not found');
+    }
+
+    // ready_for_grn = 0 when number_of_grn_done == received_quantity, 1 otherwise
+    const readyForGrn = skuSplit.received_quantity === skuSplit.number_of_grn_done ? 0 : 1;
+    
+    // grn_completed = 1 when received_quantity == number_of_grn_done
+    const grnCompleted = skuSplit.received_quantity === skuSplit.number_of_grn_done ? 1 : 0;
+
+    await skuSplit.update({
+      ready_for_grn: readyForGrn,
+      grn_completed: grnCompleted
+    });
+  }
+
+  /**
+   * Create DC GRN from SKU splits ready for GRN
+   */
+  static async createDCGrnFromSkuSplits(data: {
+    poId: number;
+    lines: Array<{
+      skuId: string;
+      orderedQty: number;
+      receivedQty: number;
+      rejectedQty?: number;
+      qcPassQty: number;
+      remarks?: string;
+      heldQty?: number;
+      rtvQty?: number;
+      photos?: string;
+      batches?: Array<{
+        batchNo: string;
+        expiry: string;
+        qty: number;
+      }>;
+    }>;
+    closeReason?: string;
+    status: 'partial' | 'completed' | 'closed' | 'pending-qc' | 'variance-review' | 'rtv-initiated';
+  }, createdBy: number): Promise<{
+    grnId: number;
+    message: string;
+  }> {
+    const transaction = await sequelize.transaction();
+    
+    try {
+      // Validate DC PO exists and is approved
+      const dcPO = await DCPurchaseOrder.findByPk(data.poId, { transaction });
+      if (!dcPO) {
+        throw new Error(`DC Purchase Order ${data.poId} not found`);
+      }
+
+      if (dcPO.status !== 'APPROVED') {
+        throw new Error(`DC Purchase Order ${data.poId} is not approved`);
+      }
+
+      // Check if GRN already exists for this PO
+      const existingGrn = await DCGrn.findOne({
+        where: { dc_po_id: data.poId },
+        transaction
+      });
+
+      if (existingGrn) {
+        throw new Error(`GRN already exists for DC Purchase Order ${data.poId}`);
+      }
+
+      // Create DC GRN
+      const dcGrn = await DCGrn.create({
+        dc_po_id: data.poId,
+        status: data.status,
+        closeReason: data.closeReason || null,
+        created_by: createdBy,
+        dc_id: dcPO.dcId
+      }, { transaction });
+
+      // Create GRN lines for each line item
+      for (const line of data.lines) {
+        const pendingQty = line.orderedQty - line.receivedQty;
+        const lineStatus = pendingQty === 0 ? 'completed' : (line.receivedQty > 0 ? 'partial' : 'pending');
+
+        const grnLine = await DCGrnLine.create({
+          dc_grn_id: dcGrn.id,
+          sku_id: line.skuId,
+          ordered_qty: line.orderedQty,
+          received_qty: line.receivedQty,
+          pending_qty: pendingQty,
+          rejected_qty: line.rejectedQty || 0,
+          qc_pass_qty: line.qcPassQty,
+          qc_fail_qty: line.receivedQty - line.qcPassQty,
+          held_qty: line.heldQty || 0,
+          rtv_qty: line.rtvQty || 0,
+          line_status: lineStatus,
+          putaway_status: 'pending',
+          remarks: line.remarks || null
+        }, { transaction });
+
+        // Create batches if provided
+        if (line.batches && line.batches.length > 0) {
+          for (const batch of line.batches) {
+            await DCGrnBatch.create({
+              dc_grn_line_id: grnLine.id,
+              batch_no: batch.batchNo,
+              expiry_date: new Date(batch.expiry),
+              qty: batch.qty
+            }, { transaction });
+          }
+        }
+
+        // Create photos if provided
+        if (line.photos) {
+          await DCGrnPhoto.create({
+            sku_id: line.skuId,
+            dc_grn_id: dcGrn.id,
+            dc_po_id: data.poId,
+            url: line.photos,
+            reason: 'sku-level-photo'
+          }, { transaction });
+        }
+
+        // Update SKU split status if it exists
+        const skuSplit = await DCSkuSplitted.findOne({
+          where: {
+            po_id: data.poId,
+            sku: line.skuId,
+            ready_for_grn: 1
+          },
+          transaction
+        });
+
+        if (skuSplit) {
+          const newGrnDone = skuSplit.number_of_grn_done + line.receivedQty;
+          const readyForGrn = skuSplit.received_quantity > newGrnDone ? 1 : 0;
+          const grnCompleted = skuSplit.received_quantity === newGrnDone ? 1 : 0;
+
+          await skuSplit.update({
+            number_of_grn_done: newGrnDone,
+            ready_for_grn: readyForGrn,
+            grn_completed: grnCompleted
+          }, { transaction });
+        }
+      }
+
+      await transaction.commit();
+
+      return {
+        grnId: dcGrn.id,
+        message: 'DC GRN created successfully'
+      };
+
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
   }
 }
