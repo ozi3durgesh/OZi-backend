@@ -5,8 +5,8 @@ import DCGrnLine from './DCGrnLine';
 export interface DCGrnBatchAttributes {
   id: number;
   dc_grn_line_id: number;
-  batch_no: string;
-  expiry_date: Date;
+  batch_no: string | null;
+  expiry_date: Date | null;
   qty: number;
   created_at: Date;
   updated_at: Date;
@@ -14,16 +14,16 @@ export interface DCGrnBatchAttributes {
 
 export interface DCGrnBatchCreationAttributes {
   dc_grn_line_id: number;
-  batch_no: string;
-  expiry_date: Date;
+  batch_no: string | null;
+  expiry_date: Date | null;
   qty: number;
 }
 
 class DCGrnBatch extends Model<DCGrnBatchAttributes, DCGrnBatchCreationAttributes> implements DCGrnBatchAttributes {
   declare id: number;
   declare dc_grn_line_id: number;
-  declare batch_no: string;
-  declare expiry_date: Date;
+  declare batch_no: string | null;
+  declare expiry_date: Date | null;
   declare qty: number;
   declare created_at: Date;
   declare updated_at: Date;
@@ -42,11 +42,11 @@ DCGrnBatch.init(
     },
     batch_no: {
       type: DataTypes.STRING(50),
-      allowNull: false,
+      allowNull: true,
     },
     expiry_date: {
       type: DataTypes.DATE,
-      allowNull: false,
+      allowNull: true,
     },
     qty: {
       type: DataTypes.INTEGER,
