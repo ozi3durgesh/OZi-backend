@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { ResponseHandler } from '../../middleware/responseHandler';
-import { DCGrn, DCGrnLine, DCGrnBatch, DCGrnPhoto, DCPurchaseOrder, User, DistributionCenter, DCPOProduct, ParentProductMasterDC } from '../../models';
+import { DCGrn, DCGrnLine, DCGrnBatch, DCGrnPhoto, DCPurchaseOrder, User, DistributionCenter, DCPOProduct, ParentProductMasterDC, DCSkuSplitted } from '../../models';
 import { Transaction } from 'sequelize';
 import sequelize from '../../config/database';
 
@@ -519,6 +519,126 @@ export class DCGrnController {
 
     } catch (error: any) {
       console.error('Error fetching DC-GRN statistics:', error);
+      return ResponseHandler.error(res, error.message || 'Internal Server Error', 500);
+    }
+  }
+
+  /**
+   * Get DC GRN list with SKU splits grouped by PO
+   * GET /api/dc/grn/list?page=1&limit=10
+   */
+  static async getDCGrnList(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+
+      // Validate pagination parameters
+      if (page < 1) {
+        return ResponseHandler.error(res, 'Page number must be greater than 0', 400);
+      }
+      if (limit < 1 || limit > 100) {
+        return ResponseHandler.error(res, 'Limit must be between 1 and 100', 400);
+      }
+
+      const offset = (page - 1) * limit;
+
+      // Get SKU splits ready for GRN
+      const { count, rows: skuSplits } = await DCSkuSplitted.findAndCountAll({
+        where: {
+          ready_for_grn: 1
+        },
+        include: [
+          {
+            model: DCPurchaseOrder,
+            as: 'PurchaseOrder',
+            attributes: ['id', 'poId', 'vendorId', 'status', 'createdAt'],
+            include: [
+              {
+                model: User,
+                as: 'CreatedBy',
+                attributes: ['id', 'email', 'name']
+              }
+            ]
+          }
+        ],
+        order: [['createdAt', 'ASC']],
+        limit,
+        offset
+      });
+
+      // Group SKU splits by PO
+      const groupedByPO = new Map();
+      
+      skuSplits.forEach((split: any) => {
+        const poId = split.po_id;
+        if (!groupedByPO.has(poId)) {
+          groupedByPO.set(poId, {
+            id: split.PurchaseOrder?.id || poId,
+            po_id: poId,
+            status: 'ready_for_grn',
+            closeReason: null,
+            created_by: split.PurchaseOrder?.CreatedBy?.id || null,
+            created_at: split.PurchaseOrder?.createdAt || split.createdAt,
+            updated_at: split.updatedAt,
+            PO: {
+              id: split.PurchaseOrder?.id || poId,
+              po_id: split.PurchaseOrder?.poId || `PO-${poId}`,
+              vendor_name: `Vendor-${split.PurchaseOrder?.vendorId || poId}`,
+              approval_status: split.PurchaseOrder?.status || 'approved'
+            },
+            Line: []
+          });
+        }
+
+        // Add this SKU split as a line item
+        groupedByPO.get(poId).Line.push({
+          id: split.id,
+          sku_id: split.sku,
+          ordered_qty: split.received_quantity,
+          received_qty: split.sku_splitted_quantity,
+          pending_qty: split.received_quantity - split.sku_splitted_quantity,
+          rejected_qty: 0,
+          qc_pass_qty: split.sku_splitted_quantity,
+          qc_fail_qty: 0,
+          rtv_qty: 0,
+          held_qty: 0,
+          line_status: split.sku_splitted_quantity === split.received_quantity ? 'completed' : 'partial',
+          product_details: {
+            name: split.name,
+            description: split.description,
+            mrp: split.mrp,
+            ean_upc: split.ean_upc,
+            image_url: split.image_url,
+            weight: split.weight,
+            length: split.length,
+            height: split.height,
+            width: split.width,
+            gst: split.gst,
+            cess: split.cess
+          }
+        });
+      });
+
+      const grnList = Array.from(groupedByPO.values());
+      const totalPages = Math.ceil(count / limit);
+
+      const response = {
+        grn: grnList,
+        pagination: {
+          page: page,
+          limit: limit,
+          total: count,
+          totalPages: totalPages
+        }
+      };
+
+      return ResponseHandler.success(res, {
+        message: 'DC GRN list retrieved successfully',
+        data: response
+      });
+
+    } catch (error: any) {
+      console.error('Error fetching DC GRN list:', error);
       return ResponseHandler.error(res, error.message || 'Internal Server Error', 500);
     }
   }
