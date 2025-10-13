@@ -14,7 +14,7 @@ class Product extends Model<
   declare id: CreationOptional<number>;
   declare CPId: string | null;
   declare Status: string | null;
-  declare ModelNum: string | null;
+  declare catalogue_id: string | null;
   declare ModelName: string | null;
   declare Category: string | null;
   declare SKU: string;
@@ -61,7 +61,7 @@ Product.init(
     id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
     CPId: { type: DataTypes.STRING, allowNull: true },
     Status: { type: DataTypes.STRING, allowNull: true },
-    ModelNum: { type: DataTypes.STRING, allowNull: true },
+    catalogue_id: { type: DataTypes.STRING(7), allowNull: true },
     ModelName: { type: DataTypes.STRING, allowNull: true },
     Category: { type: DataTypes.STRING, allowNull: true },
     SKU: { type: DataTypes.STRING, unique: true, allowNull: false },

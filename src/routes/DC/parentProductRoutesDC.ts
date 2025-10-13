@@ -10,6 +10,7 @@ import {
   deleteParentProduct,
   bulkUploadParentProducts,
 } from '../../controllers/DC/parentProductControllerDC';
+import { fetchSKUByCatalogueId } from '../../controllers/DC/fetchSKUController';
 
 const router = Router();
 
@@ -52,6 +53,9 @@ router.delete('/parent-products/:id', deleteParentProduct);
 
 // Bulk upload parent products via Excel
 router.post('/parent-products/bulk-upload', upload.single('file'), bulkUploadParentProducts);
+
+// Fetch SKUs by catalogue ID
+router.get('/fetchSKU/:catalogue_id', fetchSKUByCatalogueId);
 
 export default router;
 
