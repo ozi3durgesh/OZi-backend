@@ -64,6 +64,8 @@ export class EmailService {
     role: 'category_head' | 'admin' | 'creator'
   ): Promise<boolean> {
     let productLines = '';
+    let productIndex = 1;
+    
     for (const product of products) {
       // Handle both direct product objects and Sequelize model instances
       const productName = product.productName || product.dataValues?.productName || 'N/A';
@@ -76,64 +78,115 @@ export class EmailService {
       const weight = product.weight || product.dataValues?.weight || product.Product?.weight || 'N/A';
       const dimensions = `${product.length || product.dataValues?.length || product.Product?.length || 'N/A'} x ${product.width || product.dataValues?.width || product.Product?.width || 'N/A'} x ${product.height || product.dataValues?.height || product.Product?.height || 'N/A'}`;
       const mrp = product.mrp || product.dataValues?.mrp || product.Product?.mrp || 'N/A';
-      const cost = product.unitPrice || product.dataValues?.unitPrice || product.Product?.unitPrice || 'N/A'; // Use unitPrice as cost
+      const cost = product.unitPrice || product.dataValues?.unitPrice || product.Product?.unitPrice || 'N/A';
       const gst = product.gst || product.dataValues?.gst || product.Product?.gst || 'N/A';
-      const description = product.description || product.dataValues?.description || product.Product?.description || 'N/A';
       
       // Check if product has SKU matrix
       const skuMatrix = product.SkuMatrix || product.dataValues?.SkuMatrix || product.skuMatrix || [];
       
+      // Create product section with proper table format
+      productLines += `
+        <div class="product-row">
+          <div class="product-header">
+            📦 Row ${productIndex}: ${productName}
+          </div>
+          <div class="product-details-table">
+            <table class="main-product-table">
+              <thead>
+                <tr>
+                  <th>Catalogue ID</th>
+                  <th>Total Quantity</th>
+                  <th>Unit Price</th>
+                  <th>Total</th>
+                  <th>HSN</th>
+                  <th>EAN/UPC</th>
+                  <th>Weight</th>
+                  <th>Dimensions</th>
+                  <th>MRP</th>
+                  <th>Cost</th>
+                  <th>GST</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>${catalogueId}</td>
+                  <td>${quantity}</td>
+                  <td>₹${unitPrice}</td>
+                  <td>₹${totalAmount}</td>
+                  <td>${hsn}</td>
+                  <td>${eanUpc}</td>
+                  <td>${weight} kg</td>
+                  <td>${dimensions}</td>
+                  <td>₹${mrp}</td>
+                  <td>₹${cost}</td>
+                  <td>${gst}%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+      `;
+      
+      // Add SKU details if available
       if (skuMatrix && skuMatrix.length > 0) {
-        // If SKU matrix exists, show individual SKUs
+        productLines += `
+          <div class="sku-details-section">
+            <div class="sku-details-header">
+              🔽 SKU Details:
+            </div>
+            <table class="sku-table">
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>Product Name</th>
+                  <th>Quantity</th>
+                  <th>HSN</th>
+                  <th>MRP</th>
+                  <th>Weight</th>
+                  <th>Dimensions</th>
+                  <th>Brand</th>
+                </tr>
+              </thead>
+              <tbody>
+        `;
+        
         for (const sku of skuMatrix) {
           const skuProductName = sku.product_name || sku.dataValues?.product_name || 'N/A';
-          const skuCatalogueId = sku.catalogue_id || sku.dataValues?.catalogue_id || 'N/A';
           const skuQuantity = sku.quantity || sku.dataValues?.quantity || 'N/A';
-          const skuUnitPrice = (unitPrice !== 'N/A' && quantity !== 'N/A') ? (parseFloat(unitPrice) / parseFloat(quantity)) : 'N/A';
-          const skuTotalAmount = (skuUnitPrice !== 'N/A' && skuQuantity !== 'N/A') ? (parseFloat(skuUnitPrice.toString()) * parseFloat(skuQuantity.toString())) : 'N/A';
           const skuHsn = sku.hsn || sku.dataValues?.hsn || hsn;
           const skuEanUpc = sku.ean_upc || sku.dataValues?.ean_upc || eanUpc;
           const skuWeight = sku.weight || sku.dataValues?.weight || 'N/A';
           const skuDimensions = `${sku.length || sku.dataValues?.length || 'N/A'} x ${sku.width || sku.dataValues?.width || 'N/A'} x ${sku.height || sku.dataValues?.height || 'N/A'}`;
           const skuMrp = sku.mrp || sku.dataValues?.mrp || 'N/A';
           const skuGst = sku.gst || sku.dataValues?.gst || gst;
+          const skuBrand = sku.brand || sku.dataValues?.brand || 'N/A';
+          const skuSku = sku.sku || sku.dataValues?.sku || 'N/A';
           
           productLines += `
             <tr>
-              <td>${skuProductName}</td>
-              <td>${skuCatalogueId}</td>
-              <td>${skuQuantity}</td>
-              <td>₹${skuUnitPrice}</td>
-              <td>₹${skuTotalAmount}</td>
-              <td>${skuHsn}</td>
-              <td>${skuEanUpc}</td>
-              <td>${skuWeight} kg</td>
-              <td>${skuDimensions}</td>
-              <td>₹${skuMrp}</td>
-              <td>₹${skuUnitPrice}</td>
-              <td>${skuGst}%</td>
-            </tr>
+                  <td>${skuSku}</td>
+                  <td>${skuProductName}</td>
+                  <td>${skuQuantity}</td>
+                  <td>${skuHsn}</td>
+                  <td>₹${skuMrp}</td>
+                  <td>${skuWeight} kg</td>
+                  <td>${skuDimensions}</td>
+                  <td>${skuBrand}</td>
+                </tr>
           `;
-        }
-      } else {
-        // If no SKU matrix, show main product
-        productLines += `
-          <tr>
-            <td>${productName}</td>
-            <td>${catalogueId}</td>
-            <td>${quantity}</td>
-            <td>₹${unitPrice}</td>
-            <td>₹${totalAmount}</td>
-            <td>${hsn}</td>
-            <td>${eanUpc}</td>
-            <td>${weight} kg</td>
-            <td>${dimensions}</td>
-            <td>₹${mrp}</td>
-            <td>₹${cost}</td>
-            <td>${gst}%</td>
-          </tr>
+      }
+      
+      productLines += `
+              </tbody>
+            </table>
+          </div>
         `;
       }
+      
+      productLines += `
+        </div>
+      `;
+      
+      productIndex++;
     }
 
     const html = `
@@ -141,17 +194,190 @@ export class EmailService {
       <html>
       <head>
         <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background-color: #f4f4f4; padding: 20px; text-align: center; }
-          .content { padding: 20px; }
-          .po-details { background-color: #f9f9f9; padding: 15px; margin: 15px 0; border-radius: 5px; }
-          .products-table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 12px; }
-          .products-table th, .products-table td { border: 1px solid #ddd; padding: 6px; text-align: left; }
-          .products-table th { background-color: #f2f2f2; font-weight: bold; }
-          .products-table td { word-wrap: break-word; }
-          .approval-link { background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 15px 0; }
-          .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; }
+          body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            line-height: 1.6; 
+            color: #1E2939; 
+            background-color: #F9FAFB;
+            margin: 0;
+            padding: 0;
+          }
+          .container { 
+            max-width: 800px; 
+            margin: 0 auto; 
+            background-color: #FFFFFF;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+          }
+          .header { 
+            background: linear-gradient(135deg, #B15177 0%, #C77398 100%);
+            padding: 30px 20px; 
+            text-align: center; 
+            color: white;
+          }
+          .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+          }
+          .content { 
+            padding: 30px; 
+          }
+          .po-details { 
+            background: linear-gradient(135deg, #FAF5F8 0%, #F7ECF1 100%);
+            padding: 20px; 
+            margin: 20px 0; 
+            border-radius: 8px; 
+            border-left: 4px solid #B15177;
+          }
+          .po-details h3 {
+            color: #B15177;
+            margin-top: 0;
+            font-size: 18px;
+          }
+          .po-details p {
+            margin: 8px 0;
+            font-size: 14px;
+          }
+          .product-row { 
+            border: 1px solid #E5E7EB; 
+            margin: 25px 0; 
+            padding: 0; 
+            border-radius: 8px; 
+            background-color: #FFFFFF;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+          }
+          .product-header { 
+            background: linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%);
+            padding: 15px 20px; 
+            font-weight: 600; 
+            border-bottom: 1px solid #E5E7EB; 
+            color: #1E2939;
+            font-size: 16px;
+          }
+          .product-details-table {
+            padding: 20px;
+          }
+          .main-product-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            margin: 15px 0;
+            background-color: #FFFFFF;
+            border-radius: 6px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+          }
+          .main-product-table th {
+            background: linear-gradient(135deg, #B15177 0%, #C77398 100%);
+            color: white;
+            padding: 12px 8px;
+            font-weight: 600;
+            text-align: center;
+            font-size: 11px;
+            border: 1px solid #973F5F;
+          }
+          .main-product-table td {
+            background-color: #FFFFFF;
+            padding: 12px 8px;
+            text-align: center;
+            color: #1E2939;
+            font-size: 11px;
+            border: 1px solid #E5E7EB;
+            word-wrap: break-word;
+          }
+          .main-product-table tr:nth-child(even) td {
+            background-color: #F9FAFB;
+          }
+          .sku-details-section {
+            padding: 0 20px 20px 20px;
+          }
+          .sku-details-header {
+            background: linear-gradient(135deg, #B15177 0%, #C77398 100%);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            text-align: center;
+            margin: 15px 0;
+          }
+          .sku-table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin: 10px 0; 
+            font-size: 12px;
+            background-color: #FFFFFF;
+            border-radius: 6px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+          }
+          .sku-table th, .sku-table td { 
+            border: 1px solid #E5E7EB; 
+            padding: 10px 8px; 
+            text-align: left; 
+          }
+          .sku-table th { 
+            background: linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%);
+            font-weight: 600; 
+            color: #4A5565;
+            font-size: 11px;
+          }
+          .sku-table td { 
+            word-wrap: break-word; 
+            color: #1E2939;
+            font-size: 11px;
+          }
+          .sku-table tr:nth-child(even) {
+            background-color: #F9FAFB;
+          }
+          .approval-link { 
+            background: linear-gradient(135deg, #B15177 0%, #C77398 100%);
+            color: white; 
+            padding: 12px 25px; 
+            text-decoration: none; 
+            border-radius: 6px; 
+            display: inline-block; 
+            margin: 15px 0;
+            font-weight: 500;
+            transition: all 0.3s ease;
+          }
+          .approval-link:hover {
+            background: linear-gradient(135deg, #973F5F 0%, #B15177 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(177, 81, 119, 0.3);
+          }
+          .footer { 
+            margin-top: 30px; 
+            padding: 20px 30px; 
+            border-top: 1px solid #E5E7EB; 
+            background-color: #F9FAFB;
+            color: #6A7282;
+            font-size: 14px;
+          }
+          .priority-high {
+            background: linear-gradient(135deg, #FEF3F2 0%, #FEE2E1 100%);
+            color: #DC2626;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+          }
+          .priority-medium {
+            background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%);
+            color: #D97706;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+          }
+          .priority-low {
+            background: linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%);
+            color: #16A34A;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+          }
         </style>
       </head>
       <body>
@@ -169,44 +395,24 @@ export class EmailService {
               <p><strong>Vendor:</strong> ${vendorName}</p>
               <p><strong>Distribution Center:</strong> ${dcName}</p>
               <p><strong>Total Amount:</strong> ₹${totalAmount}</p>
-              <p><strong>Priority:</strong> ${priority}</p>
+              <p><strong>Priority:</strong> <span class="priority-${priority.toLowerCase()}">${priority}</span></p>
             </div>
 
-            <h3>Products:</h3>
-            <table class="products-table">
-              <thead>
-                <tr>
-                  <th>Product Name</th>
-                  <th>Catalogue ID</th>
-                  <th>Quantity</th>
-                  <th>Unit Price</th>
-                  <th>Total</th>
-                  <th>HSN</th>
-                  <th>EAN/UPC</th>
-                  <th>Weight</th>
-                  <th>Dimensions (L×W×H)</th>
-                  <th>MRP</th>
-                  <th>Cost</th>
-                  <th>GST%</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${productLines}
-              </tbody>
-            </table>
+            <h3 style="color: #B15177; margin-top: 30px;">Products:</h3>
+            ${productLines}
 
             ${role !== 'creator' ? `
-              <div style="text-align: center; margin: 20px 0;">
+              <div style="text-align: center; margin: 30px 0;">
                 <a href="${approvalLink}" class="approval-link">Approve/Reject Purchase Order</a>
               </div>
             ` : `
-              <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
-                <h3>Next Steps for Creator:</h3>
+              <div style="background: linear-gradient(135deg, #F9FAFB 0%, #F3F4F6 100%); padding: 25px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #B15177;">
+                <h3 style="color: #B15177; margin-top: 0;">Next Steps for Creator:</h3>
                 <p>Please upload the Proforma Invoice (PI) and set the expected delivery date:</p>
-                <div style="text-align: center; margin: 15px 0;">
+                <div style="text-align: center; margin: 20px 0;">
                   <a href="${process.env.APP_BASE_URL_FRONTEND}/dc-po/${poId}/upload-pi" class="approval-link">Upload PI & Set Delivery Date</a>
                 </div>
-                <p style="font-size: 12px; color: #666; margin-top: 10px;">
+                <p style="font-size: 13px; color: #6A7282; margin-top: 15px;">
                   <strong>Note:</strong> Upload the PI document and provide the expected delivery date to complete the purchase order process.
                 </p>
               </div>
@@ -214,7 +420,7 @@ export class EmailService {
           </div>
           
           <div class="footer">
-            <p>Thanks,<br>Ozi Technologies</p>
+            <p>Thanks,<br><strong>Ozi Technologies</strong></p>
           </div>
         </div>
       </body>
@@ -258,18 +464,18 @@ export class EmailService {
       productLines += `
         <tr>
           <td>${productName}</td>
-          <td>${catalogueId}</td>
-          <td>${quantity}</td>
-          <td>₹${unitPrice}</td>
-          <td>₹${totalAmount}</td>
-          <td>${hsn}</td>
-          <td>${eanUpc}</td>
-          <td>${weight} kg</td>
-          <td>${dimensions}</td>
-          <td>₹${mrp}</td>
-          <td>₹${cost}</td>
-          <td>${gst}%</td>
-        </tr>
+                  <td>${catalogueId}</td>
+                  <td>${quantity}</td>
+                  <td>₹${unitPrice}</td>
+                  <td>₹${totalAmount}</td>
+                  <td>${hsn}</td>
+                  <td>${eanUpc}</td>
+                  <td>${weight} kg</td>
+                  <td>${dimensions}</td>
+                  <td>₹${mrp}</td>
+                  <td>₹${cost}</td>
+                  <td>${gst}%</td>
+                </tr>
       `;
     }
 
@@ -292,10 +498,24 @@ export class EmailService {
           .content { padding: 20px; }
           .po-details { background-color: #f9f9f9; padding: 15px; margin: 15px 0; border-radius: 5px; }
           .delivery-info { background-color: #e8f5e8; padding: 15px; margin: 15px 0; border-radius: 5px; border-left: 4px solid #28a745; }
-          .products-table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 12px; }
-          .products-table th, .products-table td { border: 1px solid #ddd; padding: 6px; text-align: left; }
-          .products-table th { background-color: #f2f2f2; font-weight: bold; }
-          .products-table td { word-wrap: break-word; }
+          .product-row { border: 1px solid #ddd; margin: 20px 0; padding: 15px; border-radius: 5px; }
+          .product-header { background-color: #f8f9fa; padding: 10px; font-weight: bold; border-bottom: 1px solid #ddd; margin-bottom: 10px; }
+          .product-content { display: flex; gap: 20px; }
+          .product-details-column { flex: 1; }
+          .sku-details-column { flex: 1; }
+          .sku-details { background-color: #f9f9f9; padding: 10px; margin-top: 10px; border-radius: 3px; }
+          .sku-item { border-bottom: 1px solid #eee; padding: 8px 0; }
+          .sku-item:last-child { border-bottom: none; }
+          .sku-header { font-weight: bold; color: #333; margin-bottom: 10px; }
+          .sku-details-row { font-size: 12px; color: #666; margin-top: 5px; }
+          .product-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12px; }
+          .product-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+          .product-table td:nth-child(odd) { background-color: #f8f9fa; font-weight: bold; width: 40%; }
+          .product-table td:nth-child(even) { background-color: #ffffff; width: 60%; }
+          .sku-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12px; }
+          .sku-table th, .sku-table td { border: 1px solid #ddd; padding: 6px; text-align: left; }
+          .sku-table th { background-color: #f2f2f2; font-weight: bold; }
+          .sku-table td { word-wrap: break-word; }
           .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; }
           .success-badge { background-color: #28a745; color: white; padding: 5px 10px; border-radius: 3px; font-size: 12px; }
         </style>
@@ -328,27 +548,7 @@ export class EmailService {
             </div>
 
             <h3>Products:</h3>
-            <table class="products-table">
-              <thead>
-                <tr>
-                  <th>Product Name</th>
-                  <th>Catalogue ID</th>
-                  <th>Quantity</th>
-                  <th>Unit Price</th>
-                  <th>Total</th>
-                  <th>HSN</th>
-                  <th>EAN/UPC</th>
-                  <th>Weight</th>
-                  <th>Dimensions (L×W×H)</th>
-                  <th>MRP</th>
-                  <th>Cost</th>
-                  <th>GST%</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${productLines}
-              </tbody>
-            </table>
+            ${productLines}
 
             <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0;">
               <h3>✅ Next Steps:</h3>

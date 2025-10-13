@@ -36,6 +36,7 @@ class DCPOProduct extends Model<
   declare brand_id: number | null;
   declare category_id: number | null;
   declare status: number | null;
+  declare sku_matrix_on_catelogue_id: string | null;
   declare createdAt: CreationOptional<Date>;
   declare updatedAt: CreationOptional<Date>;
 }
@@ -152,6 +153,10 @@ DCPOProduct.init(
     },
     status: {
       type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    sku_matrix_on_catelogue_id: {
+      type: DataTypes.TEXT,
       allowNull: true,
     },
     createdAt: {

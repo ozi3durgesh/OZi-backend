@@ -347,6 +347,11 @@ export class DCPOService {
               model: ParentProductMasterDC,
               as: 'Product',
             },
+            {
+              model: DCPOSkuMatrix,
+              as: 'SkuMatrix',
+              attributes: ['id', 'quantity', 'catalogue_id', 'category', 'sku', 'product_name', 'description', 'hsn', 'image_url', 'mrp', 'ean_upc', 'color', 'size', 'brand', 'weight', 'length', 'height', 'width', 'inventory_threshold', 'gst', 'cess'],
+            },
           ],
         },
       ],
