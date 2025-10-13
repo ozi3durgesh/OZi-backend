@@ -64,6 +64,27 @@ export const fetchSKUByCatalogueId = async (req: Request, res: Response) => {
 
     const { count, rows } = await Product.findAndCountAll({
       where: whereClause,
+      attributes: [
+        'catalogue_id',
+        'Category',
+        'SKU',
+        'ProductName',
+        'Description',
+        'hsn',
+        'ImageURL',
+        'MRP',
+        'EAN_UPC',
+        'Color',
+        'Size',
+        'Brand',
+        'Weight',
+        'Length',
+        'Height',
+        'Width',
+        'InventoryThreshold',
+        'gst',
+        'CESS'
+      ],
       limit: parseInt(limit.toString()),
       offset,
       order: [['id', 'DESC']]
