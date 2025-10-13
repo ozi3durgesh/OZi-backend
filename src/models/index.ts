@@ -45,6 +45,7 @@ import Brand from './Brand';
 import DCPurchaseOrder from './DCPurchaseOrder';
 import DCPOProduct from './DCPOProduct';
 import DCPOApproval from './DCPOApproval';
+import DCPOSkuMatrix from './DCPOSkuMatrix';
 import DCGrn from './DCGrn.model';
 import DCGrnLine from './DCGrnLine';
 import DCGrnBatch from './DCGrnBatch';
@@ -430,6 +431,17 @@ DCPOProduct.belongsTo(DCPurchaseOrder, {
 DCPOProduct.belongsTo(ParentProductMasterDC, {
   foreignKey: 'productId',
   as: 'Product',
+});
+
+// DCPOSkuMatrix associations
+DCPOSkuMatrix.belongsTo(DCPOProduct, {
+  foreignKey: 'dcPOProductId',
+  as: 'DCPOProduct',
+});
+
+DCPOProduct.hasMany(DCPOSkuMatrix, {
+  foreignKey: 'dcPOProductId',
+  as: 'SkuMatrix',
 });
 
 // DCPOApproval associations

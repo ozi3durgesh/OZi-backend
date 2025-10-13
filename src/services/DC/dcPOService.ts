@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import DCPurchaseOrder, { DCPurchaseOrderCreationAttributes } from '../../models/DCPurchaseOrder';
 import DCPOProduct, { DCPOProductCreationAttributes } from '../../models/DCPOProduct';
 import DCPOApproval, { DCPOApprovalCreationAttributes } from '../../models/DCPOApproval';
+import DCPOSkuMatrix from '../../models/DCPOSkuMatrix';
 import VendorDC from '../../models/VendorDC';
 import ParentProductMasterDC from '../../models/ParentProductMasterDC';
 import { DistributionCenter, User } from '../../models';
@@ -22,11 +23,33 @@ interface CreateDCPOData {
   vendorId: number;
   dcId: number;
   products: Array<{
-    productId: number;
-    quantity: number;
-    unitPrice: number;
+    catelogue_id: string;
+    totoal_quantity: number;
+    totalPrice: number;
     description?: string;
     notes?: string;
+    sku_matrix_on_catelogue_id?: Array<{
+      quantity: number;
+      catalogue_id: string;
+      category?: string;
+      sku: string;
+      product_name: string;
+      description?: string;
+      hsn?: string;
+      image_url?: string;
+      mrp?: string;
+      ean_upc?: string;
+      color?: string;
+      size?: string;
+      brand?: string;
+      weight?: number;
+      length?: number;
+      height?: number;
+      width?: number;
+      inventory_threshold?: number;
+      gst?: string;
+      cess?: string;
+    }>;
   }>;
   description?: string;
   notes?: string;
@@ -94,8 +117,8 @@ export class DCPOService {
       throw error;
     }
 
-    // Validate products exist by catalogue_id
-    const catalogueIds = data.products.map(p => p.productId.toString());
+    // Validate products exist by catalogue_id (new structure)
+    const catalogueIds = data.products.map(p => p.catelogue_id.toString());
     const products = await ParentProductMasterDC.findAll({
       where: { catalogue_id: { [Op.in]: catalogueIds } },
       attributes: [
@@ -115,22 +138,24 @@ export class DCPOService {
     // Calculate total amount
     let totalAmount = 0;
     const validatedProducts = data.products.map(productData => {
-      const product = products.find(p => p.catalogue_id.toString() === productData.productId.toString());
+      const product = products.find(p => p.catalogue_id.toString() === productData.catelogue_id.toString());
       if (!product) {
-        throw new Error(`Product with catalogue_id ${productData.productId} not found`);
+        throw new Error(`Product with catalogue_id ${productData.catelogue_id} not found`);
       }
-      const productTotal = productData.quantity * productData.unitPrice;
+      
+      // Use totalPrice directly instead of calculating
+      const productTotal = productData.totalPrice;
       totalAmount += productTotal;
 
       return {
         productId: product.id, // Use the actual database ID
         catalogue_id: product.catalogue_id, // Store catalogue_id in catalogue_id field
         productName: product.name || 'Unknown Product',
-        quantity: productData.quantity,
-        unitPrice: productData.unitPrice,
+        quantity: productData.totoal_quantity,
+        unitPrice: productData.totalPrice / productData.totoal_quantity, // Calculate unit price
         totalAmount: productTotal,
         mrp: product.mrp,
-        cost: productData.unitPrice, // Use unitPrice as cost since cost column is removed
+        cost: productData.totalPrice / productData.totoal_quantity, // Calculate cost per unit
         description: productData.description || product.description,
         notes: productData.notes,
         // Additional product details from parent_product_master
@@ -147,6 +172,8 @@ export class DCPOService {
         brand_id: product.brand_id,
         category_id: product.category_id,
         status: product.status,
+        // Store SKU matrix data for later processing
+        skuMatrix: productData.sku_matrix_on_catelogue_id || [],
       };
     });
 
@@ -166,10 +193,10 @@ export class DCPOService {
       createdBy: data.createdBy,
     } as DCPurchaseOrderCreationAttributes);
 
-    // Create PO products
+    // Create PO products and their SKU matrix
     const poProducts = await Promise.all(
-      validatedProducts.map(productData =>
-        DCPOProduct.create({
+      validatedProducts.map(async (productData) => {
+        const poProduct = await DCPOProduct.create({
           dcPOId: newPO.id,
           productId: productData.productId,
           catalogue_id: productData.catalogue_id,
@@ -194,8 +221,39 @@ export class DCPOService {
           brand_id: productData.brand_id,
           category_id: productData.category_id,
           status: productData.status,
-        })
-      )
+        });
+
+        // Create SKU matrix entries if provided
+        if (productData.skuMatrix && productData.skuMatrix.length > 0) {
+          const skuMatrixEntries = productData.skuMatrix.map((sku: any) => ({
+            dcPOProductId: poProduct.id,
+            quantity: sku.quantity,
+            catalogue_id: sku.catalogue_id,
+            category: sku.category || sku.Category,
+            sku: sku.sku || sku.SKU,
+            product_name: sku.product_name || sku.ProductName,
+            description: sku.description || sku.Description,
+            hsn: sku.hsn,
+            image_url: sku.image_url || sku.ImageURL,
+            mrp: sku.mrp || sku.MRP,
+            ean_upc: sku.ean_upc || sku.EAN_UPC,
+            color: sku.color || sku.Color,
+            size: sku.size || sku.Size,
+            brand: sku.brand || sku.Brand,
+            weight: sku.weight || sku.Weight,
+            length: sku.length || sku.Length,
+            height: sku.height || sku.Height,
+            width: sku.width || sku.Width,
+            inventory_threshold: sku.inventory_threshold || sku.InventoryThreshold,
+            gst: sku.gst,
+            cess: sku.cess || sku.CESS,
+          }));
+
+          await DCPOSkuMatrix.bulkCreate(skuMatrixEntries);
+        }
+
+        return poProduct;
+      })
     );
 
     // Initialize approval workflow
@@ -227,6 +285,11 @@ export class DCPOService {
               model: ParentProductMasterDC,
               as: 'Product',
               attributes: ['id', 'catalogue_id', 'name', 'mrp'],
+            },
+            {
+              model: DCPOSkuMatrix,
+              as: 'SkuMatrix',
+              attributes: ['id', 'quantity', 'catalogue_id', 'category', 'sku', 'product_name', 'description', 'hsn', 'image_url', 'mrp', 'ean_upc', 'color', 'size', 'brand', 'weight', 'length', 'height', 'width', 'inventory_threshold', 'gst', 'cess'],
             },
           ],
         },

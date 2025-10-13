@@ -80,22 +80,60 @@ export class EmailService {
       const gst = product.gst || product.dataValues?.gst || product.Product?.gst || 'N/A';
       const description = product.description || product.dataValues?.description || product.Product?.description || 'N/A';
       
-      productLines += `
-        <tr>
-          <td>${productName}</td>
-          <td>${catalogueId}</td>
-          <td>${quantity}</td>
-          <td>₹${unitPrice}</td>
-          <td>₹${totalAmount}</td>
-          <td>${hsn}</td>
-          <td>${eanUpc}</td>
-          <td>${weight} kg</td>
-          <td>${dimensions}</td>
-          <td>₹${mrp}</td>
-          <td>₹${cost}</td>
-          <td>${gst}%</td>
-        </tr>
-      `;
+      // Check if product has SKU matrix
+      const skuMatrix = product.SkuMatrix || product.dataValues?.SkuMatrix || product.skuMatrix || [];
+      
+      if (skuMatrix && skuMatrix.length > 0) {
+        // If SKU matrix exists, show individual SKUs
+        for (const sku of skuMatrix) {
+          const skuProductName = sku.product_name || sku.dataValues?.product_name || 'N/A';
+          const skuCatalogueId = sku.catalogue_id || sku.dataValues?.catalogue_id || 'N/A';
+          const skuQuantity = sku.quantity || sku.dataValues?.quantity || 'N/A';
+          const skuUnitPrice = (unitPrice !== 'N/A' && quantity !== 'N/A') ? (parseFloat(unitPrice) / parseFloat(quantity)) : 'N/A';
+          const skuTotalAmount = (skuUnitPrice !== 'N/A' && skuQuantity !== 'N/A') ? (parseFloat(skuUnitPrice.toString()) * parseFloat(skuQuantity.toString())) : 'N/A';
+          const skuHsn = sku.hsn || sku.dataValues?.hsn || hsn;
+          const skuEanUpc = sku.ean_upc || sku.dataValues?.ean_upc || eanUpc;
+          const skuWeight = sku.weight || sku.dataValues?.weight || 'N/A';
+          const skuDimensions = `${sku.length || sku.dataValues?.length || 'N/A'} x ${sku.width || sku.dataValues?.width || 'N/A'} x ${sku.height || sku.dataValues?.height || 'N/A'}`;
+          const skuMrp = sku.mrp || sku.dataValues?.mrp || 'N/A';
+          const skuGst = sku.gst || sku.dataValues?.gst || gst;
+          
+          productLines += `
+            <tr>
+              <td>${skuProductName}</td>
+              <td>${skuCatalogueId}</td>
+              <td>${skuQuantity}</td>
+              <td>₹${skuUnitPrice}</td>
+              <td>₹${skuTotalAmount}</td>
+              <td>${skuHsn}</td>
+              <td>${skuEanUpc}</td>
+              <td>${skuWeight} kg</td>
+              <td>${skuDimensions}</td>
+              <td>₹${skuMrp}</td>
+              <td>₹${skuUnitPrice}</td>
+              <td>${skuGst}%</td>
+            </tr>
+          `;
+        }
+      } else {
+        // If no SKU matrix, show main product
+        productLines += `
+          <tr>
+            <td>${productName}</td>
+            <td>${catalogueId}</td>
+            <td>${quantity}</td>
+            <td>₹${unitPrice}</td>
+            <td>₹${totalAmount}</td>
+            <td>${hsn}</td>
+            <td>${eanUpc}</td>
+            <td>${weight} kg</td>
+            <td>${dimensions}</td>
+            <td>₹${mrp}</td>
+            <td>₹${cost}</td>
+            <td>${gst}%</td>
+          </tr>
+        `;
+      }
     }
 
     const html = `

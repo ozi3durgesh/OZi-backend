@@ -33,20 +33,51 @@ export class DCPOController {
         return ResponseHandler.error(res, 'Vendor ID, DC ID, and products are required', 400);
       }
 
-      // Validate products array
+      // Validate products array with new structure
       for (const product of products) {
-        if (!product.productId || !product.quantity || !product.unitPrice) {
-          return ResponseHandler.error(res, 'Each product must have productId (catalogue_id), quantity, and unitPrice', 400);
+        // Check for new structure with catalogue_id and total_quantity
+        if (!product.catelogue_id || !product.totoal_quantity || !product.totalPrice) {
+          return ResponseHandler.error(res, 'Each product must have catelogue_id, totoal_quantity, and totalPrice', 400);
         }
 
-        if (product.quantity < DC_PO_CONSTANTS.VALIDATION.MIN_QUANTITY || 
-            product.quantity > DC_PO_CONSTANTS.VALIDATION.MAX_QUANTITY) {
-          return ResponseHandler.error(res, `Quantity must be between ${DC_PO_CONSTANTS.VALIDATION.MIN_QUANTITY} and ${DC_PO_CONSTANTS.VALIDATION.MAX_QUANTITY}`, 400);
+        // Validate total_quantity
+        if (product.totoal_quantity < DC_PO_CONSTANTS.VALIDATION.MIN_QUANTITY || 
+            product.totoal_quantity > DC_PO_CONSTANTS.VALIDATION.MAX_QUANTITY) {
+          return ResponseHandler.error(res, `Total quantity must be between ${DC_PO_CONSTANTS.VALIDATION.MIN_QUANTITY} and ${DC_PO_CONSTANTS.VALIDATION.MAX_QUANTITY}`, 400);
         }
 
-        if (product.unitPrice < DC_PO_CONSTANTS.VALIDATION.MIN_AMOUNT || 
-            product.unitPrice > DC_PO_CONSTANTS.VALIDATION.MAX_AMOUNT) {
-          return ResponseHandler.error(res, `Unit price must be between ₹${DC_PO_CONSTANTS.VALIDATION.MIN_AMOUNT} and ₹${DC_PO_CONSTANTS.VALIDATION.MAX_AMOUNT}`, 400);
+        // Validate total price
+        if (product.totalPrice < DC_PO_CONSTANTS.VALIDATION.MIN_AMOUNT || 
+            product.totalPrice > DC_PO_CONSTANTS.VALIDATION.MAX_AMOUNT) {
+          return ResponseHandler.error(res, `Total price must be between ₹${DC_PO_CONSTANTS.VALIDATION.MIN_AMOUNT} and ₹${DC_PO_CONSTANTS.VALIDATION.MAX_AMOUNT}`, 400);
+        }
+
+        // Validate SKU matrix if provided
+        if (product.sku_matrix_on_catelogue_id && Array.isArray(product.sku_matrix_on_catelogue_id)) {
+          // Validate total quantity matches sum of SKU matrix quantities
+          const skuMatrixTotal = product.sku_matrix_on_catelogue_id.reduce((sum: number, sku: any) => sum + (sku.quantity || 0), 0);
+          if (skuMatrixTotal !== product.totoal_quantity) {
+            return ResponseHandler.error(res, `Total quantity (${product.totoal_quantity}) must equal sum of SKU matrix quantities (${skuMatrixTotal})`, 400);
+          }
+
+          // Validate each SKU in the matrix
+          for (const sku of product.sku_matrix_on_catelogue_id) {
+            if (!sku.quantity || !sku.catalogue_id || !sku.sku) {
+              return ResponseHandler.error(res, 'Each SKU in matrix must have quantity, catalogue_id, and sku', 400);
+            }
+
+            // Validate catalogue_id prefix matches SKU prefix (first 7 digits)
+            const cataloguePrefix = product.catelogue_id.toString().substring(0, 7);
+            const skuPrefix = sku.sku.toString().substring(0, 7);
+            if (cataloguePrefix !== skuPrefix) {
+              return ResponseHandler.error(res, `Catalogue ID prefix (${cataloguePrefix}) must match SKU prefix (${skuPrefix}) for SKU ${sku.sku}`, 400);
+            }
+
+            // Validate SKU quantity
+            if (sku.quantity < 1 || sku.quantity > DC_PO_CONSTANTS.VALIDATION.MAX_QUANTITY) {
+              return ResponseHandler.error(res, `SKU quantity must be between 1 and ${DC_PO_CONSTANTS.VALIDATION.MAX_QUANTITY}`, 400);
+            }
+          }
         }
       }
 
