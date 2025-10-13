@@ -404,8 +404,15 @@ export class DCSkuSplittingController {
         if (line.batches && Array.isArray(line.batches)) {
           for (let j = 0; j < line.batches.length; j++) {
             const batch = line.batches[j];
-            if (!batch.batchNo || !batch.expiry || !Number.isInteger(batch.qty) || batch.qty <= 0) {
-              return ResponseHandler.error(res, `Line ${i + 1}, Batch ${j + 1}: batchNo, expiry, and qty are required`, 400);
+            if (!Number.isInteger(batch.qty) || batch.qty <= 0) {
+              return ResponseHandler.error(res, `Line ${i + 1}, Batch ${j + 1}: qty is required and must be a positive integer`, 400);
+            }
+            // batchNo and expiry can be null, but if provided they should be strings
+            if (batch.batchNo !== null && batch.batchNo !== undefined && typeof batch.batchNo !== 'string') {
+              return ResponseHandler.error(res, `Line ${i + 1}, Batch ${j + 1}: batchNo must be a string or null`, 400);
+            }
+            if (batch.expiry !== null && batch.expiry !== undefined && typeof batch.expiry !== 'string') {
+              return ResponseHandler.error(res, `Line ${i + 1}, Batch ${j + 1}: expiry must be a string or null`, 400);
             }
           }
         }

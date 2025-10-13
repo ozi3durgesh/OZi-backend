@@ -586,8 +586,8 @@ export class DCSkuSplittingService {
       rtvQty?: number;
       photos?: string;
       batches?: Array<{
-        batchNo: string;
-        expiry: string;
+        batchNo?: string | null;
+        expiry?: string | null;
         qty: number;
       }>;
     }>;
@@ -643,8 +643,6 @@ export class DCSkuSplittingService {
           rejected_qty: line.rejectedQty || 0,
           qc_pass_qty: line.qcPassQty,
           qc_fail_qty: line.receivedQty - line.qcPassQty,
-          held_qty: line.heldQty || 0,
-          rtv_qty: line.rtvQty || 0,
           line_status: lineStatus,
           putaway_status: 'pending',
           remarks: line.remarks || null
@@ -655,8 +653,8 @@ export class DCSkuSplittingService {
           for (const batch of line.batches) {
             await DCGrnBatch.create({
               dc_grn_line_id: grnLine.id,
-              batch_no: batch.batchNo,
-              expiry_date: new Date(batch.expiry),
+              batch_no: batch.batchNo || null,
+              expiry_date: batch.expiry ? new Date(batch.expiry) : null,
               qty: batch.qty
             }, { transaction });
           }
