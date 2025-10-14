@@ -200,7 +200,7 @@ export class DCPOService {
       description: data.description,
       notes: data.notes,
       priority: data.priority || DC_PO_CONSTANTS.DEFAULTS.PRIORITY,
-      gstType: data.gstType,
+      gst_type: data.gstType,
       status: DC_PO_CONSTANTS.STATUS.DRAFT,
       createdBy: data.createdBy,
     } as DCPurchaseOrderCreationAttributes);
