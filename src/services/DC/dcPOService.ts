@@ -510,6 +510,12 @@ export class DCPOService {
         {
           model: DCPOProduct,
           as: 'Products',
+          include: [
+            {
+              model: DCPOSkuMatrix,
+              as: 'SkuMatrix',
+            },
+          ],
         },
       ],
     });

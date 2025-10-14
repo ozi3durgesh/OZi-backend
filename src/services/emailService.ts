@@ -81,6 +81,12 @@ export class EmailService {
       const cost = product.unitPrice || product.dataValues?.unitPrice || product.Product?.unitPrice || 'N/A';
       const gst = product.gst || product.dataValues?.gst || product.Product?.gst || 'N/A';
       
+      // New fields for pricing and tax
+      const rlp = product.rlp || product.dataValues?.rlp || 'N/A';
+      const rlpWoTax = product.rlp_w_o_tax || product.dataValues?.rlp_w_o_tax || 'N/A';
+      const sgst = product.sgst || product.dataValues?.sgst || 'N/A';
+      const cgst = product.cgst || product.dataValues?.cgst || 'N/A';
+      
       // Check if product has SKU matrix
       const skuMatrix = product.SkuMatrix || product.dataValues?.SkuMatrix || product.skuMatrix || [];
       
@@ -94,8 +100,8 @@ export class EmailService {
             <table class="main-product-table">
               <thead>
                 <tr>
-                  <th>Catalogue ID</th>
-                  <th>Total Quantity</th>
+                  <th>Cat ID</th>
+                  <th>Qty</th>
                   <th>Unit Price</th>
                   <th>Total</th>
                   <th>HSN</th>
@@ -104,6 +110,10 @@ export class EmailService {
                   <th>Dimensions</th>
                   <th>MRP</th>
                   <th>Cost</th>
+                  <th>RLP</th>
+                  <th>RLP w/o Tax</th>
+                  <th>SGST</th>
+                  <th>CGST</th>
                   <th>GST</th>
                 </tr>
               </thead>
@@ -119,6 +129,10 @@ export class EmailService {
                   <td>${dimensions}</td>
                   <td>₹${mrp}</td>
                   <td>₹${cost}</td>
+                  <td>₹${rlp}</td>
+                  <td>₹${rlpWoTax}</td>
+                  <td>₹${sgst}</td>
+                  <td>₹${cgst}</td>
                   <td>${gst}%</td>
                 </tr>
               </tbody>
@@ -240,92 +254,96 @@ export class EmailService {
           }
           .product-row { 
             border: 1px solid #E5E7EB; 
-            margin: 25px 0; 
+            margin: 15px 0; 
             padding: 0; 
-            border-radius: 8px; 
+            border-radius: 6px; 
             background-color: #FFFFFF;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
           }
           .product-header { 
             background: linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%);
-            padding: 15px 20px; 
+            padding: 10px 15px; 
             font-weight: 600; 
             border-bottom: 1px solid #E5E7EB; 
             color: #1E2939;
-            font-size: 16px;
+            font-size: 14px;
           }
           .product-details-table {
-            padding: 20px;
+            padding: 15px;
           }
           .main-product-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 12px;
-            margin: 15px 0;
+            font-size: 10px;
+            margin: 10px 0;
             background-color: #FFFFFF;
-            border-radius: 6px;
+            border-radius: 4px;
             overflow: hidden;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
           }
           .main-product-table th {
             background: linear-gradient(135deg, #B15177 0%, #C77398 100%);
             color: white;
-            padding: 12px 8px;
+            padding: 8px 4px;
             font-weight: 600;
             text-align: center;
-            font-size: 11px;
+            font-size: 9px;
             border: 1px solid #973F5F;
+            white-space: nowrap;
           }
           .main-product-table td {
             background-color: #FFFFFF;
-            padding: 12px 8px;
+            padding: 8px 4px;
             text-align: center;
             color: #1E2939;
-            font-size: 11px;
+            font-size: 9px;
             border: 1px solid #E5E7EB;
             word-wrap: break-word;
+            white-space: nowrap;
           }
           .main-product-table tr:nth-child(even) td {
             background-color: #F9FAFB;
           }
           .sku-details-section {
-            padding: 0 20px 20px 20px;
+            padding: 0 15px 15px 15px;
           }
           .sku-details-header {
             background: linear-gradient(135deg, #B15177 0%, #C77398 100%);
             color: white;
-            padding: 12px 20px;
-            border-radius: 6px;
-            font-size: 14px;
+            padding: 8px 15px;
+            border-radius: 4px;
+            font-size: 12px;
             font-weight: 500;
             text-align: center;
-            margin: 15px 0;
+            margin: 10px 0;
           }
           .sku-table { 
             width: 100%; 
             border-collapse: collapse; 
-            margin: 10px 0; 
-            font-size: 12px;
+            margin: 8px 0; 
+            font-size: 10px;
             background-color: #FFFFFF;
-            border-radius: 6px;
+            border-radius: 4px;
             overflow: hidden;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
           }
           .sku-table th, .sku-table td { 
             border: 1px solid #E5E7EB; 
-            padding: 10px 8px; 
+            padding: 6px 4px; 
             text-align: left; 
           }
           .sku-table th { 
             background: linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%);
             font-weight: 600; 
             color: #4A5565;
-            font-size: 11px;
+            font-size: 9px;
+            white-space: nowrap;
           }
           .sku-table td { 
             word-wrap: break-word; 
             color: #1E2939;
-            font-size: 11px;
+            font-size: 9px;
+            white-space: nowrap;
           }
           .sku-table tr:nth-child(even) {
             background-color: #F9FAFB;
