@@ -114,62 +114,73 @@ export class VendorDCService {
       ],
     });
 
-    // Send onboarding email to vendor
-    if (vendor && vendor.pocEmail) {
+    // Send onboarding email ONLY to vendor's POC email
+    console.log('🚀 ===== VENDOR EMAIL PROCESS STARTED =====');
+    console.log('🔍 Vendor exists:', !!vendor);
+    console.log('🔍 POC email exists:', !!vendor?.pocEmail);
+    console.log('🔍 POC email value:', vendor?.pocEmail);
+    console.log('🔍 Full vendor object:', JSON.stringify(vendor, null, 2));
+    console.log('🔍 EmailService import check:', typeof EmailService);
+    console.log('🔍 EmailService.sendVendorOnboardingEmail check:', typeof EmailService.sendVendorOnboardingEmail);
+    
+    const pocEmail = vendor?.pocEmail || vendor?.dataValues?.pocEmail;
+    if (vendor && pocEmail) {
       try {
-        // Send email to vendor's POC email
-        const vendorEmailRecipients = [vendor.pocEmail];
+        console.log('📧 ===== SENDING EMAIL TO POC =====');
+        console.log('📧 Recipient:', pocEmail);
+        console.log('📧 Vendor Name:', vendor?.tradeName || vendor?.dataValues?.tradeName);
+        console.log('📧 Vendor ID:', vendor?.vendorId || vendor?.dataValues?.vendorId);
         
-        // Send email to vendor
-        await EmailService.sendVendorOnboardingEmail(
-          vendorEmailRecipients,
-          vendor.tradeName,
-          vendor.vendorId,
-          (vendor as any).DistributionCenter?.name || 'N/A',
-          vendor.pocName || 'Vendor',
-          vendor.pocEmail,
-          vendor.businessAddress || '',
-          vendor.city || '',
-          vendor.state || '',
-          vendor.pincode || '',
-          vendor.gstNumber,
-          vendor.panNumber || '',
-          vendor.vendorType,
-          vendor.brandName,
-          vendor.model,
-          vendor.vrf,
-          vendor.paymentTerms
-        );
-
-        // Also send notification to admin team
-        const adminEmails = [
-          'admin@ozi.in',
-          'durgesh.singh@ozi.in'
-        ];
+        const tradeName = vendor?.tradeName || vendor?.dataValues?.tradeName;
+        const vendorId = vendor?.vendorId || vendor?.dataValues?.vendorId;
+        const pocName = vendor?.pocName || vendor?.dataValues?.pocName;
+        const businessAddress = vendor?.businessAddress || vendor?.dataValues?.businessAddress;
+        const city = vendor?.city || vendor?.dataValues?.city;
+        const state = vendor?.state || vendor?.dataValues?.state;
+        const pincode = vendor?.pincode || vendor?.dataValues?.pincode;
+        const gstNumber = vendor?.gstNumber || vendor?.dataValues?.gstNumber;
+        const panNumber = vendor?.panNumber || vendor?.dataValues?.panNumber;
+        const vendorType = vendor?.vendorType || vendor?.dataValues?.vendorType;
+        const brandName = vendor?.brandName || vendor?.dataValues?.brandName;
+        const model = vendor?.model || vendor?.dataValues?.model;
+        const vrf = vendor?.vrf || vendor?.dataValues?.vrf;
+        const paymentTerms = vendor?.paymentTerms || vendor?.dataValues?.paymentTerms;
         
-        await EmailService.sendVendorOnboardingEmail(
-          adminEmails,
-          vendor.tradeName,
-          vendor.vendorId,
+        const emailResult = await EmailService.sendVendorOnboardingEmail(
+          [pocEmail], // Only send to the POC email from the request
+          tradeName,
+          vendorId,
           (vendor as any).DistributionCenter?.name || 'N/A',
-          vendor.pocName || 'Vendor',
-          vendor.pocEmail,
-          vendor.businessAddress || '',
-          vendor.city || '',
-          vendor.state || '',
-          vendor.pincode || '',
-          vendor.gstNumber,
-          vendor.panNumber || '',
-          vendor.vendorType,
-          vendor.brandName,
-          vendor.model,
-          vendor.vrf,
-          vendor.paymentTerms
+          pocName || 'Vendor',
+          pocEmail,
+          businessAddress || '',
+          city || '',
+          state || '',
+          pincode || '',
+          gstNumber,
+          panNumber || '',
+          vendorType,
+          brandName,
+          model,
+          vrf,
+          paymentTerms
         );
+        
+        console.log('✅ ===== EMAIL SENT SUCCESSFULLY =====');
+        console.log('✅ Email result:', emailResult);
+        console.log('✅ Sent to:', pocEmail);
+        console.log('✅ Subject: Welcome to OZI - ' + tradeName + ' Successfully Onboarded!');
       } catch (emailError) {
-        console.error('Failed to send vendor onboarding email:', emailError);
+        console.error('❌ ===== EMAIL SENDING FAILED =====');
+        console.error('❌ Error:', emailError);
+        console.error('❌ Error details:', (emailError as Error).message);
         // Don't throw error - vendor creation should still succeed
       }
+    } else {
+      console.log('⚠️ ===== NO EMAIL SENT =====');
+      console.log('⚠️ Reason: No POC email provided');
+      console.log('⚠️ Vendor exists:', !!vendor);
+      console.log('⚠️ POC Email exists:', !!vendor?.pocEmail);
     }
 
     return vendor;

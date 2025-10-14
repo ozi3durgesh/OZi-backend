@@ -17,12 +17,17 @@ export class EmailService {
    */
   static async sendEmail(to: string[], subject: string, html: string): Promise<boolean> {
     try {
+      console.log('📧 EMAIL SERVICE DEBUG: sendEmail called');
+      console.log('📧 EMAIL SERVICE DEBUG: To:', to);
+      console.log('📧 EMAIL SERVICE DEBUG: Subject:', subject);
+      
       // For vendor onboarding emails, allow any domain
       // For other emails, validate ozi.in domain
       let validRecipients = to;
       
       // Check if this is a vendor onboarding email by looking at the subject
       const isVendorOnboarding = subject.includes('Successfully Onboarded') || subject.includes('Welcome to OZI');
+      console.log('📧 EMAIL SERVICE DEBUG: Is vendor onboarding:', isVendorOnboarding);
       
       if (!isVendorOnboarding) {
         // Validate that all recipients are from ozi.in domain for non-vendor emails
@@ -35,6 +40,8 @@ export class EmailService {
           throw new Error('No valid recipients found. All recipients must be from ozi.in domain');
         }
       }
+      
+      console.log('📧 EMAIL SERVICE DEBUG: Valid recipients:', validRecipients);
 
       const emailData: EmailData = {
         service: 'send_email',
@@ -44,15 +51,18 @@ export class EmailService {
         html
       };
 
+      console.log('📧 EMAIL SERVICE DEBUG: Sending to AWS API Gateway...');
       const response = await axios.post(this.API_URL, emailData, {
         headers: {
           'Content-Type': 'application/json'
         }
       });
 
+      console.log('📧 EMAIL SERVICE DEBUG: AWS response:', response.data);
       return true;
     } catch (error) {
-      console.error('Failed to send email:', error);
+      console.error('📧 EMAIL SERVICE DEBUG: Failed to send email:', error);
+      console.error('📧 EMAIL SERVICE DEBUG: Error details:', (error as any).response?.data || (error as Error).message);
       return false;
     }
   }

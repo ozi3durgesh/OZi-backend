@@ -36,6 +36,7 @@ import dcVendorRoutes from './routes/DC/vendorRoutes';
 import dcPORoutes from './routes/DC/dcPORoutes';
 import dcGrnRoutes from './routes/DC/dcGrnRoutes';
 import dcInventory1Routes from './routes/DC/dcInventory1Routes';
+import pdfUploadRoutes from './routes/pdfUploadRoutes';
 
 const app = express();
 
@@ -98,6 +99,9 @@ app.use('/api/v1/customer/order', orderRoutes);
 
 // Ecommerce integration routes
 app.use('/api/ecommerce', easyEcomWebhookRoutes);
+
+// PDF upload routes
+app.use('/api/upload', pdfUploadRoutes);
 
 
 // Health check
