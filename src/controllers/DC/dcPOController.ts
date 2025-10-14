@@ -22,6 +22,7 @@ export class DCPOController {
       const {
         vendorId,
         dcId,
+        gstType,
         products,
         description,
         notes,
@@ -97,9 +98,16 @@ export class DCPOController {
         return ResponseHandler.error(res, 'Priority must be one of: LOW, MEDIUM, HIGH, URGENT', 400);
       }
 
+      // Validate gstType
+      const validGstTypes = ['SGST+CGST', 'IGST', 'NONE'];
+      if (gstType && !validGstTypes.includes(gstType)) {
+        return ResponseHandler.error(res, 'GST Type must be one of: SGST+CGST, IGST, NONE', 400);
+      }
+
       const po = await DCPOService.createDCPO({
         vendorId,
         dcId,
+        gstType,
         products,
         description,
         notes,

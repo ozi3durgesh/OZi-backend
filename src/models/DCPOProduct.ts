@@ -37,6 +37,10 @@ class DCPOProduct extends Model<
   declare category_id: number | null;
   declare status: number | null;
   declare sku_matrix_on_catelogue_id: string | null;
+  declare rlp: string | null;
+  declare rlp_w_o_tax: string | null;
+  declare sgst: string | null;
+  declare cgst: string | null;
   declare createdAt: CreationOptional<Date>;
   declare updatedAt: CreationOptional<Date>;
 }
@@ -157,6 +161,22 @@ DCPOProduct.init(
     },
     sku_matrix_on_catelogue_id: {
       type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    rlp: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    rlp_w_o_tax: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    sgst: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    cgst: {
+      type: DataTypes.STRING(50),
       allowNull: true,
     },
     createdAt: {
