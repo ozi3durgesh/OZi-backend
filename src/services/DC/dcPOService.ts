@@ -451,7 +451,7 @@ export class DCPOService {
     let approvalLink = '';
     // Generate approval token for all roles including creator
     const token = this.generateApprovalToken(po.id, role);
-    approvalLink = `${process.env.APP_BASE_URL_FRONTEND}/dc-po-approval/${encodeURIComponent(token)}`;
+    approvalLink = `${process.env.APP_BASE_URL_FRONTEND}dc/po-approval/${encodeURIComponent(token)}`;
 
     // Get recipient email
     const recipientEmail = DC_PO_CONSTANTS.EMAIL.APPROVAL_EMAILS[role];
