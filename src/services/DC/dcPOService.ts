@@ -10,6 +10,7 @@ import { DistributionCenter, User } from '../../models';
 import { DC_PO_CONSTANTS } from '../../constants/dcPOConstants';
 import { EmailService } from '../emailService';
 import { DCSkuSplittingService } from './dcSkuSplittingService';
+import { DCInventory1Service } from '../DCInventory1Service';
 
 interface DCPOFilters {
   search?: string;
@@ -258,6 +259,14 @@ export class DCPOService {
 
     // Initialize approval workflow
     await this.initializeApprovalWorkflow(newPO.id);
+
+    // Update DC Inventory 1 for PO raise
+    for (const product of validatedProducts) {
+      await DCInventory1Service.updateOnPORaise(
+        product.catalogue_id,
+        product.quantity
+      );
+    }
 
     // Fetch the created PO with associations
     const po = await DCPurchaseOrder.findByPk(newPO.id, {
@@ -541,6 +550,19 @@ export class DCPOService {
           approvedBy: null, // We don't have user ID from token
           approvedAt: new Date(),
         });
+
+        // Update DC Inventory 1 for PO approval
+        const products = await DCPOProduct.findAll({
+          where: { dcPOId: po.id },
+          attributes: ['catalogue_id', 'quantity']
+        });
+
+        for (const product of products) {
+          await DCInventory1Service.updateOnPOApprove(
+            product.catalogue_id,
+            product.quantity
+          );
+        }
       }
     }
 
@@ -899,6 +921,19 @@ export class DCPOService {
       updatedBy: data.updatedBy,
       approvedAt: new Date(),
     });
+
+    // Update DC Inventory 1 for PO approval
+    const products = await DCPOProduct.findAll({
+      where: { dcPOId: poId },
+      attributes: ['catalogue_id', 'quantity']
+    });
+
+    for (const product of products) {
+      await DCInventory1Service.updateOnPOApprove(
+        product.catalogue_id,
+        product.quantity
+      );
+    }
 
     // Send final notification email to all stakeholders
     await this.sendFinalNotificationEmail(poId);

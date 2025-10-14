@@ -35,6 +35,7 @@ import parentProductRoutesDC from './routes/DC/parentProductRoutesDC';
 import dcVendorRoutes from './routes/DC/vendorRoutes';
 import dcPORoutes from './routes/DC/dcPORoutes';
 import dcGrnRoutes from './routes/DC/dcGrnRoutes';
+import dcInventory1Routes from './routes/DC/dcInventory1Routes';
 
 const app = express();
 
@@ -77,6 +78,7 @@ app.use('/api/dc', dcVendorRoutes);
 app.use('/api/dc', parentProductRoutesDC);
 app.use('/api/dc', dcPORoutes);
 app.use('/api/dc/grn', dcGrnRoutes);
+app.use('/api/dc/inventory-1', dcInventory1Routes);
 
 app.use('/api', vendorRoutes);
 app.use('/api', productRoutes);

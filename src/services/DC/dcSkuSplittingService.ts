@@ -9,6 +9,7 @@ import DCGrnBatch from '../../models/DCGrnBatch';
 import DCGrnPhoto from '../../models/DCGrnPhoto';
 import sequelize from '../../config/database';
 import { DC_PO_CONSTANTS } from '../../constants/dcPOConstants';
+import { DCInventory1Service } from '../DCInventory1Service';
 
 export interface SkuSplittingStatus {
   status: 'pending' | 'partial' | 'completed';
@@ -213,6 +214,19 @@ export class DCSkuSplittingService {
       // Update splitting status for this PO and catalogue_id
       await this.updateSplittingStatus(poId, catalogueId);
       
+      // Update DC Inventory 1 for SKU split update
+      try {
+        const skuSplitData_for_inventory = {
+          [sku]: skuSplittedQuantity
+        };
+        console.log(`🔍 SKU Split Update Hook: Updating DC Inventory for catalogue ${catalogueId} with data:`, skuSplitData_for_inventory);
+        await DCInventory1Service.updateOnSKUSplit(catalogueId, skuSplitData_for_inventory);
+        console.log(`✅ SKU Split Update Hook: DC Inventory updated successfully`);
+      } catch (error) {
+        console.error(`❌ SKU Split Update Hook Error:`, error);
+        // Don't throw the error to prevent breaking the SKU split operation
+      }
+      
       // Get updated splitting status
       const splittingStatus = await this.getSkuSplittingStatus(poId, catalogueId);
 
@@ -278,6 +292,19 @@ export class DCSkuSplittingService {
     
     // Update splitting status for this PO and catalogue_id
     await this.updateSplittingStatus(poId, catalogueId);
+    
+    // Update DC Inventory 1 for SKU split
+    try {
+      const skuSplitData_for_inventory = {
+        [sku]: skuSplittedQuantity
+      };
+      console.log(`🔍 SKU Split Hook: Updating DC Inventory for catalogue ${catalogueId} with data:`, skuSplitData_for_inventory);
+      await DCInventory1Service.updateOnSKUSplit(catalogueId, skuSplitData_for_inventory);
+      console.log(`✅ SKU Split Hook: DC Inventory updated successfully`);
+    } catch (error) {
+      console.error(`❌ SKU Split Hook Error:`, error);
+      // Don't throw the error to prevent breaking the SKU split operation
+    }
     
     return skuSplit;
   }
@@ -691,6 +718,12 @@ export class DCSkuSplittingService {
             ready_for_grn: readyForGrn,
             grn_completed: grnCompleted
           }, { transaction });
+
+          // Update DC Inventory 1 for GRN done
+          const grnData = {
+            [line.skuId]: line.receivedQty
+          };
+          await DCInventory1Service.updateOnGRNDone(skuSplit.catalogue_id, grnData, transaction);
         }
       }
 

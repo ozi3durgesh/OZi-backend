@@ -51,6 +51,7 @@ import DCGrnLine from './DCGrnLine';
 import DCGrnBatch from './DCGrnBatch';
 import DCGrnPhoto from './DCGrnPhoto';
 import DCSkuSplitted from './DCSkuSplitted';
+import DCInventory1 from './DCInventory1';
 
 // Set up associations
 Coupon.hasMany(CouponTranslation, {
@@ -582,4 +583,5 @@ export {
   DCGrnBatch,
   DCGrnPhoto,
   DCSkuSplitted,
+  DCInventory1,
 };
