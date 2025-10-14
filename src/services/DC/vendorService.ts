@@ -336,7 +336,76 @@ export class VendorDCService {
       }
     }
 
+    // Check if POC email is being updated
+    const isPocEmailUpdated = updateData.pocEmail && updateData.pocEmail !== vendor.pocEmail;
+    const oldPocEmail = vendor.pocEmail;
+
     await vendor.update(updateData);
+
+    // If POC email was updated, send onboarding email to new POC
+    if (isPocEmailUpdated) {
+      console.log('🚀 ===== VENDOR POC EMAIL UPDATED - SENDING EMAIL =====');
+      console.log('🔍 Old POC email:', oldPocEmail);
+      console.log('🔍 New POC email:', updateData.pocEmail);
+      
+      try {
+        // Get the updated vendor with associations
+        const updatedVendor = await this.getVendorById(id);
+        
+        if (updatedVendor && updateData.pocEmail) {
+          console.log('📧 ===== SENDING EMAIL TO NEW POC =====');
+          console.log('📧 Recipient:', updateData.pocEmail);
+          console.log('📧 Vendor Name:', updatedVendor.tradeName);
+          console.log('📧 Vendor ID:', updatedVendor.vendorId);
+          
+          // Extract vendor data with proper field access
+          const tradeName = updatedVendor?.tradeName || updatedVendor?.dataValues?.tradeName;
+          const vendorId = updatedVendor?.vendorId || updatedVendor?.dataValues?.vendorId;
+          const pocName = updateData.pocName || updatedVendor?.pocName || updatedVendor?.dataValues?.pocName;
+          const businessAddress = updatedVendor?.businessAddress || updatedVendor?.dataValues?.businessAddress;
+          const city = updatedVendor?.city || updatedVendor?.dataValues?.city;
+          const state = updatedVendor?.state || updatedVendor?.dataValues?.state;
+          const pincode = updatedVendor?.pincode || updatedVendor?.dataValues?.pincode;
+          const gstNumber = updatedVendor?.gstNumber || updatedVendor?.dataValues?.gstNumber;
+          const panNumber = updatedVendor?.panNumber || updatedVendor?.dataValues?.panNumber;
+          const vendorType = updatedVendor?.vendorType || updatedVendor?.dataValues?.vendorType;
+          const brandName = updatedVendor?.brandName || updatedVendor?.dataValues?.brandName;
+          const model = updatedVendor?.model || updatedVendor?.dataValues?.model;
+          const vrf = updatedVendor?.vrf || updatedVendor?.dataValues?.vrf;
+          const paymentTerms = updatedVendor?.paymentTerms || updatedVendor?.dataValues?.paymentTerms;
+          
+          const emailResult = await EmailService.sendVendorOnboardingEmail(
+            [updateData.pocEmail], // Send to the new POC email
+            tradeName,
+            vendorId,
+            (updatedVendor as any).DistributionCenter?.name || 'N/A',
+            pocName || 'Vendor',
+            updateData.pocEmail,
+            businessAddress || '',
+            city || '',
+            state || '',
+            pincode || '',
+            gstNumber,
+            panNumber || '',
+            vendorType,
+            brandName,
+            model,
+            vrf,
+            paymentTerms
+          );
+          
+          console.log('✅ ===== EMAIL SENT TO NEW POC =====');
+          console.log('✅ Email result:', emailResult);
+          console.log('✅ Sent to:', updateData.pocEmail);
+          console.log('✅ Subject: Welcome to OZI - ' + tradeName + ' Successfully Onboarded!');
+        }
+      } catch (emailError) {
+        console.error('❌ ===== EMAIL SENDING FAILED =====');
+        console.error('❌ Error:', emailError);
+        console.error('❌ Error details:', (emailError as Error).message);
+        // Don't throw error - vendor update should still succeed
+      }
+    }
 
     // Return updated vendor with associations
     return await this.getVendorById(id);
