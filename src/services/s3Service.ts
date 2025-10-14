@@ -117,6 +117,47 @@ export class S3Service {
   }
 
   /**
+   * Upload file buffer to S3 and return signed URL
+   * @param buffer - File buffer
+   * @param key - S3 key (path)
+   * @param folder - Folder path in S3 bucket
+   * @returns Promise<string> - Signed S3 URL
+   */
+  static async uploadFileWithSignedUrl(
+    buffer: Buffer,
+    key: string,
+    folder: string = 'dc-po-documents'
+  ): Promise<string> {
+    try {
+      // Create S3 key with folder
+      const s3Key = `${folder}/${key}`;
+      
+      // Upload to S3
+      const command = new PutObjectCommand({
+        Bucket: this.BUCKET_NAME,
+        Key: s3Key,
+        Body: buffer,
+        ContentType: 'application/pdf',
+      });
+      
+      await s3Client.send(command);
+      
+      // Generate signed URL (valid for 7 days)
+      const getCommand = new GetObjectCommand({
+        Bucket: this.BUCKET_NAME,
+        Key: s3Key,
+      });
+      
+      const signedUrl = await getSignedUrl(s3Client, getCommand, { expiresIn: 604800 }); // 7 days
+      return signedUrl;
+      
+    } catch (error) {
+      console.error('Error uploading file to S3:', error);
+      throw new Error(`Failed to upload file to S3: ${error}`);
+    }
+  }
+
+  /**
    * Upload single base64 image to S3 for SKU
    * @param image - Base64 image data
    * @param skuId - SKU ID for folder organization

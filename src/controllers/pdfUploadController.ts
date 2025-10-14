@@ -20,8 +20,8 @@ export class PdfUploadController {
       const fileExtension = originalName.split('.').pop();
       const fileName = `vrf-documents/${timestamp}-${originalName}`;
 
-      // Upload to S3
-      const s3Url = await S3Service.uploadFile(
+      // Upload to S3 with signed URL
+      const s3Url = await S3Service.uploadFileWithSignedUrl(
         req.file.buffer,
         fileName,
         'vrf-documents'
