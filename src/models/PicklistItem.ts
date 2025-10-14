@@ -181,10 +181,10 @@ PicklistItem.init(
   }
 );
 
-// 🔗 Association: PicklistItem → Product (via SKU)
+// 🔗 Association: PicklistItem → Product (via sku)
 PicklistItem.belongsTo(Product, {
   foreignKey: 'sku', // PicklistItem.sku
-  targetKey: 'SKU',  // Product.SKU
+  targetKey: 'sku',  // Product.sku
   as: 'product',
 });
 

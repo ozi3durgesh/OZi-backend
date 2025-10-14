@@ -17,8 +17,8 @@ export const PICKING_CONSTANTS = {
   
   // Column names
   COLUMNS: {
-    SKU: 'SKU',
-    CATEGORY: 'Category',
+    SKU: 'sku',
+    CATEGORY: 'category',
     BIN_CODE: 'bin_code',
     CATEGORY_MAPPING: 'category_mapping',
     STATUS: 'status'

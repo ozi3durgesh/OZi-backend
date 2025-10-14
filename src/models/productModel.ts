@@ -12,95 +12,61 @@ class Product extends Model<
   InferCreationAttributes<Product>
 > {
   declare id: CreationOptional<number>;
-  declare CPId: string | null;
-  declare Status: string | null;
-  declare catalogue_id: string | null;
-  declare ModelName: string | null;
-  declare Category: string | null;
-  declare SKU: string;
-  declare ParentSKU: string | null;
-  declare ProductName: string | null;
-  declare Description: string | null;
-  declare hsn: string | null;
-  declare ImageURL: string | null;
-  declare MRP: number | null;
-  declare COST: number | null;
-  declare EAN_UPC: string | null;
-  declare Color: string | null;
-  declare Size: string | null;
-  declare Brand: string | null;
-  declare Weight: number | null;
-  declare Length: number | null;
-  declare Height: number | null;
-  declare Width: number | null;
-  declare AccountingSKU: string | null;
-  declare AccountingUnit: string | null;
-  declare Flammable: string | null;
-  declare SPThreshold: number | null;
-  declare InventoryThreshold: number | null;
-  declare ERPSystemId: number | null;
-  declare SyncTally: number | null;
-  declare ShelfLife: string | null;
-  declare ShelfLifePercentage: number | null;
-  declare ProductExpiryInDays: number | null;
-  declare ReverseWeight: number | null;
-  declare ReverseLength: number | null;
-  declare ReverseHeight: number | null;
-  declare ReverseWidth: number | null;
+  declare status: number | null;
+  declare catelogue_id: number | null;
+  declare name: string | null;
+  declare category: string | null;
+  declare item_code: string | null;
+  declare sku: string;
+  declare description: string | null;
+  declare image_url: string | null;
+  declare mrp: number | null;
+  declare cost: number | null;
+  declare ean_upc: string | null;
+  declare brand_id: number | null;
+  declare weight: number | null;
+  declare length: number | null;
+  declare height: number | null;
+  declare width: number | null;
+  declare inventory_thresshold: number | null;
   declare gst: string | null;
-  declare CESS: number | null;
-  declare CreatedDate: string | null;
-  declare LastUpdatedDate: string | null;
-  declare SKUType: string | null;
-  declare MaterialType: string | null;
-  declare fc_id?: number;
+  declare cess: number | null;
+  declare hsn: string | null;
+  declare dc_id: number | null;
+  declare created_by: number | null;
+  declare updated_by: any | null;
+  declare created_at: Date | null;
+  declare updated_at: Date | null;
 }
 
 Product.init(
   {
     id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
-    CPId: { type: DataTypes.STRING, allowNull: true },
-    Status: { type: DataTypes.STRING, allowNull: true },
-    catalogue_id: { type: DataTypes.STRING(7), allowNull: true },
-    ModelName: { type: DataTypes.STRING, allowNull: true },
-    Category: { type: DataTypes.STRING, allowNull: true },
-    SKU: { type: DataTypes.STRING, unique: true, allowNull: false },
-    ParentSKU: { type: DataTypes.STRING, allowNull: true },
-    ProductName: { type: DataTypes.STRING, allowNull: true },
-    Description: { type: DataTypes.TEXT, allowNull: true },
-    hsn: { type: DataTypes.STRING, allowNull: true },
-    ImageURL: { type: DataTypes.TEXT, allowNull: true },
-    MRP: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
-    COST: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
-    EAN_UPC: { type: DataTypes.STRING, allowNull: true },
-    Color: { type: DataTypes.STRING, allowNull: true },
-    Size: { type: DataTypes.STRING, allowNull: true },
-    Brand: { type: DataTypes.STRING, allowNull: true },
-    Weight: { type: DataTypes.INTEGER, allowNull: true },
-    Length: { type: DataTypes.INTEGER, allowNull: true },
-    Height: { type: DataTypes.INTEGER, allowNull: true },
-    Width: { type: DataTypes.INTEGER, allowNull: true },
-    AccountingSKU: { type: DataTypes.STRING, allowNull: true },
-    AccountingUnit: { type: DataTypes.STRING, allowNull: true },
-    Flammable: { type: DataTypes.ENUM('Yes', 'No', 'Unknown'), allowNull: true, defaultValue: 'No' },
-    SPThreshold: { type: DataTypes.INTEGER, allowNull: true },
-    InventoryThreshold: { type: DataTypes.INTEGER, allowNull: true },
-    ERPSystemId: { type: DataTypes.INTEGER, allowNull: true },
-    SyncTally: { type: DataTypes.INTEGER, allowNull: true },
-    ShelfLife: { type: DataTypes.STRING, allowNull: true },
-    ShelfLifePercentage: { type: DataTypes.INTEGER, allowNull: true },
-    ProductExpiryInDays: { type: DataTypes.INTEGER, allowNull: true },
-    ReverseWeight: { type: DataTypes.INTEGER, allowNull: true },
-    ReverseLength: { type: DataTypes.INTEGER, allowNull: true },
-    ReverseHeight: { type: DataTypes.INTEGER, allowNull: true },
-    ReverseWidth: { type: DataTypes.INTEGER, allowNull: true },
+    status: { type: DataTypes.INTEGER, allowNull: true, defaultValue: 1 },
+    catelogue_id: { type: DataTypes.BIGINT, allowNull: true },
+    name: { type: DataTypes.STRING, allowNull: true },
+    category: { type: DataTypes.STRING, allowNull: true },
+    item_code: { type: DataTypes.STRING, allowNull: true },
+    sku: { type: DataTypes.STRING, unique: true, allowNull: false },
+    description: { type: DataTypes.TEXT, allowNull: true },
+    image_url: { type: DataTypes.TEXT, allowNull: true },
+    mrp: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
+    cost: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
+    ean_upc: { type: DataTypes.STRING, allowNull: true },
+    brand_id: { type: DataTypes.INTEGER, allowNull: true },
+    weight: { type: DataTypes.INTEGER, allowNull: true },
+    length: { type: DataTypes.INTEGER, allowNull: true },
+    height: { type: DataTypes.INTEGER, allowNull: true },
+    width: { type: DataTypes.INTEGER, allowNull: true },
+    inventory_thresshold: { type: DataTypes.INTEGER, allowNull: true },
     gst: { type: DataTypes.STRING, allowNull: true },
-    CESS: { type: DataTypes.DECIMAL(5, 2), allowNull: true },
-    CreatedDate: { type: DataTypes.STRING, allowNull: true },
-    LastUpdatedDate: { type: DataTypes.STRING, allowNull: true },
-    SKUType: { type: DataTypes.STRING, allowNull: true },
-    MaterialType: { type: DataTypes.STRING, allowNull: true },
-    fc_id: { type: DataTypes.INTEGER, allowNull: true, references: { model: 'fulfillment_centers', key: 'id' } },
+    cess: { type: DataTypes.DECIMAL(5, 2), allowNull: true },
+    hsn: { type: DataTypes.STRING(50), allowNull: true },
+    dc_id: { type: DataTypes.INTEGER, allowNull: true },
+    created_by: { type: DataTypes.INTEGER, allowNull: true },
+    updated_by: { type: DataTypes.JSON, allowNull: true },
+    created_at: { type: DataTypes.DATE, allowNull: true },
+    updated_at: { type: DataTypes.DATE, allowNull: true },
   },
   {
     sequelize,

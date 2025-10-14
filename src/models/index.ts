@@ -201,12 +201,12 @@ ScannerSku.belongsTo(ScannerBin, {
 // PicklistItem.ts
 PicklistItem.belongsTo(Product, {
   foreignKey: 'sku',
-  targetKey: 'SKU',
+  targetKey: 'sku',
   as: 'productInfo',
 });
 Product.hasMany(PicklistItem, {
   foreignKey: 'sku',
-  sourceKey: 'SKU',
+  sourceKey: 'sku',
   as: 'picklistItems',
 });
 

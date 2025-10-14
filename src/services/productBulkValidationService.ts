@@ -380,13 +380,13 @@ export class ProductBulkValidationService {
 
         // For existing SKUs, check EAN consistency
         if (isUpdate && existingProduct) {
-          if (existingProduct.EAN_UPC && existingProduct.EAN_UPC !== ean) {
+          if (existingProduct.ean_upc && existingProduct.ean_upc !== ean) {
             errors.push({
               row,
               column: 'EAN_UPC',
               value: ean,
               error: 'EAN_MISMATCH_EXISTING',
-              description: `EAN/UPC ${ean} does not match existing EAN/UPC ${existingProduct.EAN_UPC} for SKU ${data.SKU}`
+              description: `EAN/UPC ${ean} does not match existing EAN/UPC ${existingProduct.ean_upc} for SKU ${data.SKU}`
             });
           }
         }
@@ -401,22 +401,22 @@ export class ProductBulkValidationService {
     if (newEANs.length > 0) {
       const existingEANs = await Product.findAll({
         where: {
-          EAN_UPC: { [Op.in]: newEANs }
+          ean_upc: { [Op.in]: newEANs }
         },
         attributes: ['EAN_UPC']
       });
 
       for (const existingEAN of existingEANs) {
         const conflictingRecord = records.find(r => 
-          !r.isUpdate && r.data.EAN_UPC === existingEAN.EAN_UPC
+          !r.isUpdate && r.data.EAN_UPC === existingEAN.ean_upc
         );
         if (conflictingRecord) {
           errors.push({
             row: conflictingRecord.row,
             column: 'EAN_UPC',
-            value: existingEAN.EAN_UPC,
+            value: existingEAN.ean_upc,
             error: 'EAN_ALREADY_EXISTS',
-            description: `EAN/UPC ${existingEAN.EAN_UPC} already exists in database for different SKU`
+            description: `EAN/UPC ${existingEAN.ean_upc} already exists in database for different SKU`
           });
         }
       }
@@ -438,11 +438,11 @@ export class ProductBulkValidationService {
 
     // Fetch existing products
     const existingProducts = await Product.findAll({
-      where: { SKU: { [Op.in]: skus } }
+      where: { sku: { [Op.in]: skus } }
     });
 
     const existingSKUMap = new Map(
-      existingProducts.map(p => [p.SKU, p])
+      existingProducts.map(p => [p.sku, p])
     );
 
     for (let i = 0; i < records.length; i++) {

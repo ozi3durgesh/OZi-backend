@@ -85,15 +85,15 @@ const parseCSV = (filePath: string): Promise<any[]> => {
 // Create product
 export const createProduct = async (req: Request, res: Response) => {
   try {
-    const { SKU, ImageURL, ...rest } = req.body;
+    const { sku, image_url, ...rest } = req.body;
 
     // Validation errors array
     const validationErrors: string[] = [];
 
     // Required fields validation
     const requiredFields = [
-      'SKU', 'MRP', 'COST', 'Weight', 'Length', 'Height', 'Width', 
-      'hsn', 'EAN_UPC', 'ProductName', 'ImageURL', 'Status', 'Category', 'Brand', 'gst'
+      'sku', 'mrp', 'cost', 'weight', 'length', 'height', 'width', 
+      'hsn', 'ean_upc', 'name', 'image_url', 'status', 'category', 'brand_id', 'gst'
     ];
 
     for (const field of requiredFields) {
@@ -103,7 +103,7 @@ export const createProduct = async (req: Request, res: Response) => {
     }
 
     // SKU format validation (exactly 12 digits)
-    if (SKU && !/^\d{12}$/.test(SKU.toString())) {
+    if (sku && !/^\d{12}$/.test(sku.toString())) {
       validationErrors.push('SKU must be exactly 12 digits');
     }
 
@@ -113,25 +113,25 @@ export const createProduct = async (req: Request, res: Response) => {
     }
 
     // EAN/UPC format validation (8-14 digits)
-    if (req.body.EAN_UPC && !/^\d{8,14}$/.test(req.body.EAN_UPC.toString())) {
+    if (req.body.ean_upc && !/^\d{8,14}$/.test(req.body.ean_upc.toString())) {
       validationErrors.push('EAN/UPC must be 8-14 digits');
     }
 
     // ImageURL format validation
-    if (ImageURL) {
+    if (image_url) {
       const urlPattern = /^https?:\/\/.+/i;
       const imageExtensionPattern = /\.(jpg|jpeg|png|gif|bmp|webp|svg)(\?.*)?$/i;
       
-      if (!urlPattern.test(ImageURL)) {
+      if (!urlPattern.test(image_url)) {
         validationErrors.push('ImageURL must be a valid HTTP/HTTPS URL');
-      } else if (!imageExtensionPattern.test(ImageURL)) {
+      } else if (!imageExtensionPattern.test(image_url)) {
         validationErrors.push('ImageURL must have a valid image extension (jpg, jpeg, png, gif, bmp, webp, svg)');
       }
     }
 
-    // Status validation
-    if (req.body.Status && !['active', 'inactive', 'draft', 'archived'].includes(req.body.Status)) {
-      validationErrors.push('Status must be active, inactive, draft, or archived');
+    // Status validation (now integer: 0=inactive, 1=active)
+    if (req.body.status !== undefined && ![0, 1].includes(parseInt(req.body.status))) {
+      validationErrors.push('Status must be 0 (inactive) or 1 (active)');
     }
 
     // GST format validation
@@ -148,7 +148,7 @@ export const createProduct = async (req: Request, res: Response) => {
     }
 
     // Numeric fields validation
-    const numericFields = ['MRP', 'COST', 'Weight', 'Length', 'Height', 'Width'];
+    const numericFields = ['mrp', 'cost', 'weight', 'length', 'height', 'width'];
     for (const field of numericFields) {
       if (req.body[field] !== undefined && req.body[field] !== null && req.body[field] !== '') {
         const value = Number(req.body[field]);
@@ -158,27 +158,22 @@ export const createProduct = async (req: Request, res: Response) => {
       }
     }
 
-    // Flammable validation
-    if (req.body.Flammable && !['Yes', 'No', 'Unknown'].includes(req.body.Flammable)) {
-      validationErrors.push('Flammable must be Yes, No, or Unknown');
-    }
-
     // Return validation errors if any
     if (validationErrors.length > 0) {
       return ResponseHandler.error(res, `Validation failed: ${validationErrors.join(', ')}`, 400);
     }
 
-    const existingProduct = await Product.findOne({ where: { SKU } });
+    const existingProduct = await Product.findOne({ where: { sku } });
     if (existingProduct) {
-      return ResponseHandler.error(res, `Product with SKU ${SKU} already exists`, 400);
+      return ResponseHandler.error(res, `Product with SKU ${sku} already exists`, 400);
     }
 
-    // Use ImageURL directly from request (no AWS S3 upload)
-    const imageUrl = cleanUrl(ImageURL);
+    // Use image_url directly from request (no AWS S3 upload)
+    const imageUrl = cleanUrl(image_url);
 
     const product = await Product.create({
-      SKU,
-      ImageURL: imageUrl,
+      sku,
+      image_url: imageUrl,
       ...rest,
     } as ProductCreationAttributes);
 
@@ -199,7 +194,7 @@ export const updateProduct = async (req: Request, res: Response) => {
       return ResponseHandler.error(res, 'Product not found', 404);
     }
 
-    let updatedImageURL = product.ImageURL;
+    let updatedImageURL = product.image_url;
     if (ImageURL) {
       // Use ImageURL directly from request (no AWS S3 upload)
       updatedImageURL = cleanUrl(ImageURL);
@@ -225,7 +220,7 @@ export const getProductBySKU = async (req: Request, res: Response) => {
 
   try {
     const { count, rows } = await Product.findAndCountAll({
-      where: { SKU: sku },
+      where: { sku: sku },
       limit: parseInt(limit.toString()),
       offset,
     });
@@ -508,7 +503,7 @@ export const bulkUpdateProducts = async (req: Request, res: Response) => {
           gst: data.gst,
           CESS: data.CESS ? parseFloat(data.CESS.toString()) : null,
           CreatedDate: new Date().toISOString(),
-          LastUpdatedDate: new Date().toISOString(),
+          updated_at: new Date(),
           SKUType: data.SKUType || null,
           MaterialType: data.MaterialType
         };
@@ -622,7 +617,7 @@ export const updateProductEAN = async (req: Request, res: Response) => {
 
     // Find the product by SKU
     const product = await Product.findOne({ 
-      where: { SKU: SKU } 
+      where: { sku: SKU } 
     });
 
     if (!product) {
@@ -631,20 +626,20 @@ export const updateProductEAN = async (req: Request, res: Response) => {
     }
 
     console.log(`✅ Found product:`, {
-      SKU: product.SKU,
-      EAN_UPC: product.EAN_UPC,
-      ProductName: product.ProductName
+      SKU: product.sku,
+      EAN_UPC: product.ean_upc,
+      ProductName: product.name
     });
 
     // Case 1: EAN_UPC is empty/null - Update both product_master and grn_lines
-    if (!product.EAN_UPC || product.EAN_UPC.trim() === '') {
+    if (!product.ean_upc || product.ean_upc.trim() === '') {
       console.log('📝 Case 1: Empty EAN_UPC - Updating both tables');
       
       try {
         // Update product_master
         await product.update({ 
-          EAN_UPC: EAN_UPC,
-          LastUpdatedDate: new Date().toISOString()
+          ean_upc: EAN_UPC,
+          updated_at: new Date()
         });
 
         // Update grn_lines - handle unique constraint by clearing existing EANs first
@@ -671,7 +666,7 @@ export const updateProductEAN = async (req: Request, res: Response) => {
           message: 'EAN/UPC updated successfully',
           data: {
             SKU: SKU,
-            EAN_UPC: EAN_UPC,
+            ean_upc: EAN_UPC,
             updated_tables: ['product_master', 'grn_lines'],
             grn_lines_updated: updatedGrnLines
           }
@@ -683,7 +678,7 @@ export const updateProductEAN = async (req: Request, res: Response) => {
     }
 
     // Case 2: EAN_UPC already exists and matches the provided value
-    if (product.EAN_UPC === EAN_UPC) {
+    if (product.ean_upc === EAN_UPC) {
       console.log('📝 Case 2: Matching EAN_UPC - Updating only GRN lines');
       
       try {
@@ -711,7 +706,7 @@ export const updateProductEAN = async (req: Request, res: Response) => {
           message: 'EAN/UPC updated successfully',
           data: {
             SKU: SKU,
-            EAN_UPC: EAN_UPC,
+            ean_upc: EAN_UPC,
             updated_tables: ['grn_lines'],
             grn_lines_updated: updatedGrnLines
           }
@@ -723,9 +718,9 @@ export const updateProductEAN = async (req: Request, res: Response) => {
     }
 
     // Case 3: EAN_UPC already exists but doesn't match - Return error with suggested EAN
-    console.log(`📝 Case 3: Non-matching EAN_UPC - Current: ${product.EAN_UPC}, Provided: ${EAN_UPC}`);
+    console.log(`📝 Case 3: Non-matching EAN_UPC - Current: ${product.ean_upc}, Provided: ${EAN_UPC}`);
     
-    return ResponseHandler.error(res, `EAN/UPC already exists with different value. Suggested EAN: ${product.EAN_UPC}`, 409);
+    return ResponseHandler.error(res, `EAN/UPC already exists with different value. Suggested EAN: ${product.ean_upc}`, 409);
 
   } catch (error: any) {
     console.error('❌ Error updating EAN/UPC:', error);
@@ -893,7 +888,7 @@ export const getProductsByFC = async (req: Request, res: Response) => {
         limit: Number(limit),
         totalPages: Math.ceil(products.count / Number(limit))
       },
-      fc_id: fcId
+      dc_id: fcId
     });
   } catch (error) {
     console.error('Get products by FC error:', error);
@@ -922,7 +917,7 @@ export const getProductByIdAndFC = async (req: Request, res: Response) => {
     return ResponseHandler.success(res, {
       message: 'Product retrieved successfully',
       data: product,
-      fc_id: fcId
+      dc_id: fcId
     });
   } catch (error) {
     console.error('Get product by ID and FC error:', error);
@@ -948,8 +943,8 @@ export const updateProductByFC = async (req: Request, res: Response) => {
 
     // Update product with FC context
     const [updatedRowsCount] = await Product.update(
-      { ...updateData, fc_id: fcId },
-      { where: { id: parseInt(id), fc_id: fcId } }
+      { ...updateData, dc_id: fcId },
+      { where: { id: parseInt(id), dc_id: fcId } }
     );
 
     if (updatedRowsCount === 0) {
@@ -957,13 +952,13 @@ export const updateProductByFC = async (req: Request, res: Response) => {
     }
 
     const updatedProduct = await Product.findOne({
-      where: { id: parseInt(id), fc_id: fcId }
+      where: { id: parseInt(id), dc_id: fcId }
     });
 
     return ResponseHandler.success(res, {
       message: 'Product updated successfully',
       data: updatedProduct,
-      fc_id: fcId
+      dc_id: fcId
     });
   } catch (error) {
     console.error('Update product by FC error:', error);
@@ -979,7 +974,7 @@ export const createProductByFC = async (req: Request, res: Response) => {
     // Add FC context to product data
     const productWithFC = {
       ...productData,
-      fc_id: fcId
+      dc_id: fcId
     };
 
     const product = await Product.create(productWithFC);
@@ -987,7 +982,7 @@ export const createProductByFC = async (req: Request, res: Response) => {
     return ResponseHandler.success(res, {
       message: 'Product created successfully',
       data: product,
-      fc_id: fcId
+      dc_id: fcId
     }, 201);
   } catch (error) {
     console.error('Create product by FC error:', error);

@@ -203,7 +203,7 @@ export class PutawayController {
           const productDetails = await Promise.all(
             skuArray.map(async (skuId) => {
               const product = await Product.findOne({
-                where: { SKU: skuId }
+                where: { sku: skuId }
               });
               
               const qcDetails = grnData.skuQcDetails.get(skuId) || {
@@ -449,7 +449,7 @@ export class PutawayController {
 
       // Find product in product_master table
       const product = await Product.findOne({
-        where: { SKU: sku_id },
+        where: { sku: sku_id },
       });
 
       if (!product) {
@@ -562,7 +562,7 @@ export class PutawayController {
       
       // First, try to find by SKU directly
       product = await Product.findOne({
-        where: { SKU: sku_id }
+        where: { sku: sku_id }
       });
       
       if (product) {
@@ -571,7 +571,7 @@ export class PutawayController {
       } else {
         // If not found by SKU, try to find by EAN_UPC
         product = await Product.findOne({
-          where: { EAN_UPC: sku_id }
+          where: { ean_upc: sku_id }
         });
         
         if (product) {
@@ -955,7 +955,7 @@ export class PutawayController {
 
       // Get product details
       const product = await Product.findOne({
-        where: { SKU: sku_id },
+        where: { sku: sku_id },
       });
 
       if (!product) {
