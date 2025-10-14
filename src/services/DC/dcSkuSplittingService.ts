@@ -653,8 +653,8 @@ export class DCSkuSplittingService {
           for (const batch of line.batches) {
             await DCGrnBatch.create({
               dc_grn_line_id: grnLine.id,
-              batch_no: batch.batchNo || null,
-              expiry_date: batch.expiry ? new Date(batch.expiry) : null,
+              batch_no: batch.batchNo && batch.batchNo.trim() !== '' ? batch.batchNo : `BATCH_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              expiry_date: batch.expiry && batch.expiry.trim() !== '' ? new Date(batch.expiry) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // Default to 1 year from now
               qty: batch.qty
             }, { transaction });
           }
