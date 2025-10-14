@@ -54,15 +54,12 @@ export class DCVendorController {
    */
   static async getVendors(req: AuthRequest, res: Response) {
     try {
-      const { page = 1, limit = 10, search, status, dcId, vendorType } = req.query;
+      const { page = 1, limit = 10, search, dcId, vendorType } = req.query;
 
       const filters: any = {};
 
       if (search) {
         filters.search = search as string;
-      }
-      if (status) {
-        filters.status = status as string;
       }
       if (dcId) {
         filters.dcId = parseInt(dcId as string, 10);
@@ -217,48 +214,5 @@ export class DCVendorController {
     }
   }
 
-  /**
-   * Update vendor status
-   * Only admin users can update status
-   */
-  static async updateVendorStatus(req: AuthRequest, res: Response) {
-    try {
-      const { id } = req.params;
-      const { status } = req.body;
-      const userId = req.user?.id;
-      const userRole = req.user?.role;
-
-      if (!userId) {
-        return ResponseHandler.error(res, 'User not authenticated', 401);
-      }
-
-      // Ensure only admin can update status
-      if (userRole !== 'admin') {
-        return ResponseHandler.error(res, VENDOR_CONSTANTS.ERRORS.UNAUTHORIZED, 403);
-      }
-
-      const validStatuses = Object.values(VENDOR_CONSTANTS.STATUS);
-      if (!validStatuses.includes(status)) {
-        return ResponseHandler.error(res, 'Invalid status', 400);
-      }
-
-      const updatedVendor = await VendorDCService.updateVendor(parseInt(id, 10), {
-        status,
-        updatedBy: userId,
-      });
-
-      return ResponseHandler.success(res, {
-        message: 'Vendor status updated successfully',
-        data: updatedVendor,
-      });
-    } catch (error: any) {
-      console.error('Error updating vendor status:', error);
-      return ResponseHandler.error(
-        res,
-        error.message || 'Failed to update vendor status',
-        500
-      );
-    }
-  }
 }
 

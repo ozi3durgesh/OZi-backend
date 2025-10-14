@@ -27,8 +27,6 @@ router.get('/vendors/code/:vendorId', DCVendorController.getVendorByVendorId);
 // Update vendor (Admin only)
 router.put('/vendors/:id', isAdmin, DCVendorController.updateVendor);
 
-// Update vendor status (Admin only)
-router.patch('/vendors/:id/status', isAdmin, DCVendorController.updateVendorStatus);
 
 // Delete vendor (Admin only)
 router.delete('/vendors/:id', isAdmin, DCVendorController.deleteVendor);

@@ -2,10 +2,10 @@ import { Op } from 'sequelize';
 import VendorDC from '../../models/VendorDC';
 import { DistributionCenter, User } from '../../models';
 import { VENDOR_CONSTANTS } from '../../constants/vendorConstants';
+import { EmailService } from '../emailService';
 
 interface VendorFilters {
   search?: string;
-  status?: string;
   dcId?: number;
   vendorType?: string;
 }
@@ -79,7 +79,7 @@ export class VendorDCService {
     const newVendor = await VendorDC.create({
       vendorId,
       dcId: vendorData.dcId,
-      businessName: vendorData.businessName,
+      tradeName: vendorData.tradeName,
       businessAddress: vendorData.businessAddress,
       city: vendorData.city,
       state: vendorData.state,
@@ -90,12 +90,11 @@ export class VendorDCService {
       pocEmail: vendorData.pocEmail,
       gstNumber: vendorData.gstNumber,
       panNumber: vendorData.panNumber,
-      status: vendorData.status || VENDOR_CONSTANTS.DEFAULTS.STATUS,
       vendorType: vendorData.vendorType || VENDOR_CONSTANTS.DEFAULTS.VENDOR_TYPE,
+      brandName: vendorData.brandName,
+      model: vendorData.model,
+      vrf: vendorData.vrf,
       paymentTerms: vendorData.paymentTerms,
-      creditLimit: vendorData.creditLimit || VENDOR_CONSTANTS.DEFAULTS.CREDIT_LIMIT,
-      rating: vendorData.rating,
-      notes: vendorData.notes,
       createdBy: vendorData.createdBy,
     });
 
@@ -115,6 +114,64 @@ export class VendorDCService {
       ],
     });
 
+    // Send onboarding email to vendor
+    if (vendor && vendor.pocEmail) {
+      try {
+        // Send email to vendor's POC email
+        const vendorEmailRecipients = [vendor.pocEmail];
+        
+        // Send email to vendor
+        await EmailService.sendVendorOnboardingEmail(
+          vendorEmailRecipients,
+          vendor.tradeName,
+          vendor.vendorId,
+          (vendor as any).DistributionCenter?.name || 'N/A',
+          vendor.pocName || 'Vendor',
+          vendor.pocEmail,
+          vendor.businessAddress || '',
+          vendor.city || '',
+          vendor.state || '',
+          vendor.pincode || '',
+          vendor.gstNumber,
+          vendor.panNumber || '',
+          vendor.vendorType,
+          vendor.brandName,
+          vendor.model,
+          vendor.vrf,
+          vendor.paymentTerms
+        );
+
+        // Also send notification to admin team
+        const adminEmails = [
+          'admin@ozi.in',
+          'durgesh.singh@ozi.in'
+        ];
+        
+        await EmailService.sendVendorOnboardingEmail(
+          adminEmails,
+          vendor.tradeName,
+          vendor.vendorId,
+          (vendor as any).DistributionCenter?.name || 'N/A',
+          vendor.pocName || 'Vendor',
+          vendor.pocEmail,
+          vendor.businessAddress || '',
+          vendor.city || '',
+          vendor.state || '',
+          vendor.pincode || '',
+          vendor.gstNumber,
+          vendor.panNumber || '',
+          vendor.vendorType,
+          vendor.brandName,
+          vendor.model,
+          vendor.vrf,
+          vendor.paymentTerms
+        );
+      } catch (emailError) {
+        console.error('Failed to send vendor onboarding email:', emailError);
+        // Don't throw error - vendor creation should still succeed
+      }
+    }
+
     return vendor;
   }
 
@@ -129,15 +186,12 @@ export class VendorDCService {
     if (filters.search) {
       whereClause[Op.or] = [
         { vendorId: { [Op.like]: `%${filters.search}%` } },
-        { businessName: { [Op.like]: `%${filters.search}%` } },
+        { tradeName: { [Op.like]: `%${filters.search}%` } },
         { pocName: { [Op.like]: `%${filters.search}%` } },
         { gstNumber: { [Op.like]: `%${filters.search}%` } },
       ];
     }
 
-    if (filters.status) {
-      whereClause.status = filters.status;
-    }
 
     if (filters.dcId) {
       whereClause.dcId = filters.dcId;

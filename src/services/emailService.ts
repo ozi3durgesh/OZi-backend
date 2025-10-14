@@ -17,14 +17,23 @@ export class EmailService {
    */
   static async sendEmail(to: string[], subject: string, html: string): Promise<boolean> {
     try {
-      // Validate that all recipients are from ozi.in domain
-      const validRecipients = to.filter(email => {
-        const domain = email.split('@')[1];
-        return domain === 'ozi.in';
-      });
+      // For vendor onboarding emails, allow any domain
+      // For other emails, validate ozi.in domain
+      let validRecipients = to;
+      
+      // Check if this is a vendor onboarding email by looking at the subject
+      const isVendorOnboarding = subject.includes('Successfully Onboarded') || subject.includes('Welcome to OZI');
+      
+      if (!isVendorOnboarding) {
+        // Validate that all recipients are from ozi.in domain for non-vendor emails
+        validRecipients = to.filter(email => {
+          const domain = email.split('@')[1];
+          return domain === 'ozi.in';
+        });
 
-      if (validRecipients.length === 0) {
-        throw new Error('No valid recipients found. All recipients must be from ozi.in domain');
+        if (validRecipients.length === 0) {
+          throw new Error('No valid recipients found. All recipients must be from ozi.in domain');
+        }
       }
 
       const emailData: EmailData = {
@@ -41,12 +50,161 @@ export class EmailService {
         }
       });
 
-      console.log('Email sent successfully:', response.data);
       return true;
     } catch (error) {
       console.error('Failed to send email:', error);
       return false;
     }
+  }
+
+  /**
+   * Send vendor onboarding email
+   */
+  static async sendVendorOnboardingEmail(
+    to: string[], 
+    vendorName: string, 
+    vendorId: string,
+    dcName: string,
+    pocName: string,
+    pocEmail: string,
+    businessAddress: string,
+    city: string,
+    state: string,
+    pincode: string,
+    gstNumber: string,
+    panNumber: string,
+    vendorType: string,
+    brandName?: string,
+    model?: string,
+    vrf?: string,
+    paymentTerms?: string
+  ): Promise<boolean> {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Vendor Onboarding - OZI</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+          .vendor-info { background: white; padding: 25px; border-radius: 8px; margin: 20px 0; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+          .info-row { display: flex; justify-content: space-between; margin: 10px 0; padding: 8px 0; border-bottom: 1px solid #eee; }
+          .info-label { font-weight: bold; color: #555; }
+          .info-value { color: #333; }
+          .success-badge { background: #4CAF50; color: white; padding: 8px 16px; border-radius: 20px; font-size: 14px; font-weight: bold; display: inline-block; margin: 10px 0; }
+          .footer { text-align: center; margin-top: 30px; color: #666; font-size: 14px; }
+          .highlight { background: #e8f5e8; padding: 15px; border-left: 4px solid #4CAF50; margin: 20px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🎉 Welcome to OZI!</h1>
+            <p>Vendor Onboarding Successful</p>
+          </div>
+          
+          <div class="content">
+            <div class="success-badge">✅ Vendor Successfully Onboarded</div>
+            
+            <div class="highlight">
+              <h3>Dear ${pocName},</h3>
+              <p>Congratulations! <strong>${vendorName}</strong> has been successfully onboarded as a vendor with OZI. We're excited to work with you!</p>
+            </div>
+
+            <div class="vendor-info">
+              <h3>📋 Vendor Details</h3>
+              <div class="info-row">
+                <span class="info-label">Vendor ID:</span>
+                <span class="info-value"><strong>${vendorId}</strong></span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Business Name:</span>
+                <span class="info-value">${vendorName}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Vendor Type:</span>
+                <span class="info-value">${vendorType}</span>
+              </div>
+              ${brandName ? `
+              <div class="info-row">
+                <span class="info-label">Brand Name:</span>
+                <span class="info-value">${brandName}</span>
+              </div>
+              ` : ''}
+              ${model ? `
+              <div class="info-row">
+                <span class="info-label">Model:</span>
+                <span class="info-value">${model}</span>
+              </div>
+              ` : ''}
+              <div class="info-row">
+                <span class="info-label">Distribution Center:</span>
+                <span class="info-value">${dcName}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Business Address:</span>
+                <span class="info-value">${businessAddress}, ${city}, ${state} - ${pincode}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">GST Number:</span>
+                <span class="info-value">${gstNumber}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">PAN Number:</span>
+                <span class="info-value">${panNumber}</span>
+              </div>
+              ${paymentTerms ? `
+              <div class="info-row">
+                <span class="info-label">Payment Terms:</span>
+                <span class="info-value">${paymentTerms}</span>
+              </div>
+              ` : ''}
+              ${vrf ? `
+              <div class="info-row">
+                <span class="info-label">VRF Link:</span>
+                <span class="info-value"><a href="${vrf}" target="_blank">View VRF Document</a></span>
+              </div>
+              ` : ''}
+            </div>
+
+            <div class="vendor-info">
+              <h3>👤 Point of Contact</h3>
+              <div class="info-row">
+                <span class="info-label">Contact Person:</span>
+                <span class="info-value">${pocName}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Email:</span>
+                <span class="info-value">${pocEmail}</span>
+              </div>
+            </div>
+
+            <div class="highlight">
+              <h3>🚀 Next Steps</h3>
+              <ul>
+                <li>Your vendor account is now active and ready for business</li>
+                <li>You can start receiving purchase orders from our system</li>
+                <li>Our team will be in touch with you shortly for further onboarding</li>
+                <li>If you have any questions, please don't hesitate to contact us</li>
+              </ul>
+            </div>
+
+            <div class="footer">
+              <p>Thank you for choosing OZI as your business partner!</p>
+              <p><strong>OZI Team</strong></p>
+              <p>This is an automated message. Please do not reply to this email.</p>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    return await this.sendEmail(to, `Welcome to OZI - ${vendorName} Successfully Onboarded!`, html);
   }
 
   /**

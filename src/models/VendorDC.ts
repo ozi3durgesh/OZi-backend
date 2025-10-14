@@ -5,7 +5,7 @@ export interface VendorDCAttributes {
   id: number;
   vendorId: string;
   dcId: number;
-  businessName: string;
+  tradeName: string;
   businessAddress?: string;
   city?: string;
   state?: string;
@@ -16,12 +16,11 @@ export interface VendorDCAttributes {
   pocEmail?: string;
   gstNumber: string;
   panNumber?: string;
-  status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
   vendorType: 'MANUFACTURER' | 'SUPPLIER' | 'DISTRIBUTOR' | 'WHOLESALER' | 'OTHER';
+  brandName?: string;
+  model?: string;
+  vrf?: string;
   paymentTerms?: string;
-  creditLimit?: number;
-  rating?: number;
-  notes?: string;
   createdBy: number;
   updatedBy?: number;
   createdAt?: Date;
@@ -39,7 +38,7 @@ class VendorDC extends Model<VendorDCAttributes, VendorDCCreationAttributes> imp
   public id!: number;
   public vendorId!: string;
   public dcId!: number;
-  public businessName!: string;
+  public tradeName!: string;
   public businessAddress?: string;
   public city?: string;
   public state?: string;
@@ -50,12 +49,11 @@ class VendorDC extends Model<VendorDCAttributes, VendorDCCreationAttributes> imp
   public pocEmail?: string;
   public gstNumber!: string;
   public panNumber?: string;
-  public status!: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
   public vendorType!: 'MANUFACTURER' | 'SUPPLIER' | 'DISTRIBUTOR' | 'WHOLESALER' | 'OTHER';
+  public brandName?: string;
+  public model?: string;
+  public vrf?: string;
   public paymentTerms?: string;
-  public creditLimit?: number;
-  public rating?: number;
-  public notes?: string;
   public createdBy!: number;
   public updatedBy?: number;
   public readonly createdAt!: Date;
@@ -89,10 +87,10 @@ VendorDC.init(
         key: 'id',
       },
     },
-    businessName: {
+    tradeName: {
       type: DataTypes.STRING(255),
       allowNull: false,
-      field: 'business_name',
+      field: 'trade_name',
     },
     businessAddress: {
       type: DataTypes.TEXT,
@@ -145,11 +143,6 @@ VendorDC.init(
       allowNull: true,
       field: 'pan_number',
     },
-    status: {
-      type: DataTypes.ENUM('ACTIVE', 'INACTIVE', 'SUSPENDED'),
-      allowNull: false,
-      defaultValue: 'ACTIVE',
-    },
     vendorType: {
       type: DataTypes.ENUM('MANUFACTURER', 'SUPPLIER', 'DISTRIBUTOR', 'WHOLESALER', 'OTHER'),
       allowNull: false,
@@ -161,22 +154,17 @@ VendorDC.init(
       allowNull: true,
       field: 'payment_terms',
     },
-    creditLimit: {
-      type: DataTypes.DECIMAL(15, 2),
+    brandName: {
+      type: DataTypes.STRING(255),
       allowNull: true,
-      defaultValue: 0,
-      field: 'credit_limit',
+      field: 'brand_name',
     },
-    rating: {
-      type: DataTypes.DECIMAL(3, 2),
+    model: {
+      type: DataTypes.STRING(255),
       allowNull: true,
-      validate: {
-        min: 0,
-        max: 5,
-      },
     },
-    notes: {
-      type: DataTypes.TEXT,
+    vrf: {
+      type: DataTypes.STRING(500),
       allowNull: true,
     },
     createdBy: {

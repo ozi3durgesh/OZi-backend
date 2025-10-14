@@ -11,6 +11,9 @@ export const runMigrations = async (): Promise<void> => {
     // Create dc_inventory_1 table if it doesn't exist
     await createDCInventory1Table();
     
+    // Update vendor_dc table with new fields
+    await updateVendorDCTable();
+    
     console.log('✅ Database migrations completed successfully');
   } catch (error) {
     console.error('❌ Migration failed:', error);
@@ -89,6 +92,53 @@ const createDCInventory1Table = async (): Promise<void> => {
     }
   } catch (error) {
     console.error('❌ Error creating dc_inventory_1 table:', error);
+    throw error;
+  }
+};
+
+const updateVendorDCTable = async (): Promise<void> => {
+  try {
+    console.log('📋 Updating vendor_dc table...');
+    
+    // Check if trade_name column exists
+    const columns = await sequelize.query(
+      "SHOW COLUMNS FROM vendor_dc LIKE 'trade_name'",
+      { type: QueryTypes.SELECT }
+    );
+    
+    if (columns.length === 0) {
+      console.log('🔄 Adding new columns to vendor_dc table...');
+      
+      // Add new columns
+      await sequelize.query(`
+        ALTER TABLE vendor_dc 
+        ADD COLUMN trade_name VARCHAR(255) NOT NULL DEFAULT '' AFTER dc_id,
+        ADD COLUMN brand_name VARCHAR(255) NULL AFTER vendor_type,
+        ADD COLUMN model VARCHAR(255) NULL AFTER brand_name,
+        ADD COLUMN vrf VARCHAR(500) NULL AFTER model
+      `);
+      
+      // Copy data from business_name to trade_name
+      await sequelize.query(`
+        UPDATE vendor_dc SET trade_name = business_name WHERE trade_name = ''
+      `);
+      
+      // Drop old columns
+      await sequelize.query(`
+        ALTER TABLE vendor_dc 
+        DROP COLUMN business_name,
+        DROP COLUMN status,
+        DROP COLUMN credit_limit,
+        DROP COLUMN rating,
+        DROP COLUMN notes
+      `);
+      
+      console.log('✅ vendor_dc table updated successfully');
+    } else {
+      console.log('ℹ️ vendor_dc table already updated');
+    }
+  } catch (error) {
+    console.error('❌ Error updating vendor_dc table:', error);
     throw error;
   }
 };
