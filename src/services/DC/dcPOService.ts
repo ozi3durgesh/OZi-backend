@@ -32,6 +32,7 @@ interface CreateDCPOData {
     rlp_w_o_tax?: string;
     sgst?: string;
     cgst?: string;
+    margin?: string;
     description?: string;
     notes?: string;
     sku_matrix_on_catelogue_id?: Array<{

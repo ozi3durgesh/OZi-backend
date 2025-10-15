@@ -40,50 +40,53 @@ export const fetchSKUByCatalogueId = async (req: Request, res: Response) => {
     // Build where clause
     const whereClause: any = {};
 
-    // Query product_master table directly by catalogue_id
-    // Add catalogue_id filter
-    whereClause.catalogue_id = catalogue_id;
+    // Query product_master table directly by catelogue_id
+    // Add catelogue_id filter (note: typo in database column name)
+    whereClause.catelogue_id = catalogue_id;
 
     // Add status filter if provided
     if (status) {
-      whereClause.Status = status;
+      whereClause.status = status;
     }
 
     // Add search filter if provided
     if (search) {
       whereClause[Op.or] = [
-        { SKU: { [Op.like]: `%${search}%` } },
-        { ProductName: { [Op.like]: `%${search}%` } },
-        { ModelName: { [Op.like]: `%${search}%` } },
-        { Brand: { [Op.like]: `%${search}%` } },
+        { name: { [Op.like]: `%${search}%` } },
+        { description: { [Op.like]: `%${search}%` } },
         { hsn: { [Op.like]: `%${search}%` } },
-        { EAN_UPC: { [Op.like]: `%${search}%` } },
-        { catalogue_id: { [Op.like]: `%${search}%` } },
+        { ean_upc: { [Op.like]: `%${search}%` } },
+        { sku: { [Op.like]: `%${search}%` } },
+        { catelogue_id: { [Op.like]: `%${search}%` } },
       ];
     }
 
     const { count, rows } = await Product.findAndCountAll({
       where: whereClause,
       attributes: [
-        'catalogue_id',
-        'Category',
-        'SKU',
-        'ProductName',
-        'Description',
+        'id',
+        'catelogue_id',
+        'name',
+        'description',
         'hsn',
-        'ImageURL',
-        'MRP',
-        'EAN_UPC',
-        'Color',
-        'Size',
-        'Brand',
-        'Weight',
-        'Length',
-        'Height',
-        'Width',
-        'InventoryThreshold',
+        'image_url',
+        'mrp',
+        'ean_upc',
+        'weight',
+        'length',
+        'height',
+        'width',
+        'inventory_thresshold',
         'gst',
-        'CESS'
+        'cess',
+        'status',
+        'category',
+        'brand_id',
+        'sku',
+        'item_code',
+        'cost',
+        'dc_id',
+        'created_by'
       ],
       limit: parseInt(limit.toString()),
       offset,
