@@ -289,7 +289,7 @@ export class DCPOService {
         {
           model: VendorDC,
           as: 'Vendor',
-          attributes: ['id', 'vendorId', 'businessName', 'pocName', 'pocEmail'],
+          attributes: ['id', 'vendorId', 'tradeName', 'pocName', 'pocEmail'],
         },
         {
           model: DistributionCenter,
@@ -460,7 +460,7 @@ export class DCPOService {
     const success = await EmailService.sendDCApprovalEmail(
       [recipientEmail],
       po.poId,
-      po.Vendor?.businessName || po.Vendor?.dataValues?.businessName || 'N/A',
+      po.Vendor?.tradeName || po.Vendor?.dataValues?.tradeName || 'N/A',
       po.DistributionCenter?.name || po.DistributionCenter?.dataValues?.name || 'N/A',
       po.totalAmount,
       po.priority,
@@ -631,7 +631,7 @@ export class DCPOService {
         {
           model: VendorDC,
           as: 'Vendor',
-          attributes: ['id', 'vendorId', 'businessName', 'pocName'],
+          attributes: ['id', 'vendorId', 'tradeName', 'pocName'],
         },
         {
           model: DistributionCenter,
@@ -674,7 +674,7 @@ export class DCPOService {
         {
           model: VendorDC,
           as: 'Vendor',
-          attributes: ['id', 'vendorId', 'businessName', 'pocName', 'pocEmail', 'businessAddress'],
+          attributes: ['id', 'vendorId', 'tradeName', 'pocName', 'pocEmail', 'businessAddress'],
         },
         {
           model: DistributionCenter,
@@ -786,7 +786,7 @@ export class DCPOService {
         {
           model: VendorDC,
           as: 'Vendor',
-          attributes: ['id', 'vendorId', 'businessName', 'pocName', 'pocEmail', 'businessAddress', 'city', 'state'],
+          attributes: ['id', 'vendorId', 'tradeName', 'pocName', 'pocEmail', 'businessAddress', 'city', 'state'],
         },
         {
           model: DistributionCenter,
@@ -974,7 +974,7 @@ export class DCPOService {
           {
             model: VendorDC,
             as: 'Vendor',
-            attributes: ['id', 'businessName', 'pocName', 'pocEmail', 'businessAddress']
+            attributes: ['id', 'tradeName', 'pocName', 'pocEmail', 'businessAddress']
           },
           {
             model: DistributionCenter,
@@ -1016,7 +1016,7 @@ export class DCPOService {
       const success = await EmailService.sendDCFinalNotificationEmail(
         stakeholderEmails,
         po.poId,
-        (po as any).Vendor?.businessName || 'N/A',
+        (po as any).Vendor?.tradeName || 'N/A',
         (po as any).DistributionCenter?.name || 'N/A',
         po.totalAmount,
         po.priority,
