@@ -129,7 +129,16 @@ VendorDC.init(
       allowNull: true,
       field: 'poc_email',
       validate: {
-        isEmail: true,
+        isValidEmailList(value: string) {
+          if (!value) return;
+          const emails = value.split(',').map(email => email.trim());
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          for (const email of emails) {
+            if (!emailRegex.test(email)) {
+              throw new Error('Invalid email format in POC email list');
+            }
+          }
+        },
       },
     },
     gstNumber: {

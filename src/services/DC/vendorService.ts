@@ -75,6 +75,14 @@ export class VendorDCService {
     // Generate unique vendor ID
     const vendorId = await this.generateVendorId();
 
+    // Handle array inputs for pocEmail and brandName
+    const pocEmailArray = Array.isArray(vendorData.pocEmail) ? vendorData.pocEmail : [vendorData.pocEmail];
+    const brandNameArray = Array.isArray(vendorData.brandName) ? vendorData.brandName : [vendorData.brandName];
+    
+    // Convert arrays to comma-separated strings for database storage
+    const pocEmailString = pocEmailArray.filter(email => email).join(',');
+    const brandNameString = brandNameArray.filter(name => name).join(',');
+
     // Create vendor
     const newVendor = await VendorDC.create({
       vendorId,
@@ -87,11 +95,11 @@ export class VendorDCService {
       pincode: vendorData.pincode,
       pocName: vendorData.pocName,
       pocNumber: vendorData.pocNumber,
-      pocEmail: vendorData.pocEmail,
+      pocEmail: pocEmailString,
       gstNumber: vendorData.gstNumber,
       panNumber: vendorData.panNumber,
       vendorType: vendorData.vendorType || VENDOR_CONSTANTS.DEFAULTS.VENDOR_TYPE,
-      brandName: vendorData.brandName,
+      brandName: brandNameString,
       model: vendorData.model,
       vrf: vendorData.vrf,
       paymentTerms: vendorData.paymentTerms,
@@ -114,7 +122,7 @@ export class VendorDCService {
       ],
     });
 
-    // Send onboarding email ONLY to vendor's POC email
+    // Send onboarding email to all POC emails
     console.log('🚀 ===== VENDOR EMAIL PROCESS STARTED =====');
     console.log('🔍 Vendor exists:', !!vendor);
     console.log('🔍 POC email exists:', !!vendor?.pocEmail);
@@ -123,11 +131,14 @@ export class VendorDCService {
     console.log('🔍 EmailService import check:', typeof EmailService);
     console.log('🔍 EmailService.sendVendorOnboardingEmail check:', typeof EmailService.sendVendorOnboardingEmail);
     
-    const pocEmail = vendor?.pocEmail || vendor?.dataValues?.pocEmail;
-    if (vendor && pocEmail) {
+    const pocEmailStringForEmail = vendor?.pocEmail || vendor?.dataValues?.pocEmail;
+    if (vendor && pocEmailStringForEmail) {
       try {
-        console.log('📧 ===== SENDING EMAIL TO POC =====');
-        console.log('📧 Recipient:', pocEmail);
+        // Parse comma-separated emails back to array
+        const pocEmails = pocEmailStringForEmail.split(',').map(email => email.trim()).filter(email => email);
+        
+        console.log('📧 ===== SENDING EMAIL TO POCS =====');
+        console.log('📧 Recipients:', pocEmails);
         console.log('📧 Vendor Name:', vendor?.tradeName || vendor?.dataValues?.tradeName);
         console.log('📧 Vendor ID:', vendor?.vendorId || vendor?.dataValues?.vendorId);
         
@@ -147,12 +158,12 @@ export class VendorDCService {
         const paymentTerms = vendor?.paymentTerms || vendor?.dataValues?.paymentTerms;
         
         const emailResult = await EmailService.sendVendorOnboardingEmail(
-          [pocEmail], // Only send to the POC email from the request
+          pocEmails, // Send to all POC emails
           tradeName,
           vendorId,
           (vendor as any).DistributionCenter?.name || 'N/A',
           pocName || 'Vendor',
-          pocEmail,
+          pocEmails[0] || '', // Use first email as primary contact
           businessAddress || '',
           city || '',
           state || '',
@@ -168,7 +179,7 @@ export class VendorDCService {
         
         console.log('✅ ===== EMAIL SENT SUCCESSFULLY =====');
         console.log('✅ Email result:', emailResult);
-        console.log('✅ Sent to:', pocEmail);
+        console.log('✅ Sent to:', pocEmails);
         console.log('✅ Subject: Welcome to OZI - ' + tradeName + ' Successfully Onboarded!');
       } catch (emailError) {
         console.error('❌ ===== EMAIL SENDING FAILED =====');
@@ -336,13 +347,24 @@ export class VendorDCService {
       }
     }
 
+    // Handle array inputs for pocEmail and brandName if provided
+    if (updateData.pocEmail) {
+      const pocEmailArray = Array.isArray(updateData.pocEmail) ? updateData.pocEmail : [updateData.pocEmail];
+      updateData.pocEmail = pocEmailArray.filter(email => email).join(',');
+    }
+    
+    if (updateData.brandName) {
+      const brandNameArray = Array.isArray(updateData.brandName) ? updateData.brandName : [updateData.brandName];
+      updateData.brandName = brandNameArray.filter(name => name).join(',');
+    }
+
     // Check if POC email is being updated
     const isPocEmailUpdated = updateData.pocEmail && updateData.pocEmail !== vendor.pocEmail;
     const oldPocEmail = vendor.pocEmail;
 
     await vendor.update(updateData);
 
-    // If POC email was updated, send onboarding email to new POC
+    // If POC email was updated, send onboarding email to new POCs
     if (isPocEmailUpdated) {
       console.log('🚀 ===== VENDOR POC EMAIL UPDATED - SENDING EMAIL =====');
       console.log('🔍 Old POC email:', oldPocEmail);
@@ -353,8 +375,11 @@ export class VendorDCService {
         const updatedVendor = await this.getVendorById(id);
         
         if (updatedVendor && updateData.pocEmail) {
-          console.log('📧 ===== SENDING EMAIL TO NEW POC =====');
-          console.log('📧 Recipient:', updateData.pocEmail);
+          // Parse comma-separated emails back to array
+          const pocEmails = updateData.pocEmail.split(',').map(email => email.trim()).filter(email => email);
+          
+          console.log('📧 ===== SENDING EMAIL TO NEW POCS =====');
+          console.log('📧 Recipients:', pocEmails);
           console.log('📧 Vendor Name:', updatedVendor.tradeName);
           console.log('📧 Vendor ID:', updatedVendor.vendorId);
           
@@ -375,12 +400,12 @@ export class VendorDCService {
           const paymentTerms = updatedVendor?.paymentTerms || updatedVendor?.dataValues?.paymentTerms;
           
           const emailResult = await EmailService.sendVendorOnboardingEmail(
-            [updateData.pocEmail], // Send to the new POC email
+            pocEmails, // Send to all new POC emails
             tradeName,
             vendorId,
             (updatedVendor as any).DistributionCenter?.name || 'N/A',
             pocName || 'Vendor',
-            updateData.pocEmail,
+            pocEmails[0] || '', // Use first email as primary contact
             businessAddress || '',
             city || '',
             state || '',
@@ -394,9 +419,9 @@ export class VendorDCService {
             paymentTerms
           );
           
-          console.log('✅ ===== EMAIL SENT TO NEW POC =====');
+          console.log('✅ ===== EMAIL SENT TO NEW POCS =====');
           console.log('✅ Email result:', emailResult);
-          console.log('✅ Sent to:', updateData.pocEmail);
+          console.log('✅ Sent to:', pocEmails);
           console.log('✅ Subject: Welcome to OZI - ' + tradeName + ' Successfully Onboarded!');
         }
       } catch (emailError) {
