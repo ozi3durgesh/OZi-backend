@@ -258,77 +258,68 @@ export class EmailService {
       // Check if product has SKU matrix
       const skuMatrix = product.SkuMatrix || product.dataValues?.SkuMatrix || product.skuMatrix || [];
       
-      // Create product section with proper table format
+      // Create compact Google Sheets-style table format
       productLines += `
-        <div class="product-row">
-          <div class="product-header">
-            📦 Row ${productIndex}: ${productName}
-          </div>
-          <div class="product-details-table">
-            <table class="main-product-table">
-              <thead>
-                <tr>
-                  <th>Cat ID</th>
-                  <th>Qty</th>
-                  <th>Unit Price</th>
-                  <th>Total</th>
-                  <th>HSN</th>
-                  <th>EAN/UPC</th>
-                  <th>Weight</th>
-                  <th>Dimensions</th>
-                  <th>MRP</th>
-                  <th>Cost</th>
-                  <th>RLP</th>
-                  <th>RLP w/o Tax</th>
-                  <th>SGST</th>
-                  <th>CGST</th>
-                  <th>GST</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>${catalogueId}</td>
-                  <td>${quantity}</td>
-                  <td>₹${unitPrice}</td>
-                  <td>₹${totalAmount}</td>
-                  <td>${hsn}</td>
-                  <td>${eanUpc}</td>
-                  <td>${weight} kg</td>
-                  <td>${dimensions}</td>
-                  <td>₹${mrp}</td>
-                  <td>₹${cost}</td>
-                  <td>₹${rlp}</td>
-                  <td>₹${rlpWoTax}</td>
-                  <td>₹${sgst}</td>
-                  <td>₹${cgst}</td>
-                  <td>${gst}%</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+        <table class="compact-table">
+          <tr>
+            <td>S.No</td>
+            <td>Cat ID</td>
+            <td>Qty</td>
+            <td>Unit Price</td>
+            <td>Total</td>
+            <td>HSN</td>
+            <td>EAN/UPC</td>
+            <td>Weight</td>
+            <td>Dimensions</td>
+            <td>MRP</td>
+            <td>Cost</td>
+            <td>RLP</td>
+            <td>RLP w/o Tax</td>
+            <td>SGST</td>
+            <td>CGST</td>
+            <td>GST</td>
+          </tr>
+          <tr>
+            <td>${productIndex}</td>
+            <td>${catalogueId}</td>
+            <td>${quantity}</td>
+            <td>₹${unitPrice}</td>
+            <td>₹${totalAmount}</td>
+            <td>${hsn}</td>
+            <td>${eanUpc}</td>
+            <td>${weight} kg</td>
+            <td>${dimensions}</td>
+            <td>₹${mrp}</td>
+            <td>₹${cost}</td>
+            <td>₹${rlp}</td>
+            <td>₹${rlpWoTax}</td>
+            <td>₹${sgst}</td>
+            <td>₹${cgst}</td>
+            <td>${gst}%</td>
+          </tr>
       `;
       
       // Add SKU details if available
       if (skuMatrix && skuMatrix.length > 0) {
         productLines += `
-          <div class="sku-details-section">
-            <div class="sku-details-header">
-              🔽 SKU Details:
-            </div>
-            <table class="sku-table">
-              <thead>
-                <tr>
-                  <th>SKU</th>
-                  <th>Product Name</th>
-                  <th>Quantity</th>
-                  <th>HSN</th>
-                  <th>MRP</th>
-                  <th>Weight</th>
-                  <th>Dimensions</th>
-                  <th>Brand</th>
-                </tr>
-              </thead>
-              <tbody>
+          <tr>
+            <td></td>
+            <td>SKU</td>
+            <td>Product Name</td>
+            <td>Quantity</td>
+            <td>HSN</td>
+            <td>MRP</td>
+            <td>Weight</td>
+            <td>Dimensions</td>
+            <td>Brand</td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+          </tr>
         `;
         
         for (const sku of skuMatrix) {
@@ -345,28 +336,28 @@ export class EmailService {
           
           productLines += `
             <tr>
-                  <td>${skuSku}</td>
-                  <td>${skuProductName}</td>
-                  <td>${skuQuantity}</td>
-                  <td>${skuHsn}</td>
-                  <td>₹${skuMrp}</td>
-                  <td>${skuWeight} kg</td>
-                  <td>${skuDimensions}</td>
-                  <td>${skuBrand}</td>
-                </tr>
+              <td></td>
+              <td>${skuSku}</td>
+              <td>${skuProductName}</td>
+              <td>${skuQuantity}</td>
+              <td>${skuHsn}</td>
+              <td>₹${skuMrp}</td>
+              <td>${skuWeight} kg</td>
+              <td>${skuDimensions}</td>
+              <td>${skuBrand}</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
           `;
+        }
       }
       
-      productLines += `
-              </tbody>
-            </table>
-          </div>
-        `;
-      }
-      
-      productLines += `
-        </div>
-      `;
+      productLines += `</table>`;
       
       productIndex++;
     }
@@ -564,6 +555,24 @@ export class EmailService {
             font-size: 12px;
             font-weight: 600;
           }
+          .compact-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+            margin: 15px 0;
+            background-color: #FFFFFF;
+            border: 1px solid #E5E7EB;
+          }
+          .compact-table td {
+            padding: 6px 4px;
+            border: 1px solid #E5E7EB;
+            text-align: left;
+            color: #1E2939;
+            white-space: nowrap;
+          }
+          .compact-table tr:nth-child(even) {
+            background-color: #F9FAFB;
+          }
         </style>
       </head>
       <body>
@@ -632,6 +641,8 @@ export class EmailService {
     products: any[]
   ): Promise<boolean> {
     let productLines = '';
+    let productIndex = 1;
+    
     for (const product of products) {
       // Handle both direct product objects and Sequelize model instances
       const productName = product.productName || product.dataValues?.productName || 'N/A';
@@ -644,25 +655,119 @@ export class EmailService {
       const weight = product.weight || product.dataValues?.weight || product.Product?.weight || 'N/A';
       const dimensions = `${product.length || product.dataValues?.length || product.Product?.length || 'N/A'} x ${product.width || product.dataValues?.width || product.Product?.width || 'N/A'} x ${product.height || product.dataValues?.height || product.Product?.height || 'N/A'}`;
       const mrp = product.mrp || product.dataValues?.mrp || product.Product?.mrp || 'N/A';
-      const cost = product.unitPrice || product.dataValues?.unitPrice || product.Product?.unitPrice || 'N/A'; // Use unitPrice as cost
+      const cost = product.unitPrice || product.dataValues?.unitPrice || product.Product?.unitPrice || 'N/A';
       const gst = product.gst || product.dataValues?.gst || product.Product?.gst || 'N/A';
       
+      // New fields for pricing and tax
+      const rlp = product.rlp || product.dataValues?.rlp || 'N/A';
+      const rlpWoTax = product.rlp_w_o_tax || product.dataValues?.rlp_w_o_tax || 'N/A';
+      const sgst = product.sgst || product.dataValues?.sgst || 'N/A';
+      const cgst = product.cgst || product.dataValues?.cgst || 'N/A';
+      
+      // Check if product has SKU matrix
+      const skuMatrix = product.SkuMatrix || product.dataValues?.SkuMatrix || product.skuMatrix || [];
+      
+      // Create compact Google Sheets-style table format
       productLines += `
-        <tr>
-          <td>${productName}</td>
-                  <td>${catalogueId}</td>
-                  <td>${quantity}</td>
-                  <td>₹${unitPrice}</td>
-                  <td>₹${totalAmount}</td>
-                  <td>${hsn}</td>
-                  <td>${eanUpc}</td>
-                  <td>${weight} kg</td>
-                  <td>${dimensions}</td>
-                  <td>₹${mrp}</td>
-                  <td>₹${cost}</td>
-                  <td>${gst}%</td>
-                </tr>
+        <table class="compact-table">
+          <tr>
+            <td>S.No</td>
+            <td>Cat ID</td>
+            <td>Qty</td>
+            <td>Unit Price</td>
+            <td>Total</td>
+            <td>HSN</td>
+            <td>EAN/UPC</td>
+            <td>Weight</td>
+            <td>Dimensions</td>
+            <td>MRP</td>
+            <td>Cost</td>
+            <td>RLP</td>
+            <td>RLP w/o Tax</td>
+            <td>SGST</td>
+            <td>CGST</td>
+            <td>GST</td>
+          </tr>
+          <tr>
+            <td>${productIndex}</td>
+            <td>${catalogueId}</td>
+            <td>${quantity}</td>
+            <td>₹${unitPrice}</td>
+            <td>₹${totalAmount}</td>
+            <td>${hsn}</td>
+            <td>${eanUpc}</td>
+            <td>${weight} kg</td>
+            <td>${dimensions}</td>
+            <td>₹${mrp}</td>
+            <td>₹${cost}</td>
+            <td>₹${rlp}</td>
+            <td>₹${rlpWoTax}</td>
+            <td>₹${sgst}</td>
+            <td>₹${cgst}</td>
+            <td>${gst}%</td>
+          </tr>
       `;
+      
+      // Add SKU details if available
+      if (skuMatrix && skuMatrix.length > 0) {
+        productLines += `
+          <tr>
+            <td></td>
+            <td>SKU</td>
+            <td>Product Name</td>
+            <td>Quantity</td>
+            <td>HSN</td>
+            <td>MRP</td>
+            <td>Weight</td>
+            <td>Dimensions</td>
+            <td>Brand</td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+          </tr>
+        `;
+        
+        for (const sku of skuMatrix) {
+          const skuProductName = sku.product_name || sku.dataValues?.product_name || 'N/A';
+          const skuQuantity = sku.quantity || sku.dataValues?.quantity || 'N/A';
+          const skuHsn = sku.hsn || sku.dataValues?.hsn || hsn;
+          const skuEanUpc = sku.ean_upc || sku.dataValues?.ean_upc || eanUpc;
+          const skuWeight = sku.weight || sku.dataValues?.weight || 'N/A';
+          const skuDimensions = `${sku.length || sku.dataValues?.length || 'N/A'} x ${sku.width || sku.dataValues?.width || 'N/A'} x ${sku.height || sku.dataValues?.height || 'N/A'}`;
+          const skuMrp = sku.mrp || sku.dataValues?.mrp || 'N/A';
+          const skuGst = sku.gst || sku.dataValues?.gst || gst;
+          const skuBrand = sku.brand || sku.dataValues?.brand || 'N/A';
+          const skuSku = sku.sku || sku.dataValues?.sku || 'N/A';
+          
+          productLines += `
+            <tr>
+              <td></td>
+              <td>${skuSku}</td>
+              <td>${skuProductName}</td>
+              <td>${skuQuantity}</td>
+              <td>${skuHsn}</td>
+              <td>₹${skuMrp}</td>
+              <td>${skuWeight} kg</td>
+              <td>${skuDimensions}</td>
+              <td>${skuBrand}</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+          `;
+        }
+      }
+      
+      productLines += `</table>`;
+      productIndex++;
     }
 
     const deliveryDateFormatted = deliveryDate ? new Date(deliveryDate).toLocaleDateString('en-IN', {
@@ -704,6 +809,24 @@ export class EmailService {
           .sku-table td { word-wrap: break-word; }
           .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; }
           .success-badge { background-color: #28a745; color: white; padding: 5px 10px; border-radius: 3px; font-size: 12px; }
+          .compact-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+            margin: 15px 0;
+            background-color: #FFFFFF;
+            border: 1px solid #E5E7EB;
+          }
+          .compact-table td {
+            padding: 6px 4px;
+            border: 1px solid #E5E7EB;
+            text-align: left;
+            color: #1E2939;
+            white-space: nowrap;
+          }
+          .compact-table tr:nth-child(even) {
+            background-color: #F9FAFB;
+          }
         </style>
       </head>
       <body>
