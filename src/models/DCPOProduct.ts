@@ -41,6 +41,7 @@ class DCPOProduct extends Model<
   declare rlp_w_o_tax: string | null;
   declare sgst: string | null;
   declare cgst: string | null;
+  declare margin: string | null;
   declare createdAt: CreationOptional<Date>;
   declare updatedAt: CreationOptional<Date>;
 }
@@ -176,6 +177,10 @@ DCPOProduct.init(
       allowNull: true,
     },
     cgst: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    margin: {
       type: DataTypes.STRING(50),
       allowNull: true,
     },

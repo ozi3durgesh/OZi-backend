@@ -14,6 +14,9 @@ export const runMigrations = async (): Promise<void> => {
     // Update vendor_dc table with new fields
     await updateVendorDCTable();
     
+    // Add margin column to dc_po_products table
+    await addMarginColumnToDCPOProducts();
+    
     console.log('✅ Database migrations completed successfully');
   } catch (error) {
     console.error('❌ Migration failed:', error);
@@ -139,6 +142,35 @@ const updateVendorDCTable = async (): Promise<void> => {
     }
   } catch (error) {
     console.error('❌ Error updating vendor_dc table:', error);
+    throw error;
+  }
+};
+
+const addMarginColumnToDCPOProducts = async (): Promise<void> => {
+  try {
+    console.log('📋 Adding margin column to dc_po_products table...');
+    
+    // Check if margin column exists
+    const columns = await sequelize.query(
+      "SHOW COLUMNS FROM dc_po_products LIKE 'margin'",
+      { type: QueryTypes.SELECT }
+    );
+    
+    if (columns.length === 0) {
+      console.log('🔄 Adding margin column to dc_po_products table...');
+      
+      // Add margin column
+      await sequelize.query(`
+        ALTER TABLE dc_po_products 
+        ADD COLUMN margin VARCHAR(50) NULL AFTER cgst
+      `);
+      
+      console.log('✅ margin column added to dc_po_products table successfully');
+    } else {
+      console.log('ℹ️ margin column already exists in dc_po_products table');
+    }
+  } catch (error) {
+    console.error('❌ Error adding margin column to dc_po_products table:', error);
     throw error;
   }
 };

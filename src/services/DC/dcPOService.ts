@@ -185,6 +185,7 @@ export class DCPOService {
         rlp_w_o_tax: productData.rlp_w_o_tax,
         sgst: productData.sgst,
         cgst: productData.cgst,
+        margin: productData.margin,
       };
     });
 
@@ -237,6 +238,7 @@ export class DCPOService {
           rlp_w_o_tax: productData.rlp_w_o_tax,
           sgst: productData.sgst,
           cgst: productData.cgst,
+          margin: productData.margin,
         });
 
         // Create SKU matrix entries if provided
