@@ -784,6 +784,7 @@ export class DCPOService {
    * Get complete product details for a DC Purchase Order
    */
   static async getDCPOProductDetails(poId: number): Promise<any> {
+    console.log('🔍 Getting DC PO Product Details for PO ID:', poId);
     const po: any = await DCPurchaseOrder.findByPk(poId, {
       include: [
         {
@@ -813,6 +814,16 @@ export class DCPOService {
                 'mrp', 'hsn', 'ean_upc', 'weight', 'length', 'height', 'width', 
                 'inventory_threshold', 'gst', 'cess', 'image_url', 'status',
                 'createdAt', 'updatedAt'
+              ],
+            },
+            {
+              model: DCPOSkuMatrix,
+              as: 'SkuMatrix',
+              attributes: [
+                'id', 'quantity', 'catalogue_id', 'category', 'sku', 'product_name', 
+                'description', 'hsn', 'image_url', 'mrp', 'ean_upc', 'color', 'size', 
+                'brand', 'weight', 'length', 'height', 'width', 'inventory_threshold', 
+                'gst', 'cess', 'createdAt', 'updatedAt'
               ],
             },
           ],
@@ -849,7 +860,9 @@ export class DCPOService {
     };
 
     // Add calculated fields and SKU splitting status to each product
+    console.log('📦 Processing products:', po.Products?.length || 0);
     const productsWithCalculations = await Promise.all((po.Products || []).map(async (product: any) => {
+      console.log('🔍 Product ID:', product.id, 'SKU Matrix count:', product.SkuMatrix?.length || 0);
       let skuSplittingStatus: any = null;
       
       // Only get SKU splitting status for approved POs
@@ -881,6 +894,8 @@ export class DCPOService {
           savingsPercentage: product.Product?.mrp ? 
             ((product.Product.mrp - product.unitPrice) / product.Product.mrp * 100) : 0,
         },
+        // Add SKU Matrix information
+        SkuMatrix: product.SkuMatrix || [],
         // Add SKU splitting information
         sku_splitting_status: skuSplittingStatus?.status || null,
         sku_splitting_summary: skuSplittingStatus ? {

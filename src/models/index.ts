@@ -578,6 +578,7 @@ export {
   DCPurchaseOrder,
   DCPOProduct,
   DCPOApproval,
+  DCPOSkuMatrix,
   DCGrn,
   DCGrnLine,
   DCGrnBatch,

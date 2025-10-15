@@ -387,7 +387,7 @@ export class DCPOController {
       const productDetails = await DCPOService.getDCPOProductDetails(parseInt(id));
 
       return ResponseHandler.success(res, {
-        message: 'Product details retrieved successfully',
+        message: 'Product details retrieved successfully - UPDATED WITH SKU MATRIX',
         data: productDetails,
       });
 
