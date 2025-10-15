@@ -117,6 +117,41 @@ export class S3Service {
   }
 
   /**
+   * Upload brand image to S3
+   * @param buffer - File buffer
+   * @param fileName - Filename
+   * @param contentType - MIME type
+   * @returns Promise<string> - S3 signed URL
+   */
+  static async uploadBrandImage(
+    buffer: Buffer,
+    fileName: string,
+    contentType: string
+  ): Promise<string> {
+    try {
+      // Create S3 key - directly in brand-images folder
+      const s3Key = `brand-images/${fileName}`;
+      
+      // Upload to S3
+      const command = new PutObjectCommand({
+        Bucket: this.BUCKET_NAME,
+        Key: s3Key,
+        Body: buffer,
+        ContentType: contentType,
+      });
+      
+      await s3Client.send(command);
+      
+      // Return the signed URL (valid for 7 days)
+      return await this.getSignedUrl(s3Key);
+      
+    } catch (error) {
+      console.error('Error uploading brand image to S3:', error);
+      throw new Error(`Failed to upload brand image to S3: ${error}`);
+    }
+  }
+
+  /**
    * Upload file buffer to S3 and return signed URL
    * @param buffer - File buffer
    * @param key - S3 key (path)
