@@ -17,6 +17,9 @@ export const runMigrations = async (): Promise<void> => {
     // Add margin column to dc_po_products table
     await addMarginColumnToDCPOProducts();
     
+    // Add new vendor fields to vendor_dc table
+    await addNewVendorFields();
+    
     console.log('✅ Database migrations completed successfully');
   } catch (error) {
     console.error('❌ Migration failed:', error);
@@ -171,6 +174,43 @@ const addMarginColumnToDCPOProducts = async (): Promise<void> => {
     }
   } catch (error) {
     console.error('❌ Error adding margin column to dc_po_products table:', error);
+    throw error;
+  }
+};
+
+const addNewVendorFields = async (): Promise<void> => {
+  try {
+    console.log('📋 Adding new vendor fields to vendor_dc table...');
+    
+    // Check if agreement column exists (one of the new fields)
+    const columns = await sequelize.query(
+      "SHOW COLUMNS FROM vendor_dc LIKE 'agreement'",
+      { type: QueryTypes.SELECT }
+    );
+    
+    if (columns.length === 0) {
+      console.log('🔄 Adding new vendor fields to vendor_dc table...');
+      
+      // Add new columns
+      await sequelize.query(`
+        ALTER TABLE vendor_dc 
+        ADD COLUMN agreement VARCHAR(500) NULL AFTER agreement_doc,
+        ADD COLUMN pan_document VARCHAR(500) NULL AFTER agreement,
+        ADD COLUMN gst_certificate VARCHAR(500) NULL AFTER pan_document,
+        ADD COLUMN cancelled_cheque VARCHAR(500) NULL AFTER gst_certificate,
+        ADD COLUMN msme_certificate VARCHAR(500) NULL AFTER cancelled_cheque,
+        ADD COLUMN bank_account_number VARCHAR(50) NULL AFTER msme_certificate,
+        ADD COLUMN ifsc_code VARCHAR(20) NULL AFTER bank_account_number,
+        ADD COLUMN stock_correction BOOLEAN NULL DEFAULT FALSE AFTER ifsc_code,
+        ADD COLUMN stock_correction_percentage VARCHAR(10) NULL AFTER stock_correction
+      `);
+      
+      console.log('✅ New vendor fields added to vendor_dc table successfully');
+    } else {
+      console.log('ℹ️ New vendor fields already exist in vendor_dc table');
+    }
+  } catch (error) {
+    console.error('❌ Error adding new vendor fields to vendor_dc table:', error);
     throw error;
   }
 };

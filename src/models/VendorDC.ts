@@ -21,6 +21,15 @@ export interface VendorDCAttributes {
   model?: string;
   vrf?: string;
   agreementDoc?: string;
+  agreement?: string;
+  panDocument?: string;
+  gstCertificate?: string;
+  cancelledCheque?: string;
+  msmeCertificate?: string;
+  bankAccountNumber?: string;
+  ifscCode?: string;
+  stockCorrection?: boolean;
+  stockCorrectionPercentage?: string;
   creditTerms?: string;
   creditDays?: string;
   deliveryTAT?: string;
@@ -59,6 +68,15 @@ class VendorDC extends Model<VendorDCAttributes, VendorDCCreationAttributes> imp
   public model?: string;
   public vrf?: string;
   public agreementDoc?: string;
+  public agreement?: string;
+  public panDocument?: string;
+  public gstCertificate?: string;
+  public cancelledCheque?: string;
+  public msmeCertificate?: string;
+  public bankAccountNumber?: string;
+  public ifscCode?: string;
+  public stockCorrection?: boolean;
+  public stockCorrectionPercentage?: string;
   public creditTerms?: string;
   public creditDays?: string;
   public deliveryTAT?: string;
@@ -185,6 +203,51 @@ VendorDC.init(
       type: DataTypes.STRING(500),
       allowNull: true,
       field: 'agreement_doc',
+    },
+    agreement: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
+    },
+    panDocument: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
+      field: 'pan_document',
+    },
+    gstCertificate: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
+      field: 'gst_certificate',
+    },
+    cancelledCheque: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
+      field: 'cancelled_cheque',
+    },
+    msmeCertificate: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
+      field: 'msme_certificate',
+    },
+    bankAccountNumber: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      field: 'bank_account_number',
+    },
+    ifscCode: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+      field: 'ifsc_code',
+    },
+    stockCorrection: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      defaultValue: false,
+      field: 'stock_correction',
+    },
+    stockCorrectionPercentage: {
+      type: DataTypes.STRING(10),
+      allowNull: true,
+      field: 'stock_correction_percentage',
     },
     creditTerms: {
       type: DataTypes.STRING(100),
