@@ -259,6 +259,11 @@ export class DCPOService {
           }));
 
           await DCPOSkuMatrix.bulkCreate(skuMatrixEntries);
+          
+          // Update the DCPOProduct with the SKU matrix JSON data
+          await poProduct.update({
+            sku_matrix_on_catelogue_id: JSON.stringify(productData.skuMatrix)
+          });
         }
 
         return poProduct;
@@ -297,6 +302,13 @@ export class DCPOService {
         {
           model: DCPOProduct,
           as: 'Products',
+          attributes: [
+            'id', 'dcPOId', 'productId', 'catalogue_id', 'productName', 'quantity', 
+            'unitPrice', 'totalAmount', 'mrp', 'cost', 'description', 'notes', 
+            'hsn', 'ean_upc', 'weight', 'length', 'height', 'width', 
+            'inventory_threshold', 'gst', 'cess', 'image_url', 'brand_id', 
+            'category_id', 'status', 'sku_matrix_on_catelogue_id', 'createdAt', 'updatedAt'
+          ],
           include: [
             {
               model: ParentProductMasterDC,
@@ -306,7 +318,7 @@ export class DCPOService {
             {
               model: DCPOSkuMatrix,
               as: 'SkuMatrix',
-              attributes: ['id', 'quantity', 'catalogue_id', 'category', 'sku', 'product_name', 'description', 'hsn', 'image_url', 'mrp', 'ean_upc', 'color', 'size', 'brand', 'weight', 'length', 'height', 'width', 'inventory_threshold', 'gst', 'cess'],
+              attributes: ['id', 'quantity', 'catalogue_id', 'category', 'sku', 'product_name', 'description', 'hsn', 'image_url', 'mrp', 'ean_upc', 'color', 'size', 'brand', 'weight', 'length', 'height', 'width', 'inventory_threshold', 'gst', 'cess', 'rlp', 'rlp_w_o_tax', 'gstType', 'selling_price'],
             },
           ],
         },
@@ -359,15 +371,23 @@ export class DCPOService {
         {
           model: DCPOProduct,
           as: 'Products',
+          attributes: [
+            'id', 'dcPOId', 'productId', 'catalogue_id', 'productName', 'quantity', 
+            'unitPrice', 'totalAmount', 'mrp', 'cost', 'description', 'notes', 
+            'hsn', 'ean_upc', 'weight', 'length', 'height', 'width', 
+            'inventory_threshold', 'gst', 'cess', 'image_url', 'brand_id', 
+            'category_id', 'status', 'sku_matrix_on_catelogue_id', 'createdAt', 'updatedAt'
+          ],
           include: [
             {
               model: ParentProductMasterDC,
               as: 'Product',
+              attributes: ['id', 'catalogue_id', 'name', 'mrp', 'hsn', 'brand_id'],
             },
             {
               model: DCPOSkuMatrix,
               as: 'SkuMatrix',
-              attributes: ['id', 'quantity', 'catalogue_id', 'category', 'sku', 'product_name', 'description', 'hsn', 'image_url', 'mrp', 'ean_upc', 'color', 'size', 'brand', 'weight', 'length', 'height', 'width', 'inventory_threshold', 'gst', 'cess'],
+              attributes: ['id', 'quantity', 'catalogue_id', 'category', 'sku', 'product_name', 'description', 'hsn', 'image_url', 'mrp', 'ean_upc', 'color', 'size', 'brand', 'weight', 'length', 'height', 'width', 'inventory_threshold', 'gst', 'cess', 'rlp', 'rlp_w_o_tax', 'gstType', 'selling_price'],
             },
           ],
         },
@@ -697,11 +717,23 @@ export class DCPOService {
         {
           model: DCPOProduct,
           as: 'Products',
+          attributes: [
+            'id', 'dcPOId', 'productId', 'catalogue_id', 'productName', 'quantity', 
+            'unitPrice', 'totalAmount', 'mrp', 'cost', 'description', 'notes', 
+            'hsn', 'ean_upc', 'weight', 'length', 'height', 'width', 
+            'inventory_threshold', 'gst', 'cess', 'image_url', 'brand_id', 
+            'category_id', 'status', 'sku_matrix_on_catelogue_id', 'createdAt', 'updatedAt'
+          ],
           include: [
             {
               model: ParentProductMasterDC,
               as: 'Product',
               attributes: ['id', 'catalogue_id', 'name', 'mrp', 'hsn', 'brand_id'],
+            },
+            {
+              model: DCPOSkuMatrix,
+              as: 'SkuMatrix',
+              attributes: ['id', 'quantity', 'catalogue_id', 'category', 'sku', 'product_name', 'description', 'hsn', 'image_url', 'mrp', 'ean_upc', 'color', 'size', 'brand', 'weight', 'length', 'height', 'width', 'inventory_threshold', 'gst', 'cess', 'rlp', 'rlp_w_o_tax', 'gstType', 'selling_price'],
             },
           ],
         },

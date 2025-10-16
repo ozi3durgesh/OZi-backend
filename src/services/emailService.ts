@@ -258,43 +258,29 @@ export class EmailService {
       // Check if product has SKU matrix
       const skuMatrix = product.SkuMatrix || product.dataValues?.SkuMatrix || product.skuMatrix || [];
       
-      // Create compact Google Sheets-style table format
+      // Create compact Google Sheets-style table format for product summary
       productLines += `
         <table class="compact-table">
           <tr>
             <td>S.No</td>
             <td>Cat ID</td>
+            <td>Product Name</td>
             <td>Qty</td>
             <td>Unit Price</td>
             <td>Total</td>
             <td>HSN</td>
-            <td>EAN/UPC</td>
-            <td>Weight</td>
-            <td>Dimensions</td>
             <td>MRP</td>
-            <td>Cost</td>
-            <td>RLP</td>
-            <td>RLP w/o Tax</td>
-            <td>SGST</td>
-            <td>CGST</td>
             <td>GST</td>
           </tr>
           <tr>
             <td>${productIndex}</td>
             <td>${catalogueId}</td>
+            <td>${productName}</td>
             <td>${quantity}</td>
             <td>₹${unitPrice}</td>
             <td>₹${totalAmount}</td>
             <td>${hsn}</td>
-            <td>${eanUpc}</td>
-            <td>${weight} kg</td>
-            <td>${dimensions}</td>
             <td>₹${mrp}</td>
-            <td>₹${cost}</td>
-            <td>₹${rlp}</td>
-            <td>₹${rlpWoTax}</td>
-            <td>₹${sgst}</td>
-            <td>₹${cgst}</td>
             <td>${gst}%</td>
           </tr>
       `;
@@ -308,17 +294,17 @@ export class EmailService {
             <td>Product Name</td>
             <td>Quantity</td>
             <td>HSN</td>
+            <td>EAN/UPC</td>
             <td>MRP</td>
             <td>Weight</td>
             <td>Dimensions</td>
             <td>Brand</td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
+            <td>RLP</td>
+            <td>RLP w/o Tax</td>
+            <td>GST Type</td>
+            <td>Selling Price</td>
+            <td>GST</td>
+            <td>CESS</td>
           </tr>
         `;
         
@@ -334,6 +320,13 @@ export class EmailService {
           const skuBrand = sku.brand || sku.dataValues?.brand || 'N/A';
           const skuSku = sku.sku || sku.dataValues?.sku || 'N/A';
           
+          // New SKU-level fields
+          const skuRlp = sku.rlp || sku.dataValues?.rlp || 'N/A';
+          const skuRlpWoTax = sku.rlp_w_o_tax || sku.dataValues?.rlp_w_o_tax || 'N/A';
+          const skuGstType = sku.gstType || sku.dataValues?.gstType || 'N/A';
+          const skuSellingPrice = sku.selling_price || sku.dataValues?.selling_price || 'N/A';
+          const skuCess = sku.cess || sku.dataValues?.cess || 'N/A';
+          
           productLines += `
             <tr>
               <td></td>
@@ -341,17 +334,17 @@ export class EmailService {
               <td>${skuProductName}</td>
               <td>${skuQuantity}</td>
               <td>${skuHsn}</td>
+              <td>${skuEanUpc}</td>
               <td>₹${skuMrp}</td>
               <td>${skuWeight} kg</td>
               <td>${skuDimensions}</td>
               <td>${skuBrand}</td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
+              <td>₹${skuRlp}</td>
+              <td>₹${skuRlpWoTax}</td>
+              <td>${skuGstType}</td>
+              <td>₹${skuSellingPrice}</td>
+              <td>${skuGst}%</td>
+              <td>${skuCess}%</td>
             </tr>
           `;
         }
@@ -667,43 +660,29 @@ export class EmailService {
       // Check if product has SKU matrix
       const skuMatrix = product.SkuMatrix || product.dataValues?.SkuMatrix || product.skuMatrix || [];
       
-      // Create compact Google Sheets-style table format
+      // Create compact Google Sheets-style table format for product summary
       productLines += `
         <table class="compact-table">
           <tr>
             <td>S.No</td>
             <td>Cat ID</td>
+            <td>Product Name</td>
             <td>Qty</td>
             <td>Unit Price</td>
             <td>Total</td>
             <td>HSN</td>
-            <td>EAN/UPC</td>
-            <td>Weight</td>
-            <td>Dimensions</td>
             <td>MRP</td>
-            <td>Cost</td>
-            <td>RLP</td>
-            <td>RLP w/o Tax</td>
-            <td>SGST</td>
-            <td>CGST</td>
             <td>GST</td>
           </tr>
           <tr>
             <td>${productIndex}</td>
             <td>${catalogueId}</td>
+            <td>${productName}</td>
             <td>${quantity}</td>
             <td>₹${unitPrice}</td>
             <td>₹${totalAmount}</td>
             <td>${hsn}</td>
-            <td>${eanUpc}</td>
-            <td>${weight} kg</td>
-            <td>${dimensions}</td>
             <td>₹${mrp}</td>
-            <td>₹${cost}</td>
-            <td>₹${rlp}</td>
-            <td>₹${rlpWoTax}</td>
-            <td>₹${sgst}</td>
-            <td>₹${cgst}</td>
             <td>${gst}%</td>
           </tr>
       `;
@@ -717,17 +696,17 @@ export class EmailService {
             <td>Product Name</td>
             <td>Quantity</td>
             <td>HSN</td>
+            <td>EAN/UPC</td>
             <td>MRP</td>
             <td>Weight</td>
             <td>Dimensions</td>
             <td>Brand</td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
+            <td>RLP</td>
+            <td>RLP w/o Tax</td>
+            <td>GST Type</td>
+            <td>Selling Price</td>
+            <td>GST</td>
+            <td>CESS</td>
           </tr>
         `;
         
@@ -743,6 +722,13 @@ export class EmailService {
           const skuBrand = sku.brand || sku.dataValues?.brand || 'N/A';
           const skuSku = sku.sku || sku.dataValues?.sku || 'N/A';
           
+          // New SKU-level fields
+          const skuRlp = sku.rlp || sku.dataValues?.rlp || 'N/A';
+          const skuRlpWoTax = sku.rlp_w_o_tax || sku.dataValues?.rlp_w_o_tax || 'N/A';
+          const skuGstType = sku.gstType || sku.dataValues?.gstType || 'N/A';
+          const skuSellingPrice = sku.selling_price || sku.dataValues?.selling_price || 'N/A';
+          const skuCess = sku.cess || sku.dataValues?.cess || 'N/A';
+          
           productLines += `
             <tr>
               <td></td>
@@ -750,17 +736,17 @@ export class EmailService {
               <td>${skuProductName}</td>
               <td>${skuQuantity}</td>
               <td>${skuHsn}</td>
+              <td>${skuEanUpc}</td>
               <td>₹${skuMrp}</td>
               <td>${skuWeight} kg</td>
               <td>${skuDimensions}</td>
               <td>${skuBrand}</td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
+              <td>₹${skuRlp}</td>
+              <td>₹${skuRlpWoTax}</td>
+              <td>${skuGstType}</td>
+              <td>₹${skuSellingPrice}</td>
+              <td>${skuGst}%</td>
+              <td>${skuCess}%</td>
             </tr>
           `;
         }
