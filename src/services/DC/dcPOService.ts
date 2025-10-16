@@ -53,6 +53,7 @@ interface CreateDCPOData {
       rlp: string;
       rlp_w_o_tax: string;
       gstType: string;
+      selling_price?: string;
     }>;
   }>;
   description?: string;
@@ -254,6 +255,7 @@ export class DCPOService {
             rlp: sku.rlp,
             rlp_w_o_tax: sku.rlp_w_o_tax,
             gstType: sku.gstType,
+            selling_price: sku.selling_price,
           }));
 
           await DCPOSkuMatrix.bulkCreate(skuMatrixEntries);
