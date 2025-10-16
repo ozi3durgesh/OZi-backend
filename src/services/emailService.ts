@@ -249,11 +249,11 @@ export class EmailService {
       const cost = product.unitPrice || product.dataValues?.unitPrice || product.Product?.unitPrice || 'N/A';
       const gst = product.gst || product.dataValues?.gst || product.Product?.gst || 'N/A';
       
-      // New fields for pricing and tax
-      const rlp = product.rlp || product.dataValues?.rlp || 'N/A';
-      const rlpWoTax = product.rlp_w_o_tax || product.dataValues?.rlp_w_o_tax || 'N/A';
-      const sgst = product.sgst || product.dataValues?.sgst || 'N/A';
-      const cgst = product.cgst || product.dataValues?.cgst || 'N/A';
+      // New fields for pricing and tax - these are now at SKU level
+      const rlp = 'N/A'; // Will be shown in SKU details
+      const rlpWoTax = 'N/A'; // Will be shown in SKU details
+      const sgst = 'N/A'; // Will be shown in SKU details
+      const cgst = 'N/A'; // Will be shown in SKU details
       
       // Check if product has SKU matrix
       const skuMatrix = product.SkuMatrix || product.dataValues?.SkuMatrix || product.skuMatrix || [];
@@ -658,11 +658,11 @@ export class EmailService {
       const cost = product.unitPrice || product.dataValues?.unitPrice || product.Product?.unitPrice || 'N/A';
       const gst = product.gst || product.dataValues?.gst || product.Product?.gst || 'N/A';
       
-      // New fields for pricing and tax
-      const rlp = product.rlp || product.dataValues?.rlp || 'N/A';
-      const rlpWoTax = product.rlp_w_o_tax || product.dataValues?.rlp_w_o_tax || 'N/A';
-      const sgst = product.sgst || product.dataValues?.sgst || 'N/A';
-      const cgst = product.cgst || product.dataValues?.cgst || 'N/A';
+      // New fields for pricing and tax - these are now at SKU level
+      const rlp = 'N/A'; // Will be shown in SKU details
+      const rlpWoTax = 'N/A'; // Will be shown in SKU details
+      const sgst = 'N/A'; // Will be shown in SKU details
+      const cgst = 'N/A'; // Will be shown in SKU details
       
       // Check if product has SKU matrix
       const skuMatrix = product.SkuMatrix || product.dataValues?.SkuMatrix || product.skuMatrix || [];
