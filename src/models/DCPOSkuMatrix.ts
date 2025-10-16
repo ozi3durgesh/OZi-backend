@@ -33,6 +33,9 @@ class DCPOSkuMatrix extends Model<
   declare inventory_threshold: number | null;
   declare gst: string | null;
   declare cess: string | null;
+  declare rlp: string | null;
+  declare rlp_w_o_tax: string | null;
+  declare gstType: string | null;
   declare createdAt: CreationOptional<Date>;
   declare updatedAt: CreationOptional<Date>;
 }
@@ -131,6 +134,18 @@ DCPOSkuMatrix.init(
     },
     cess: {
       type: DataTypes.STRING(10),
+      allowNull: true,
+    },
+    rlp: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    rlp_w_o_tax: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    gstType: {
+      type: DataTypes.STRING(50),
       allowNull: true,
     },
     createdAt: {

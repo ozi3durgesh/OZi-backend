@@ -23,16 +23,10 @@ interface DCPOFilters {
 interface CreateDCPOData {
   vendorId: number;
   dcId: number;
-  gstType?: string;
   products: Array<{
     catelogue_id: string;
     totoal_quantity: number;
     totalPrice: number;
-    rlp?: string;
-    rlp_w_o_tax?: string;
-    sgst?: string;
-    cgst?: string;
-    margin?: string;
     description?: string;
     notes?: string;
     sku_matrix_on_catelogue_id?: Array<{
@@ -56,6 +50,9 @@ interface CreateDCPOData {
       inventory_threshold?: number;
       gst?: string;
       cess?: string;
+      rlp: string;
+      rlp_w_o_tax: string;
+      gstType: string;
     }>;
   }>;
   description?: string;
@@ -181,12 +178,6 @@ export class DCPOService {
         status: product.status,
         // Store SKU matrix data for later processing
         skuMatrix: productData.sku_matrix_on_catelogue_id || [],
-        // Store new fields from request
-        rlp: productData.rlp,
-        rlp_w_o_tax: productData.rlp_w_o_tax,
-        sgst: productData.sgst,
-        cgst: productData.cgst,
-        margin: productData.margin,
       };
     });
 
@@ -202,7 +193,6 @@ export class DCPOService {
       description: data.description,
       notes: data.notes,
       priority: data.priority || DC_PO_CONSTANTS.DEFAULTS.PRIORITY,
-      gst_type: data.gstType,
       status: DC_PO_CONSTANTS.STATUS.DRAFT,
       createdBy: data.createdBy,
     } as DCPurchaseOrderCreationAttributes);
@@ -235,11 +225,6 @@ export class DCPOService {
           brand_id: productData.brand_id,
           category_id: productData.category_id,
           status: productData.status,
-          rlp: productData.rlp,
-          rlp_w_o_tax: productData.rlp_w_o_tax,
-          sgst: productData.sgst,
-          cgst: productData.cgst,
-          margin: productData.margin,
         });
 
         // Create SKU matrix entries if provided
@@ -266,6 +251,9 @@ export class DCPOService {
             inventory_threshold: sku.inventory_threshold || sku.InventoryThreshold,
             gst: sku.gst,
             cess: sku.cess || sku.CESS,
+            rlp: sku.rlp,
+            rlp_w_o_tax: sku.rlp_w_o_tax,
+            gstType: sku.gstType,
           }));
 
           await DCPOSkuMatrix.bulkCreate(skuMatrixEntries);

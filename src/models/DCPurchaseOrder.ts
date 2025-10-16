@@ -28,7 +28,6 @@ class DCPurchaseOrder extends Model<
   declare final_delivery_date: Date | null;
   declare pi_notes: string | null;
   declare pi_file_url: string | null;
-  declare gst_type: string | null;
   declare createdBy: number;
   declare updatedBy: number | null;
   declare createdAt: CreationOptional<Date>;
@@ -132,10 +131,6 @@ DCPurchaseOrder.init(
     },
     pi_file_url: {
       type: DataTypes.TEXT,
-      allowNull: true,
-    },
-    gst_type: {
-      type: DataTypes.STRING(50),
       allowNull: true,
     },
     createdBy: {

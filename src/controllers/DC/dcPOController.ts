@@ -22,7 +22,6 @@ export class DCPOController {
       const {
         vendorId,
         dcId,
-        gstType,
         products,
         description,
         notes,
@@ -55,12 +54,6 @@ export class DCPOController {
 
         // Validate SKU matrix if provided
         if (product.sku_matrix_on_catelogue_id && Array.isArray(product.sku_matrix_on_catelogue_id)) {
-          // Validate total quantity matches sum of SKU matrix quantities
-          const skuMatrixTotal = product.sku_matrix_on_catelogue_id.reduce((sum: number, sku: any) => sum + (sku.quantity || 0), 0);
-          if (skuMatrixTotal !== product.totoal_quantity) {
-            return ResponseHandler.error(res, `Total quantity (${product.totoal_quantity}) must equal sum of SKU matrix quantities (${skuMatrixTotal})`, 400);
-          }
-
           // Validate each SKU in the matrix
           for (const sku of product.sku_matrix_on_catelogue_id) {
             if (!sku.quantity || !sku.catalogue_id || !sku.sku) {
@@ -77,6 +70,17 @@ export class DCPOController {
             // Validate SKU quantity
             if (sku.quantity < 1 || sku.quantity > DC_PO_CONSTANTS.VALIDATION.MAX_QUANTITY) {
               return ResponseHandler.error(res, `SKU quantity must be between 1 and ${DC_PO_CONSTANTS.VALIDATION.MAX_QUANTITY}`, 400);
+            }
+
+            // Validate new required fields for SKU matrix
+            if (!sku.rlp || !sku.rlp_w_o_tax || !sku.gstType) {
+              return ResponseHandler.error(res, 'Each SKU in matrix must have rlp, rlp_w_o_tax, and gstType', 400);
+            }
+
+            // Validate gstType for SKU
+            const validGstTypes = ['SGST+CGST', 'IGST', 'NONE'];
+            if (sku.gstType && !validGstTypes.includes(sku.gstType)) {
+              return ResponseHandler.error(res, 'SKU gstType must be one of: SGST+CGST, IGST, NONE', 400);
             }
           }
         }
@@ -98,16 +102,10 @@ export class DCPOController {
         return ResponseHandler.error(res, 'Priority must be one of: LOW, MEDIUM, HIGH, URGENT', 400);
       }
 
-      // Validate gstType
-      const validGstTypes = ['SGST+CGST', 'IGST', 'NONE'];
-      if (gstType && !validGstTypes.includes(gstType)) {
-        return ResponseHandler.error(res, 'GST Type must be one of: SGST+CGST, IGST, NONE', 400);
-      }
 
       const po = await DCPOService.createDCPO({
         vendorId,
         dcId,
-        gstType,
         products,
         description,
         notes,
