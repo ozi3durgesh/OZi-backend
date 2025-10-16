@@ -15,6 +15,7 @@ class Brand extends Model<
   declare name: string;
   declare slug: string | null;
   declare image: string | null;
+  declare brand_type: 'branded' | 'unbranded' | 'white_labeled';
   declare status: number; // 0 or 1
   declare module_id: number | null;
   declare createdAt: CreationOptional<Date>;
@@ -27,6 +28,11 @@ Brand.init(
     name: { type: DataTypes.STRING(255), allowNull: false, unique: true },
     slug: { type: DataTypes.STRING(255), allowNull: true },
     image: { type: DataTypes.STRING(100), allowNull: true },
+    brand_type: { 
+      type: DataTypes.ENUM('branded', 'unbranded', 'white_labeled'), 
+      allowNull: false, 
+      defaultValue: 'branded' 
+    },
     status: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
     module_id: { type: DataTypes.INTEGER, allowNull: true },
     createdAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },

@@ -6,7 +6,7 @@ import { Op } from 'sequelize';
 // Create brand
 export const createBrand = async (req: Request, res: Response) => {
   try {
-    const { name, slug, image, status = 1, module_id } = req.body;
+    const { name, slug, image, brand_type = 'branded', status = 1, module_id } = req.body;
 
     // Check if brand with same name already exists
     const existingBrand = await Brand.findOne({ where: { name } });
@@ -19,6 +19,7 @@ export const createBrand = async (req: Request, res: Response) => {
       name,
       slug,
       image,
+      brand_type,
       status,
       module_id,
     });
@@ -37,6 +38,7 @@ export const getBrands = async (req: Request, res: Response) => {
     const limit = parseInt(req.query.limit as string) || 10;
     const search = req.query.search as string;
     const status = req.query.status as string;
+    const brand_type = req.query.brand_type as string;
 
     const offset = (page - 1) * limit;
 
@@ -52,6 +54,10 @@ export const getBrands = async (req: Request, res: Response) => {
 
     if (status !== undefined) {
       whereClause.status = status;
+    }
+
+    if (brand_type !== undefined) {
+      whereClause.brand_type = brand_type;
     }
 
     // Get brands with pagination
@@ -102,7 +108,7 @@ export const getBrandById = async (req: Request, res: Response) => {
 export const updateBrand = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, slug, image, status, module_id } = req.body;
+    const { name, slug, image, brand_type, status, module_id } = req.body;
 
     const brand = await Brand.findByPk(id);
     if (!brand) {
@@ -127,6 +133,7 @@ export const updateBrand = async (req: Request, res: Response) => {
       name: name || brand.name,
       slug: slug !== undefined ? slug : brand.slug,
       image: image !== undefined ? image : brand.image,
+      brand_type: brand_type !== undefined ? brand_type : brand.brand_type,
       status: status !== undefined ? status : brand.status,
       module_id: module_id !== undefined ? module_id : brand.module_id,
     });
