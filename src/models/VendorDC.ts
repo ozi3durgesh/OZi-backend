@@ -20,7 +20,12 @@ export interface VendorDCAttributes {
   brandName?: string;
   model?: string;
   vrf?: string;
-  paymentTerms?: string;
+  agreementDoc?: string;
+  creditTerms?: string;
+  creditDays?: string;
+  deliveryTAT?: string;
+  margin?: string;
+  marginOn?: string;
   createdBy: number;
   updatedBy?: number;
   createdAt?: Date;
@@ -53,7 +58,12 @@ class VendorDC extends Model<VendorDCAttributes, VendorDCCreationAttributes> imp
   public brandName?: string;
   public model?: string;
   public vrf?: string;
-  public paymentTerms?: string;
+  public agreementDoc?: string;
+  public creditTerms?: string;
+  public creditDays?: string;
+  public deliveryTAT?: string;
+  public margin?: string;
+  public marginOn?: string;
   public createdBy!: number;
   public updatedBy?: number;
   public readonly createdAt!: Date;
@@ -158,11 +168,6 @@ VendorDC.init(
       defaultValue: 'SUPPLIER',
       field: 'vendor_type',
     },
-    paymentTerms: {
-      type: DataTypes.STRING(100),
-      allowNull: true,
-      field: 'payment_terms',
-    },
     brandName: {
       type: DataTypes.STRING(255),
       allowNull: true,
@@ -175,6 +180,35 @@ VendorDC.init(
     vrf: {
       type: DataTypes.STRING(500),
       allowNull: true,
+    },
+    agreementDoc: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
+      field: 'agreement_doc',
+    },
+    creditTerms: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      field: 'credit_terms',
+    },
+    creditDays: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      field: 'credit_days',
+    },
+    deliveryTAT: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      field: 'delivery_tat',
+    },
+    margin: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    marginOn: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      field: 'margin_on',
     },
     createdBy: {
       type: DataTypes.INTEGER,

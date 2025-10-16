@@ -2,7 +2,7 @@
 // This runs the FC mapping migration when the server starts
 
 import sequelize from './config/database';
-import { addBrandTypeToBrands } from './migrations/add-brand-type-to-brands';
+import { addVendorDCFields } from './migrations/add-vendor-dc-fields';
 
 export async function runFCMigration() {
   console.log('🚀 Starting FC mapping migration...');
@@ -50,8 +50,8 @@ export async function runFCMigration() {
 
     console.log('🎉 FC mapping migration completed successfully!');
     
-    // Run brand type migration
-    await addBrandTypeToBrands();
+    // Run vendor DC fields migration
+    await addVendorDCFields();
     
   } catch (error) {
     console.error('❌ Migration failed:', (error as Error).message);

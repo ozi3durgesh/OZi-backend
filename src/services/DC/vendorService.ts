@@ -75,13 +75,17 @@ export class VendorDCService {
     // Generate unique vendor ID
     const vendorId = await this.generateVendorId();
 
-    // Handle array inputs for pocEmail and brandName
+    // Handle array inputs for pocEmail, brandName, pocName, and pocNumber
     const pocEmailArray = Array.isArray(vendorData.pocEmail) ? vendorData.pocEmail : [vendorData.pocEmail];
     const brandNameArray = Array.isArray(vendorData.brandName) ? vendorData.brandName : [vendorData.brandName];
+    const pocNameArray = Array.isArray(vendorData.pocName) ? vendorData.pocName : [vendorData.pocName];
+    const pocNumberArray = Array.isArray(vendorData.pocNumber) ? vendorData.pocNumber : [vendorData.pocNumber];
     
     // Convert arrays to comma-separated strings for database storage
     const pocEmailString = pocEmailArray.filter(email => email).join(',');
     const brandNameString = brandNameArray.filter(name => name).join(',');
+    const pocNameString = pocNameArray.filter(name => name).join(',');
+    const pocNumberString = pocNumberArray.filter(number => number).join(',');
 
     // Create vendor
     const newVendor = await VendorDC.create({
@@ -93,8 +97,8 @@ export class VendorDCService {
       state: vendorData.state,
       country: vendorData.country || VENDOR_CONSTANTS.DEFAULTS.COUNTRY,
       pincode: vendorData.pincode,
-      pocName: vendorData.pocName,
-      pocNumber: vendorData.pocNumber,
+      pocName: pocNameString,
+      pocNumber: pocNumberString,
       pocEmail: pocEmailString,
       gstNumber: vendorData.gstNumber,
       panNumber: vendorData.panNumber,
@@ -102,7 +106,12 @@ export class VendorDCService {
       brandName: brandNameString,
       model: vendorData.model,
       vrf: vendorData.vrf,
-      paymentTerms: vendorData.paymentTerms,
+      agreementDoc: vendorData.aggreement_doc,
+      creditTerms: vendorData.creditTerms,
+      creditDays: vendorData.creditDays,
+      deliveryTAT: vendorData.deliveryTAT,
+      margin: vendorData.margin,
+      marginOn: vendorData.marginOn,
       createdBy: vendorData.createdBy,
     });
 
@@ -155,7 +164,6 @@ export class VendorDCService {
         const brandName = vendor?.brandName || vendor?.dataValues?.brandName;
         const model = vendor?.model || vendor?.dataValues?.model;
         const vrf = vendor?.vrf || vendor?.dataValues?.vrf;
-        const paymentTerms = vendor?.paymentTerms || vendor?.dataValues?.paymentTerms;
         
         const emailResult = await EmailService.sendVendorOnboardingEmail(
           pocEmails, // Send to all POC emails
@@ -173,8 +181,7 @@ export class VendorDCService {
           vendorType,
           brandName,
           model,
-          vrf,
-          paymentTerms
+          vrf
         );
         
         console.log('✅ ===== EMAIL SENT SUCCESSFULLY =====');
@@ -397,7 +404,6 @@ export class VendorDCService {
           const brandName = updatedVendor?.brandName || updatedVendor?.dataValues?.brandName;
           const model = updatedVendor?.model || updatedVendor?.dataValues?.model;
           const vrf = updatedVendor?.vrf || updatedVendor?.dataValues?.vrf;
-          const paymentTerms = updatedVendor?.paymentTerms || updatedVendor?.dataValues?.paymentTerms;
           
           const emailResult = await EmailService.sendVendorOnboardingEmail(
             pocEmails, // Send to all new POC emails
@@ -415,8 +421,7 @@ export class VendorDCService {
             vendorType,
             brandName,
             model,
-            vrf,
-            paymentTerms
+            vrf
           );
           
           console.log('✅ ===== EMAIL SENT TO NEW POCS =====');
