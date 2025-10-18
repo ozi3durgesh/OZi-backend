@@ -89,6 +89,7 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
       availabilityStatus: user.availabilityStatus,
       createdAt: user.createdAt,
       currentFcId: payload.currentFcId,
+      currentDcId: payload.currentDcId,
       availableFcs: payload.availableFcs
     };
 

@@ -36,6 +36,10 @@ import dcVendorRoutes from './routes/DC/vendorRoutes';
 import dcPORoutes from './routes/DC/dcPORoutes';
 import dcGrnRoutes from './routes/DC/dcGrnRoutes';
 import dcInventory1Routes from './routes/DC/dcInventory1Routes';
+import fcPORoutes from './routes/fcPORoutes';
+import fcSKURoutes from './routes/fcSKURoutes';
+import dcFCPORoutes from './routes/dcFCPORoutes';
+import fcPOStatusRoutes from './routes/fcPOStatusRoutes';
 import pdfUploadRoutes from './routes/pdfUploadRoutes';
 import brandRoutes from './routes/brandRoutes';
 
@@ -81,6 +85,14 @@ app.use('/api/dc', parentProductRoutesDC);
 app.use('/api/dc', dcPORoutes);
 app.use('/api/dc/grn', dcGrnRoutes);
 app.use('/api/dc/inventory-1', dcInventory1Routes);
+
+// FC-specific routes (Fulfillment Center context)
+app.use('/api/fc-po', fcPOStatusRoutes);
+app.use('/api/fc-po', fcPORoutes);
+app.use('/api/fc/skus', fcSKURoutes);
+
+// DC-specific FC-PO routes (Distribution Center context)
+app.use('/api/dc/fc-pos', dcFCPORoutes);
 
 app.use('/api', vendorRoutes);
 app.use('/api', productRoutes);

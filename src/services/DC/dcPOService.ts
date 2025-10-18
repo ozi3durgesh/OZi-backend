@@ -204,7 +204,7 @@ export class DCPOService {
         const poProduct = await DCPOProduct.create({
           dcPOId: newPO.id,
           productId: productData.productId,
-          catalogue_id: productData.catalogue_id,
+          catalogue_id: productData.catalogue_id.toString(),
           productName: productData.productName,
           quantity: productData.quantity,
           unitPrice: productData.unitPrice,
@@ -276,7 +276,7 @@ export class DCPOService {
     // Update DC Inventory 1 for PO raise
     for (const product of validatedProducts) {
       await DCInventory1Service.updateOnPORaise(
-        product.catalogue_id,
+        product.catalogue_id.toString(),
         product.quantity
       );
     }

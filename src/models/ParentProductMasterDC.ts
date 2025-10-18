@@ -15,7 +15,7 @@ class ParentProductMasterDC extends Model<
   declare name: string;
   declare status: number; // 0 or 1
   declare category_id: number;
-  declare catalogue_id: string; // 7 numeric digits
+  declare catalogue_id: number;
   declare description: string;
   declare hsn: string;
   declare image_url: string;
@@ -42,12 +42,9 @@ ParentProductMasterDC.init(
     status: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1, validate: { isIn: [[0, 1]] } },
     category_id: { type: DataTypes.INTEGER, allowNull: false },
     catalogue_id: { 
-      type: DataTypes.STRING(7), 
-      allowNull: false, 
-      validate: { 
-        len: [7, 7],
-        isNumeric: true 
-      } 
+      type: DataTypes.INTEGER, 
+      allowNull: false,
+      field: 'catalogue_id'
     },
     description: { type: DataTypes.TEXT, allowNull: false },
     hsn: { type: DataTypes.STRING(8), allowNull: false },

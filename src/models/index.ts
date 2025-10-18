@@ -52,6 +52,10 @@ import DCGrnBatch from './DCGrnBatch';
 import DCGrnPhoto from './DCGrnPhoto';
 import DCSkuSplitted from './DCSkuSplitted';
 import DCInventory1 from './DCInventory1';
+import FCPurchaseOrder from './FCPurchaseOrder';
+import FCPOProduct from './FCPOProduct';
+import FCPOApproval from './FCPOApproval';
+import FCSkuSplitted from './FCSkuSplitted';
 
 // Set up associations
 Coupon.hasMany(CouponTranslation, {
@@ -530,6 +534,116 @@ User.hasMany(DCGrn, { foreignKey: 'created_by', as: 'CreatedDCGrns' });
 User.hasMany(DCGrn, { foreignKey: 'approved_by', as: 'ApprovedDCGrns' });
 DistributionCenter.hasMany(DCGrn, { foreignKey: 'dc_id', as: 'DCGrns' });
 
+// FC Purchase Order associations
+FCPurchaseOrder.belongsTo(FulfillmentCenter, {
+  foreignKey: 'fcId',
+  as: 'FulfillmentCenter',
+});
+
+FCPurchaseOrder.belongsTo(DistributionCenter, {
+  foreignKey: 'dcId',
+  as: 'DistributionCenter',
+});
+
+FCPurchaseOrder.belongsTo(User, {
+  foreignKey: 'createdBy',
+  as: 'CreatedBy',
+});
+
+FCPurchaseOrder.belongsTo(User, {
+  foreignKey: 'updatedBy',
+  as: 'UpdatedBy',
+});
+
+FCPurchaseOrder.belongsTo(User, {
+  foreignKey: 'approvedBy',
+  as: 'ApprovedBy',
+});
+
+FCPurchaseOrder.belongsTo(User, {
+  foreignKey: 'rejectedBy',
+  as: 'RejectedBy',
+});
+
+FCPurchaseOrder.hasMany(FCPOProduct, {
+  foreignKey: 'fcPOId',
+  as: 'Products',
+});
+
+FCPurchaseOrder.hasMany(FCPOApproval, {
+  foreignKey: 'fcPOId',
+  as: 'Approvals',
+});
+
+// FCPOProduct associations
+FCPOProduct.belongsTo(FCPurchaseOrder, {
+  foreignKey: 'fcPOId',
+  as: 'PurchaseOrder',
+});
+
+FCPOProduct.belongsTo(ParentProductMasterDC, {
+  foreignKey: 'productId',
+  as: 'Product',
+});
+
+// FCPOApproval associations
+FCPOApproval.belongsTo(FCPurchaseOrder, {
+  foreignKey: 'fcPOId',
+  as: 'PurchaseOrder',
+});
+
+FCPOApproval.belongsTo(User, {
+  foreignKey: 'approverId',
+  as: 'Approver',
+});
+
+// Reverse associations
+FulfillmentCenter.hasMany(FCPurchaseOrder, {
+  foreignKey: 'fcId',
+  as: 'FCPurchaseOrders',
+});
+
+DistributionCenter.hasMany(FCPurchaseOrder, {
+  foreignKey: 'dcId',
+  as: 'FCPurchaseOrders',
+});
+
+User.hasMany(FCPurchaseOrder, {
+  foreignKey: 'createdBy',
+  as: 'CreatedFCPurchaseOrders',
+});
+
+User.hasMany(FCPOApproval, {
+  foreignKey: 'approverId',
+  as: 'FCApprovals',
+});
+
+ParentProductMasterDC.hasMany(FCPOProduct, {
+  foreignKey: 'productId',
+  as: 'FCPOProducts',
+});
+
+// FCSkuSplitted associations
+FCSkuSplitted.belongsTo(FCPurchaseOrder, {
+  foreignKey: 'fcPOId',
+  as: 'FCPurchaseOrder',
+});
+
+FCSkuSplitted.belongsTo(User, {
+  foreignKey: 'createdBy',
+  as: 'CreatedBy',
+});
+
+FCPurchaseOrder.hasMany(FCSkuSplitted, {
+  foreignKey: 'fcPOId',
+  as: 'SkuSplitted',
+});
+
+User.hasMany(FCSkuSplitted, {
+  foreignKey: 'createdBy',
+  as: 'CreatedFCSkuSplitted',
+});
+
 // Return system associations are defined in individual model files
 
 export {
@@ -585,4 +699,8 @@ export {
   DCGrnPhoto,
   DCSkuSplitted,
   DCInventory1,
+  FCPurchaseOrder,
+  FCPOProduct,
+  FCPOApproval,
+  FCSkuSplitted,
 };
