@@ -1,7 +1,7 @@
 import { DataTypes, Model, InferAttributes, InferCreationAttributes, CreationOptional } from 'sequelize';
 import sequelize from '../config/database';
 
-interface FCSkuSplittedAttributes {
+interface FCPOSkuMatrixAttributes {
   id: number;
   fcPOId: number;
   fcPOProductId: number;
@@ -30,9 +30,9 @@ interface FCSkuSplittedAttributes {
   updatedAt: CreationOptional<Date>;
 }
 
-class FCSkuSplitted extends Model<
-  InferAttributes<FCSkuSplitted>,
-  InferCreationAttributes<FCSkuSplitted>
+class FCPOSkuMatrix extends Model<
+  InferAttributes<FCPOSkuMatrix>,
+  InferCreationAttributes<FCPOSkuMatrix>
 > {
   declare id: number;
   declare fcPOId: number;
@@ -62,7 +62,7 @@ class FCSkuSplitted extends Model<
   declare updatedAt: CreationOptional<Date>;
 }
 
-FCSkuSplitted.init(
+FCPOSkuMatrix.init(
   {
     id: {
       type: DataTypes.INTEGER,
@@ -199,10 +199,10 @@ FCSkuSplitted.init(
   },
   {
     sequelize,
-    modelName: 'FCSkuSplitted',
-    tableName: 'fc_sku_splitted',
+    modelName: 'FCPOSkuMatrix',
+    tableName: 'fc_po_sku_matrix',
     timestamps: true,
   }
 );
 
-export default FCSkuSplitted;
+export default FCPOSkuMatrix;

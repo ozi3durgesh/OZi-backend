@@ -13,6 +13,7 @@ interface FCPOProductAttributes {
   totalAmount: number;
   mrp?: number;
   notes?: string;
+  skuMatrixOnCatalogueId?: string;
   createdAt: CreationOptional<Date>;
   updatedAt: CreationOptional<Date>;
 }
@@ -32,6 +33,7 @@ class FCPOProduct extends Model<
   declare totalAmount: number;
   declare mrp?: number;
   declare notes?: string;
+  declare skuMatrixOnCatalogueId?: string;
   declare createdAt: CreationOptional<Date>;
   declare updatedAt: CreationOptional<Date>;
 }
@@ -62,7 +64,7 @@ FCPOProduct.init(
       },
     },
     catalogueId: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.STRING(255),
       allowNull: false,
       field: 'catalogue_id',
     },
@@ -96,6 +98,11 @@ FCPOProduct.init(
     notes: {
       type: DataTypes.TEXT,
       allowNull: true,
+    },
+    skuMatrixOnCatalogueId: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      field: 'sku_matrix_on_catalogue_id',
     },
     createdAt: {
       type: DataTypes.DATE,

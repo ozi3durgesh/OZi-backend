@@ -1,5 +1,10 @@
 import { DataTypes, Model, InferAttributes, InferCreationAttributes, CreationOptional } from 'sequelize';
 import sequelize from '../config/database';
+import FCPOProduct from './FCPOProduct';
+import FCPOApproval from './FCPOApproval';
+import User from './User';
+import FulfillmentCenter from './FulfillmentCenter';
+import DistributionCenter from './DistributionCenter';
 
 interface FCPurchaseOrderAttributes {
   id: CreationOptional<number>;
@@ -44,6 +49,16 @@ class FCPurchaseOrder extends Model<
   declare updatedBy?: number;
   declare createdAt: CreationOptional<Date>;
   declare updatedAt: CreationOptional<Date>;
+
+  // Association properties
+  declare Products?: FCPOProduct[];
+  declare Approvals?: FCPOApproval[];
+  declare CreatedBy?: typeof User;
+  declare UpdatedBy?: typeof User;
+  declare ApprovedBy?: typeof User;
+  declare RejectedBy?: typeof User;
+  declare FulfillmentCenter?: typeof FulfillmentCenter;
+  declare DistributionCenter?: typeof DistributionCenter;
 }
 
 FCPurchaseOrder.init(

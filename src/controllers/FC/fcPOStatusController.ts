@@ -124,6 +124,7 @@ export class FCPOStatusController {
                 totalAmount: product.totalAmount,
                 mrp: product.mrp,
                 notes: product.notes,
+                skuMatrixOnCatalogueId: product.skuMatrixOnCatalogueId,
                 product: product.Product ? {
                   id: product.Product.id,
                   catalogueId: product.Product.catalogue_id,
@@ -165,6 +166,7 @@ export class FCPOStatusController {
                 totalAmount: product.totalAmount,
                 mrp: product.mrp,
                 notes: product.notes,
+                skuMatrixOnCatalogueId: product.skuMatrixOnCatalogueId,
                 product: product.Product ? {
                   id: product.Product.id,
                   catalogueId: product.Product.catalogue_id,
@@ -203,6 +205,7 @@ export class FCPOStatusController {
                 totalAmount: product.totalAmount,
                 mrp: product.mrp,
                 notes: product.notes,
+                skuMatrixOnCatalogueId: product.skuMatrixOnCatalogueId,
                 product: product.Product ? {
                   id: product.Product.id,
                   catalogueId: product.Product.catalogue_id,
@@ -241,6 +244,7 @@ export class FCPOStatusController {
                 totalAmount: product.totalAmount,
                 mrp: product.mrp,
                 notes: product.notes,
+                skuMatrixOnCatalogueId: product.skuMatrixOnCatalogueId,
                 product: product.Product ? {
                   id: product.Product.id,
                   catalogueId: product.Product.catalogue_id,
