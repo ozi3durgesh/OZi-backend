@@ -1,4 +1,6 @@
 import { Op } from 'sequelize';
+import { Transaction } from 'sequelize';
+import sequelize from '../../config/database';
 import crypto from 'crypto';
 import DCPurchaseOrder, { DCPurchaseOrderCreationAttributes } from '../../models/DCPurchaseOrder';
 import DCPOProduct, { DCPOProductCreationAttributes } from '../../models/DCPOProduct';
@@ -11,6 +13,8 @@ import { DC_PO_CONSTANTS } from '../../constants/dcPOConstants';
 import { EmailService } from '../emailService';
 import { DCSkuSplittingService } from './dcSkuSplittingService';
 import { DCInventory1Service } from '../DCInventory1Service';
+import  PurchaseOrderEdit  from '../../models/PurchaseOrderEdits'
+import  POProductEdit  from '../../models/POProductEdit';
 
 interface DCPOFilters {
   search?: string;
@@ -60,6 +64,16 @@ interface CreateDCPOData {
   notes?: string;
   priority?: string;
   createdBy: number;
+}
+
+interface EditPOData {
+  vendorId: number;
+  dcId: number;
+  priority: string;
+  description?: string;
+  final_delivery_date?: string;
+  pi_url?: string;
+  products: Array<any>;
 }
 
 export class DCPOService {
@@ -1076,4 +1090,76 @@ export class DCPOService {
       console.error('Error sending final notification email:', error);
     }
   }
+
+  static async editPO(poId: number, data: EditPOData, userId: number) {
+    const transaction: Transaction = await sequelize.transaction();
+
+    try {
+      // 1️ Check if original DC Purchase Order exists
+      const originalPO = await DCPurchaseOrder.findByPk(poId);
+      if (!originalPO) {
+        throw new Error('DC Purchase Order not found');
+      }
+
+      // 2️ Prevent multiple edits
+      const alreadyEdited = await PurchaseOrderEdit.findOne({
+        where: { purchase_order_id: poId },
+      });
+      if (alreadyEdited) {
+        throw new Error('This PO has already been edited once.');
+      }
+
+      // 3️ Create edited PO header
+      const editedPO = await PurchaseOrderEdit.create(
+        {
+          purchase_order_id: poId,
+          vendor_id: data.vendorId ?? originalPO.vendorId,
+          dc_id: data.dcId ?? originalPO.dcId,
+          priority: data.priority ?? originalPO.priority,
+          description: data.description ?? originalPO.description,
+          final_delivery_date: data.final_delivery_date
+            ? new Date(data.final_delivery_date)
+            : originalPO.final_delivery_date,
+          pi_url: data.pi_url ?? originalPO.pi_file_url,
+        },
+        { transaction }
+      );
+
+      // 4️ Create edited products
+      if (data.products && data.products.length) {
+        const editedProducts = data.products.flatMap((product: any) =>
+          product.sku_matrix_on_catelogue_id.map((skuItem: any) => ({
+            purchase_order_edit_id: editedPO.id,
+            product_id: parseInt(skuItem.catalogue_id),
+            catalogue_id: skuItem.catalogue_id,
+            product_name: skuItem.product_name,
+            quantity: skuItem.quantity,
+            unitPrice: parseFloat(skuItem.selling_price),
+            totalAmount: parseFloat(product.totalPrice),
+            mrp: parseFloat(skuItem.mrp),
+            hsn: skuItem.hsn,
+            ean_upc: skuItem.ean_upc,
+            weight: skuItem.weight,
+            length: skuItem.length,
+            height: skuItem.height,
+            width: skuItem.width,
+            // brand_id: skuItem.brand ? parseInt(skuItem.brand) : null,
+            sku_matrix_on_catelogue_id: JSON.stringify(
+              product.sku_matrix_on_catelogue_id
+            ),
+          }))
+        );
+        console.log("edit---------",editedProducts)
+        await POProductEdit.bulkCreate(editedProducts, { transaction });
+      }
+
+      await transaction.commit();
+      return editedPO;
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+
 }

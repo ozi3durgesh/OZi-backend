@@ -61,6 +61,9 @@ router.get('/approval/:token', DCPOController.getApprovalDetails);
 // Process approval/rejection via token (public route for email links)
 router.post('/approval/:token', DCPOController.processApproval);
 
+router.put('/purchase-orders/:id/edit', DCPOController.editPO);
+router.post('')
+
 // SKU Splitting routes
 router.use('/', dcSkuSplittingRoutes);
 

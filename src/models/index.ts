@@ -52,6 +52,8 @@ import DCGrnBatch from './DCGrnBatch';
 import DCGrnPhoto from './DCGrnPhoto';
 import DCSkuSplitted from './DCSkuSplitted';
 import DCInventory1 from './DCInventory1';
+import PurchaseOrderEdit from './PurchaseOrderEdits';
+import POProductEdit from './POProductEdit';
 
 // Set up associations
 Coupon.hasMany(CouponTranslation, {
@@ -530,6 +532,17 @@ User.hasMany(DCGrn, { foreignKey: 'created_by', as: 'CreatedDCGrns' });
 User.hasMany(DCGrn, { foreignKey: 'approved_by', as: 'ApprovedDCGrns' });
 DistributionCenter.hasMany(DCGrn, { foreignKey: 'dc_id', as: 'DCGrns' });
 
+
+// One-to-Many relationship
+PurchaseOrderEdit.hasMany(POProductEdit, {
+  foreignKey: 'purchase_order_edit_id',
+  as: 'products',
+});
+POProductEdit.belongsTo(PurchaseOrderEdit, {
+  foreignKey: 'purchase_order_edit_id',
+  as: 'purchaseOrderEdit',
+});
+
 // Return system associations are defined in individual model files
 
 export {
@@ -585,4 +598,7 @@ export {
   DCGrnPhoto,
   DCSkuSplitted,
   DCInventory1,
+  PurchaseOrderEdit,
+  POProductEdit
+
 };

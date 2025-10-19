@@ -3,6 +3,8 @@ import { DCPOService } from '../../services/DC/dcPOService';
 import { ResponseHandler } from '../../middleware/responseHandler';
 import { DC_PO_CONSTANTS } from '../../constants/dcPOConstants';
 
+
+
 interface AuthRequest extends Request {
   user?: any;
 }
@@ -445,4 +447,34 @@ export class DCPOController {
       return ResponseHandler.error(res, error.message || 'Failed to upload PI and set delivery date', error.statusCode || 500);
     }
   }
+
+    /**
+   * Edit a purchase order (only once)
+   */
+
+  static async editPO(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const updatedData = req.body;
+      const userId = (req as any).user?.id; // from auth middleware
+
+      const editedPO = await DCPOService.editPO(
+        parseInt(id),
+        updatedData,
+        parseInt(userId)
+      );
+
+      return res.status(200).json({
+        message: 'Edited PO saved successfully.',
+        editedPO,
+      });
+    } catch (error: any) {
+      console.error('Error editing PO:', error);
+      return res.status(500).json({
+        message: error.message || 'Error saving edited PO',
+        error,
+      });
+    }
+  }
+
 }
