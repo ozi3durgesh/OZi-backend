@@ -1112,6 +1112,7 @@ export class DCPOService {
       // 3️ Create edited PO header
       const editedPO = await PurchaseOrderEdit.create(
         {
+          poId: `EDIT-${originalPO.poId}`, // unique edit reference
           purchase_order_id: poId,
           vendor_id: data.vendorId ?? originalPO.vendorId,
           dc_id: data.dcId ?? originalPO.dcId,
@@ -1120,7 +1121,10 @@ export class DCPOService {
           final_delivery_date: data.final_delivery_date
             ? new Date(data.final_delivery_date)
             : originalPO.final_delivery_date,
-          pi_url: data.pi_url ?? originalPO.pi_file_url,
+          pi_file_url: data.pi_url ?? originalPO.pi_file_url,
+          totalAmount: 0.0, // will calculate later if needed
+          status: 'DRAFT', // or PENDING_CATEGORY_HEAD etc.
+          createdBy: userId, // logged-in user performing edit
         },
         { transaction }
       );
