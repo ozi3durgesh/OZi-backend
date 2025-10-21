@@ -38,6 +38,7 @@ import dcGrnRoutes from './routes/DC/dcGrnRoutes';
 import dcInventory1Routes from './routes/DC/dcInventory1Routes';
 import pdfUploadRoutes from './routes/pdfUploadRoutes';
 import brandRoutes from './routes/brandRoutes';
+import productMasterRoutes from './routes/productMasterRoutes';
 
 const app = express();
 
@@ -106,6 +107,9 @@ app.use('/api/upload', pdfUploadRoutes);
 
 // Brand routes
 app.use('/api/brands', brandRoutes);
+
+// New Product Master routes
+app.use('/api', productMasterRoutes);
 
 
 // Health check

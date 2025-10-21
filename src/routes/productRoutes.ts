@@ -3,17 +3,17 @@ import multer from 'multer';
 import { authenticate, checkFulfillmentCenterAccess } from '../middleware/auth';
 import { FCFilterMiddlewareFactory } from '../middleware/fcFilterMiddleware';
 import { 
-  createProduct, 
-  updateProduct, 
-  getProducts, 
-  getProductBySKU, 
-  bulkUpdateProducts, 
-  updateProductEAN,
+  createProductMaster, 
+  updateProductMaster, 
+  getProductMasters, 
+  getProductMasterBySKU, 
+  bulkUpdateProductMasters, 
+  updateProductMasterEAN,
   getBulkImportLogsByUser,
-  getBulkImportLogsByStatus,
+  getBulkImportLogsBystatus,
   getBulkImportLogById,
   processCSVForPO,
-  getProductsByFC
+  getProductMastersByFC
 } from '../controllers/productsController';
 
 const router = Router();
@@ -24,27 +24,27 @@ router.use(authenticate);
 router.use(FCFilterMiddlewareFactory.createProductFilter());
 
 // Create product
-router.post('/products', createProduct);
+router.post('/products', createProductMaster);
 
 // Get products (FC-filtered) - temporarily commented out
-// router.get('/products', authenticate, fcFilterMiddleware, getProductsByFC);
-router.get('/products', getProducts);
+// router.get('/products', authenticate, fcFilterMiddleware, getProductMastersByFC);
+router.get('/products', getProductMasters);
 
 // Bulk insert/update via CSV upload
-router.post('/products/bulk', upload.single('file'), bulkUpdateProducts);
+router.post('/products/bulk', upload.single('file'), bulkUpdateProductMasters);
 
 // Update EAN/UPC for product and related GRN lines (MUST be before parameterized routes)
-router.put('/products/update-ean', updateProductEAN);
+router.put('/products/update-ean', updateProductMasterEAN);
 
 // Update product (parameterized route)
-router.put('/products/:id', updateProduct);
+router.put('/products/:id', updateProductMaster);
 
 // Get product by SKU (parameterized route)
-router.get('/products/:sku', getProductBySKU);
+router.get('/products/:sku', getProductMasterBySKU);
 
 // Bulk import log endpoints
 router.get('/products/bulk/logs/user/:userId', getBulkImportLogsByUser);
-router.get('/products/bulk/logs/status/:status', getBulkImportLogsByStatus);
+router.get('/products/bulk/logs/status/:status', getBulkImportLogsBystatus);
 router.get('/products/bulk/logs/:id', getBulkImportLogById);
 
 // Process CSV for PO creation - Get enriched product data

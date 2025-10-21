@@ -5,7 +5,7 @@ import DCPOProduct, { DCPOProductCreationAttributes } from '../../models/DCPOPro
 import DCPOApproval, { DCPOApprovalCreationAttributes } from '../../models/DCPOApproval';
 import DCPOSkuMatrix from '../../models/DCPOSkuMatrix';
 import VendorDC from '../../models/VendorDC';
-import ParentProductMasterDC from '../../models/ParentProductMasterDC';
+import ProductMaster from '../../models/NewProductMaster';
 import { DistributionCenter, User } from '../../models';
 import { DC_PO_CONSTANTS } from '../../constants/dcPOConstants';
 import { EmailService } from '../emailService';
@@ -124,13 +124,13 @@ export class DCPOService {
 
     // Validate products exist by catalogue_id (new structure)
     const catalogueIds = data.products.map(p => p.catelogue_id.toString());
-    const products = await ParentProductMasterDC.findAll({
+    const products = await ProductMaster.findAll({
       where: { catalogue_id: { [Op.in]: catalogueIds } },
       attributes: [
         'id', 'name', 'status', 'category_id', 'catalogue_id', 'description', 
-        'hsn', 'image_url', 'mrp', 'ean_upc', 'brand_id', 'weight', 'length', 
-        'height', 'width', 'inventory_threshold', 'gst', 'cess', 'createdBy', 
-        'updatedBy', 'createdAt', 'updatedAt'
+        'hsn', 'image_url', 'mrp', 'cost', 'ean_upc', 'brand_id', 'weight', 'length', 
+        'height', 'width', 'inventory_threshold', 'gst', 'cess', 'sku', 'item_code', 
+        'dc_id', 'createdBy', 'updatedBy', 'createdAt', 'updatedAt'
       ]
     });
 
