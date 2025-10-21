@@ -1,0 +1,148 @@
+import {
+  DataTypes,
+  Model,
+  InferAttributes,
+  InferCreationAttributes,
+  CreationOptional,
+} from 'sequelize';
+import sequelize from '../config/database.js';
+
+class ProductMaster extends Model<
+  InferAttributes<ProductMaster>,
+  InferCreationAttributes<ProductMaster>
+> {
+  declare id: CreationOptional<number>;
+  declare name: string;
+  declare status: number; // 0 or 1
+  declare category_id: number;
+  declare catalogue_id: string; // 7 numeric digits
+  declare description: string;
+  declare hsn: string;
+  declare image_url: string;
+  declare mrp: number;
+  declare cost: number | null; // Added from Product model
+  declare ean_upc: string;
+  declare brand_id: number;
+  declare weight: number;
+  declare length: number;
+  declare height: number;
+  declare width: number;
+  declare inventory_threshold: number;
+  declare gst: number;
+  declare cess: number;
+  declare sku: string; // Added from Product model - unique identifier
+  declare item_code: string | null; // Added from Product model
+  declare dc_id: number | null; // Added from Product model for DC association
+  declare createdAt: CreationOptional<Date>;
+  declare updatedAt: CreationOptional<Date>;
+  declare createdBy: number;
+  declare updatedBy: number[];
+}
+
+ProductMaster.init(
+  {
+    id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+    name: { type: DataTypes.STRING(255), allowNull: false },
+    status: { 
+      type: DataTypes.INTEGER, 
+      allowNull: false, 
+      defaultValue: 1, 
+      validate: { isIn: [[0, 1]] } 
+    },
+    category_id: { type: DataTypes.INTEGER, allowNull: false },
+    catalogue_id: { 
+      type: DataTypes.STRING(7), 
+      allowNull: false, 
+      unique: true,
+      validate: { 
+        len: [7, 7],
+        isNumeric: true 
+      } 
+    },
+    description: { type: DataTypes.TEXT, allowNull: false },
+    hsn: { type: DataTypes.STRING(8), allowNull: false },
+    image_url: { type: DataTypes.TEXT, allowNull: false },
+    mrp: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+    cost: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
+    ean_upc: { type: DataTypes.STRING(14), allowNull: false },
+    brand_id: { 
+      type: DataTypes.INTEGER, 
+      allowNull: false, 
+      references: { model: 'Brands', key: 'id' } 
+    },
+    weight: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+    length: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+    height: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+    width: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+    inventory_threshold: { type: DataTypes.INTEGER, allowNull: false },
+    gst: { type: DataTypes.DECIMAL(5, 2), allowNull: false },
+    cess: { type: DataTypes.DECIMAL(5, 2), allowNull: false },
+    sku: { 
+      type: DataTypes.STRING(255), 
+      allowNull: false, 
+      unique: true 
+    },
+    item_code: { type: DataTypes.STRING(255), allowNull: true },
+    dc_id: { 
+      type: DataTypes.INTEGER, 
+      allowNull: true,
+      references: { model: 'DistributionCenters', key: 'id' }
+    },
+    createdBy: { 
+      type: DataTypes.INTEGER, 
+      allowNull: false, 
+      references: { model: 'Users', key: 'id' } 
+    },
+    updatedBy: { 
+      type: DataTypes.JSON, 
+      allowNull: false, 
+      defaultValue: [] 
+    },
+    createdAt: { 
+      type: DataTypes.DATE, 
+      allowNull: false, 
+      defaultValue: DataTypes.NOW 
+    },
+    updatedAt: { 
+      type: DataTypes.DATE, 
+      allowNull: false, 
+      defaultValue: DataTypes.NOW 
+    },
+  },
+  {
+    sequelize,
+    modelName: 'ProductMaster',
+    tableName: 'product_master',
+    timestamps: true,
+    validate: {
+      updatedByIsArray() {
+        if (!Array.isArray((this as any).updatedBy)) {
+          throw new Error('updatedBy must be an array');
+        }
+      }
+    }
+  }
+);
+
+// Add hooks to handle updatedBy array
+ProductMaster.addHook('beforeUpdate', (instance: any) => {
+  if (instance.changed('updatedBy')) {
+    if (!Array.isArray(instance.updatedBy)) {
+      throw new Error('updatedBy must be an array');
+    }
+  }
+});
+
+// Add indexes for better performance
+// ProductMaster.addIndex(['catalogue_id']);
+// ProductMaster.addIndex(['sku']);
+// ProductMaster.addIndex(['brand_id']);
+// ProductMaster.addIndex(['category_id']);
+// ProductMaster.addIndex(['dc_id']);
+// ProductMaster.addIndex(['status']);
+
+export default ProductMaster;
+
+// Export types for TypeScript
+export type ProductMasterCreationAttributes = InferCreationAttributes<ProductMaster>;
+export type ProductMasterAttributes = InferAttributes<ProductMaster>;

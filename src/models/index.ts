@@ -25,8 +25,7 @@ import GRNBatch from './GrnBatch';
 import GRNPhoto from './GrnPhoto';
 import PurchaseOrder from './PurchaseOrder';
 import EcomLog from './EcomLog';
-import Product from './productModel';
-import ProductMaster from './productModel';
+import ProductMaster from './NewProductMaster';
 import POProduct from './POProduct';
 import TokenBlacklist from './TokenBlacklist';
 import ReturnRequestItem from './ReturnRequestItem';
@@ -40,7 +39,6 @@ import DistributionCenter from './DistributionCenter';
 import FulfillmentCenter from './FulfillmentCenter';
 import UserFulfillmentCenter from './UserFulfillmentCenter';
 import VendorDC from './VendorDC';
-import ParentProductMasterDC from './ParentProductMasterDC';
 import Brand from './Brand';
 import DCPurchaseOrder from './DCPurchaseOrder';
 import DCPOProduct from './DCPOProduct';
@@ -202,20 +200,20 @@ ScannerSku.belongsTo(ScannerBin, {
 });
 
 // associations
-// PicklistItem.ts
-PicklistItem.belongsTo(Product, {
+// PicklistItem.ts - Updated for new ProductMaster structure
+PicklistItem.belongsTo(ProductMaster, {
   foreignKey: 'sku',
-  targetKey: 'sku',
+  targetKey: 'sku_id',
   as: 'productInfo',
 });
-Product.hasMany(PicklistItem, {
+ProductMaster.hasMany(PicklistItem, {
   foreignKey: 'sku',
-  sourceKey: 'sku',
+  sourceKey: 'sku_id',
   as: 'picklistItems',
 });
 
-POProduct.belongsTo(ProductMaster, { foreignKey: 'sku_id', as: 'sku' });
-ProductMaster.hasMany(POProduct, { foreignKey: 'sku_id', as: 'products' });
+POProduct.belongsTo(ProductMaster, { foreignKey: 'sku_id', targetKey: 'sku_id', as: 'sku' });
+ProductMaster.hasMany(POProduct, { foreignKey: 'sku_id', sourceKey: 'sku_id', as: 'products' });
 
 // GRN associations
 GRN.belongsTo(PurchaseOrder, { foreignKey: 'po_id', as: 'PO' });
@@ -348,42 +346,25 @@ User.hasMany(VendorDC, {
   as: 'CreatedVendorsDC',
 });
 
-// ParentProductMasterDC associations
-// dc_id association removed since dc_id column was removed
-
-ParentProductMasterDC.belongsTo(Brand, {
+// ProductMaster associations - Updated for new structure
+ProductMaster.belongsTo(Brand, {
   foreignKey: 'brand_id',
   as: 'Brand',
 });
 
-ParentProductMasterDC.belongsTo(User, {
-  foreignKey: 'createdBy',
+ProductMaster.belongsTo(User, {
+  foreignKey: 'created_by',
   as: 'CreatedBy',
 });
 
-ParentProductMasterDC.belongsTo(User, {
-  foreignKey: 'updatedBy',
-  as: 'UpdatedBy',
-});
-
-// DistributionCenter.hasMany(ParentProductMasterDC, {
-//   foreignKey: 'dc_id',
-//   as: 'ParentProducts',
-// }); // Removed since dc_id column was removed from ParentProductMasterDC
-
-Brand.hasMany(ParentProductMasterDC, {
+Brand.hasMany(ProductMaster, {
   foreignKey: 'brand_id',
-  as: 'ParentProducts',
+  as: 'Products',
 });
 
-User.hasMany(ParentProductMasterDC, {
-  foreignKey: 'createdBy',
-  as: 'CreatedParentProducts',
-});
-
-User.hasMany(ParentProductMasterDC, {
-  foreignKey: 'updatedBy',
-  as: 'UpdatedParentProducts',
+User.hasMany(ProductMaster, {
+  foreignKey: 'created_by',
+  as: 'CreatedProducts',
 });
 
 // DCPurchaseOrder associations
@@ -433,8 +414,9 @@ DCPOProduct.belongsTo(DCPurchaseOrder, {
   as: 'PurchaseOrder',
 });
 
-DCPOProduct.belongsTo(ParentProductMasterDC, {
+DCPOProduct.belongsTo(ProductMaster, {
   foreignKey: 'productId',
+  targetKey: 'id',
   as: 'Product',
 });
 
@@ -481,8 +463,9 @@ User.hasMany(DCPOApproval, {
   as: 'Approvals',
 });
 
-ParentProductMasterDC.hasMany(DCPOProduct, {
+ProductMaster.hasMany(DCPOProduct, {
   foreignKey: 'productId',
+  sourceKey: 'id',
   as: 'POProducts',
 });
 
@@ -667,7 +650,7 @@ export {
   ScannerBin,
   ScannerSku,
   EcomLog,
-  Product,
+  ProductMaster,
   BinLocation,
   GRN,
   GRNLine,
@@ -687,7 +670,6 @@ export {
   FulfillmentCenter,
   UserFulfillmentCenter,
   VendorDC,
-  ParentProductMasterDC,
   Brand,
   DCPurchaseOrder,
   DCPOProduct,
