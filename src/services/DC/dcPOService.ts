@@ -1,4 +1,6 @@
 import { Op } from 'sequelize';
+import { Transaction } from 'sequelize';
+import sequelize from '../../config/database';
 import crypto from 'crypto';
 import DCPurchaseOrder, { DCPurchaseOrderCreationAttributes } from '../../models/DCPurchaseOrder';
 import DCPOProduct, { DCPOProductCreationAttributes } from '../../models/DCPOProduct';
@@ -11,6 +13,9 @@ import { DC_PO_CONSTANTS } from '../../constants/dcPOConstants';
 import { EmailService } from '../emailService';
 import { DCSkuSplittingService } from './dcSkuSplittingService';
 import { DCInventory1Service } from '../DCInventory1Service';
+import  PurchaseOrderEdit  from '../../models/PurchaseOrderEdits'
+import  POProductEdit  from '../../models/POProductEdit';
+import ParentProductMasterDC from '../../models/ParentProductMasterDC';
 
 interface DCPOFilters {
   search?: string;
@@ -60,6 +65,16 @@ interface CreateDCPOData {
   notes?: string;
   priority?: string;
   createdBy: number;
+}
+
+interface EditPOData {
+  vendorId: number;
+  dcId: number;
+  priority: string;
+  description?: string;
+  final_delivery_date?: string;
+  pi_url?: string;
+  products: Array<any>;
 }
 
 export class DCPOService {
@@ -125,7 +140,7 @@ export class DCPOService {
     // Validate products exist by catalogue_id (new structure)
     const catalogueIds = data.products.map(p => p.catelogue_id.toString());
     const products = await ProductMaster.findAll({
-      where: { catalogue_id: { [Op.in]: catalogueIds } },
+      where: { catelogue_id: { [Op.in]: catalogueIds } },
       attributes: [
         'id', 'name', 'status', 'category_id', 'catalogue_id', 'description', 
         'hsn', 'image_url', 'mrp', 'cost', 'ean_upc', 'brand_id', 'weight', 'length', 
@@ -135,7 +150,7 @@ export class DCPOService {
     });
 
     if (products.length !== catalogueIds.length) {
-      const error: any = new Error(`Products not found. Requested: ${catalogueIds.join(', ')}, Found: ${products.map(p => p.catalogue_id).join(', ')}`);
+      const error: any = new Error(`Products not found. Requested: ${catalogueIds.join(', ')}, Found: ${products.map(p => p.catelogue_id).join(', ')}`);
       error.statusCode = 400;
       throw error;
     }
@@ -143,7 +158,7 @@ export class DCPOService {
     // Calculate total amount
     let totalAmount = 0;
     const validatedProducts = data.products.map(productData => {
-      const product = products.find(p => p.catalogue_id.toString() === productData.catelogue_id.toString());
+      const product = products.find(p => p.catelogue_id.toString() === productData.catelogue_id.toString());
       if (!product) {
         throw new Error(`Product with catalogue_id ${productData.catelogue_id} not found`);
       }
@@ -154,7 +169,7 @@ export class DCPOService {
 
       return {
         productId: product.id, // Use the actual database ID
-        catalogue_id: product.catalogue_id, // Store catalogue_id in catalogue_id field
+        catalogue_id: product.catelogue_id, // Store catalogue_id in catalogue_id field
         productName: product.name || 'Unknown Product',
         quantity: productData.totoal_quantity,
         unitPrice: productData.totalPrice / productData.totoal_quantity, // Calculate unit price
@@ -175,7 +190,7 @@ export class DCPOService {
         cess: product.cess,
         image_url: product.image_url,
         brand_id: product.brand_id,
-        category_id: product.category_id,
+        category_id: parseInt(product.category) || null,
         status: product.status,
         // Store SKU matrix data for later processing
         skuMatrix: productData.sku_matrix_on_catelogue_id || [],
@@ -1076,4 +1091,80 @@ export class DCPOService {
       console.error('Error sending final notification email:', error);
     }
   }
+
+  static async editPO(poId: number, data: EditPOData, userId: number) {
+    const transaction: Transaction = await sequelize.transaction();
+
+    try {
+      // 1️ Check if original DC Purchase Order exists
+      const originalPO = await DCPurchaseOrder.findByPk(poId);
+      if (!originalPO) {
+        throw new Error('DC Purchase Order not found');
+      }
+
+      // 2️ Prevent multiple edits
+      const alreadyEdited = await PurchaseOrderEdit.findOne({
+        where: { purchase_order_id: poId },
+      });
+      if (alreadyEdited) {
+        throw new Error('This PO has already been edited once.');
+      }
+
+      // 3️ Create edited PO header
+      const editedPO = await PurchaseOrderEdit.create(
+        {
+          poId: `EDIT-${originalPO.poId}`, // unique edit reference
+          purchase_order_id: poId,
+          vendor_id: data.vendorId ?? originalPO.vendorId,
+          dc_id: data.dcId ?? originalPO.dcId,
+          priority: data.priority ?? originalPO.priority,
+          description: data.description ?? originalPO.description,
+          final_delivery_date: data.final_delivery_date
+            ? new Date(data.final_delivery_date)
+            : originalPO.final_delivery_date,
+          pi_file_url: data.pi_url ?? originalPO.pi_file_url,
+          totalAmount: 0.0, // will calculate later if needed
+          status: 'DRAFT', // or PENDING_CATEGORY_HEAD etc.
+          createdBy: userId, // logged-in user performing edit
+        },
+        { transaction }
+      );
+
+      // 4️ Create edited products
+      if (data.products && data.products.length) {
+        const editedProducts = data.products.flatMap((product: any) =>
+          product.sku_matrix_on_catelogue_id.map((skuItem: any) => ({
+            purchase_order_edit_id: editedPO.id,
+            product_id: parseInt(skuItem.catalogue_id),
+            catalogue_id: skuItem.catalogue_id,
+            product_name: skuItem.product_name,
+            quantity: skuItem.quantity,
+            unitPrice: parseFloat(skuItem.selling_price),
+            totalAmount: parseFloat(product.totalPrice),
+            mrp: parseFloat(skuItem.mrp),
+            hsn: skuItem.hsn,
+            ean_upc: skuItem.ean_upc,
+            weight: skuItem.weight,
+            length: skuItem.length,
+            height: skuItem.height,
+            width: skuItem.width,
+            // brand_id: skuItem.brand ? parseInt(skuItem.brand) : null,
+            sku_matrix_on_catelogue_id: JSON.stringify(
+              product.sku_matrix_on_catelogue_id
+            ),
+          }))
+        );
+        console.log("edit---------",editedProducts)
+        await POProductEdit.bulkCreate(editedProducts, { transaction });
+      }
+
+      await transaction.commit();
+      return editedPO;
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+
 }

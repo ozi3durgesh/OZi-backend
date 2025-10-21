@@ -133,7 +133,7 @@ export const createParentProduct = async (req: Request, res: Response) => {
     }
 
     // Check if product with same catalogue_id already exists
-    const existingProduct = await ProductMaster.findOne({ where: { catalogue_id: req.body.catalogue_id } });
+    const existingProduct = await ProductMaster.findOne({ where: { catelogue_id: req.body.catalogue_id } });
     if (existingProduct) {
       return ResponseHandler.error(
         res,
@@ -154,7 +154,7 @@ export const createParentProduct = async (req: Request, res: Response) => {
       image_url: imageUrl,
       sku: sku,
       createdBy: req.user.id,
-      updatedBy: [req.user.id], // Initialize as array
+      created_by: req.user.id,
     } as ProductMasterCreationAttributes);
 
     return ResponseHandler.success(res, product, 201);
@@ -200,10 +200,10 @@ export const updateParentProduct = async (req: Request, res: Response) => {
     }
 
     // Check if catalogue_id already exists (if catalogue_id is being updated)
-    if (req.body.catalogue_id && req.body.catalogue_id !== product.catalogue_id) {
+    if (req.body.catalogue_id && req.body.catalogue_id !== product.catelogue_id) {
       const existingProduct = await ProductMaster.findOne({ 
         where: { 
-          catalogue_id: req.body.catalogue_id,
+          catelogue_id: req.body.catalogue_id,
           id: { [Op.ne]: id }
         } 
       });
@@ -221,16 +221,11 @@ export const updateParentProduct = async (req: Request, res: Response) => {
       updatedImageUrl = cleanUrl(image_url) || product.image_url;
     }
 
-    // Update updatedBy array
-    const updatedByArray = [...product.updatedBy];
-    if (!updatedByArray.includes(req.user.id)) {
-      updatedByArray.push(req.user.id);
-    }
+    // Update the product
 
     await product.update({
       ...rest,
       image_url: updatedImageUrl,
-      updatedBy: updatedByArray,
     });
 
     return ResponseHandler.success(res, product);
@@ -247,7 +242,7 @@ export const getParentProductByCatalogueId = async (req: Request, res: Response)
 
   try {
     const { count, rows } = await ProductMaster.findAndCountAll({
-      where: { catalogue_id: catalogueId },
+      where: { catelogue_id: catalogueId },
       limit: parseInt(limit.toString()),
       offset,
       include: [
@@ -456,7 +451,7 @@ export const bulkUploadParentProducts = async (req: Request, res: Response) => {
 
         // Check if catalogue_id already exists
         const existingProduct = await ProductMaster.findOne({ 
-          where: { catalogue_id: row.catalogue_id } 
+          where: { catelogue_id: row.catalogue_id } 
         });
         if (existingProduct) {
           results.failed++;
@@ -477,7 +472,7 @@ export const bulkUploadParentProducts = async (req: Request, res: Response) => {
           image_url: cleanUrl(row.image_url),
           sku: sku,
           createdBy: req.user.id,
-          updatedBy: [req.user.id],
+          created_by: req.user.id,
         } as ProductMasterCreationAttributes);
 
         results.success++;

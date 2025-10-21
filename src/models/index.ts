@@ -54,6 +54,9 @@ import FCPurchaseOrder from './FCPurchaseOrder';
 import FCPOProduct from './FCPOProduct';
 import FCPOApproval from './FCPOApproval';
 import FCSkuSplitted from './FCSkuSplitted';
+import PurchaseOrderEdit from './PurchaseOrderEdits';
+import POProductEdit from './POProductEdit';
+import ParentProductMasterDC from './ParentProductMasterDC';
 
 // Set up associations
 Coupon.hasMany(CouponTranslation, {
@@ -627,6 +630,16 @@ User.hasMany(FCSkuSplitted, {
   as: 'CreatedFCSkuSplitted',
 });
 
+// One-to-Many relationship
+PurchaseOrderEdit.hasMany(POProductEdit, {
+  foreignKey: 'purchase_order_edit_id',
+  as: 'products',
+});
+POProductEdit.belongsTo(PurchaseOrderEdit, {
+  foreignKey: 'purchase_order_edit_id',
+  as: 'purchaseOrderEdit',
+});
+
 // Return system associations are defined in individual model files
 
 export {
@@ -685,4 +698,7 @@ export {
   FCPOProduct,
   FCPOApproval,
   FCSkuSplitted,
+  PurchaseOrderEdit,
+  POProductEdit,
+  ParentProductMasterDC
 };

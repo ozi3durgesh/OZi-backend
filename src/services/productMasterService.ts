@@ -185,9 +185,9 @@ export class ProductMasterService {
     } catch (error) {
       console.error('❌ [ProductMasterService] createProduct error:', error);
       console.error('❌ [ProductMasterService] Error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
+        message: (error as Error).message,
+        stack: (error as Error).stack,
+        name: (error as Error).name
       });
       await transaction.rollback();
       console.log('🔄 [ProductMasterService] Transaction rolled back');

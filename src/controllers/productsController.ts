@@ -18,7 +18,7 @@ import ProductMasterCSVProcessingService from '../services/productCSVProcessingS
 // const FOLDER_NAME = 'product-images'; // Folder inside S3
 
 // ✅ Helper function: clean URL
-const cleanUrl = (url: string | undefined) => {
+const cleanUrl = (url: string | undefined): string | null => {
   if (!url) return null;
   return url.replace(/`/g, '').trim();
 };
@@ -163,7 +163,7 @@ export const createProductMaster = async (req: Request, res: Response) => {
       return ResponseHandler.error(res, `Validation failed: ${validationErrors.join(', ')}`, 400);
     }
 
-    const existingProductMaster = await ProductMaster.findOne({ where: { sku } });
+    const existingProductMaster = await ProductMaster.findOne({ where: { sku_id: sku } });
     if (existingProductMaster) {
       return ResponseHandler.error(res, `ProductMaster with SKU ${sku} already exists`, 400);
     }
@@ -197,7 +197,7 @@ export const updateProductMaster = async (req: Request, res: Response) => {
     let updatedImageURL = product.image_url;
     if (ImageURL) {
       // Use ImageURL directly from request (no AWS S3 upload)
-      updatedImageURL = cleanUrl(ImageURL);
+      updatedImageURL = cleanUrl(ImageURL) || undefined;
     }
 
     await product.update({
@@ -220,7 +220,7 @@ export const getProductMasterBySKU = async (req: Request, res: Response) => {
 
   try {
     const { count, rows } = await ProductMaster.findAndCountAll({
-      where: { sku: sku },
+      where: { sku_id: sku },
       limit: parseInt(limit.toString()),
       offset,
     });
@@ -457,7 +457,7 @@ export const bulkUpdateProductMasters = async (req: Request, res: Response) => {
 
       // 8. Process each record based on mode
       for (const record of processedRecords) {
-        const { data, isUpdate, existingProductMaster } = record;
+        const { data, isUpdate, existingProduct } = record;
         
         // Use ImageURL directly from CSV (no AWS S3 upload)
         let imageUrl = data.ImageURL;
@@ -516,11 +516,11 @@ export const bulkUpdateProductMasters = async (req: Request, res: Response) => {
           createCount++;
         } else {
           // UPDATE MODE: Only update existing products (SKU remains unchanged)
-          if (isUpdate && existingProductMaster) {
+          if (isUpdate && existingProduct) {
             // Remove SKU from update data to prevent changing it
             const { SKU, ...updateData } = productData;
             productsToUpdate.push({
-              id: existingProductMaster.id,
+              id: existingProduct.id,
               data: updateData
             });
             updateCount++;
@@ -619,7 +619,7 @@ export const updateProductMasterEAN = async (req: Request, res: Response) => {
 
     // Find the product by SKU
     const product = await ProductMaster.findOne({ 
-      where: { sku: SKU } 
+      where: { sku_id: SKU } 
     });
 
     if (!product) {
@@ -628,7 +628,7 @@ export const updateProductMasterEAN = async (req: Request, res: Response) => {
     }
 
     console.log(`✅ Found product:`, {
-      SKU: product.sku,
+      SKU: product.sku_id,
       EAN_UPC: product.ean_upc,
       ProductMasterName: product.name
     });
@@ -871,7 +871,7 @@ export const getProductMastersByFC = async (req: Request, res: Response) => {
       whereClause.status = status;
     }
 
-    const fcFilteredWhere = FCQueryBuilder.addProductMasterFCFilter(whereClause, fcId);
+    const fcFilteredWhere = FCQueryBuilder.addProductFCFilter(whereClause, fcId);
 
     const offset = (Number(page) - 1) * Number(limit);
     const products = await ProductMaster.findAndCountAll({
@@ -890,7 +890,7 @@ export const getProductMastersByFC = async (req: Request, res: Response) => {
         limit: Number(limit),
         totalPages: Math.ceil(products.count / Number(limit))
       },
-      dc_id: fcId
+      created_by: req.user.id
     });
   } catch (error) {
     console.error('Get products by FC error:', error);
@@ -907,7 +907,7 @@ export const getProductMasterByIdAndFC = async (req: Request, res: Response) => 
       return ResponseHandler.error(res, 'ProductMaster ID is required', 400);
     }
 
-    const fcFilteredWhere = FCQueryBuilder.addProductMasterFCFilter({ id: parseInt(id) }, fcId);
+    const fcFilteredWhere = FCQueryBuilder.addProductFCFilter({ id: parseInt(id) }, fcId);
     const product = await ProductMaster.findOne({
       where: fcFilteredWhere
     });
@@ -919,7 +919,7 @@ export const getProductMasterByIdAndFC = async (req: Request, res: Response) => 
     return ResponseHandler.success(res, {
       message: 'ProductMaster retrieved successfully',
       data: product,
-      dc_id: fcId
+      created_by: req.user.id
     });
   } catch (error) {
     console.error('Get product by ID and FC error:', error);
@@ -938,15 +938,15 @@ export const updateProductMasterByFC = async (req: Request, res: Response) => {
     }
 
     // Validate that product belongs to FC
-    const isValidFC = await FCValidator.validateProductMasterFC(parseInt(id), fcId);
+    const isValidFC = await FCValidator.validateProductFC(parseInt(id), fcId);
     if (!isValidFC) {
       return ResponseHandler.error(res, 'ProductMaster not found or access denied', 404);
     }
 
     // Update product with FC context
     const [updatedRowsCount] = await ProductMaster.update(
-      { ...updateData, dc_id: fcId },
-      { where: { id: parseInt(id), dc_id: fcId } }
+      { ...updateData, created_by: req.user.id },
+      { where: { id: parseInt(id) } }
     );
 
     if (updatedRowsCount === 0) {
@@ -954,13 +954,13 @@ export const updateProductMasterByFC = async (req: Request, res: Response) => {
     }
 
     const updatedProductMaster = await ProductMaster.findOne({
-      where: { id: parseInt(id), dc_id: fcId }
+      where: { id: parseInt(id) }
     });
 
     return ResponseHandler.success(res, {
       message: 'ProductMaster updated successfully',
       data: updatedProductMaster,
-      dc_id: fcId
+      created_by: req.user.id
     });
   } catch (error) {
     console.error('Update product by FC error:', error);
@@ -976,7 +976,7 @@ export const createProductMasterByFC = async (req: Request, res: Response) => {
     // Add FC context to product data
     const productWithFC = {
       ...productData,
-      dc_id: fcId
+      created_by: req.user.id
     };
 
     const product = await ProductMaster.create(productWithFC);
@@ -984,7 +984,7 @@ export const createProductMasterByFC = async (req: Request, res: Response) => {
     return ResponseHandler.success(res, {
       message: 'ProductMaster created successfully',
       data: product,
-      dc_id: fcId
+      created_by: req.user.id
     }, 201);
   } catch (error) {
     console.error('Create product by FC error:', error);

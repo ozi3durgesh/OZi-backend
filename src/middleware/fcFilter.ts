@@ -201,8 +201,8 @@ export class FCValidator {
    * Validate product belongs to FC
    */
   static async validateProductFC(productId: number, fcId: number): Promise<boolean> {
-    const { Product } = await import('../models/index.js');
-    return this.validateFCResource(Product, productId, fcId, 'fc_id');
+    const { ProductMaster } = await import('../models/index.js');
+    return this.validateFCResource(ProductMaster, productId, fcId, 'fc_id');
   }
 
   /**

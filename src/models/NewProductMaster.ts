@@ -45,9 +45,33 @@ export interface ProductMasterUpdateAttributes extends Partial<ProductMasterCrea
 export class ProductMaster extends Model<ProductMasterAttributes, ProductMasterCreationAttributes> 
   implements ProductMasterAttributes {
   
-  // Remove public class fields to avoid shadowing Sequelize's attribute getters & setters
-  // The attributes will be accessible via this.getDataValue() and this.setDataValue()
-  // or directly as properties after the model is properly initialized
+  public id!: number;
+  public status!: number;
+  public catelogue_id!: string;
+  public product_id!: string;
+  public sku_id!: string;
+  public color?: string;
+  public age_size?: string;
+  public name!: string;
+  public category!: string;
+  public description!: string;
+  public image_url?: string;
+  public mrp!: number;
+  public avg_cost_to_ozi?: number;
+  public ean_upc?: string;
+  public brand_id!: number;
+  public weight?: number;
+  public length?: number;
+  public height?: number;
+  public width?: number;
+  public inventory_threshold?: number;
+  public gst!: number;
+  public cess!: number;
+  public hsn!: string;
+  public created_by!: number;
+  public created_at!: Date;
+  public updated_at!: Date;
+  public logs!: any[];
 }
 
 // Initialize the model
