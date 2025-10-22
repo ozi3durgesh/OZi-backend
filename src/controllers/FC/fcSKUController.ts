@@ -385,6 +385,67 @@ export class FCSKUController {
   }
 
   /**
+   * Get all products from ProductMaster with pagination
+   * GET /api/dc/fetchSKU/All
+   */
+  static async getAllProducts(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { page = 1, limit = 20, search, status, category, brand_id } = req.query;
+
+      const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
+
+      // Build search conditions
+      const whereClause: any = {};
+      
+      if (search) {
+        whereClause[Op.or] = [
+          { name: { [Op.like]: `%${search}%` } },
+          { description: { [Op.like]: `%${search}%` } },
+          { sku_id: { [Op.like]: `%${search}%` } },
+          { catelogue_id: { [Op.like]: `%${search}%` } },
+          { product_id: { [Op.like]: `%${search}%` } },
+          { ean_upc: { [Op.like]: `%${search}%` } },
+          { hsn: { [Op.like]: `%${search}%` } }
+        ];
+      }
+
+      if (status !== undefined) {
+        whereClause.status = status;
+      }
+
+      if (category) {
+        whereClause.category = { [Op.like]: `%${category}%` };
+      }
+
+      if (brand_id) {
+        whereClause.brand_id = brand_id;
+      }
+
+      const { count, rows } = await ProductMaster.findAndCountAll({
+        where: whereClause,
+        limit: parseInt(limit.toString()),
+        offset: offset,
+        order: [['created_at', 'DESC']]
+      });
+
+      return ResponseHandler.success(res, {
+        message: 'All products retrieved successfully',
+        data: rows,
+        pagination: {
+          currentPage: parseInt(page.toString()),
+          totalPages: Math.ceil(count / parseInt(limit.toString())),
+          totalItems: count,
+          itemsPerPage: parseInt(limit.toString())
+        }
+      });
+
+    } catch (error: any) {
+      console.error('Get all products error:', error);
+      return ResponseHandler.error(res, error.message || 'Failed to fetch all products', 500);
+    }
+  }
+
+  /**
    * Get SKU details by catalogue ID for FC-PO
    * GET /api/fc/skus/:catalogueId
    */
