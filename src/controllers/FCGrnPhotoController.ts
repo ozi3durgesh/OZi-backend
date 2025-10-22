@@ -1,23 +1,23 @@
 import { Request, Response } from 'express';
-import GRNPhoto from '../models/GrnPhoto';
-import GRNLine from '../models/GrnLine';
-import GRN from '../models/Grn.model';
+import FCGrnPhoto from '../models/FCGrnPhoto';
+import FCGrnLine from '../models/FCGrnLine';
+import FCGrn from '../models/FCGrn.model';
 import { S3Service } from '../services/s3Service';
-export interface CreateGRNPhotoRequest {
+export interface CreateFCGrnPhotoRequest {
   grnLineId: number;
   grnBatchId?: number;
   photos: string[];
   reason?: string;
 }
 
-export class GrnPhotoController {
+export class FCGrnPhotoController {
   /**
-   * Upload GRN photos via FormData and return S3 URLs
+   * Upload FCGrn photos via FormData and return S3 URLs
    * POST /api/grn/photo/upload
    * Body: FormData with 'photos' field (single or multiple files)
    * Query: skuId (required)
    */
-  static async uploadGRNPhotos(req: Request, res: Response) {
+  static async uploadFCGrnPhotos(req: Request, res: Response) {
     try {
       const { skuId } = req.query;
       
@@ -58,7 +58,7 @@ export class GrnPhotoController {
         error: null,
       });
     } catch (error: any) {
-      console.error('Error uploading GRN photos:', error);
+      console.error('Error uploading FCGrn photos:', error);
       return res.status(500).json({
         statusCode: 500,
         success: false,
@@ -68,30 +68,30 @@ export class GrnPhotoController {
     }
   }
 
-  static async createGRNPhotos(req: Request, res: Response) {
+  static async createFCGrnPhotos(req: Request, res: Response) {
     try {
       const { grnLineId, grnBatchId, photos, reason } = req.body;
       const created: any = [];
 
-      // Get GRN Line and GRN information
-      const grnLine = await GRNLine.findByPk(grnLineId);
+      // Get FCGrn Line and FCGrn information
+      const grnLine = await FCGrnLine.findByPk(grnLineId);
       if (!grnLine) {
         return res.status(404).json({
           success: false,
-          message: 'GRN Line not found',
+          message: 'FCGrn Line not found',
         });
       }
 
-      const grn = await GRN.findByPk(grnLine.grn_id);
+      const grn = await FCGrn.findByPk(grnLine.grn_id);
       if (!grn) {
         return res.status(404).json({
           success: false,
-          message: 'GRN not found',
+          message: 'FCGrn not found',
         });
       }
 
       for (const url of photos) {
-        const photo = await GRNPhoto.create({
+        const photo = await FCGrnPhoto.create({
           sku_id: grnLine.sku_id,
           grn_id: grnLine.grn_id,
           po_id: grn.po_id,
@@ -108,7 +108,7 @@ export class GrnPhotoController {
         error: null,
       });
     } catch (error: any) {
-      console.error('Error creating GRN photo:', error);
+      console.error('Error creating FCGrn photo:', error);
       return res.status(500).json({
         statusCode: 500,
         success: false,
@@ -118,9 +118,9 @@ export class GrnPhotoController {
     }
   }
 
-  static async getGrnPhotos(req: Request, res: Response) {
+  static async getFCGrnPhotos(req: Request, res: Response) {
     try {
-      const photos = await GRNPhoto.findAll();
+      const photos = await FCGrnPhoto.findAll();
       return res.status(200).json({
         statusCode: 200,
         success: true,
@@ -128,7 +128,7 @@ export class GrnPhotoController {
         error: null,
       });
     } catch (error: any) {
-      console.error('Error fetching GRN photos:', error);
+      console.error('Error fetching FCGrn photos:', error);
       return res.status(500).json({
         statusCode: 500,
         success: false,
@@ -138,22 +138,22 @@ export class GrnPhotoController {
     }
   }
 
-  static async getGrnPhotoByLineId(req: Request, res: Response) {
+  static async getFCGrnPhotoByLineId(req: Request, res: Response) {
     try {
       const { id } = req.params;
       
-      // Get the GRN Line to find the GRN ID
-      const grnLine = await GRNLine.findByPk(id);
+      // Get the FCGrn Line to find the FCGrn ID
+      const grnLine = await FCGrnLine.findByPk(id);
       if (!grnLine) {
         return res.status(404).json({
           statusCode: 404,
           success: false,
           data: null,
-          error: 'GRN Line not found',
+          error: 'FCGrn Line not found',
         });
       }
       
-      const photos = await GRNPhoto.findAll({
+      const photos = await FCGrnPhoto.findAll({
         where: {
           grn_id: grnLine.grn_id,
         },
@@ -175,7 +175,7 @@ export class GrnPhotoController {
         error: null,
       });
     } catch (error: any) {
-      console.error('Error fetching GRN photo:', error);
+      console.error('Error fetching FCGrn photo:', error);
       return res.status(500).json({
         statusCode: 500,
         success: false,
@@ -184,10 +184,10 @@ export class GrnPhotoController {
       });
     }
   }
-  static async getGrnPhotoById(req: Request, res: Response) {
+  static async getFCGrnPhotoById(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const photo = await GRNPhoto.findByPk(id);
+      const photo = await FCGrnPhoto.findByPk(id);
 
       if (!photo) {
         return res.status(404).json({
@@ -205,7 +205,7 @@ export class GrnPhotoController {
         error: null,
       });
     } catch (error: any) {
-      console.error('Error fetching GRN photo:', error);
+      console.error('Error fetching FCGrn photo:', error);
       return res.status(500).json({
         statusCode: 500,
         success: false,
@@ -215,10 +215,10 @@ export class GrnPhotoController {
     }
   }
 
-  static async deleteGrnPhoto(req: Request, res: Response) {
+  static async deleteFCGrnPhoto(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const deleted = await GRNPhoto.destroy({ where: { id } });
+      const deleted = await FCGrnPhoto.destroy({ where: { id } });
 
       if (!deleted) {
         return res.status(404).json({
@@ -236,7 +236,7 @@ export class GrnPhotoController {
         error: null,
       });
     } catch (error: any) {
-      console.error('Error deleting GRN photo:', error);
+      console.error('Error deleting FCGrn photo:', error);
       return res.status(500).json({
         statusCode: 500,
         success: false,
@@ -247,13 +247,13 @@ export class GrnPhotoController {
   }
 
   /**
-   * Generate signed URLs for existing GRN photos
+   * Generate signed URLs for existing FCGrn photos
    * GET /api/grn/photo/signed-urls/:id
    */
   static async getSignedUrlsForPhoto(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const photo = await GRNPhoto.findByPk(id);
+      const photo = await FCGrnPhoto.findByPk(id);
 
       if (!photo) {
         return res.status(404).json({
@@ -290,25 +290,25 @@ export class GrnPhotoController {
   }
 
   /**
-   * Generate signed URLs for all photos in a GRN line
+   * Generate signed URLs for all photos in a FCGrn line
    * GET /api/grn/photo/signed-urls/line/:lineId
    */
   static async getSignedUrlsForGrnLine(req: Request, res: Response) {
     try {
       const { lineId } = req.params;
       
-      // Get the GRN Line to find the GRN ID
-      const grnLine = await GRNLine.findByPk(lineId);
+      // Get the FCGrn Line to find the FCGrn ID
+      const grnLine = await FCGrnLine.findByPk(lineId);
       if (!grnLine) {
         return res.status(404).json({
           statusCode: 404,
           success: false,
           data: null,
-          error: 'GRN Line not found',
+          error: 'FCGrn Line not found',
         });
       }
       
-      const photos = await GRNPhoto.findAll({
+      const photos = await FCGrnPhoto.findAll({
         where: {
           grn_id: grnLine.grn_id,
         },
@@ -319,7 +319,7 @@ export class GrnPhotoController {
           statusCode: 404,
           success: false,
           data: null,
-          error: 'No photos found for this GRN line',
+          error: 'No photos found for this FCGrn line',
         });
       }
 
@@ -351,7 +351,7 @@ export class GrnPhotoController {
         error: null,
       });
     } catch (error: any) {
-      console.error('Error generating signed URLs for GRN line:', error);
+      console.error('Error generating signed URLs for FCGrn line:', error);
       return res.status(500).json({
         statusCode: 500,
         success: false,

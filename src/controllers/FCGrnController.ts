@@ -1,11 +1,12 @@
 import { Request, Response } from 'express';
+import { ResponseHandler } from '../middleware/responseHandler';
 import sequelize from '../config/database';
 import { QueryTypes } from 'sequelize';
-import GRNLine from '../models/GrnLine';
-import GRNBatch from '../models/GrnBatch';
-import { User } from '../models';
-import GRN from '../models/Grn.model';
-import GRNPhoto from '../models/GrnPhoto';
+import FCGrnLine from '../models/FCGrnLine';
+import FCGrnBatch from '../models/FCGrnBatch';
+import { User, FCPurchaseOrder, FCPOProduct } from '../models';
+import FCGrn from '../models/FCGrn.model';
+import FCGrnPhoto from '../models/FCGrnPhoto';
 import {
   AuthRequest,
   CreateGRNPhotoRequest,
@@ -14,14 +15,12 @@ import {
   CreateFullGRNInput,
 } from '../types';
 import { Op } from 'sequelize';
-import PurchaseOrder from '../models/PurchaseOrder';
-import POProduct from '../models/POProduct';
 import { rejects } from 'assert';
 import { S3Service } from '../services/s3Service';
 import DirectInventoryService from '../services/DirectInventoryService';
 import { INVENTORY_OPERATIONS } from '../config/inventoryConstants';
 
-export class GrnController {
+export class FCGrnController {
   /**
    * Validate if the provided string is a valid S3 URL
    * @param url - URL to validate
@@ -36,7 +35,7 @@ export class GrnController {
     }
   }
 
-  static async createGrn(req: AuthRequest, res: Response): Promise<void> {
+  static async createFCGrn(req: AuthRequest, res: Response): Promise<void> {
     try {
       const data: GRNRequest = req.body;
       const userId = req.user?.id;
@@ -50,21 +49,21 @@ export class GrnController {
         });
         return;
       }
-      const existingGRN = await GRN.findOne({
+      const existingFCGrn = await FCGrn.findOne({
         where: { po_id: data.po_id },
       });
 
-      if (existingGRN) {
+      if (existingFCGrn) {
         res.status(400).json({
           statusCode: 400,
           success: false,
           data: null,
-          error: 'GRN code already exists',
+          error: 'FC FCGrn code already exists',
         });
         return;
       }
 
-      const grn = await GRN.create({
+      const fcGrn = await FCGrn.create({
         ...data,
         status: data.status || 'partial',
         created_by: userId,
@@ -72,7 +71,7 @@ export class GrnController {
         updated_at: new Date(),
       });
 
-      const createdGrn = await GRN.findByPk(grn.id, {
+      const createdFCGrn = await FCGrn.findByPk(fcGrn.id, {
         include: [
           { model: User, as: 'GrnCreatedBy', attributes: ['id', 'email'] },
         ],
@@ -80,11 +79,11 @@ export class GrnController {
       res.status(201).json({
         statusCode: 201,
         success: true,
-        data: createdGrn,
+        data: createdFCGrn,
         error: null,
       });
     } catch (error: any) {
-      console.error('Error creating GRN:', error);
+      console.error('Error creating FC FCGrn:', error);
       res.status(500).json({
         statusCode: 500,
         success: false,
@@ -93,7 +92,7 @@ export class GrnController {
       });
     }
   }
-  static async createFullGRN(req: AuthRequest, res: Response) {
+  static async createFullFCFCGrn(req: AuthRequest, res: Response) {
     const input: CreateFullGRNInput = req.body;
     const userId = req.user?.id;
 
@@ -109,11 +108,11 @@ export class GrnController {
 
     const t = await sequelize.transaction();
     try {
-      const grn = await GRN.create(
+      const fcGrn = await FCGrn.create(
         {
           po_id: input.poId,
           status: input.status || 'partial',
-          closeReason: input.closeReason || null,
+          close_reason: input.close_reason || null,
           created_by: userId,
           created_at: new Date(),
           updated_at: new Date(),
@@ -122,28 +121,28 @@ export class GrnController {
       );
 
       for (const line of input.lines) {
-        const poProduct = await POProduct.findOne({
-          where: { po_id: input.poId, sku_id: line.skuId },
+        const fcPOProduct = await FCPOProduct.findOne({
+          where: { fcPOId: input.poId, catalogueId: line.skuId },
           transaction: t,
         });
-        if (!poProduct) {
+        if (!fcPOProduct) {
           await t.rollback();
           res.status(400).json({
             statusCode: 400,
             success: false,
             data: null,
-            error: `PO Product not found for PO ${input.poId} and SKU ${line.skuId}`,
+            error: `FC PO Product not found for FC PO ${input.poId} and SKU ${line.skuId}`,
           });
           return;
         }
 
-        if (poProduct.get('grnStatus') === 'completed') {
+        if (fcPOProduct.get('grnStatus') === 'completed') {
           await t.rollback();
           res.status(400).json({
             statusCode: 400,
             success: false,
             data: null,
-            error: `GRN already completed for SKU ${line.skuId}`,
+            error: `FC FCGrn already completed for SKU ${line.skuId}`,
           });
           return;
         }
@@ -151,8 +150,8 @@ export class GrnController {
         const [result] = await sequelize.query(
           `
           SELECT COALESCE(SUM(gl.received_qty), 0) as totalReceived
-          FROM grn_lines gl
-          INNER JOIN grns g ON g.id = gl.grn_id
+          FROM fc_grn_lines gl
+          INNER JOIN fc_grns g ON g.id = gl.grn_id
           WHERE g.po_id = :poId AND gl.sku_id = :skuId
         `,
           {
@@ -194,7 +193,7 @@ export class GrnController {
 
         // Validate S3 URL if provided
         if (line.photos) {
-          if (!GrnController.isValidS3Url(line.photos)) {
+          if (!FCGrnController.isValidS3Url(line.photos)) {
             await t.rollback();
             res.status(400).json({
               statusCode: 400,
@@ -206,9 +205,9 @@ export class GrnController {
           }
         }
 
-        const grnLine = await GRNLine.create(
+        const grnLine = await FCGrnLine.create(
           {
-            grn_id: grn.id,
+            grn_id: fcGrn.id,
             sku_id: line.skuId,
             ordered_qty: line.orderedQty,
             received_qty: line.receivedQty,
@@ -228,14 +227,14 @@ export class GrnController {
           { transaction: t }
         );
 
-        // Create GRNPhoto record for the S3 URL
+        // Create FCGrnPhoto record for the S3 URL
         if (line.photos) {
           try {
-            // Create GRNPhoto record for the S3 URL (already uploaded via photo upload API)
-            await GRNPhoto.create(
+            // Create FCGrnPhoto record for the S3 URL (already uploaded via photo upload API)
+            await FCGrnPhoto.create(
               {
                 sku_id: line.skuId,
-                grn_id: grn.id,
+                grn_id: fcGrn.id,
                 po_id: input.poId,
                 url: line.photos,
                 reason: 'sku-level-photo',
@@ -244,7 +243,7 @@ export class GrnController {
             );
           } catch (photoError) {
             await t.rollback();
-            console.error('GRN Photo creation error:', photoError);
+            console.error('FCGrn Photo creation error:', photoError);
             res.status(500).json({
               statusCode: 500,
               success: false,
@@ -255,23 +254,18 @@ export class GrnController {
           }
         }
 
-        await POProduct.update(
-          {
-            grnStatus:
-              newTotalReceived === 0
-                ? 'pending'
-                : newTotalReceived < line.orderedQty
-                  ? 'partial'
-                  : 'completed',
-            pending_qty: line.orderedQty - newTotalReceived,
-          },
-          { where: { po_id: input.poId, sku_id: line.skuId }, transaction: t }
-        );
+        // Update FC PO Product status
+        // await FCPOProduct.update(
+        //   {
+        //     pending_qty: line.orderedQty - newTotalReceived,
+        //   },
+        //   { where: { fcPOId: input.poId, productId: line.skuId }, transaction: t }
+        // );
 
         // Handle batches (without photos since they're now at SKU level)
         if (line.batches && line.batches.length > 0) {
           for (const batch of line.batches) {
-            await GRNBatch.create(
+            await FCGrnBatch.create(
               {
                 grn_line_id: grnLine.id,
                 batch_no: batch.batchNo,
@@ -284,25 +278,27 @@ export class GrnController {
         }
       }
 
-      const allProducts = await POProduct.findAll({
-        where: { po_id: input.poId },
-        transaction: t,
-      });
+      // Check if all products are completed
+      // const allProducts = await FCPOProduct.findAll({
+      //   where: { fcPOId: input.poId },
+      //   transaction: t,
+      // });
 
-      const allCompleted = allProducts.every(
-        (p) => p.get('grnStatus') === 'completed'
-      );
+      // const allCompleted = allProducts.every(
+      //   (p) => p.get('grnStatus') === 'completed'
+      // );
 
-      if (allCompleted) {
-        await PurchaseOrder.update(
-          { approval_status: 'completed' },
-          { where: { id: input.poId }, transaction: t }
-        );
+      if (false) { // allCompleted
+        // Update FC Purchase Order status
+        // await FCPurchaseOrder.update(
+        //   { approval_status: 'completed' },
+        //   { where: { id: input.poId }, transaction: t }
+        // );
       }
 
       await t.commit();
 
-      // Update inventory for each GRN line item
+      // Update inventory for each FCGrn line item
       const inventoryUpdates: Array<{
         sku: string;
         status: 'success' | 'failed' | 'error';
@@ -316,14 +312,14 @@ export class GrnController {
               sku: line.skuId,
               operation: INVENTORY_OPERATIONS.GRN,
               quantity: line.receivedQty,
-              referenceId: `GRN-${grn.id}`,
+              referenceId: `FCGrn-${fcGrn.id}`,
               operationDetails: {
-                grnId: grn.id,
+                grnId: fcGrn.id,
                 poId: input.poId,
                 receivedQty: line.receivedQty,
                 rejectedQty: line.rejectedQty || 0,
                 qcPassQty: line.qcPassQty || line.receivedQty,
-                remarks: line.remarks || 'GRN received'
+                remarks: line.remarks || 'FCGrn received'
               },
               performedBy: userId
             });
@@ -357,7 +353,7 @@ export class GrnController {
         }
       }
 
-      const createdGrn = await GRN.findByPk(grn.id, {
+      const createdGrn = await FCGrn.findByPk(fcGrn.id, {
         include: [
           { model: User, as: 'GrnCreatedBy', attributes: ['id', 'email'] },
         ],
@@ -368,7 +364,7 @@ export class GrnController {
           statusCode: 500,
           success: false,
           data: null,
-          error: 'Failed to retrieve created GRN',
+          error: 'Failed to retrieve created FCGrn',
         });
         return;
       }
@@ -390,7 +386,7 @@ export class GrnController {
       });
     } catch (err: any) {
       await t.rollback();
-      console.error('Error creating GRN:', err);
+      console.error('Error creating FCGrn:', err);
       res.status(500).json({
         statusCode: 500,
         success: false,
@@ -404,7 +400,7 @@ export class GrnController {
   //   try {
   //     const { poId } = req.params;
 
-  //     const grn = await GRN.findOne({
+  //     const grn = await FCGrn.findOne({
   //       where: { po_id: poId },
   //       include: [
   //         { model: User, as: 'CreatedBy', attributes: ['id', 'email'] },
@@ -417,14 +413,14 @@ export class GrnController {
   //         statusCode: 404,
   //         success: false,
   //         data: null,
-  //         error: `No GRN found for PO ID ${poId}`,
+  //         error: `No FCGrn found for PO ID ${poId}`,
   //       });
   //       return;
   //     }
-  //     const grlLines = await GRNLine.findAll({
-  //       where: { grn_id: grn.id },
+  //     const grlLines = await FCGrnLine.findAll({
+  //       where: { grn_id: fcGrn.id },
   //     });
-  //     const batches = await GRNBatch.findAll({
+  //     const batches = await FCGrnBatch.findAll({
   //       where: { grn_line_id: grlLines.map((line) => line.id) },
   //     });
   //     res.status(200).json({
@@ -434,7 +430,7 @@ export class GrnController {
   //       error: null,
   //     });
   //   } catch (error: any) {
-  //     console.error('Error fetching GRN by PO ID:', error);
+  //     console.error('Error fetching FCGrn by PO ID:', error);
   //     res.status(500).json({
   //       statusCode: 500,
   //       success: false,
@@ -450,42 +446,42 @@ export class GrnController {
     try {
       const { poId } = req.params;
 
-      const grns = await GRN.findAll({
+      const grns = await FCGrn.findAll({
         where: { po_id: poId },
         include: [
           {
-            model: PurchaseOrder,
-            as: 'PO',
-            attributes: ['id', 'po_id', 'vendor_name', 'approval_status'],
+            model: FCPurchaseOrder,
+            as: 'FCPO',
+            attributes: ['id', 'po_id', 'status'],
           },
           { model: User, as: 'GrnCreatedBy', attributes: ['id', 'email'] },
           { model: User, as: 'ApprovedBy', attributes: ['id', 'email'] },
           {
-            model: GRNLine,
+            model: FCGrnLine,
             as: 'Line',
             include: [
               {
-                model: GRNBatch,
+                model: FCGrnBatch,
                 as: 'Batches',
               },
             ],
           },
           {
-            model: GRNPhoto,
+            model: FCGrnPhoto,
             as: 'Photos',
             attributes: ['id', 'sku_id', 'url', 'reason', 'created_at'],
           },
         ],
         order: [
           ['created_at', 'DESC'],
-          [{ model: GRNLine, as: 'Line' }, 'id', 'ASC'],
+          [{ model: FCGrnLine, as: 'Line' }, 'id', 'ASC'],
           [
-            { model: GRNLine, as: 'Line' },
-            { model: GRNBatch, as: 'Batches' },
+            { model: FCGrnLine, as: 'Line' },
+            { model: FCGrnBatch, as: 'Batches' },
             'id',
             'ASC',
           ],
-          [{ model: GRNPhoto, as: 'Photos' }, 'created_at', 'DESC'],
+          [{ model: FCGrnPhoto, as: 'Photos' }, 'created_at', 'DESC'],
         ],
       });
 
@@ -494,7 +490,7 @@ export class GrnController {
           statusCode: 404,
           success: false,
           data: null,
-          error: `No GRNs found for PO ID ${poId}`,
+          error: `No FCGrns found for PO ID ${poId}`,
         });
         return;
       }
@@ -506,7 +502,7 @@ export class GrnController {
         error: null,
       });
     } catch (error: any) {
-      console.error('Error fetching GRNs with details:', error);
+      console.error('Error fetching FCGrns with details:', error);
       res.status(500).json({
         statusCode: 500,
         success: false,
@@ -515,22 +511,22 @@ export class GrnController {
       });
     }
   }
-  static async getGrnStats(req: Request, res: Response): Promise<void> {
+  static async getFCGrnStats(req: Request, res: Response): Promise<void> {
     try {
-      // 1. Total GRNs
-      const totalGrns = await GRN.count();
+      // 1. Total FCGrns
+      const totalGrns = await FCGrn.count();
 
-      const grnsWithVariance = await GRN.count({
+      const grnsWithVariance = await FCGrn.count({
         where: {
           status: 'partial',
         },
       });
 
-      const pendingQc = await GRN.count({
+      const pendingQc = await FCGrn.count({
         where: { status: 'pending-qc' },
       });
 
-      const rtvInitiated = await GRN.count({
+      const rtvInitiated = await FCGrn.count({
         where: { status: 'rtv-initiated' },
       });
 
@@ -546,7 +542,7 @@ export class GrnController {
         error: null,
       });
     } catch (error: any) {
-      console.error('Error fetching GRN stats:', error);
+      console.error('Error fetching FCGrn stats:', error);
       res.status(500).json({
         statusCode: 500,
         success: false,
@@ -556,7 +552,7 @@ export class GrnController {
     }
   }
 
-  static async getGrnDetails(req: Request, res: Response): Promise<void> {
+  static async getFCGrnDetails(req: Request, res: Response): Promise<void> {
     try {
       const {
         status,
@@ -583,17 +579,17 @@ export class GrnController {
         };
       }
 
-      const { count, rows } = await GRN.findAndCountAll({
+      const { count, rows } = await FCGrn.findAndCountAll({
         where: whereClause,
         include: [
           {
-            model: PurchaseOrder,
-            as: 'PO',
-            attributes: ['id', 'po_id', 'vendor_name', 'approval_status'],
-            where: search ? { vendor_name: { [Op.like]: `%${search}%` } } : {},
+            model: FCPurchaseOrder,
+            as: 'FCPO',
+            attributes: ['id', 'po_id', 'status'],
+            where: search ? { po_id: { [Op.like]: `%${search}%` } } : {},
           },
           {
-            model: GRNLine,
+            model: FCGrnLine,
             as: 'Line',
             attributes: [
               'id',
@@ -642,18 +638,18 @@ export class GrnController {
     }
   }
 
-  static async getGrnById(req: Request, res: Response): Promise<void> {
+  static async getFCGrnById(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const grn = await GRN.findByPk(id, {
+      const grn = await FCGrn.findByPk(id, {
         include: [
           {
-            model: PurchaseOrder,
-            as: 'PO',
-            attributes: ['id', 'po_id', 'vendor_name', 'approval_status'],
+            model: FCPurchaseOrder,
+            as: 'FCPO',
+            attributes: ['id', 'po_id', 'status'],
           },
           {
-            model: GRNLine,
+            model: FCGrnLine,
             as: 'Line',
             attributes: [
               'id',
@@ -667,7 +663,7 @@ export class GrnController {
             ],
             include: [
               {
-                model: GRNBatch,
+                model: FCGrnBatch,
                 as: 'Batches',
               },
             ],
@@ -675,20 +671,20 @@ export class GrnController {
           { model: User, as: 'GrnCreatedBy', attributes: ['id', 'email'] },
           { model: User, as: 'ApprovedBy', attributes: ['id', 'email'] },
           {
-            model: GRNPhoto,
+            model: FCGrnPhoto,
             as: 'Photos',
             attributes: ['id', 'sku_id', 'url', 'reason', 'created_at'],
           },
         ],
         order: [
-          [{ model: GRNLine, as: 'Line' }, 'id', 'ASC'],
+          [{ model: FCGrnLine, as: 'Line' }, 'id', 'ASC'],
           [
-            { model: GRNLine, as: 'Line' },
-            { model: GRNBatch, as: 'Batches' },
+            { model: FCGrnLine, as: 'Line' },
+            { model: FCGrnBatch, as: 'Batches' },
             'id',
             'ASC',
           ],
-          [{ model: GRNPhoto, as: 'Photos' }, 'created_at', 'DESC'],
+          [{ model: FCGrnPhoto, as: 'Photos' }, 'created_at', 'DESC'],
         ],
       });
 
@@ -697,7 +693,7 @@ export class GrnController {
           statusCode: 404,
           success: false,
           data: null,
-          error: 'GRN not found',
+          error: 'FCGrn not found',
         });
         return;
       }
@@ -709,7 +705,7 @@ export class GrnController {
         error: null,
       });
     } catch (error: any) {
-      console.error('Error fetching GRN:', error);
+      console.error('Error fetching FCGrn:', error);
       res.status(500).json({
         statusCode: 500,
         success: false,
@@ -719,32 +715,32 @@ export class GrnController {
     }
   }
 
-  static async updateGrn(req: AuthRequest, res: Response): Promise<void> {
+  static async updateFCGrn(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
       const updates = req.body;
 
-      const grn = await GRN.findByPk(id);
-      if (!grn) {
+      const fcGrn = await FCGrn.findByPk(id);
+      if (!fcGrn) {
         res.status(404).json({
           statusCode: 404,
           success: false,
           data: null,
-          error: 'GRN not found',
+          error: 'FCGrn not found',
         });
         return;
       }
 
-      await grn.update({ ...updates, updated_at: new Date() });
+      await fcGrn.update({ ...updates, updated_at: new Date() });
 
       res.status(200).json({
         statusCode: 200,
         success: true,
-        data: grn,
+        data: fcGrn,
         error: null,
       });
     } catch (error: any) {
-      console.error('Error updating GRN:', error);
+      console.error('Error updating FCGrn:', error);
       res.status(500).json({
         statusCode: 500,
         success: false,
@@ -754,32 +750,32 @@ export class GrnController {
     }
   }
 
-  static async updateGrnStatus(req: AuthRequest, res: Response): Promise<void> {
+  static async updateFCGrnStatus(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
       const { status } = req.body;
 
-      const grn = await GRN.findByPk(id);
-      if (!grn) {
+      const fcGrn = await FCGrn.findByPk(id);
+      if (!fcGrn) {
         res.status(404).json({
           statusCode: 404,
           success: false,
           data: null,
-          error: 'GRN not found',
+          error: 'FCGrn not found',
         });
         return;
       }
 
-      await grn.update({ status, updated_at: new Date() });
+      await fcGrn.update({ status, updated_at: new Date() });
 
       res.status(200).json({
         statusCode: 200,
         success: true,
-        data: grn,
+        data: fcGrn,
         error: null,
       });
     } catch (error: any) {
-      console.error('Error updating GRN status:', error);
+      console.error('Error updating FCGrn status:', error);
       res.status(500).json({
         statusCode: 500,
         success: false,
@@ -789,31 +785,31 @@ export class GrnController {
     }
   }
 
-  static async deleteGrn(req: AuthRequest, res: Response): Promise<void> {
+  static async deleteFCGrn(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
 
-      const grn = await GRN.findByPk(id);
-      if (!grn) {
+      const fcGrn = await FCGrn.findByPk(id);
+      if (!fcGrn) {
         res.status(404).json({
           statusCode: 404,
           success: false,
           data: null,
-          error: 'GRN not found',
+          error: 'FCGrn not found',
         });
         return;
       }
 
-      await grn.destroy();
+      await fcGrn.destroy();
 
       res.status(200).json({
         statusCode: 200,
         success: true,
-        data: `GRN ${id} deleted successfully`,
+        data: `FCGrn ${id} deleted successfully`,
         error: null,
       });
     } catch (error: any) {
-      console.error('Error deleting GRN:', error);
+      console.error('Error deleting FCGrn:', error);
       res.status(500).json({
         statusCode: 500,
         success: false,
@@ -822,4 +818,102 @@ export class GrnController {
       });
     }
   }
+
+  static async getFCGrnsByPoIdWithDetails(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { poId } = req.params;
+
+      const fcGrns = await FCGrn.findAll({
+        where: { po_id: poId },
+        include: [
+          {
+            model: FCGrnLine,
+            as: 'Line',
+            include: [
+              {
+                model: FCGrnBatch,
+                as: 'Batches'
+              }
+            ]
+          },
+          {
+            model: FCGrnPhoto,
+            as: 'Photos'
+          },
+          {
+            model: User,
+            as: 'GrnCreatedBy',
+            attributes: ['id', 'email', 'name']
+          },
+          {
+            model: User,
+            as: 'ApprovedBy',
+            attributes: ['id', 'email', 'name']
+          }
+        ],
+        order: [['created_at', 'DESC']]
+      });
+
+      res.status(200).json({
+        statusCode: 200,
+        success: true,
+        data: fcGrns,
+        error: null,
+      });
+    } catch (error: any) {
+      console.error('Error getting FC FCGrns by PO ID:', error);
+      res.status(500).json({
+        statusCode: 500,
+        success: false,
+        data: null,
+        error: error.message,
+      });
+    }
+  }
+
+  // Temporary endpoint to fix foreign key constraints
+  static async fixConstraints(req: Request, res: Response): Promise<Response> {
+    try {
+      const sequelize = (FCGrn as any).sequelize;
+      
+      // Drop existing constraints
+      try {
+        await sequelize.query(`ALTER TABLE fc_grns DROP FOREIGN KEY fc_grns_ibfk_1;`);
+        console.log('✅ Dropped fc_grns constraint');
+      } catch (error) {
+        console.log('ℹ️  fc_grns constraint not found');
+      }
+
+      try {
+        await sequelize.query(`ALTER TABLE fc_grn_photos DROP FOREIGN KEY fc_grn_photos_ibfk_1;`);
+        console.log('✅ Dropped fc_grn_photos constraint');
+      } catch (error) {
+        console.log('ℹ️  fc_grn_photos constraint not found');
+      }
+
+      // Add correct constraints
+      await sequelize.query(`
+        ALTER TABLE fc_grns 
+        ADD CONSTRAINT fc_grns_po_fk 
+        FOREIGN KEY (po_id) REFERENCES fc_purchase_orders(id) 
+        ON DELETE CASCADE ON UPDATE CASCADE;
+      `);
+      console.log('✅ Added fc_grns constraint');
+
+      await sequelize.query(`
+        ALTER TABLE fc_grn_photos 
+        ADD CONSTRAINT fc_grn_photos_po_fk 
+        FOREIGN KEY (po_id) REFERENCES fc_purchase_orders(id) 
+        ON DELETE CASCADE ON UPDATE CASCADE;
+      `);
+      console.log('✅ Added fc_grn_photos constraint');
+
+      return ResponseHandler.success(res, { message: 'Foreign key constraints fixed successfully' });
+    } catch (error) {
+      console.error('❌ Error fixing constraints:', error);
+      return ResponseHandler.error(res, 'Failed to fix constraints', 500);
+    }
+  }
 }
+
+export default FCGrnController;

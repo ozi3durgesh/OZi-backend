@@ -19,14 +19,13 @@ import Rider from './Rider';
 import ScannerBin from './ScannerBin';
 import ScannerSku from './ScannerSku';
 import BinLocation from './BinLocation';
-import GRN from './Grn.model';
-import GRNLine from './GrnLine';
-import GRNBatch from './GrnBatch';
-import GRNPhoto from './GrnPhoto';
+import FCGrn from './FCGrn.model';
+import FCGrnLine from './FCGrnLine';
+import FCGrnBatch from './FCGrnBatch';
+import FCGrnPhoto from './FCGrnPhoto';
 import PurchaseOrder from './PurchaseOrder';
 import EcomLog from './EcomLog';
-import Product from './productModel';
-import ProductMaster from './productModel';
+import ProductMaster from './NewProductMaster';
 import POProduct from './POProduct';
 import TokenBlacklist from './TokenBlacklist';
 import ReturnRequestItem from './ReturnRequestItem';
@@ -40,7 +39,6 @@ import DistributionCenter from './DistributionCenter';
 import FulfillmentCenter from './FulfillmentCenter';
 import UserFulfillmentCenter from './UserFulfillmentCenter';
 import VendorDC from './VendorDC';
-import ParentProductMasterDC from './ParentProductMasterDC';
 import Brand from './Brand';
 import DCPurchaseOrder from './DCPurchaseOrder';
 import DCPOProduct from './DCPOProduct';
@@ -52,8 +50,13 @@ import DCGrnBatch from './DCGrnBatch';
 import DCGrnPhoto from './DCGrnPhoto';
 import DCSkuSplitted from './DCSkuSplitted';
 import DCInventory1 from './DCInventory1';
+import FCPurchaseOrder from './FCPurchaseOrder';
+import FCPOProduct from './FCPOProduct';
+import FCPOApproval from './FCPOApproval';
+import FCSkuSplitted from './FCSkuSplitted';
 import PurchaseOrderEdit from './PurchaseOrderEdits';
 import POProductEdit from './POProductEdit';
+import ParentProductMasterDC from './ParentProductMasterDC';
 
 // Set up associations
 Coupon.hasMany(CouponTranslation, {
@@ -200,47 +203,49 @@ ScannerSku.belongsTo(ScannerBin, {
 });
 
 // associations
-// PicklistItem.ts
-PicklistItem.belongsTo(Product, {
+// PicklistItem.ts - Updated for new ProductMaster structure
+PicklistItem.belongsTo(ProductMaster, {
   foreignKey: 'sku',
-  targetKey: 'sku',
+  targetKey: 'sku_id',
   as: 'productInfo',
 });
-Product.hasMany(PicklistItem, {
+ProductMaster.hasMany(PicklistItem, {
   foreignKey: 'sku',
-  sourceKey: 'sku',
+  sourceKey: 'sku_id',
   as: 'picklistItems',
 });
 
-POProduct.belongsTo(ProductMaster, { foreignKey: 'sku_id', as: 'sku' });
-ProductMaster.hasMany(POProduct, { foreignKey: 'sku_id', as: 'products' });
+POProduct.belongsTo(ProductMaster, { foreignKey: 'sku_id', targetKey: 'sku_id', as: 'sku' });
+ProductMaster.hasMany(POProduct, { foreignKey: 'sku_id', sourceKey: 'sku_id', as: 'products' });
 
-// GRN associations
-GRN.belongsTo(PurchaseOrder, { foreignKey: 'po_id', as: 'PO' });
-GRN.belongsTo(User, { foreignKey: 'created_by', as: 'GrnCreatedBy' });
-GRN.belongsTo(User, { foreignKey: 'approved_by', as: 'ApprovedBy' });
-User.hasMany(GRN, { foreignKey: 'created_by', as: 'CreatedGrns' });
-User.hasMany(GRN, { foreignKey: 'approved_by', as: 'ApprovedGrns' });
-PurchaseOrder.hasMany(GRN, { foreignKey: 'po_id', as: 'GRNs' });
+// FC-GRN associations
+FCGrn.belongsTo(FCPurchaseOrder, { foreignKey: 'po_id', as: 'FCPO' });
+FCGrn.belongsTo(User, { foreignKey: 'created_by', as: 'GrnCreatedBy' });
+FCGrn.belongsTo(User, { foreignKey: 'approved_by', as: 'ApprovedBy' });
+FCGrn.belongsTo(FulfillmentCenter, { foreignKey: 'fc_id', as: 'FulfillmentCenter' });
+User.hasMany(FCGrn, { foreignKey: 'created_by', as: 'CreatedFCGrns' });
+User.hasMany(FCGrn, { foreignKey: 'approved_by', as: 'ApprovedFCGrns' });
+FCPurchaseOrder.hasMany(FCGrn, { foreignKey: 'po_id', as: 'FCGrns' });
+FulfillmentCenter.hasMany(FCGrn, { foreignKey: 'fc_id', as: 'FCGrns' });
 
-// GRN Line associations
-GRN.hasMany(GRNLine, { foreignKey: 'grn_id', as: 'Line' });
-GRNLine.belongsTo(GRN, { foreignKey: 'grn_id', as: 'GrnId' });
+// FC-GRN Line associations
+FCGrn.hasMany(FCGrnLine, { foreignKey: 'grn_id', as: 'Line' });
+FCGrnLine.belongsTo(FCGrn, { foreignKey: 'grn_id', as: 'FCGrn' });
 
-// GRN Batch associations
-GRNLine.hasMany(GRNBatch, { foreignKey: 'grn_line_id', as: 'Batches' });
-GRNBatch.belongsTo(GRNLine, { foreignKey: 'grn_line_id', as: 'Line' });
+// FC-GRN Batch associations
+FCGrnLine.hasMany(FCGrnBatch, { foreignKey: 'grn_line_id', as: 'Batches' });
+FCGrnBatch.belongsTo(FCGrnLine, { foreignKey: 'grn_line_id', as: 'Line' });
 
-// GRN Photo associations
-GRN.hasMany(GRNPhoto, { foreignKey: 'grn_id', as: 'Photos' });
-GRNPhoto.belongsTo(GRN, { foreignKey: 'grn_id', as: 'GRN' });
+// FC-GRN Photo associations
+FCGrn.hasMany(FCGrnPhoto, { foreignKey: 'grn_id', as: 'Photos' });
+FCGrnPhoto.belongsTo(FCGrn, { foreignKey: 'grn_id', as: 'FCGrn' });
 
-PurchaseOrder.hasMany(GRNPhoto, { foreignKey: 'po_id', as: 'Photos' });
-GRNPhoto.belongsTo(PurchaseOrder, { foreignKey: 'po_id', as: 'PurchaseOrder' });
+FCPurchaseOrder.hasMany(FCGrnPhoto, { foreignKey: 'po_id', as: 'FCGrnPhotos' });
+FCGrnPhoto.belongsTo(FCPurchaseOrder, { foreignKey: 'po_id', as: 'FCPurchaseOrder' });
 
 // Putaway associations
-PutawayTask.belongsTo(GRN, { foreignKey: 'grn_id', as: 'GRN' });
-PutawayTask.belongsTo(GRNLine, { foreignKey: 'grn_line_id', as: 'GRNLine' });
+PutawayTask.belongsTo(FCGrn, { foreignKey: 'grn_id', as: 'FCGRN' });
+PutawayTask.belongsTo(FCGrnLine, { foreignKey: 'grn_line_id', as: 'FCGRNLine' });
 PutawayTask.belongsTo(User, { foreignKey: 'assigned_to', as: 'AssignedTo' });
 PutawayTask.belongsTo(User, { foreignKey: 'created_by', as: 'CreatedBy' });
 
@@ -346,42 +351,25 @@ User.hasMany(VendorDC, {
   as: 'CreatedVendorsDC',
 });
 
-// ParentProductMasterDC associations
-// dc_id association removed since dc_id column was removed
-
-ParentProductMasterDC.belongsTo(Brand, {
+// ProductMaster associations - Updated for new structure
+ProductMaster.belongsTo(Brand, {
   foreignKey: 'brand_id',
   as: 'Brand',
 });
 
-ParentProductMasterDC.belongsTo(User, {
-  foreignKey: 'createdBy',
+ProductMaster.belongsTo(User, {
+  foreignKey: 'created_by',
   as: 'CreatedBy',
 });
 
-ParentProductMasterDC.belongsTo(User, {
-  foreignKey: 'updatedBy',
-  as: 'UpdatedBy',
-});
-
-// DistributionCenter.hasMany(ParentProductMasterDC, {
-//   foreignKey: 'dc_id',
-//   as: 'ParentProducts',
-// }); // Removed since dc_id column was removed from ParentProductMasterDC
-
-Brand.hasMany(ParentProductMasterDC, {
+Brand.hasMany(ProductMaster, {
   foreignKey: 'brand_id',
-  as: 'ParentProducts',
+  as: 'Products',
 });
 
-User.hasMany(ParentProductMasterDC, {
-  foreignKey: 'createdBy',
-  as: 'CreatedParentProducts',
-});
-
-User.hasMany(ParentProductMasterDC, {
-  foreignKey: 'updatedBy',
-  as: 'UpdatedParentProducts',
+User.hasMany(ProductMaster, {
+  foreignKey: 'created_by',
+  as: 'CreatedProducts',
 });
 
 // DCPurchaseOrder associations
@@ -431,8 +419,9 @@ DCPOProduct.belongsTo(DCPurchaseOrder, {
   as: 'PurchaseOrder',
 });
 
-DCPOProduct.belongsTo(ParentProductMasterDC, {
+DCPOProduct.belongsTo(ProductMaster, {
   foreignKey: 'productId',
+  targetKey: 'id',
   as: 'Product',
 });
 
@@ -479,8 +468,9 @@ User.hasMany(DCPOApproval, {
   as: 'Approvals',
 });
 
-ParentProductMasterDC.hasMany(DCPOProduct, {
+ProductMaster.hasMany(DCPOProduct, {
   foreignKey: 'productId',
+  sourceKey: 'id',
   as: 'POProducts',
 });
 
@@ -532,6 +522,115 @@ User.hasMany(DCGrn, { foreignKey: 'created_by', as: 'CreatedDCGrns' });
 User.hasMany(DCGrn, { foreignKey: 'approved_by', as: 'ApprovedDCGrns' });
 DistributionCenter.hasMany(DCGrn, { foreignKey: 'dc_id', as: 'DCGrns' });
 
+// FC Purchase Order associations
+FCPurchaseOrder.belongsTo(FulfillmentCenter, {
+  foreignKey: 'fcId',
+  as: 'FulfillmentCenter',
+});
+
+FCPurchaseOrder.belongsTo(DistributionCenter, {
+  foreignKey: 'dcId',
+  as: 'DistributionCenter',
+});
+
+FCPurchaseOrder.belongsTo(User, {
+  foreignKey: 'createdBy',
+  as: 'CreatedBy',
+});
+
+FCPurchaseOrder.belongsTo(User, {
+  foreignKey: 'updatedBy',
+  as: 'UpdatedBy',
+});
+
+FCPurchaseOrder.belongsTo(User, {
+  foreignKey: 'approvedBy',
+  as: 'ApprovedBy',
+});
+
+FCPurchaseOrder.belongsTo(User, {
+  foreignKey: 'rejectedBy',
+  as: 'RejectedBy',
+});
+
+FCPurchaseOrder.hasMany(FCPOProduct, {
+  foreignKey: 'fcPOId',
+  as: 'Products',
+});
+
+FCPurchaseOrder.hasMany(FCPOApproval, {
+  foreignKey: 'fcPOId',
+  as: 'Approvals',
+});
+
+// FCPOProduct associations
+FCPOProduct.belongsTo(FCPurchaseOrder, {
+  foreignKey: 'fcPOId',
+  as: 'PurchaseOrder',
+});
+
+FCPOProduct.belongsTo(ParentProductMasterDC, {
+  foreignKey: 'productId',
+  as: 'Product',
+});
+
+// FCPOApproval associations
+FCPOApproval.belongsTo(FCPurchaseOrder, {
+  foreignKey: 'fcPOId',
+  as: 'PurchaseOrder',
+});
+
+FCPOApproval.belongsTo(User, {
+  foreignKey: 'approverId',
+  as: 'Approver',
+});
+
+// Reverse associations
+FulfillmentCenter.hasMany(FCPurchaseOrder, {
+  foreignKey: 'fcId',
+  as: 'FCPurchaseOrders',
+});
+
+DistributionCenter.hasMany(FCPurchaseOrder, {
+  foreignKey: 'dcId',
+  as: 'FCPurchaseOrders',
+});
+
+User.hasMany(FCPurchaseOrder, {
+  foreignKey: 'createdBy',
+  as: 'CreatedFCPurchaseOrders',
+});
+
+User.hasMany(FCPOApproval, {
+  foreignKey: 'approverId',
+  as: 'FCApprovals',
+});
+
+ParentProductMasterDC.hasMany(FCPOProduct, {
+  foreignKey: 'productId',
+  as: 'FCPOProducts',
+});
+
+// FCSkuSplitted associations
+FCSkuSplitted.belongsTo(FCPurchaseOrder, {
+  foreignKey: 'fcPOId',
+  as: 'FCPurchaseOrder',
+});
+
+FCSkuSplitted.belongsTo(User, {
+  foreignKey: 'createdBy',
+  as: 'CreatedBy',
+});
+
+FCPurchaseOrder.hasMany(FCSkuSplitted, {
+  foreignKey: 'fcPOId',
+  as: 'SkuSplitted',
+});
+
+User.hasMany(FCSkuSplitted, {
+  foreignKey: 'createdBy',
+  as: 'CreatedFCSkuSplitted',
+});
 
 // One-to-Many relationship
 PurchaseOrderEdit.hasMany(POProductEdit, {
@@ -566,12 +665,12 @@ export {
   ScannerBin,
   ScannerSku,
   EcomLog,
-  Product,
+  ProductMaster,
   BinLocation,
-  GRN,
-  GRNLine,
-  GRNBatch,
-  GRNPhoto,
+  FCGrn,
+  FCGrnLine,
+  FCGrnBatch,
+  FCGrnPhoto,
   PurchaseOrder,
   POProduct,
   TokenBlacklist,
@@ -586,7 +685,6 @@ export {
   FulfillmentCenter,
   UserFulfillmentCenter,
   VendorDC,
-  ParentProductMasterDC,
   Brand,
   DCPurchaseOrder,
   DCPOProduct,
@@ -598,7 +696,11 @@ export {
   DCGrnPhoto,
   DCSkuSplitted,
   DCInventory1,
+  FCPurchaseOrder,
+  FCPOProduct,
+  FCPOApproval,
+  FCSkuSplitted,
   PurchaseOrderEdit,
-  POProductEdit
-
+  POProductEdit,
+  ParentProductMasterDC
 };

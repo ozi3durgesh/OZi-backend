@@ -1,0 +1,54 @@
+export const FC_PO_CONSTANTS = {
+  SUCCESS: {
+    CREATED: 'FC Purchase Order created successfully',
+    UPDATED: 'FC Purchase Order updated successfully',
+    DELETED: 'FC Purchase Order deleted successfully',
+    FETCHED: 'FC Purchase Orders fetched successfully',
+    APPROVED: 'FC Purchase Order approved successfully',
+    REJECTED: 'FC Purchase Order rejected successfully',
+    SUBMITTED: 'FC Purchase Order submitted for approval successfully',
+  },
+  ERRORS: {
+    PO_NOT_FOUND: 'FC Purchase Order not found',
+    INVALID_STATUS: 'Invalid status for this operation',
+    ACCESS_DENIED: 'Access denied. Only DC users with role ID 1 or 3 can approve/reject FC Purchase Orders',
+    ALREADY_APPROVED: 'FC Purchase Order is already approved',
+    ALREADY_REJECTED: 'FC Purchase Order is already rejected',
+    INVALID_APPROVER: 'Invalid approver role',
+    TOKEN_EXPIRED: 'Approval token has expired',
+  },
+  VALIDATION: {
+    MIN_QUANTITY: 1,
+    MAX_QUANTITY: 10000,
+    MIN_AMOUNT: 1,
+    MAX_AMOUNT: 1000000,
+    DESCRIPTION_MAX_LENGTH: 1000,
+    NOTES_MAX_LENGTH: 2000,
+  },
+  PAGINATION: {
+    DEFAULT_PAGE: 1,
+    DEFAULT_LIMIT: 20,
+    MAX_LIMIT: 100,
+  },
+  STATUS: {
+    DRAFT: 'DRAFT',
+    PENDING_APPROVAL: 'PENDING_APPROVAL',
+    APPROVED: 'APPROVED',
+    REJECTED: 'REJECTED',
+    CANCELLED: 'CANCELLED',
+  },
+  PRIORITY: {
+    LOW: 'LOW',
+    MEDIUM: 'MEDIUM',
+    HIGH: 'HIGH',
+    URGENT: 'URGENT',
+  },
+  APPROVER_ROLES: {
+    DC_ADMIN: 'dc_admin',
+    DC_MANAGER: 'dc_manager',
+  },
+  ROLE_IDS: {
+    DC_ADMIN: 1,
+    DC_MANAGER: 3,
+  },
+};

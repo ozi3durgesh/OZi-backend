@@ -201,8 +201,8 @@ export class FCValidator {
    * Validate product belongs to FC
    */
   static async validateProductFC(productId: number, fcId: number): Promise<boolean> {
-    const { Product } = await import('../models/index.js');
-    return this.validateFCResource(Product, productId, fcId, 'fc_id');
+    const { ProductMaster } = await import('../models/index.js');
+    return this.validateFCResource(ProductMaster, productId, fcId, 'fc_id');
   }
 
   /**
@@ -217,8 +217,8 @@ export class FCValidator {
    * Validate GRN belongs to FC
    */
   static async validateGRNFC(grnId: number, fcId: number): Promise<boolean> {
-    const { GRN } = await import('../models/index.js');
-    return this.validateFCResource(GRN, grnId, fcId, 'fc_id');
+    const { FCGrn } = await import('../models/index.js');
+    return this.validateFCResource(FCGrn, grnId, fcId, 'fc_id');
   }
 
   /**

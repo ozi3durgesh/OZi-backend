@@ -20,6 +20,12 @@ export const runMigrations = async (): Promise<void> => {
     // Add new vendor fields to vendor_dc table
     await addNewVendorFields();
     
+    // Create fc_po_sku_matrix table
+    await createFCPOSkuMatrixTable();
+    
+    // Add sku_matrix_on_catalogue_id column to fc_po_products table
+    await addSkuMatrixColumnToFCPOProducts();
+    
     console.log('✅ Database migrations completed successfully');
   } catch (error) {
     console.error('❌ Migration failed:', error);
@@ -211,6 +217,95 @@ const addNewVendorFields = async (): Promise<void> => {
     }
   } catch (error) {
     console.error('❌ Error adding new vendor fields to vendor_dc table:', error);
+    throw error;
+  }
+};
+
+const createFCPOSkuMatrixTable = async (): Promise<void> => {
+  try {
+    // Check if table exists
+    const tableExists = await sequelize.query(
+      "SHOW TABLES LIKE 'fc_po_sku_matrix'",
+      { type: QueryTypes.SELECT }
+    );
+    
+    if (tableExists.length === 0) {
+      console.log('📋 Creating fc_po_sku_matrix table...');
+      
+      await sequelize.query(`
+        CREATE TABLE IF NOT EXISTS fc_po_sku_matrix (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          fc_po_id INT NOT NULL,
+          fc_po_product_id INT NOT NULL,
+          catalogue_id VARCHAR(255) NOT NULL,
+          sku VARCHAR(50) NOT NULL,
+          product_name VARCHAR(255) NOT NULL,
+          hsn VARCHAR(20) NULL,
+          mrp DECIMAL(10, 2) NULL,
+          ean_upc VARCHAR(50) NULL,
+          brand VARCHAR(100) NULL,
+          weight DECIMAL(8, 2) NULL,
+          length DECIMAL(8, 2) NULL,
+          height DECIMAL(8, 2) NULL,
+          width DECIMAL(8, 2) NULL,
+          gst DECIMAL(5, 2) NULL,
+          cess DECIMAL(5, 2) NULL,
+          selling_price DECIMAL(10, 2) NULL,
+          rlp DECIMAL(10, 2) NULL,
+          rlp_without_tax DECIMAL(10, 2) NULL,
+          gst_type ENUM('SGST+CGST', 'IGST', 'NONE') NULL,
+          quantity INT NOT NULL,
+          total_amount DECIMAL(12, 2) NOT NULL,
+          status ENUM('PENDING', 'READY_FOR_GRN', 'PROCESSED') NOT NULL DEFAULT 'PENDING',
+          created_by INT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_fc_po_id (fc_po_id),
+          INDEX idx_fc_po_product_id (fc_po_product_id),
+          INDEX idx_catalogue_id (catalogue_id),
+          INDEX idx_sku (sku),
+          INDEX idx_status (status),
+          FOREIGN KEY (fc_po_id) REFERENCES fc_purchase_orders(id) ON DELETE CASCADE,
+          FOREIGN KEY (fc_po_product_id) REFERENCES fc_po_products(id) ON DELETE CASCADE,
+          FOREIGN KEY (created_by) REFERENCES Users(id) ON DELETE RESTRICT
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+      
+      console.log('✅ fc_po_sku_matrix table created successfully');
+    } else {
+      console.log('ℹ️ fc_po_sku_matrix table already exists');
+    }
+  } catch (error) {
+    console.error('❌ Error creating fc_po_sku_matrix table:', error);
+    throw error;
+  }
+};
+
+const addSkuMatrixColumnToFCPOProducts = async (): Promise<void> => {
+  try {
+    console.log('📋 Adding sku_matrix_on_catalogue_id column to fc_po_products table...');
+    
+    // Check if sku_matrix_on_catalogue_id column exists
+    const columns = await sequelize.query(
+      "SHOW COLUMNS FROM fc_po_products LIKE 'sku_matrix_on_catalogue_id'",
+      { type: QueryTypes.SELECT }
+    );
+    
+    if (columns.length === 0) {
+      console.log('🔄 Adding sku_matrix_on_catalogue_id column to fc_po_products table...');
+      
+      // Add sku_matrix_on_catalogue_id column
+      await sequelize.query(`
+        ALTER TABLE fc_po_products 
+        ADD COLUMN sku_matrix_on_catalogue_id TEXT NULL AFTER notes
+      `);
+      
+      console.log('✅ sku_matrix_on_catalogue_id column added to fc_po_products table successfully');
+    } else {
+      console.log('ℹ️ sku_matrix_on_catalogue_id column already exists in fc_po_products table');
+    }
+  } catch (error) {
+    console.error('❌ Error adding sku_matrix_on_catalogue_id column to fc_po_products table:', error);
     throw error;
   }
 };

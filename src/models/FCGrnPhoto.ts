@@ -47,7 +47,7 @@ GRNPhoto.init(
   },
   {
     sequelize,
-    tableName: 'grn_photos',
+    tableName: 'fc_grn_photos',
     timestamps: true,
     createdAt: 'created_at',
     updatedAt: 'updated_at',

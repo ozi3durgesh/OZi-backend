@@ -13,7 +13,7 @@ import pickingRoutes from './routes/pickingRoutes';
 import packingRoutes from './routes/packingRoutes';
 import handoverRoutes from './routes/handoverRoutes';
 import warehouseRoutes from './routes/warehouseRoutes';
-import grnRoutes from './routes/grnRoutes';
+import fcGrnRoutes from './routes/FCGrnRoutes';
 import easyEcomWebhookRoutes from './routes/easyEcomWebhookRoutes';
 import { errorHandler } from './middleware/errorHandler';
 import vendorRoutes from './routes/vendorRoutes';
@@ -36,8 +36,13 @@ import dcVendorRoutes from './routes/DC/vendorRoutes';
 import dcPORoutes from './routes/DC/dcPORoutes';
 import dcGrnRoutes from './routes/DC/dcGrnRoutes';
 import dcInventory1Routes from './routes/DC/dcInventory1Routes';
+import fcPORoutes from './routes/fcPORoutes';
+import fcSKURoutes from './routes/fcSKURoutes';
+import dcFCPORoutes from './routes/dcFCPORoutes';
+import fcPOStatusRoutes from './routes/fcPOStatusRoutes';
 import pdfUploadRoutes from './routes/pdfUploadRoutes';
 import brandRoutes from './routes/brandRoutes';
+import productMasterRoutes from './routes/productMasterRoutes';
 
 const app = express();
 
@@ -65,7 +70,7 @@ app.use('/api/picklist', pickingRoutes);
 app.use('/api/packing', packingRoutes);
 app.use('/api/handover', handoverRoutes);
 app.use('/api/warehouses', warehouseRoutes);
-app.use('/api/grn', grnRoutes);
+app.use('/api/fc/grn', fcGrnRoutes);
 
 // FC Selection routes must come BEFORE vendor/product routes to avoid FC filtering middleware
 app.use('/api/fc-selection', fcSelectionRoutes);
@@ -81,6 +86,14 @@ app.use('/api/dc', parentProductRoutesDC);
 app.use('/api/dc', dcPORoutes);
 app.use('/api/dc/grn', dcGrnRoutes);
 app.use('/api/dc/inventory-1', dcInventory1Routes);
+
+// FC-specific routes (Fulfillment Center context)
+app.use('/api/fc-po', fcPOStatusRoutes);
+app.use('/api/fc-po', fcPORoutes);
+app.use('/api/fc/skus', fcSKURoutes);
+
+// DC-specific FC-PO routes (Distribution Center context)
+app.use('/api/dc/fc-pos', dcFCPORoutes);
 
 app.use('/api', vendorRoutes);
 app.use('/api', productRoutes);
@@ -106,6 +119,9 @@ app.use('/api/upload', pdfUploadRoutes);
 
 // Brand routes
 app.use('/api/brands', brandRoutes);
+
+// New Product Master routes
+app.use('/api', productMasterRoutes);
 
 
 // Health check

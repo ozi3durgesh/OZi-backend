@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
 import { Op, QueryTypes } from 'sequelize';
 import sequelize from '../config/database';
-import GRN from '../models/Grn.model';
-import GRNLine from '../models/GrnLine';
+import FCGrn from '../models/FCGrn.model';
+import FCGrnLine from '../models/FCGrnLine';
 import PurchaseOrder from '../models/PurchaseOrder';
 import Product from '../models/productModel';
 import BinLocation from '../models/BinLocation';
@@ -61,7 +61,7 @@ const convertProductDetailKeys = (productData: any) => {
 };
 
 export class PutawayController {
-  // 1. Get GRN Putaway List with pagination
+  // 1. Get FCGrn Putaway List with pagination
   static async getGrnPutawayList(req: AuthRequest, res: Response): Promise<void> {
     try {
       const page = parseInt(req.query.page as string) || 1;
@@ -69,11 +69,11 @@ export class PutawayController {
       const offset = (page - 1) * limit;
       const statusFilter = req.query.status as string; // Get status filter from query params
 
-      // First, get all GRN lines with the required putaway_status
-      const allGrnLines = await GRNLine.findAll({
+      // First, get all FCGrn lines with the required putaway_status
+      const allGrnLines = await FCGrnLine.findAll({
         include: [
           {
-            model: GRN,
+            model: FCGrn,
             as: 'GrnId',
             include: [
               {
@@ -94,16 +94,16 @@ export class PutawayController {
         order: [['created_at', 'DESC']],
       });
 
-      // Group GRN lines by GRN ID to get unique GRNs with detailed SKU information
+      // Group FCGrn lines by FCGrn ID to get unique FCGrns with detailed SKU information
       const grnMap = new Map();
-      // Track SKU details across all GRNs for remaining quantity calculation
+      // Track SKU details across all FCGrns for remaining quantity calculation
       const skuPoTracker = new Map(); // Key: "poId-skuId", Value: { orderedQty, totalPutAway, totalRejected }
       
       allGrnLines.forEach((grnLine: any) => {
         const grnId = grnLine.grn_id;
         const grn = grnLine.GrnId;
         
-        // Skip SKUs that haven't gone through GRN flow or have been rejected/ignored
+        // Skip SKUs that haven't gone through FCGrn flow or have been rejected/ignored
         // Only include SKUs with qc_pass_qty > 0 OR received_qty > 0 (processed SKUs)
         // This excludes: rejected SKUs (qc_pass_qty = 0) and ignored/unprocessed SKUs
         const isValidSku = grnLine.received_qty > 0 && 
@@ -130,7 +130,7 @@ export class PutawayController {
         
         const grnData = grnMap.get(grnId);
         
-        // Only include SKU IDs that have gone through GRN create flow
+        // Only include SKU IDs that have gone through FCGrn create flow
         // and have not been fully rejected or ignored
         grnData.skuIds.add(grnLine.sku_id);
         
@@ -153,7 +153,7 @@ export class PutawayController {
           poId: grn?.po_id
         });
         
-        // Track across all GRNs for this PO and SKU
+        // Track across all FCGrns for this PO and SKU
         const poSkuKey = `${grn?.po_id}-${grnLine.sku_id}`;
         if (!skuPoTracker.has(poSkuKey)) {
           skuPoTracker.set(poSkuKey, {
@@ -181,7 +181,7 @@ export class PutawayController {
         }
       });
 
-      // Set the overall status for each GRN
+      // Set the overall status for each FCGrn
       grnMap.forEach((grnData) => {
         if (grnData.hasPartial) {
           grnData.status = 'partial';
@@ -198,7 +198,7 @@ export class PutawayController {
       // Convert Map to Array and fetch product details
       let allPutawayList = await Promise.all(
         Array.from(grnMap.values()).map(async (grnData) => {
-          // Fetch product details for all SKUs in this GRN
+          // Fetch product details for all SKUs in this FCGrn
           const skuArray = Array.from(grnData.skuIds) as string[];
           const productDetails = await Promise.all(
             skuArray.map(async (skuId) => {
@@ -216,7 +216,7 @@ export class PutawayController {
                 poId: null
               };
               
-              // Calculate remaining quantity across all GRNs for this PO-SKU combination
+              // Calculate remaining quantity across all FCGrns for this PO-SKU combination
               const poSkuKey = `${qcDetails.poId}-${skuId}`;
               const tracker = skuPoTracker.get(poSkuKey) || {
                 orderedQty: qcDetails.orderedQty,
@@ -224,7 +224,7 @@ export class PutawayController {
                 totalRejected: 0
               };
               
-              // remainingQuantity = orderedQty - (items put away across all GRNs + rejected across all GRNs)
+              // remainingQuantity = orderedQty - (items put away across all FCGrns + rejected across all FCGrns)
               const remainingQuantity = tracker.orderedQty - (tracker.totalPutAway + tracker.totalRejected);
               
               return {
@@ -247,7 +247,7 @@ export class PutawayController {
             productDetails: productDetails, // Array of product details with QC info
             quantity: grnData.quantity,
             grnDate: grnData.grnDate,
-            status: grnData.status, // GRN status
+            status: grnData.status, // FCGrn status
           };
         })
       );
@@ -276,7 +276,7 @@ export class PutawayController {
         error: null,
       });
     } catch (error: any) {
-      console.error('Error fetching GRN putaway list:', error);
+      console.error('Error fetching FCGrn putaway list:', error);
       res.status(500).json({
         statusCode: 500,
         success: false,
@@ -293,8 +293,8 @@ export class PutawayController {
       const limit = parseInt(req.query.limit as string) || 10;
       const offset = (page - 1) * limit;
 
-      // For return putaway, we'll look for GRNs with RTV or return status
-      const { count, rows } = await GRN.findAndCountAll({
+      // For return putaway, we'll look for FCGrns with RTV or return status
+      const { count, rows } = await FCGrn.findAndCountAll({
         include: [
           {
             model: PurchaseOrder,
@@ -312,10 +312,10 @@ export class PutawayController {
         order: [['created_at', 'DESC']],
       });
 
-      // Now get the GRN lines with RTV or held quantities for each GRN
+      // Now get the FCGrn lines with RTV or held quantities for each FCGrn
       const returnPutawayList = await Promise.all(
         rows.map(async (grn: any) => {
-          const grnLines = await GRNLine.findAll({
+          const grnLines = await FCGrnLine.findAll({
             where: {
               grn_id: grn.id,
               [Op.or]: [
@@ -326,7 +326,7 @@ export class PutawayController {
             attributes: ['id', 'sku_id', 'rtv_qty', 'held_qty'],
           });
 
-          // Count unique SKUs for this GRN
+          // Count unique SKUs for this FCGrn
           const uniqueSkus = new Set(grnLines.map((line: any) => line.sku_id));
           const skuCount = uniqueSkus.size;
           
@@ -369,7 +369,7 @@ export class PutawayController {
     }
   }
 
-  // 3. Get GRN Details by ID
+  // 3. Get FCGrn Details by ID
   static async getGrnDetailsById(req: AuthRequest, res: Response): Promise<void> {
     try {
       const grnId = parseInt(req.params.id);
@@ -385,15 +385,15 @@ export class PutawayController {
         return;
       }
 
-      // Get the GRN data from grns table
-      const grn = await GRN.findByPk(grnId);
+      // Get the FCGrn data from grns table
+      const grn = await FCGrn.findByPk(grnId);
 
       if (!grn) {
         res.status(404).json({
           statusCode: 404,
           success: false,
           data: null,
-          error: 'GRN not found',
+          error: 'FCGrn not found',
         });
         return;
       }
@@ -411,7 +411,7 @@ export class PutawayController {
         error: null,
       });
     } catch (error: any) {
-      console.error('Error fetching GRN details:', error);
+      console.error('Error fetching FCGrn details:', error);
       res.status(500).json({
         statusCode: 500,
         success: false,
@@ -442,7 +442,7 @@ export class PutawayController {
           statusCode: 400,
           success: false,
           data: null,
-          error: 'SKU ID and GRN ID are required',
+          error: 'SKU ID and FCGrn ID are required',
         });
         return;
       }
@@ -462,8 +462,8 @@ export class PutawayController {
         return;
       }
 
-      // Check if SKU exists in the specified GRN line with QC passed quantity
-      const grnLine = await GRNLine.findOne({
+      // Check if SKU exists in the specified FCGrn line with QC passed quantity
+      const grnLine = await FCGrnLine.findOne({
         where: {
           sku_id: sku_id,
           grn_id: grn_id,
@@ -473,7 +473,7 @@ export class PutawayController {
         },
         include: [
           {
-            model: GRN,
+            model: FCGrn,
             as: 'Grn',
             include: [
               {
@@ -491,7 +491,7 @@ export class PutawayController {
           statusCode: 404,
           success: false,
           data: null,
-          error: 'No QC passed quantity found for this SKU in the specified GRN',
+          error: 'No QC passed quantity found for this SKU in the specified FCGrn',
         });
         return;
       }
@@ -550,7 +550,7 @@ export class PutawayController {
           statusCode: 400,
           success: false,
           data: null,
-          error: 'GRN ID and PO ID are required',
+          error: 'FCGrn ID and PO ID are required',
         });
         return;
       }
@@ -589,8 +589,8 @@ export class PutawayController {
         }
       }
   
-      // Check if SKU exists in the specific GRN line with QC passed quantity
-      const grnLine = await GRNLine.findOne({
+      // Check if SKU exists in the specific FCGrn line with QC passed quantity
+      const grnLine = await FCGrnLine.findOne({
         where: {
           sku_id: resolvedSku,
           grn_id: grn_id,
@@ -600,7 +600,7 @@ export class PutawayController {
         },
         include: [
           {
-            model: GRN,
+            model: FCGrn,
             as: 'GrnId',
             where: {
               po_id: po_id,
@@ -948,7 +948,7 @@ export class PutawayController {
           statusCode: 400,
           success: false,
           data: null,
-          error: 'SKU ID and GRN ID are required',
+          error: 'SKU ID and FCGrn ID are required',
         });
         return;
       }
@@ -968,8 +968,8 @@ export class PutawayController {
         return;
       }
 
-      // Get GRN and PO details
-      const grn = await GRN.findByPk(grn_id, {
+      // Get FCGrn and PO details
+      const grn = await FCGrn.findByPk(grn_id, {
         include: [
           {
             model: PurchaseOrder,
@@ -977,7 +977,7 @@ export class PutawayController {
             attributes: ['po_id', 'vendor_name'],
           },
           {
-            model: GRNLine,
+            model: FCGrnLine,
             as: 'Line',
             where: { sku_id: sku_id },
             attributes: ['id', 'qc_pass_qty'],
@@ -990,7 +990,7 @@ export class PutawayController {
           statusCode: 404,
           success: false,
           data: null,
-          error: 'GRN not found',
+          error: 'FCGrn not found',
         });
         return;
       }
@@ -1041,7 +1041,7 @@ export class PutawayController {
           statusCode: 400,
           success: false,
           data: null,
-          error: 'SKU ID, GRN ID, quantity, and bin location are required',
+          error: 'SKU ID, FCGrn ID, quantity, and bin location are required',
         });
         return;
       }
@@ -1077,8 +1077,8 @@ export class PutawayController {
         return;
       }
 
-      // Get GRN line
-      const grnLine = await GRNLine.findOne({
+      // Get FCGrn line
+      const grnLine = await FCGrnLine.findOne({
         where: { grn_id: grn_id, sku_id: sku_id },
       });
 
@@ -1087,7 +1087,7 @@ export class PutawayController {
           statusCode: 404,
           success: false,
           data: null,
-          error: 'GRN line not found',
+          error: 'FCGrn line not found',
         });
         return;
       }
@@ -1139,7 +1139,7 @@ export class PutawayController {
           putawayStatus = 'partial';
         }
 
-        // Update GRN line - reduce the QC passed quantity (this represents available quantity for putaway)
+        // Update FCGrn line - reduce the QC passed quantity (this represents available quantity for putaway)
         await grnLine.update(
           { 
             qc_pass_qty: newRemainingQty,
@@ -1262,7 +1262,7 @@ export class PutawayController {
             sku: sku_id,
             operation: INVENTORY_OPERATIONS.PUTAWAY,
             quantity: quantity,
-            referenceId: `PUTAWAY-GRN-${grn_id}`,
+            referenceId: `PUTAWAY-FCGrn-${grn_id}`,
             operationDetails: {
               grnId: grn_id,
               skuId: sku_id,
@@ -1359,20 +1359,20 @@ export class PutawayController {
   // Debug endpoint to check database
   static async debugDatabase(req: AuthRequest, res: Response): Promise<void> {
     try {
-      // Check total GRNs
-      const totalGrns = await GRN.count();
+      // Check total FCGrns
+      const totalGrns = await FCGrn.count();
       
-      // Check GRNs by status
-      const grnsByStatus = await GRN.findAll({
+      // Check FCGrns by status
+      const grnsByStatus = await FCGrn.findAll({
         attributes: ['status', [sequelize.fn('COUNT', sequelize.col('id')), 'count']],
         group: ['status'],
       });
 
-      // Check total GRN lines
-      const totalGrnLines = await GRNLine.count();
+      // Check total FCGrn lines
+      const totalGrnLines = await FCGrnLine.count();
       
-      // Check GRN lines with QC passed quantities
-      const grnLinesWithQc = await GRNLine.count({
+      // Check FCGrn lines with QC passed quantities
+      const grnLinesWithQc = await FCGrnLine.count({
         where: {
           qc_pass_qty: {
             [Op.gt]: 0,
@@ -1380,8 +1380,8 @@ export class PutawayController {
         },
       });
 
-      // Sample GRN data
-      const sampleGrn = await GRN.findOne({
+      // Sample FCGrn data
+      const sampleGrn = await FCGrn.findOne({
         include: [
           {
             model: PurchaseOrder,

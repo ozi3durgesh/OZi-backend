@@ -56,7 +56,6 @@ export const fetchSKUByCatalogueId = async (req: Request, res: Response) => {
         { description: { [Op.like]: `%${search}%` } },
         { hsn: { [Op.like]: `%${search}%` } },
         { ean_upc: { [Op.like]: `%${search}%` } },
-        { sku: { [Op.like]: `%${search}%` } },
         { catelogue_id: { [Op.like]: `%${search}%` } },
       ];
     }
@@ -76,16 +75,11 @@ export const fetchSKUByCatalogueId = async (req: Request, res: Response) => {
         'length',
         'height',
         'width',
-        'inventory_thresshold',
         'gst',
         'cess',
         'status',
         'category',
         'brand_id',
-        'sku',
-        'item_code',
-        'cost',
-        'dc_id',
         'created_by'
       ],
       limit: parseInt(limit.toString()),
@@ -110,5 +104,79 @@ export const fetchSKUByCatalogueId = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Fetch SKU by catalogue ID error:', error);
     return ResponseHandler.error(res, error.message || 'Error fetching SKUs', 500);
+  }
+};
+
+// Get all SKUs with pagination
+export const fetchAllSKUs = async (req: Request, res: Response) => {
+  try {
+    // Check DC access
+    if (!validateDCAccess(req)) {
+      return ResponseHandler.error(res, 'Access denied. DC access required.', 403);
+    }
+
+    const { page = 1, limit = 20, search, status } = req.query;
+
+    const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
+
+    // Build where clause
+    const whereClause: any = {};
+
+    // Add status filter if provided
+    if (status) {
+      whereClause.status = status;
+    }
+
+    // Add search filter if provided
+    if (search) {
+      whereClause[Op.or] = [
+        { name: { [Op.like]: `%${search}%` } },
+        { description: { [Op.like]: `%${search}%` } },
+        { hsn: { [Op.like]: `%${search}%` } },
+        { ean_upc: { [Op.like]: `%${search}%` } },
+        { catelogue_id: { [Op.like]: `%${search}%` } },
+      ];
+    }
+
+    const { count, rows } = await Product.findAndCountAll({
+      where: whereClause,
+      attributes: [
+        'id',
+        'catelogue_id',
+        'name',
+        'description',
+        'hsn',
+        'image_url',
+        'mrp',
+        'ean_upc',
+        'weight',
+        'length',
+        'height',
+        'width',
+        'gst',
+        'cess',
+        'status',
+        'category',
+        'brand_id',
+        'created_by'
+      ],
+      limit: parseInt(limit.toString()),
+      offset,
+      order: [['id', 'DESC']]
+    });
+
+    return ResponseHandler.success(res, {
+      data: rows,
+      pagination: {
+        total: count,
+        page: parseInt(page.toString()),
+        pages: Math.ceil(count / parseInt(limit.toString())),
+        limit: parseInt(limit.toString()),
+      },
+    });
+
+  } catch (error: any) {
+    console.error('Fetch all SKUs error:', error);
+    return ResponseHandler.error(res, error.message || 'Error fetching all SKUs', 500);
   }
 };

@@ -7,7 +7,7 @@ import DCPOProduct, { DCPOProductCreationAttributes } from '../../models/DCPOPro
 import DCPOApproval, { DCPOApprovalCreationAttributes } from '../../models/DCPOApproval';
 import DCPOSkuMatrix from '../../models/DCPOSkuMatrix';
 import VendorDC from '../../models/VendorDC';
-import ParentProductMasterDC from '../../models/ParentProductMasterDC';
+import ProductMaster from '../../models/NewProductMaster';
 import { DistributionCenter, User } from '../../models';
 import { DC_PO_CONSTANTS } from '../../constants/dcPOConstants';
 import { EmailService } from '../emailService';
@@ -15,6 +15,7 @@ import { DCSkuSplittingService } from './dcSkuSplittingService';
 import { DCInventory1Service } from '../DCInventory1Service';
 import  PurchaseOrderEdit  from '../../models/PurchaseOrderEdits'
 import  POProductEdit  from '../../models/POProductEdit';
+import ParentProductMasterDC from '../../models/ParentProductMasterDC';
 
 interface DCPOFilters {
   search?: string;
@@ -138,18 +139,18 @@ export class DCPOService {
 
     // Validate products exist by catalogue_id (new structure)
     const catalogueIds = data.products.map(p => p.catelogue_id.toString());
-    const products = await ParentProductMasterDC.findAll({
-      where: { catalogue_id: { [Op.in]: catalogueIds } },
+    const products = await ProductMaster.findAll({
+      where: { catelogue_id: { [Op.in]: catalogueIds } },
       attributes: [
         'id', 'name', 'status', 'category_id', 'catalogue_id', 'description', 
-        'hsn', 'image_url', 'mrp', 'ean_upc', 'brand_id', 'weight', 'length', 
-        'height', 'width', 'inventory_threshold', 'gst', 'cess', 'createdBy', 
-        'updatedBy', 'createdAt', 'updatedAt'
+        'hsn', 'image_url', 'mrp', 'cost', 'ean_upc', 'brand_id', 'weight', 'length', 
+        'height', 'width', 'inventory_threshold', 'gst', 'cess', 'sku', 'item_code', 
+        'dc_id', 'createdBy', 'updatedBy', 'createdAt', 'updatedAt'
       ]
     });
 
     if (products.length !== catalogueIds.length) {
-      const error: any = new Error(`Products not found. Requested: ${catalogueIds.join(', ')}, Found: ${products.map(p => p.catalogue_id).join(', ')}`);
+      const error: any = new Error(`Products not found. Requested: ${catalogueIds.join(', ')}, Found: ${products.map(p => p.catelogue_id).join(', ')}`);
       error.statusCode = 400;
       throw error;
     }
@@ -157,7 +158,7 @@ export class DCPOService {
     // Calculate total amount
     let totalAmount = 0;
     const validatedProducts = data.products.map(productData => {
-      const product = products.find(p => p.catalogue_id.toString() === productData.catelogue_id.toString());
+      const product = products.find(p => p.catelogue_id.toString() === productData.catelogue_id.toString());
       if (!product) {
         throw new Error(`Product with catalogue_id ${productData.catelogue_id} not found`);
       }
@@ -168,7 +169,7 @@ export class DCPOService {
 
       return {
         productId: product.id, // Use the actual database ID
-        catalogue_id: product.catalogue_id, // Store catalogue_id in catalogue_id field
+        catalogue_id: product.catelogue_id, // Store catalogue_id in catalogue_id field
         productName: product.name || 'Unknown Product',
         quantity: productData.totoal_quantity,
         unitPrice: productData.totalPrice / productData.totoal_quantity, // Calculate unit price
@@ -189,7 +190,7 @@ export class DCPOService {
         cess: product.cess,
         image_url: product.image_url,
         brand_id: product.brand_id,
-        category_id: product.category_id,
+        category_id: parseInt(product.category) || null,
         status: product.status,
         // Store SKU matrix data for later processing
         skuMatrix: productData.sku_matrix_on_catelogue_id || [],
@@ -218,7 +219,7 @@ export class DCPOService {
         const poProduct = await DCPOProduct.create({
           dcPOId: newPO.id,
           productId: productData.productId,
-          catalogue_id: productData.catalogue_id,
+          catalogue_id: productData.catalogue_id.toString(),
           productName: productData.productName,
           quantity: productData.quantity,
           unitPrice: productData.unitPrice,
@@ -290,7 +291,7 @@ export class DCPOService {
     // Update DC Inventory 1 for PO raise
     for (const product of validatedProducts) {
       await DCInventory1Service.updateOnPORaise(
-        product.catalogue_id,
+        product.catalogue_id.toString(),
         product.quantity
       );
     }

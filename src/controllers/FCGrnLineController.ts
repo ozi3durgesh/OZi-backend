@@ -1,10 +1,10 @@
 import { Request, Response } from 'express';
-import GRNLine from '../models/GrnLine';
+import FCGrnLine from '../models/FCGrnLine';
 import { CreateGRNLineRequest } from '../types';
-import GRNBatch from '../models/GrnBatch';
-import GRNPhoto from '../models/GrnPhoto';
-import GRN from '../models/Grn.model';
-export interface CreateGRNLineInput {
+import FCGrnBatch from '../models/FCGrnBatch';
+import FCGrnPhoto from '../models/FCGrnPhoto';
+import FCGrn from '../models/FCGrn.model';
+export interface CreateFCGrnLineInput {
   grnId: number;
 
   lines: {
@@ -30,20 +30,20 @@ export interface CreateGRNLineInput {
   }[];
 }
 
-export class GrnLineController {
-  static async createGrnLineByGrnId(
+export class FCGrnLineController {
+  static async createFCGrnLineByGrnId(
     req: Request,
     res: Response
   ): Promise<void> {
-    const t = await GRNLine.sequelize?.transaction(); // transaction for atomicity
+    const t = await FCGrnLine.sequelize?.transaction(); // transaction for atomicity
     try {
-      const data: CreateGRNLineInput = req.body;
+      const data: CreateFCGrnLineInput = req.body;
       const { grnId, lines } = data;
 
       if (!grnId || !lines || lines.length === 0) {
         res.status(400).json({
           success: false,
-          message: 'Missing GRN ID or lines',
+          message: 'Missing FCGrn ID or lines',
         });
         return;
       }
@@ -59,7 +59,7 @@ export class GrnLineController {
           );
         }
 
-        const grnLine = await GRNLine.create(
+        const grnLine = await FCGrnLine.create(
           {
             grn_id: grnId,
             sku_id: line.skuId,
@@ -78,7 +78,7 @@ export class GrnLineController {
 
         if (line.batches && line.batches.length > 0) {
           for (const batch of line.batches) {
-            const grnBatch = await GRNBatch.create(
+            const grnBatch = await FCGrnBatch.create(
               {
                 grn_line_id: grnLine.id,
                 batch_no: batch.batchNo,
@@ -89,14 +89,14 @@ export class GrnLineController {
             );
 
             if (batch.photos && batch.photos.length > 0) {
-              // Get GRN and PO information
-              const grn = await GRN.findByPk(data.grnId, { transaction: t });
+              // Get FCGrn and PO information
+              const grn = await FCGrn.findByPk(data.grnId, { transaction: t });
               if (!grn) {
-                throw new Error('GRN not found');
+                throw new Error('FCGrn not found');
               }
               
               for (const photo of batch.photos) {
-                await GRNPhoto.create(
+                await FCGrnPhoto.create(
                   {
                     sku_id: line.skuId,
                     grn_id: data.grnId,
@@ -118,31 +118,31 @@ export class GrnLineController {
 
       res.status(201).json({
         success: true,
-        message: 'GRN lines created successfully',
+        message: 'FCGrn lines created successfully',
         data: createdLines,
       });
     } catch (error: any) {
       await t?.rollback();
-      console.error('Error creating GRN lines:', error);
+      console.error('Error creating FCGrn lines:', error);
       res.status(500).json({
         success: false,
         message: error.message ?? 'Internal Server Error',
       });
     }
   }
-  static async getGrnLineByGrnId(req: Request, res: Response) {
+  static async getFCGrnLineByGrnId(req: Request, res: Response) {
     try {
       const { id } = req.params;
 
-      const grnLines = await GRNLine.findAll({
+      const grnLines = await FCGrnLine.findAll({
         where: { grn_id: id },
         include: [
           {
-            model: GRNBatch,
+            model: FCGrnBatch,
             as: 'Batches',
             include: [
               {
-                model: GRNPhoto,
+                model: FCGrnPhoto,
                 as: 'Photos',
                 attributes: ['id', 'url', 'reason'],
               },
@@ -157,7 +157,7 @@ export class GrnLineController {
           statusCode: 404,
           success: false,
           data: null,
-          error: `No GRN Lines found for GRN ID ${id}`,
+          error: `No FCGrn Lines found for FCGrn ID ${id}`,
         });
       }
 
@@ -168,7 +168,7 @@ export class GrnLineController {
         error: null,
       });
     } catch (error: any) {
-      console.error('Error fetching GRN Lines:', error);
+      console.error('Error fetching FCGrn Lines:', error);
       res.status(500).json({
         statusCode: 500,
         success: false,
@@ -178,23 +178,23 @@ export class GrnLineController {
     }
   }
 
-  static async getGrnLineById(req: Request, res: Response) {
+  static async getFCGrnLineById(req: Request, res: Response) {
     try {
       const { id } = req.params;
 
-      const line = await GRNLine.findByPk(id, {
+      const line = await FCGrnLine.findByPk(id, {
         include: [
           {
-            model: GRN,
+            model: FCGrn,
             as: 'Grn',
             attributes: ['id', 'po_id', 'status'],
           },
           {
-            model: GRNBatch,
+            model: FCGrnBatch,
             as: 'Batches',
             include: [
               {
-                model: GRNPhoto,
+                model: FCGrnPhoto,
                 as: 'Photos',
                 attributes: ['id', 'url', 'reason'],
               },
@@ -207,17 +207,17 @@ export class GrnLineController {
       if (!line) {
         return res.status(404).json({
           success: false,
-          message: 'GRN Line not found',
+          message: 'FCGrn Line not found',
         });
       }
 
       return res.status(200).json({
         success: true,
-        message: 'GRN Line fetched successfully',
+        message: 'FCGrn Line fetched successfully',
         data: line,
       });
     } catch (error: any) {
-      console.error('Error fetching GRN Line:', error);
+      console.error('Error fetching FCGrn Line:', error);
       return res.status(500).json({
         success: false,
         message: 'Internal Server Error',
@@ -225,8 +225,8 @@ export class GrnLineController {
       });
     }
   }
-  static async updateGrnLineById(req: Request, res: Response): Promise<void> {
-    const t = await GRNLine.sequelize?.transaction();
+  static async updateFCGrnLineById(req: Request, res: Response): Promise<void> {
+    const t = await FCGrnLine.sequelize?.transaction();
     try {
       const { grnLineId } = req.params;
       const data = req.body;
@@ -234,19 +234,19 @@ export class GrnLineController {
       if (!grnLineId) {
         res.status(400).json({
           success: false,
-          message: 'Missing GRN Line ID',
+          message: 'Missing FCGrn Line ID',
         });
         return;
       }
 
-      const existingLine = await GRNLine.findByPk(grnLineId, {
+      const existingLine = await FCGrnLine.findByPk(grnLineId, {
         transaction: t,
       });
       if (!existingLine) {
         await t?.rollback();
         res.status(404).json({
           success: false,
-          message: `GRN Line with ID ${grnLineId} not found`,
+          message: `FCGrn Line with ID ${grnLineId} not found`,
         });
         return;
       }
@@ -278,17 +278,17 @@ export class GrnLineController {
       );
 
       if (data.batches && Array.isArray(data.batches)) {
-        await GRNBatch.destroy({
+        await FCGrnBatch.destroy({
           where: { grn_line_id: grnLineId },
           transaction: t,
         });
-        await GRNPhoto.destroy({
+        await FCGrnPhoto.destroy({
           where: { grn_id: existingLine.grn_id },
           transaction: t,
         });
 
         for (const batch of data.batches) {
-          const grnBatch = await GRNBatch.create(
+          const grnBatch = await FCGrnBatch.create(
             {
               grn_line_id: existingLine.id,
               batch_no: batch.batchNo,
@@ -299,14 +299,14 @@ export class GrnLineController {
           );
 
           if (batch.photos && batch.photos.length > 0) {
-            // Get GRN information to get PO ID
-            const grn = await GRN.findByPk(existingLine.grn_id, { transaction: t });
+            // Get FCGrn information to get PO ID
+            const grn = await FCGrn.findByPk(existingLine.grn_id, { transaction: t });
             if (!grn) {
-              throw new Error('GRN not found');
+              throw new Error('FCGrn not found');
             }
             
             for (const photo of batch.photos) {
-              await GRNPhoto.create(
+              await FCGrnPhoto.create(
                 {
                   sku_id: existingLine.sku_id,
                   grn_id: existingLine.grn_id,
@@ -325,12 +325,12 @@ export class GrnLineController {
 
       res.status(200).json({
         success: true,
-        message: 'GRN Line updated successfully',
+        message: 'FCGrn Line updated successfully',
         data: existingLine,
       });
     } catch (error: any) {
       await t?.rollback();
-      console.error('Error updating GRN line:', error);
+      console.error('Error updating FCGrn line:', error);
       res.status(500).json({
         success: false,
         message: error.message ?? 'Internal Server Error',
@@ -338,47 +338,47 @@ export class GrnLineController {
     }
   }
 
-  static async deleteGrnLine(req: Request, res: Response): Promise<void> {
-    const t = await GRNLine.sequelize?.transaction();
+  static async deleteFCGrnLine(req: Request, res: Response): Promise<void> {
+    const t = await FCGrnLine.sequelize?.transaction();
     try {
       const { id } = req.params;
 
       if (!id) {
         res.status(400).json({
           success: false,
-          message: 'Missing GRN Line ID',
+          message: 'Missing FCGrn Line ID',
         });
         return;
       }
 
-      const existingLine = await GRNLine.findByPk(id, { transaction: t });
+      const existingLine = await FCGrnLine.findByPk(id, { transaction: t });
       if (!existingLine) {
         await t?.rollback();
         res.status(404).json({
           success: false,
-          message: `GRN Line with ID ${id} not found`,
+          message: `FCGrn Line with ID ${id} not found`,
         });
         return;
       }
 
       // Delete related photos first
-      await GRNPhoto.destroy({ where: { grn_id: existingLine.grn_id }, transaction: t });
+      await FCGrnPhoto.destroy({ where: { grn_id: existingLine.grn_id }, transaction: t });
 
       // Delete related batches
-      await GRNBatch.destroy({ where: { grn_line_id: id }, transaction: t });
+      await FCGrnBatch.destroy({ where: { grn_line_id: id }, transaction: t });
 
-      // Delete the GRN line
+      // Delete the FCGrn line
       await existingLine.destroy({ transaction: t });
 
       await t?.commit();
 
       res.status(200).json({
         success: true,
-        message: `GRN Line with ID ${id} deleted successfully`,
+        message: `FCGrn Line with ID ${id} deleted successfully`,
       });
     } catch (error: any) {
       await t?.rollback();
-      console.error('Error deleting GRN Line:', error);
+      console.error('Error deleting FCGrn Line:', error);
       res.status(500).json({
         success: false,
         message: error.message ?? 'Internal Server Error',
@@ -386,7 +386,7 @@ export class GrnLineController {
     }
   }
 
-  static async createGrnLine(req: Request, res: Response) {
+  static async createFCGrnLine(req: Request, res: Response) {
     try {
       const data: CreateGRNLineRequest = req.body;
       const {
@@ -411,8 +411,8 @@ export class GrnLineController {
           .json({ message: 'qcPassQty + qcFailQty must equal received qty' });
       }
 
-      // 2️⃣ Create GRN Line
-      const line = await GRNLine.create({
+      // 2️⃣ Create FCGrn Line
+      const line = await FCGrnLine.create({
         grn_id: grnId,
         sku_id: skuId,
         received_qty: receivedQty,
@@ -437,23 +437,23 @@ export class GrnLineController {
         .json({ message: 'Internal Server Error', error: error.message });
     }
   }
-  static async getGrnLines(req: Request, res: Response) {
+  static async getFCGrnLines(req: Request, res: Response) {
     try {
       const { grnId } = req.query;
       const where: any = {};
       if (grnId) where.grn_id = grnId;
 
-      const lines = await GRNLine.findAll({
+      const lines = await FCGrnLine.findAll({
         where,
         // include: [{ model: SKU, attributes: ['id', 'name', 'code'] }],
       });
 
       return res.status(200).json({
-        message: 'GRN Lines fetched successfully',
+        message: 'FCGrn Lines fetched successfully',
         data: lines,
       });
     } catch (error: any) {
-      console.error('Error fetching GRN Lines:', error);
+      console.error('Error fetching FCGrn Lines:', error);
       return res.status(500).json({
         message: 'Internal Server Error',
         error: error.message,
@@ -461,24 +461,24 @@ export class GrnLineController {
     }
   }
 
-  static async updateGrnLine(req: Request, res: Response) {
+  static async updateFCGrnLine(req: Request, res: Response) {
     try {
       const { id } = req.params;
       const updates = req.body;
 
-      const line = await GRNLine.findByPk(id);
+      const line = await FCGrnLine.findByPk(id);
       if (!line) {
-        return res.status(404).json({ message: 'GRN Line not found' });
+        return res.status(404).json({ message: 'FCGrn Line not found' });
       }
 
       await line.update(updates);
 
       return res.status(200).json({
-        message: 'GRN Line updated successfully',
+        message: 'FCGrn Line updated successfully',
         data: line,
       });
     } catch (error: any) {
-      console.error('Error updating GRN Line:', error);
+      console.error('Error updating FCGrn Line:', error);
       return res.status(500).json({
         message: 'Internal Server Error',
         error: error.message,

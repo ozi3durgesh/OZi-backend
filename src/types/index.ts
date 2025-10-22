@@ -925,7 +925,7 @@ export interface GRNAttributes {
     | 'variance-review'
     | 'rtv-initiated';
   created_by: number;
-  closeReason?: string | null;
+  close_reason?: string | null;
   approved_by?: number | null;
   fc_id?: number;
   created_at?: Date;
@@ -1018,7 +1018,7 @@ export interface CreateFullGRNInput {
       qty: number;
     }[];
   }[];
-  closeReason?: string;
+  close_reason?: string;
   status?: 'partial' | 'completed' | 'closed' | 'pending-qc' | 'rtv-initiated';
 }
 export interface scanItemRequest {
