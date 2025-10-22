@@ -76,7 +76,7 @@ PurchaseOrderEdit.init(
         'CANCELLED'
       ),
       allowNull: false,
-      defaultValue: 'DRAFT',
+      defaultValue: 'PENDING_CATEGORY_HEAD',
     },
     priority: {
       type: DataTypes.ENUM('LOW', 'MEDIUM', 'HIGH', 'URGENT'),

@@ -1123,7 +1123,7 @@ export class DCPOService {
             : originalPO.final_delivery_date,
           pi_file_url: data.pi_url ?? originalPO.pi_file_url,
           totalAmount: 0.0, // will calculate later if needed
-          status: 'DRAFT', // or PENDING_CATEGORY_HEAD etc.
+          status: 'PENDING_CATEGORY_HEAD', // or PENDING_CATEGORY_HEAD etc.
           createdBy: userId, // logged-in user performing edit
         },
         { transaction }
@@ -1165,5 +1165,30 @@ export class DCPOService {
     }
   }
 
+  static async approvePO(poId: number, userId: number) {
+
+    try {
+      // 1️ Check if original DC Purchase Order exists
+      const editedPO = await PurchaseOrderEdit.findOne(
+        {where: { purchase_order_id: poId },}
+      );
+      if (!editedPO) {
+        throw new Error('DC Purchase Order Edit not found');
+      }
+
+
+      // 3️ Create edited PO header
+      await editedPO.update({
+          status: "APPROVED",
+          approvedBy: userId, // We don't have user ID from token
+          approvedAt: new Date(),
+      })
+
+      return "PO Approved successfully";
+
+    } catch (error) {
+      throw error;
+    }
+  }
 
 }

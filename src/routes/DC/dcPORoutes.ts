@@ -62,6 +62,8 @@ router.get('/approval/:token', DCPOController.getApprovalDetails);
 router.post('/approval/:token', DCPOController.processApproval);
 
 router.put('/purchase-orders/:id/edit', DCPOController.editPO);
+router.put('/purchase-orders/:id/approve',isAdmin, DCPOController.approvePO);
+
 router.post('')
 
 // SKU Splitting routes
