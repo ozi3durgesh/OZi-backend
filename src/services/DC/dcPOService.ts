@@ -1153,7 +1153,6 @@ export class DCPOService {
             ),
           }))
         );
-        console.log("edit---------",editedProducts)
         await POProductEdit.bulkCreate(editedProducts, { transaction });
       }
 
@@ -1165,7 +1164,7 @@ export class DCPOService {
     }
   }
 
-  static async approvePO(poId: number, userId: number) {
+  static async approvePO(poId: number, userId: number, isApproved:boolean) {
 
     try {
       // 1️ Check if original DC Purchase Order exists
@@ -1176,10 +1175,19 @@ export class DCPOService {
         throw new Error('DC Purchase Order Edit not found');
       }
 
+      if(editedPO.status == "APPROVED"){
+        throw new Error("PO is already Approved");
+      }
+      
+      if (isApproved){
+        var status = "APPROVED"
+      } else {
+        var status = "REJECTED"
+      }
 
       // 3️ Create edited PO header
       await editedPO.update({
-          status: "APPROVED",
+          status: status,
           approvedBy: userId, // We don't have user ID from token
           approvedAt: new Date(),
       })
