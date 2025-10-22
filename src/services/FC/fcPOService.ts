@@ -4,7 +4,7 @@ import FCPurchaseOrder from '../../models/FCPurchaseOrder';
 import FCPOProduct from '../../models/FCPOProduct';
 import FCPOApproval from '../../models/FCPOApproval';
 import FCPOSkuMatrix from '../../models/FCPOSkuMatrix';
-import ParentProductMasterDC from '../../models/ParentProductMasterDC';
+import ProductMaster from '../../models/NewProductMaster';
 import User from '../../models/User';
 import FulfillmentCenter from '../../models/FulfillmentCenter';
 import DistributionCenter from '../../models/DistributionCenter';
@@ -65,9 +65,9 @@ export class FCPOService {
       const skuMatrixRecords: any[] = [];
 
       for (const product of data.products) {
-        // Find the product by catalogue_id
-        const parentProduct = await ParentProductMasterDC.findOne({
-          where: { catalogue_id: product.catelogue_id },
+        // Find the product by catalogue_id in ProductMaster table
+        const parentProduct = await ProductMaster.findOne({
+          where: { catelogue_id: product.catelogue_id },
           transaction,
         });
 
@@ -99,7 +99,7 @@ export class FCPOService {
           cess: product.cess || parentProduct.cess || 0,
           imageUrl: product.image_url || parentProduct.image_url || '',
           brandId: product.brand_id || parentProduct.brand_id || 1,
-          categoryId: product.category_id || parentProduct.category_id || 1,
+          categoryId: product.category_id || 1,
           status: 1,
         };
 
@@ -193,7 +193,7 @@ export class FCPOService {
             as: 'Products',
             include: [
               {
-                model: ParentProductMasterDC,
+                model: ProductMaster,
                 as: 'Product',
                 attributes: ['id', 'catalogue_id', 'name', 'description', 'mrp'],
               },
@@ -526,7 +526,7 @@ export class FCPOService {
           as: 'Products',
           include: [
             {
-              model: ParentProductMasterDC,
+              model: ProductMaster,
               as: 'Product',
               attributes: ['id', 'catalogue_id', 'name', 'description', 'mrp'],
             },
@@ -714,7 +714,7 @@ export class FCPOService {
   static async getAvailableProductsForFCPO(dcId: number): Promise<any[]> {
     // This would typically query products that have been received via GRN from DC
     // For now, we'll return all products from the DC
-    return await ParentProductMasterDC.findAll({
+    return await ProductMaster.findAll({
       where: {
         // Add any filters for products available for FC PO
         status: 'ACTIVE',

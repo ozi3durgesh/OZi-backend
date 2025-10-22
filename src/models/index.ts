@@ -569,7 +569,7 @@ FCPOProduct.belongsTo(FCPurchaseOrder, {
   as: 'PurchaseOrder',
 });
 
-FCPOProduct.belongsTo(ParentProductMasterDC, {
+FCPOProduct.belongsTo(ProductMaster, {
   foreignKey: 'productId',
   as: 'Product',
 });
@@ -606,7 +606,7 @@ User.hasMany(FCPOApproval, {
   as: 'FCApprovals',
 });
 
-ParentProductMasterDC.hasMany(FCPOProduct, {
+ProductMaster.hasMany(FCPOProduct, {
   foreignKey: 'productId',
   as: 'FCPOProducts',
 });
