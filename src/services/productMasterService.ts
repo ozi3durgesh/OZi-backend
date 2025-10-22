@@ -79,63 +79,6 @@ export class ProductMasterService {
   }
 
   /**
-   * Get the next available product ID for a given catalogue and color
-   */
-  private async getNextProductId(catalogueId: string, existingProducts: ProductMaster[]): Promise<string> {
-    // Extract existing product ID suffixes (last 2 digits)
-    const existingSuffixes = existingProducts
-      .map(p => p.product_id)
-      .filter(pid => pid.startsWith(catalogueId))
-      .map(pid => parseInt(pid.slice(-2)))
-      .sort((a, b) => a - b);
-
-    // Find the next available suffix
-    let nextSuffix = 1;
-    for (const suffix of existingSuffixes) {
-      if (suffix === nextSuffix) {
-        nextSuffix++;
-      } else {
-        break;
-      }
-    }
-
-    // If we've used all suffixes up to the max, increment from the highest
-    if (existingSuffixes.length > 0 && nextSuffix <= existingSuffixes[existingSuffixes.length - 1]) {
-      nextSuffix = existingSuffixes[existingSuffixes.length - 1] + 1;
-    }
-
-    const productId = `${catalogueId}${nextSuffix.toString().padStart(2, '0')}`;
-    console.log(`🔍 [ProductMasterService] getNextProductId: catalogueId=${catalogueId}, existingSuffixes=[${existingSuffixes.join(', ')}], nextSuffix=${nextSuffix}, productId=${productId}`);
-    return productId;
-  }
-
-  /**
-   * Get the next available SKU ID for a given product ID and age/size
-   */
-  private async getNextSkuId(productId: string, existingProducts: ProductMaster[]): Promise<string> {
-    // Extract existing SKU ID suffixes (last 3 digits) for this product ID
-    const existingSuffixes = existingProducts
-      .map(p => p.sku_id)
-      .filter(sid => sid.startsWith(productId))
-      .map(sid => parseInt(sid.slice(-3)))
-      .sort((a, b) => a - b);
-
-    // Find the next available suffix
-    let nextSuffix = 1;
-    for (const suffix of existingSuffixes) {
-      if (suffix === nextSuffix) {
-        nextSuffix++;
-      } else {
-        break;
-      }
-    }
-
-    const skuId = `${productId}${nextSuffix.toString().padStart(3, '0')}`;
-    console.log(`🔍 [ProductMasterService] getNextSkuId: productId=${productId}, existingSuffixes=[${existingSuffixes.join(', ')}], nextSuffix=${nextSuffix}, skuId=${skuId}`);
-    return skuId;
-  }
-
-  /**
    * Create multiple products with auto-generated IDs for all color and age/size combinations
    */
   async createProduct(productData: ProductMasterCreationAttributes & {
@@ -166,12 +109,13 @@ export class ProductMasterService {
       
       // Calculate total number of products to create (colors * age/sizes)
       const totalProducts = colors.length * ageSizes.length;
-      console.log(`🔍 [ProductMasterService] Generating 1 catalogue_id for product "${productData.name}" with ${totalProducts} variants...`);
+      console.log(`🔍 [ProductMasterService] Generating ${totalProducts} catalogue_ids for all combinations...`);
       
-      // Generate only ONE catalogue_id for the entire product (all variants share the same catalogue)
-      const catalogueIds = await this.generateCatalogueIds(1, transaction);
-      const baseCatalogueId = catalogueIds[0];
-      console.log(`✅ [ProductMasterService] Generated base catalogue_id: ${baseCatalogueId} for all variants`);
+      // Generate all catalogue_ids upfront to avoid race conditions
+      const catalogueIds = await this.generateCatalogueIds(totalProducts, transaction);
+      console.log(`✅ [ProductMasterService] Generated catalogue_ids: [${catalogueIds.join(', ')}]`);
+      
+      let catalogueIndex = 0;
       
       // Create products for each color and age/size combination
       for (let colorIndex = 0; colorIndex < colors.length; colorIndex++) {
@@ -181,8 +125,7 @@ export class ProductMasterService {
         
         for (let ageSizeIndex = 0; ageSizeIndex < ageSizes.length; ageSizeIndex++) {
           const ageSize = ageSizes[ageSizeIndex];
-          // All variants use the same catalogue_id
-          const catalogueId = baseCatalogueId;
+          const catalogueId = catalogueIds[catalogueIndex];
           const productId = await this.generateProductId(catalogueId, colorIndex);
           const skuId = await this.generateSkuId(productId, ageSizeIndex);
           
@@ -229,6 +172,7 @@ export class ProductMasterService {
           });
           
           createdProducts.push(newProduct);
+          catalogueIndex++;
         }
       }
 
@@ -494,6 +438,65 @@ export class ProductMasterService {
       limit,
       totalPages: Math.ceil(count / limit)
     };
+  }
+
+  /**
+   * Get the next available product ID for a given catalogue and color
+   */
+  private async getNextProductId(catalogueId: string, existingProducts: ProductMaster[]): Promise<string> {
+    // Extract existing product ID suffixes (last 2 digits)
+    const existingSuffixes = existingProducts
+      .map(p => p.product_id)
+      .filter(pid => pid && typeof pid === 'string' && pid.startsWith(catalogueId))
+      .map(pid => parseInt(pid.slice(-2)))
+      .filter(suffix => !isNaN(suffix))
+      .sort((a, b) => a - b);
+
+    // Find the next available suffix
+    let nextSuffix = 1;
+    for (const suffix of existingSuffixes) {
+      if (suffix === nextSuffix) {
+        nextSuffix++;
+      } else {
+        break;
+      }
+    }
+
+    // If we've used all suffixes up to the max, increment from the highest
+    if (existingSuffixes.length > 0 && nextSuffix <= existingSuffixes[existingSuffixes.length - 1]) {
+      nextSuffix = existingSuffixes[existingSuffixes.length - 1] + 1;
+    }
+
+    const productId = `${catalogueId}${nextSuffix.toString().padStart(2, '0')}`;
+    console.log(`🔍 [ProductMasterService] getNextProductId: catalogueId=${catalogueId}, existingSuffixes=[${existingSuffixes.join(', ')}], nextSuffix=${nextSuffix}, productId=${productId}`);
+    return productId;
+  }
+
+  /**
+   * Get the next available SKU ID for a given product ID and age/size
+   */
+  private async getNextSkuId(productId: string, existingProducts: ProductMaster[]): Promise<string> {
+    // Extract existing SKU ID suffixes (last 3 digits) for this product ID
+    const existingSuffixes = existingProducts
+      .map(p => p.sku_id)
+      .filter(sid => sid && typeof sid === 'string' && sid.startsWith(productId))
+      .map(sid => parseInt(sid.slice(-3)))
+      .filter(suffix => !isNaN(suffix))
+      .sort((a, b) => a - b);
+
+    // Find the next available suffix
+    let nextSuffix = 1;
+    for (const suffix of existingSuffixes) {
+      if (suffix === nextSuffix) {
+        nextSuffix++;
+      } else {
+        break;
+      }
+    }
+
+    const skuId = `${productId}${nextSuffix.toString().padStart(3, '0')}`;
+    console.log(`🔍 [ProductMasterService] getNextSkuId: productId=${productId}, existingSuffixes=[${existingSuffixes.join(', ')}], nextSuffix=${nextSuffix}, skuId=${skuId}`);
+    return skuId;
   }
 
   /**
