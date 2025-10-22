@@ -636,7 +636,7 @@ export class DCGrnController {
               'id', 'catalogue_id', 'productName', 'quantity', 'unitPrice', 
               'totalAmount', 'mrp', 'cost', 'description', 'hsn', 'ean_upc',
               'weight', 'length', 'height', 'width', 'gst', 'cess', 'image_url',
-              'brand_id', 'category_id'
+              'brand_id', 'category_id', 'sku_matrix_on_catelogue_id'
             ]
           },
           {
@@ -681,8 +681,24 @@ export class DCGrnController {
             approval_status: po.status.toLowerCase()
           },
           Line: po.Products?.map((product: any) => {
-            // Find corresponding GRN line for this product
-            const grnLine = grnData?.Lines?.find((line: any) => line.sku_id === product.catalogue_id);
+            // Parse SKU matrix to get actual SKUs
+            let skuMatrix: any[] = [];
+            try {
+              if (product.sku_matrix_on_catelogue_id) {
+                skuMatrix = typeof product.sku_matrix_on_catelogue_id === 'string' 
+                  ? JSON.parse(product.sku_matrix_on_catelogue_id)
+                  : product.sku_matrix_on_catelogue_id;
+              }
+            } catch (error) {
+              console.error('Error parsing SKU matrix:', error);
+              skuMatrix = [];
+            }
+
+            // Get the first SKU from the matrix (or fallback to catalogue_id)
+            const actualSku = skuMatrix.length > 0 ? skuMatrix[0].sku : product.catalogue_id;
+            
+            // Find corresponding GRN line for this product using the actual SKU
+            const grnLine = grnData?.Lines?.find((line: any) => line.sku_id === actualSku);
             
             if (grnLine) {
               // Use actual GRN line data
@@ -716,7 +732,7 @@ export class DCGrnController {
               // Fall back to PO data if no GRN line exists
               return {
                 id: product.id,
-                sku_id: product.catalogue_id,
+                sku_id: actualSku,
                 ordered_qty: product.quantity,
                 received_qty: 0,
                 pending_qty: product.quantity,
