@@ -22,6 +22,13 @@ router.get('/grn-status', FCSKUController.getSKUsWithGRNStatus);
 router.get('/grn-completed', FCSKUController.getGRNCompletedSKUs);
 
 /**
+ * @route GET /api/fc/skus/All
+ * @desc Get all products from ProductMaster with pagination
+ * @access Private (FC users)
+ */
+router.get('/All', FCSKUController.getAllProducts);
+
+/**
  * @route GET /api/fc/skus/:catalogueId
  * @desc Get SKU details by catalogue ID for FC-PO
  * @access Private (FC users)

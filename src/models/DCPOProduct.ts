@@ -34,7 +34,7 @@ class DCPOProduct extends Model<
   declare cess: number | null;
   declare image_url: string | null;
   declare brand_id: number | null;
-  declare category_id: number | null;
+  declare category_id: string | null;
   declare status: number | null;
   declare sku_matrix_on_catelogue_id: string | null;
   declare createdAt: CreationOptional<Date>;
@@ -60,7 +60,7 @@ DCPOProduct.init(
       type: DataTypes.INTEGER,
       allowNull: false,
       references: {
-        model: 'parent_product_master',
+        model: 'product_master',
         key: 'id',
       },
     },
@@ -148,7 +148,7 @@ DCPOProduct.init(
       allowNull: true,
     },
     category_id: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.STRING(255),
       allowNull: true,
     },
     status: {

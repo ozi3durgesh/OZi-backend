@@ -15,7 +15,6 @@ import { DCSkuSplittingService } from './dcSkuSplittingService';
 import { DCInventory1Service } from '../DCInventory1Service';
 import  PurchaseOrderEdit  from '../../models/PurchaseOrderEdits'
 import  POProductEdit  from '../../models/POProductEdit';
-import ParentProductMasterDC from '../../models/ParentProductMasterDC';
 
 interface DCPOFilters {
   search?: string;
@@ -142,15 +141,19 @@ export class DCPOService {
     const products = await ProductMaster.findAll({
       where: { catelogue_id: { [Op.in]: catalogueIds } },
       attributes: [
-        'id', 'name', 'status', 'category_id', 'catalogue_id', 'description', 
-        'hsn', 'image_url', 'mrp', 'cost', 'ean_upc', 'brand_id', 'weight', 'length', 
-        'height', 'width', 'inventory_threshold', 'gst', 'cess', 'sku', 'item_code', 
-        'dc_id', 'createdBy', 'updatedBy', 'createdAt', 'updatedAt'
+        'id', 'name', 'status', 'category', 'catelogue_id', 'description', 
+        'hsn', 'image_url', 'mrp', 'avg_cost_to_ozi', 'ean_upc', 'brand_id', 'weight', 'length', 
+        'height', 'width', 'inventory_threshold', 'gst', 'cess', 'sku_id', 'product_id', 
+        'created_by', 'created_at', 'updated_at'
       ]
     });
 
-    if (products.length !== catalogueIds.length) {
-      const error: any = new Error(`Products not found. Requested: ${catalogueIds.join(', ')}, Found: ${products.map(p => p.catelogue_id).join(', ')}`);
+    // Check if all requested catalogue IDs exist (handle multiple variants per catalogue_id)
+    const foundCatalogueIds = [...new Set(products.map(p => p.catelogue_id))];
+    const missingCatalogueIds = catalogueIds.filter(id => !foundCatalogueIds.includes(id));
+    
+    if (missingCatalogueIds.length > 0) {
+      const error: any = new Error(`Products not found for catalogue IDs: ${missingCatalogueIds.join(', ')}`);
       error.statusCode = 400;
       throw error;
     }
@@ -175,10 +178,10 @@ export class DCPOService {
         unitPrice: productData.totalPrice / productData.totoal_quantity, // Calculate unit price
         totalAmount: productTotal,
         mrp: product.mrp,
-        cost: productData.totalPrice / productData.totoal_quantity, // Calculate cost per unit
+        cost: product.avg_cost_to_ozi || (productData.totalPrice / productData.totoal_quantity), // Use avg_cost_to_ozi or calculate
         description: productData.description || product.description,
         notes: productData.notes,
-        // Additional product details from parent_product_master
+        // Additional product details from ProductMaster
         hsn: product.hsn,
         ean_upc: product.ean_upc,
         weight: product.weight,
@@ -190,7 +193,7 @@ export class DCPOService {
         cess: product.cess,
         image_url: product.image_url,
         brand_id: product.brand_id,
-        category_id: parseInt(product.category) || null,
+        category_id: product.category, // Use category string directly
         status: product.status,
         // Store SKU matrix data for later processing
         skuMatrix: productData.sku_matrix_on_catelogue_id || [],
@@ -225,7 +228,7 @@ export class DCPOService {
           unitPrice: productData.unitPrice,
           totalAmount: productData.totalAmount,
           mrp: productData.mrp,
-          cost: productData.unitPrice, // Use unitPrice as cost since cost column is removed
+          cost: productData.cost, // Use the cost from ProductMaster
           description: productData.description,
           notes: productData.notes,
           hsn: productData.hsn,
@@ -239,7 +242,7 @@ export class DCPOService {
           cess: productData.cess,
           image_url: productData.image_url,
           brand_id: productData.brand_id,
-          category_id: productData.category_id,
+          category_id: productData.category_id, // This will be the category string
           status: productData.status,
         });
 
@@ -326,9 +329,9 @@ export class DCPOService {
           ],
           include: [
             {
-              model: ParentProductMasterDC,
+              model: ProductMaster,
               as: 'Product',
-              attributes: ['id', 'catalogue_id', 'name', 'mrp'],
+              attributes: ['id', 'catelogue_id', 'name', 'mrp'],
             },
             {
               model: DCPOSkuMatrix,
@@ -395,9 +398,9 @@ export class DCPOService {
           ],
           include: [
             {
-              model: ParentProductMasterDC,
+              model: ProductMaster,
               as: 'Product',
-              attributes: ['id', 'catalogue_id', 'name', 'mrp', 'hsn', 'brand_id'],
+              attributes: ['id', 'catelogue_id', 'name', 'mrp', 'hsn', 'brand_id'],
             },
             {
               model: DCPOSkuMatrix,
@@ -503,6 +506,7 @@ export class DCPOService {
       console.error(`Failed to send email to ${role}: ${recipientEmail}`);
     }
   }
+
 
   /**
    * Process approval/rejection
@@ -844,13 +848,13 @@ export class DCPOService {
           as: 'Products',
           include: [
             {
-              model: ParentProductMasterDC,
+              model: ProductMaster,
               as: 'Product',
               attributes: [
-                'id', 'catalogue_id', 'name', 'description', 'category_id', 'brand_id', 
+                'id', 'catelogue_id', 'name', 'description', 'category', 'brand_id', 
                 'mrp', 'hsn', 'ean_upc', 'weight', 'length', 'height', 'width', 
                 'inventory_threshold', 'gst', 'cess', 'image_url', 'status',
-                'createdAt', 'updatedAt'
+                'created_at', 'updated_at'
               ],
             },
             {
@@ -1046,9 +1050,9 @@ export class DCPOService {
             as: 'Products',
             include: [
               {
-                model: ParentProductMasterDC,
+                model: ProductMaster,
                 as: 'Product',
-                attributes: ['id', 'catalogue_id', 'name', 'mrp', 'hsn', 'brand_id']
+                attributes: ['id', 'catelogue_id', 'name', 'mrp', 'hsn', 'brand_id']
               }
             ]
           }
@@ -1201,6 +1205,125 @@ export class DCPOService {
       return "PO Approved successfully";
 
     } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Direct approval/rejection without hierarchy
+   */
+  static async directApproval(poId: number, action: 'APPROVED' | 'REJECTED', userId: number, approverRole: string, comments?: string) {
+    const transaction = await sequelize.transaction();
+
+    try {
+      // Find the PO
+      const po = await DCPurchaseOrder.findByPk(poId, {
+        include: [
+          {
+            model: VendorDC,
+            as: 'Vendor',
+          },
+          {
+            model: DistributionCenter,
+            as: 'DistributionCenter',
+          },
+          {
+            model: DCPOProduct,
+            as: 'Products',
+            include: [
+              {
+                model: DCPOSkuMatrix,
+                as: 'SkuMatrix',
+              },
+            ],
+          },
+        ],
+        transaction
+      });
+
+      if (!po) {
+        const error: any = new Error(DC_PO_CONSTANTS.ERRORS.PO_NOT_FOUND);
+        error.statusCode = 404;
+        throw error;
+      }
+
+      // Check if PO is in a state that can be directly approved/rejected
+      const validStatuses: string[] = [
+        DC_PO_CONSTANTS.STATUS.PENDING_CATEGORY_HEAD,
+        DC_PO_CONSTANTS.STATUS.PENDING_ADMIN,
+        DC_PO_CONSTANTS.STATUS.PENDING_CREATOR_REVIEW
+      ];
+
+      if (!validStatuses.includes(po.status)) {
+        const error: any = new Error('Purchase Order is not in a state that can be directly approved/rejected');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      let newStatus: string;
+      let updateData: any = {};
+
+      if (action === 'REJECTED') {
+        newStatus = DC_PO_CONSTANTS.STATUS.REJECTED;
+        updateData = {
+          status: newStatus,
+          rejectedBy: userId,
+          rejectedAt: new Date(),
+          rejectionReason: comments,
+        };
+      } else {
+        // Direct approval - skip all hierarchy and mark as fully approved
+        newStatus = DC_PO_CONSTANTS.STATUS.APPROVED;
+        updateData = {
+          status: newStatus,
+          approvedBy: userId,
+          approvedAt: new Date(),
+        };
+      }
+
+      // Update the PO
+      await po.update(updateData, { transaction });
+
+      // Update all pending approval records to reflect the direct action
+      await DCPOApproval.update(
+        {
+          action,
+          approverId: userId,
+          comments,
+          approvedAt: new Date(),
+        },
+        {
+          where: {
+            dcPOId: poId,
+            action: 'PENDING'
+          },
+          transaction
+        }
+      );
+
+      // If approved, update DC Inventory 1
+      if (action === 'APPROVED') {
+        const products = await DCPOProduct.findAll({
+          where: { dcPOId: po.id },
+          attributes: ['catalogue_id', 'quantity'],
+          transaction
+        });
+
+        for (const product of products) {
+          await DCInventory1Service.updateOnPOApprove(
+            product.catalogue_id,
+            product.quantity
+          );
+        }
+      }
+
+      await transaction.commit();
+
+      // Return the updated PO with all associations
+      return await this.getDCPOById(poId);
+
+    } catch (error) {
+      await transaction.rollback();
       throw error;
     }
   }

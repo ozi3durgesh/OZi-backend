@@ -19,6 +19,7 @@ import { rejects } from 'assert';
 import { S3Service } from '../services/s3Service';
 import DirectInventoryService from '../services/DirectInventoryService';
 import { INVENTORY_OPERATIONS } from '../config/inventoryConstants';
+import ProductMasterService from '../services/productMasterService';
 
 export class FCGrnController {
   /**
@@ -353,7 +354,40 @@ export class FCGrnController {
         }
       }
 
-      const createdGrn = await FCGrn.findByPk(fcGrn.id, {
+// Update average cost to OZI for all SKUs in this FCGrn
+console.log('💰 Updating average cost to OZI for FCGrn SKUs...');
+const costUpdates: Array<{
+  sku: string;
+  status: 'success' | 'failed' | 'error';
+  message: string;
+  previous_cost?: number;
+  new_cost?: number;
+}> = [];
+
+for (const line of input.lines) {
+  if (line.receivedQty > 0) {
+    try {
+      const costResult = await ProductMasterService.calculateAndUpdateAverageCost(line.skuId, userId);
+      costUpdates.push({
+        sku: line.skuId,
+        status: 'success',
+        message: `Average cost updated successfully`,
+        previous_cost: costResult.avg_cost_to_ozi,
+        new_cost: costResult.avg_cost_to_ozi
+      });
+      console.log(`✅ Average cost updated for SKU ${line.skuId}`);
+    } catch (costError: any) {
+      console.error(`❌ Average cost update failed for SKU ${line.skuId}:`, costError.message);
+      costUpdates.push({
+        sku: line.skuId,
+        status: 'failed',
+        message: costError.message
+      });
+    }
+  }
+}
+
+const createdGrn = await FCGrn.findByPk(fcGrn.id, {
         include: [
           { model: User, as: 'GrnCreatedBy', attributes: ['id', 'email'] },
         ],
@@ -380,6 +414,12 @@ export class FCGrnController {
             failed_updates: inventoryUpdates.filter(u => u.status === 'failed').length,
             error_updates: inventoryUpdates.filter(u => u.status === 'error').length,
             updates: inventoryUpdates
+          },
+          costUpdates: {
+            total_updates: costUpdates.length,
+            successful_updates: costUpdates.filter(u => u.status === 'success').length,
+            failed_updates: costUpdates.filter(u => u.status === 'failed').length,
+            updates: costUpdates
           }
         },
         error: null,
@@ -565,54 +605,71 @@ export class FCGrnController {
       } = req.query as GRNFilters;
 
       const offset: number = (page - 1) * limit;
-      const whereClause: any = {};
 
-      if (status) whereClause.status = status;
-
-      if (po_id) whereClause.po_id = po_id;
-      if (startDate && endDate) {
-        whereClause.created_at = {
-          [Op.between]: [
-            new Date(startDate as string),
-            new Date(endDate as string),
-          ],
-        };
-      }
-
-      const { count, rows } = await FCGrn.findAndCountAll({
-        where: whereClause,
+      // Get FC Purchase Orders with APPROVED or REJECTED status
+      const { count, rows: purchaseOrders } = await FCPurchaseOrder.findAndCountAll({
+        where: {
+          status: ['APPROVED', 'REJECTED']
+        },
         include: [
           {
-            model: FCPurchaseOrder,
-            as: 'FCPO',
-            attributes: ['id', 'po_id', 'status'],
-            where: search ? { po_id: { [Op.like]: `%${search}%` } } : {},
+            model: User,
+            as: 'CreatedBy',
+            attributes: ['id', 'email', 'name']
           },
           {
-            model: FCGrnLine,
-            as: 'Line',
+            model: FCPOProduct,
+            as: 'Products',
             attributes: [
-              'id',
-              'sku_id',
-              'ordered_qty',
-              'received_qty',
-              'qc_pass_qty',
-              'qc_fail_qty',
-              'rtv_qty',
-              'held_qty',
-            ],
-          },
-          { model: User, as: 'GrnCreatedBy', attributes: ['id', 'email'] },
+              'id', 'catalogueId', 'productName', 'quantity', 'unitPrice', 
+              'totalAmount', 'mrp', 'description', 'createdAt'
+            ]
+          }
         ],
+        order: [['createdAt', 'DESC']],
         limit: Number(limit),
-        offset,
-        order: [['created_at', 'DESC']],
+        offset
+      });
+
+      // Transform the data to match the expected GRN format
+      const grnList = purchaseOrders.map((po: any) => {
+        return {
+          id: po.id,
+          po_id: po.id,
+          status: po.status.toLowerCase(),
+          closeReason: po.status === 'REJECTED' ? po.rejectionReason : null,
+          created_by: po.CreatedBy?.id || null,
+          created_at: po.createdAt,
+          updated_at: po.updatedAt,
+          FCPO: {
+            id: po.id,
+            po_id: po.poId,
+            status: po.status.toLowerCase()
+          },
+          Line: po.Products?.map((product: any) => ({
+            id: product.id,
+            sku_id: product.catalogueId,
+            ordered_qty: product.quantity,
+            received_qty: 0, // No received quantity for PO products
+            qc_pass_qty: 0,
+            qc_fail_qty: 0,
+            rtv_qty: 0,
+            held_qty: 0,
+            product_details: {
+              name: product.productName,
+              description: product.description,
+              mrp: product.mrp,
+              unit_price: product.unitPrice,
+              total_amount: product.totalAmount
+            }
+          })) || []
+        };
       });
 
       const totalPages = Math.ceil(count / limit);
 
       const response = {
-        grn: rows,
+        grn: grnList,
         pagination: {
           page: parseInt(page.toString()),
           limit: parseInt(limit.toString()),
@@ -628,7 +685,7 @@ export class FCGrnController {
         error: null,
       });
     } catch (error) {
-      console.error('Error fetching warehouses:', error);
+      console.error('Error fetching FC GRN list:', error);
       res.status(500).json({
         statusCode: 500,
         success: false,
@@ -767,6 +824,54 @@ export class FCGrnController {
       }
 
       await fcGrn.update({ status, updated_at: new Date() });
+
+      // If GRN is being marked as completed, update average costs
+      if (status === 'completed') {
+        console.log('💰 GRN marked as completed, updating average costs...');
+        const userId = req.user?.id || 1; // Default to user ID 1 if not available
+        
+        try {
+          // Get all GRN lines for this GRN
+          const grnLines = await FCGrnLine.findAll({
+            where: { grn_id: id }
+          });
+
+          const costUpdates: Array<{
+            sku: string;
+            status: 'success' | 'failed' | 'error';
+            message: string;
+            previous_cost?: number;
+            new_cost?: number;
+          }> = [];
+
+          for (const line of grnLines) {
+            if (line.received_qty > 0) {
+              try {
+                const costResult = await ProductMasterService.calculateAndUpdateAverageCost(line.sku_id, userId);
+                costUpdates.push({
+                  sku: line.sku_id,
+                  status: 'success',
+                  message: `Average cost updated successfully`,
+                  previous_cost: costResult.avg_cost_to_ozi,
+                  new_cost: costResult.avg_cost_to_ozi
+                });
+                console.log(`✅ Average cost updated for SKU ${line.sku_id}`);
+              } catch (costError: any) {
+                console.error(`❌ Average cost update failed for SKU ${line.sku_id}:`, costError.message);
+                costUpdates.push({
+                  sku: line.sku_id,
+                  status: 'failed',
+                  message: costError.message
+                });
+              }
+            }
+          }
+
+          console.log(`💰 Average cost updates completed: ${costUpdates.filter(u => u.status === 'success').length}/${costUpdates.length} successful`);
+        } catch (error) {
+          console.error('❌ Error updating average costs on GRN completion:', error);
+        }
+      }
 
       res.status(200).json({
         statusCode: 200,

@@ -174,8 +174,8 @@ export class FCPOController {
         return ResponseHandler.error(res, 'Action must be either APPROVED or REJECTED', 400);
       }
 
-      // Check if user has DC access (Role ID 1 or 3)
-      if (![1, 3].includes(userRoleId)) {
+      // Check if user has DC access (Role ID 1, 3, or 7)
+      if (![1, 3, 7].includes(userRoleId)) {
         return ResponseHandler.error(res, FC_PO_CONSTANTS.ERRORS.ACCESS_DENIED, 403);
       }
 

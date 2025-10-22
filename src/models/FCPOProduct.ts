@@ -59,7 +59,7 @@ FCPOProduct.init(
       allowNull: false,
       field: 'product_id',
       references: {
-        model: 'parent_product_master',
+        model: 'product_master',
         key: 'id',
       },
     },

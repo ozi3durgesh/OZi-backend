@@ -10,6 +10,7 @@ router.use(authenticate);
 
 // Product Master Routes
 router.post('/product-master', productMasterController.createProduct.bind(productMasterController));
+router.post('/product-master/add-variants', productMasterController.addVariantsToProduct.bind(productMasterController));
 router.put('/product-master/:skuId', productMasterController.updateProduct.bind(productMasterController));
 router.get('/product-master/:skuId', productMasterController.getProductBySkuId.bind(productMasterController));
 router.get('/product-master/catalogue/:catalogueId', productMasterController.getProductsByCatalogueId.bind(productMasterController));

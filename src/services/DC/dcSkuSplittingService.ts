@@ -262,7 +262,7 @@ export class DCSkuSplittingService {
       po_id: poId,
       name: product.productName,
       status: 1,
-      category_id: product.category_id || 0,
+      category_id: Number(product.category_id) || 0,
       sku,
       received_quantity: product.quantity,
       sku_splitted_quantity: skuSplittedQuantity,
@@ -619,7 +619,7 @@ export class DCSkuSplittingService {
       }>;
     }>;
     closeReason?: string;
-    status: 'partial' | 'completed' | 'closed' | 'pending-qc' | 'variance-review' | 'rtv-initiated';
+    status?: 'partial' | 'completed' | 'closed' | 'pending-qc' | 'variance-review' | 'rtv-initiated';
   }, createdBy: number): Promise<{
     grnId: number;
     message: string;
@@ -650,7 +650,7 @@ export class DCSkuSplittingService {
       // Create DC GRN
       const dcGrn = await DCGrn.create({
         dc_po_id: data.poId,
-        status: data.status,
+        status: data.status || 'partial',
         closeReason: data.closeReason || null,
         created_by: createdBy,
         dc_id: dcPO.dcId

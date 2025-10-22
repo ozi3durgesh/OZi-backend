@@ -524,6 +524,82 @@ export class DCGrnController {
   }
 
   /**
+   * Get actual DC GRN records (not POs)
+   * GET /api/dc/grn/actual?page=1&limit=10
+   */
+  static async getActualDCGrnList(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+
+      // Validate pagination parameters
+      if (page < 1) {
+        return ResponseHandler.error(res, 'Page number must be greater than 0', 400);
+      }
+      if (limit < 1 || limit > 100) {
+        return ResponseHandler.error(res, 'Limit must be between 1 and 100', 400);
+      }
+
+      const offset = (page - 1) * limit;
+
+      // Get actual DC GRN records
+      const { count, rows: grns } = await DCGrn.findAndCountAll({
+        include: [
+          {
+            model: DCPurchaseOrder,
+            as: 'DCPO',
+            attributes: ['id', 'poId', 'vendorId', 'status', 'createdAt'],
+            include: [
+              {
+                model: User,
+                as: 'CreatedBy',
+                attributes: ['id', 'email', 'name']
+              }
+            ]
+          },
+          {
+            model: User,
+            as: 'CreatedBy',
+            attributes: ['id', 'email', 'name']
+          },
+          {
+            model: DCGrnLine,
+            as: 'Lines',
+            attributes: [
+              'id', 'sku_id', 'ordered_qty', 'received_qty', 'qc_pass_qty',
+              'qc_fail_qty', 'rtv_qty', 'held_qty', 'line_status'
+            ]
+          }
+        ],
+        order: [['created_at', 'DESC']],
+        limit,
+        offset
+      });
+
+      const totalPages = Math.ceil(count / limit);
+
+      const response = {
+        grn: grns,
+        pagination: {
+          page: page,
+          limit: limit,
+          total: count,
+          totalPages: totalPages
+        }
+      };
+
+      return ResponseHandler.success(res, {
+        message: 'Actual DC GRN list retrieved successfully',
+        data: response
+      });
+
+    } catch (error: any) {
+      console.error('Error fetching actual DC GRN list:', error);
+      return ResponseHandler.error(res, error.message || 'Internal Server Error', 500);
+    }
+  }
+
+  /**
    * Get DC GRN list with SKU splits grouped by PO
    * GET /api/dc/grn/list?page=1&limit=10
    */
@@ -542,84 +618,149 @@ export class DCGrnController {
 
       const offset = (page - 1) * limit;
 
-      // Get SKU splits ready for GRN
-      const { count, rows: skuSplits } = await DCSkuSplitted.findAndCountAll({
+      // Get DC Purchase Orders with APPROVED or REJECTED status
+      const { count, rows: purchaseOrders } = await DCPurchaseOrder.findAndCountAll({
         where: {
-          ready_for_grn: 1
+          status: ['APPROVED', 'REJECTED']
         },
         include: [
           {
-            model: DCPurchaseOrder,
-            as: 'PurchaseOrder',
-            attributes: ['id', 'poId', 'vendorId', 'status', 'createdAt'],
+            model: User,
+            as: 'CreatedBy',
+            attributes: ['id', 'email', 'name']
+          },
+          {
+            model: DCPOProduct,
+            as: 'Products',
+            attributes: [
+              'id', 'catalogue_id', 'productName', 'quantity', 'unitPrice', 
+              'totalAmount', 'mrp', 'cost', 'description', 'hsn', 'ean_upc',
+              'weight', 'length', 'height', 'width', 'gst', 'cess', 'image_url',
+              'brand_id', 'category_id', 'sku_matrix_on_catelogue_id'
+            ]
+          },
+          {
+            model: DCGrn,
+            as: 'DCGrns',
             include: [
               {
-                model: User,
-                as: 'CreatedBy',
-                attributes: ['id', 'email', 'name']
+                model: DCGrnLine,
+                as: 'Lines',
+                attributes: [
+                  'id', 'sku_id', 'ordered_qty', 'received_qty', 'pending_qty',
+                  'rejected_qty', 'qc_pass_qty', 'qc_fail_qty', 'rtv_qty', 'held_qty',
+                  'line_status', 'variance_reason', 'remarks'
+                ]
               }
             ]
           }
         ],
-        order: [['createdAt', 'ASC']],
+        order: [['createdAt', 'DESC']],
         limit,
         offset
       });
 
-      // Group SKU splits by PO
-      const groupedByPO = new Map();
-      
-      skuSplits.forEach((split: any) => {
-        const poId = split.po_id;
-        if (!groupedByPO.has(poId)) {
-          groupedByPO.set(poId, {
-            id: split.PurchaseOrder?.id || poId,
-            po_id: poId,
-            status: 'ready_for_grn',
-            closeReason: null,
-            created_by: split.PurchaseOrder?.CreatedBy?.id || null,
-            created_at: split.PurchaseOrder?.createdAt || split.createdAt,
-            updated_at: split.updatedAt,
-            PO: {
-              id: split.PurchaseOrder?.id || poId,
-              po_id: split.PurchaseOrder?.poId || `PO-${poId}`,
-              vendor_name: `Vendor-${split.PurchaseOrder?.vendorId || poId}`,
-              approval_status: split.PurchaseOrder?.status || 'approved'
-            },
-            Line: []
-          });
-        }
+      // Transform the data to match the expected GRN format
+      const grnList = purchaseOrders.map((po: any) => {
+        // Check if GRN exists for this PO
+        const hasGrn = po.DCGrns && po.DCGrns.length > 0;
+        const grnData = hasGrn ? po.DCGrns[0] : null;
+        
+        return {
+          id: hasGrn ? grnData.id : po.id,
+          po_id: po.id,
+          status: hasGrn ? grnData.status : po.status.toLowerCase(),
+          closeReason: hasGrn ? grnData.closeReason : (po.status === 'REJECTED' ? po.rejectionReason : null),
+          created_by: hasGrn ? grnData.created_by : (po.CreatedBy?.id || null),
+          created_at: hasGrn ? grnData.created_at : po.createdAt,
+          updated_at: hasGrn ? grnData.updated_at : po.updatedAt,
+          PO: {
+            id: po.id,
+            po_id: po.poId,
+            vendor_name: `Vendor-${po.vendorId}`,
+            approval_status: po.status.toLowerCase()
+          },
+          Line: po.Products?.map((product: any) => {
+            // Parse SKU matrix to get actual SKUs
+            let skuMatrix: any[] = [];
+            try {
+              if (product.sku_matrix_on_catelogue_id) {
+                skuMatrix = typeof product.sku_matrix_on_catelogue_id === 'string' 
+                  ? JSON.parse(product.sku_matrix_on_catelogue_id)
+                  : product.sku_matrix_on_catelogue_id;
+              }
+            } catch (error) {
+              console.error('Error parsing SKU matrix:', error);
+              skuMatrix = [];
+            }
 
-        // Add this SKU split as a line item
-        groupedByPO.get(poId).Line.push({
-          id: split.id,
-          sku_id: split.sku,
-          ordered_qty: split.received_quantity,
-          received_qty: split.sku_splitted_quantity,
-          pending_qty: split.received_quantity - split.sku_splitted_quantity,
-          rejected_qty: 0,
-          qc_pass_qty: split.sku_splitted_quantity,
-          qc_fail_qty: 0,
-          rtv_qty: 0,
-          held_qty: 0,
-          line_status: split.sku_splitted_quantity === split.received_quantity ? 'completed' : 'partial',
-          product_details: {
-            name: split.name,
-            description: split.description,
-            mrp: split.mrp,
-            ean_upc: split.ean_upc,
-            image_url: split.image_url,
-            weight: split.weight,
-            length: split.length,
-            height: split.height,
-            width: split.width,
-            gst: split.gst,
-            cess: split.cess
-          }
-        });
+            // Get the first SKU from the matrix (or fallback to catalogue_id)
+            const actualSku = skuMatrix.length > 0 ? skuMatrix[0].sku : product.catalogue_id;
+            
+            // Find corresponding GRN line for this product using the actual SKU
+            const grnLine = grnData?.Lines?.find((line: any) => line.sku_id === actualSku);
+            
+            if (grnLine) {
+              // Use actual GRN line data
+              return {
+                id: grnLine.id,
+                sku_id: grnLine.sku_id,
+                ordered_qty: grnLine.ordered_qty,
+                received_qty: grnLine.received_qty,
+                pending_qty: grnLine.pending_qty,
+                rejected_qty: grnLine.rejected_qty,
+                qc_pass_qty: grnLine.qc_pass_qty,
+                qc_fail_qty: grnLine.qc_fail_qty,
+                rtv_qty: grnLine.rtv_qty,
+                held_qty: grnLine.held_qty,
+                line_status: grnLine.line_status,
+                product_details: {
+                  name: product.productName,
+                  description: product.description,
+                  mrp: product.mrp,
+                  ean_upc: product.ean_upc,
+                  image_url: product.image_url,
+                  weight: product.weight,
+                  length: product.length,
+                  height: product.height,
+                  width: product.width,
+                  gst: product.gst,
+                  cess: product.cess
+                }
+              };
+            } else {
+              // Fall back to PO data if no GRN line exists
+              return {
+                id: product.id,
+                sku_id: actualSku,
+                ordered_qty: product.quantity,
+                received_qty: 0,
+                pending_qty: product.quantity,
+                rejected_qty: 0,
+                qc_pass_qty: 0,
+                qc_fail_qty: 0,
+                rtv_qty: 0,
+                held_qty: 0,
+                line_status: 'pending',
+                product_details: {
+                  name: product.productName,
+                  description: product.description,
+                  mrp: product.mrp,
+                  ean_upc: product.ean_upc,
+                  image_url: product.image_url,
+                  weight: product.weight,
+                  length: product.length,
+                  height: product.height,
+                  width: product.width,
+                  gst: product.gst,
+                  cess: product.cess
+                }
+              };
+            }
+          }) || []
+        };
       });
 
-      const grnList = Array.from(groupedByPO.values());
       const totalPages = Math.ceil(count / limit);
 
       const response = {

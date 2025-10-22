@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import Product from '../../models/productModel';
+import { ProductMaster } from '../../models';
 import { ResponseHandler } from '../../middleware/responseHandler';
 import { Op } from 'sequelize';
 
@@ -60,31 +60,11 @@ export const fetchSKUByCatalogueId = async (req: Request, res: Response) => {
       ];
     }
 
-    const { count, rows } = await Product.findAndCountAll({
+    const { count, rows } = await ProductMaster.findAndCountAll({
       where: whereClause,
-      attributes: [
-        'id',
-        'catelogue_id',
-        'name',
-        'description',
-        'hsn',
-        'image_url',
-        'mrp',
-        'ean_upc',
-        'weight',
-        'length',
-        'height',
-        'width',
-        'gst',
-        'cess',
-        'status',
-        'category',
-        'brand_id',
-        'created_by'
-      ],
       limit: parseInt(limit.toString()),
       offset,
-      order: [['id', 'DESC']]
+      order: [['created_at', 'DESC']]
     });
 
     if (count === 0) {
@@ -115,7 +95,7 @@ export const fetchAllSKUs = async (req: Request, res: Response) => {
       return ResponseHandler.error(res, 'Access denied. DC access required.', 403);
     }
 
-    const { page = 1, limit = 20, search, status } = req.query;
+    const { page = 1, limit = 20, search, status, category, brand_id } = req.query;
 
     const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
 
@@ -123,8 +103,18 @@ export const fetchAllSKUs = async (req: Request, res: Response) => {
     const whereClause: any = {};
 
     // Add status filter if provided
-    if (status) {
+    if (status !== undefined) {
       whereClause.status = status;
+    }
+
+    // Add category filter if provided
+    if (category) {
+      whereClause.category = { [Op.like]: `%${category}%` };
+    }
+
+    // Add brand_id filter if provided
+    if (brand_id) {
+      whereClause.brand_id = brand_id;
     }
 
     // Add search filter if provided
@@ -132,47 +122,30 @@ export const fetchAllSKUs = async (req: Request, res: Response) => {
       whereClause[Op.or] = [
         { name: { [Op.like]: `%${search}%` } },
         { description: { [Op.like]: `%${search}%` } },
-        { hsn: { [Op.like]: `%${search}%` } },
-        { ean_upc: { [Op.like]: `%${search}%` } },
+        { sku_id: { [Op.like]: `%${search}%` } },
         { catelogue_id: { [Op.like]: `%${search}%` } },
+        { product_id: { [Op.like]: `%${search}%` } },
+        { ean_upc: { [Op.like]: `%${search}%` } },
+        { hsn: { [Op.like]: `%${search}%` } }
       ];
     }
 
-    const { count, rows } = await Product.findAndCountAll({
+    const { count, rows } = await ProductMaster.findAndCountAll({
       where: whereClause,
-      attributes: [
-        'id',
-        'catelogue_id',
-        'name',
-        'description',
-        'hsn',
-        'image_url',
-        'mrp',
-        'ean_upc',
-        'weight',
-        'length',
-        'height',
-        'width',
-        'gst',
-        'cess',
-        'status',
-        'category',
-        'brand_id',
-        'created_by'
-      ],
       limit: parseInt(limit.toString()),
       offset,
-      order: [['id', 'DESC']]
+      order: [['created_at', 'DESC']]
     });
 
     return ResponseHandler.success(res, {
+      message: 'All products retrieved successfully',
       data: rows,
       pagination: {
-        total: count,
-        page: parseInt(page.toString()),
-        pages: Math.ceil(count / parseInt(limit.toString())),
-        limit: parseInt(limit.toString()),
-      },
+        currentPage: parseInt(page.toString()),
+        totalPages: Math.ceil(count / parseInt(limit.toString())),
+        totalItems: count,
+        itemsPerPage: parseInt(limit.toString())
+      }
     });
 
   } catch (error: any) {
