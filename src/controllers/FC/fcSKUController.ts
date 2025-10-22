@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { ResponseHandler } from '../../middleware/responseHandler';
-import { ParentProductMasterDC, DCGrn, DCGrnLine, DCPOProduct, DCPurchaseOrder } from '../../models';
+import { ParentProductMasterDC, FCPurchaseOrder, FCPOProduct, FCGrn, FCGrnLine, DCPurchaseOrder, DCPOProduct, DCGrn, DCGrnLine, ProductMaster } from '../../models';
 import { Op } from 'sequelize';
 
 interface AuthRequest extends Request {
@@ -9,15 +9,15 @@ interface AuthRequest extends Request {
 
 export class FCSKUController {
   /**
-   * Get all SKUs with GRN status (done, rejected, pending) with complete details
+   * Get all approved FC-POs ready for GRN with complete details
    * GET /api/fc/skus/grn-status
    */
   static async getSKUsWithGRNStatus(req: AuthRequest, res: Response): Promise<Response> {
     try {
-      const { dcId, page = 1, limit = 20, search } = req.query;
+      const { fcId, dcId, page = 1, limit = 20, search } = req.query;
 
-      if (!dcId) {
-        return ResponseHandler.error(res, 'DC ID is required', 400);
+      if (!fcId) {
+        return ResponseHandler.error(res, 'FC ID is required', 400);
       }
 
       const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
@@ -26,233 +26,356 @@ export class FCSKUController {
       const whereClause: any = {};
       if (search) {
         whereClause[Op.or] = [
-          { catalogue_id: { [Op.like]: `%${search}%` } },
-          { name: { [Op.like]: `%${search}%` } },
+          { fcPOCode: { [Op.like]: `%${search}%` } },
           { description: { [Op.like]: `%${search}%` } },
-          { sku: { [Op.like]: `%${search}%` } },
         ];
       }
 
-      // Get all products with their GRN status
-      const { count, rows } = await ParentProductMasterDC.findAndCountAll({
-        where: whereClause,
+      // Get all approved FC-POs with their products ready for GRN
+      const { count: fcCount, rows: fcRows } = await FCPurchaseOrder.findAndCountAll({
+        where: {
+          fcId: fcId,
+          status: 'APPROVED',
+          ...whereClause
+        },
         include: [
           {
-            model: DCPOProduct,
-            as: 'POProducts',
+            model: FCPOProduct,
+            as: 'Products',
             required: false,
             include: [
               {
-                model: DCPurchaseOrder,
-                as: 'PurchaseOrder',
-                where: {
-                  dcId: dcId
-                },
-                required: false,
-                include: [
-                  {
-                    model: DCGrn,
-                    as: 'DCGrns',
-                    required: false,
-                    include: [
-                      {
-                        model: DCGrnLine,
-                        as: 'Lines',
-                        attributes: ['ordered_qty', 'received_qty', 'line_status', 'sku_id', 'variance_reason']
-                      }
-                    ]
-                  }
-                ]
+                model: ParentProductMasterDC,
+                as: 'Product',
+                required: true
+              }
+            ]
+          },
+          {
+            model: FCGrn,
+            as: 'FCGrns',
+            required: false,
+            include: [
+              {
+                model: FCGrnLine,
+                as: 'Line',
+                required: false
               }
             ]
           }
         ],
-        attributes: [
-          'id',
-          'catalogue_id',
-          'name',
-          'description',
-          'mrp',
-          'ean_upc',
-          'weight',
-          'length',
-          'height',
-          'width',
-          'gst',
-          'cess',
-          'status',
-          'category_id',
-          'brand_id',
-          'hsn',
-          'image_url',
-          'inventory_threshold'
-        ],
         limit: parseInt(limit.toString()),
-        offset,
-        order: [['name', 'ASC']],
+        offset: offset,
+        order: [['createdAt', 'DESC']],
         distinct: true
       });
 
-      // Process the data to include GRN status and quantities
-      const processedData = rows.map((product: any) => {
-        const poProducts = product.POProducts || [];
-        
-        // Calculate GRN status and quantities
-        let grnStatus = 'NO_GRN';
-        let totalOrderedQuantity = 0;
-        let totalReceivedQuantity = 0;
-        let grnDetails: any[] = [];
+      // Get completed DC GRNs that are ready for FC processing
+      const dcWhereClause: any = {
+        status: 'completed'
+      };
+      
+      // Note: dcId filter is optional for now to show all completed DC GRNs
+      // if (dcId) {
+      //   dcWhereClause.dc_id = dcId;
+      // }
 
-        // Collect all GRNs from all PO products
-        const allGrns: any[] = [];
-        poProducts.forEach((poProduct: any) => {
-          const purchaseOrder = poProduct.PurchaseOrder;
-          if (purchaseOrder && purchaseOrder.DCGrns) {
-            allGrns.push(...purchaseOrder.DCGrns);
-          }
-        });
-
-        if (allGrns.length > 0) {
-          allGrns.forEach((grn: any) => {
-            const lines = grn.Lines || [];
-            lines.forEach((line: any) => {
-              totalOrderedQuantity += line.ordered_qty || 0;
-              totalReceivedQuantity += line.received_qty || 0;
-              
-              grnDetails.push({
-                grnId: grn.id,
-                grnStatus: grn.status,
-                lineStatus: line.line_status,
-                orderedQuantity: line.ordered_qty,
-                receivedQuantity: line.received_qty,
-                sku: line.sku_id,
-                varianceReason: line.variance_reason
-              });
-            });
-          });
-
-          // Determine overall GRN status
-          if (totalReceivedQuantity === 0) {
-            grnStatus = 'PENDING';
-          } else if (totalReceivedQuantity >= totalOrderedQuantity) {
-            grnStatus = 'COMPLETED';
-          } else {
-            grnStatus = 'PARTIAL';
-          }
-        }
-
-        return {
-          ...product.toJSON(),
-          grnStatus,
-          totalOrderedQuantity,
-          totalReceivedQuantity,
-          availableQuantity: totalReceivedQuantity, // Available for FC-PO
-          grnDetails
-        };
-      });
-
-      return ResponseHandler.success(res, {
-        message: 'SKUs with GRN status retrieved successfully',
-        data: processedData,
-        pagination: {
-          total: count,
-          page: parseInt(page.toString()),
-          pages: Math.ceil(count / parseInt(limit.toString())),
-          limit: parseInt(limit.toString()),
-        },
-      });
-
-    } catch (error: any) {
-      console.error('Get SKUs with GRN status error:', error);
-      return ResponseHandler.error(res, error.message || 'Failed to fetch SKUs with GRN status', 500);
-    }
-  }
-
-  /**
-   * Get all SKUs that have been GRN done (available for FC-PO)
-   * GET /api/fc/skus/grn-completed
-   */
-  static async getGRNCompletedSKUs(req: AuthRequest, res: Response): Promise<Response> {
-    try {
-      const { dcId, page = 1, limit = 20, search } = req.query;
-
-      if (!dcId) {
-        return ResponseHandler.error(res, 'DC ID is required', 400);
-      }
-
-      const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
-
-      // Build search conditions
-      const whereClause: any = {};
-      if (search) {
-        whereClause[Op.or] = [
-          { catalogue_id: { [Op.like]: `%${search}%` } },
-          { name: { [Op.like]: `%${search}%` } },
-          { description: { [Op.like]: `%${search}%` } },
-          { sku: { [Op.like]: `%${search}%` } },
-        ];
-      }
-
-      // Get products that have been GRN'd from the specified DC
-      const { count, rows } = await ParentProductMasterDC.findAndCountAll({
+      const { count: dcCount, rows: dcRows } = await DCPurchaseOrder.findAndCountAll({
         where: {
-          ...whereClause,
-          // Add condition to check if product has been GRN'd
-          // This is a simplified approach - you might need to adjust based on your GRN logic
+          status: 'APPROVED',
+          ...whereClause
         },
         include: [
           {
+            model: DCPOProduct,
+            as: 'Products',
+            required: false,
+            include: [
+              {
+                model: ProductMaster,
+                as: 'Product',
+                required: true
+              }
+            ]
+          },
+          {
             model: DCGrn,
             as: 'DCGrns',
-            where: {
-              dc_id: dcId,
-              status: { [Op.in]: ['completed', 'partial'] } // GRN completed or partially completed
-            },
-            required: true, // Inner join - only products with GRN
+            where: dcWhereClause,
+            required: true,
             include: [
               {
                 model: DCGrnLine,
                 as: 'Lines',
-                attributes: ['quantity', 'received_quantity', 'status']
+                required: true
               }
             ]
           }
         ],
-        attributes: [
-          'id',
-          'catalogue_id',
-          'name',
-          'description',
-          'mrp',
-          'ean_upc',
-          'weight',
-          'length',
-          'height',
-          'width',
-          'gst',
-          'cess',
-          'status',
-          'category_id',
-          'brand_id',
-          'hsn',
-          'image_url',
-          'inventory_threshold'
+        limit: parseInt(limit.toString()),
+        offset: offset,
+        order: [['createdAt', 'DESC']],
+        distinct: true
+      });
+
+      // Combine FC and DC data
+      const allRows = [...fcRows, ...dcRows];
+      const totalCount = fcCount + dcCount;
+
+      // Process the data to include GRN status and quantities
+      const processedData = allRows.map((po: any) => {
+        const products = po.Products || [];
+        const isDCPO = po.DCGrns && po.DCGrns.length > 0;
+        const grns = isDCPO ? po.DCGrns : (po.FCGrns || []);
+        
+        // Calculate GRN status and quantities for each product
+        const processedProducts = products.map((product: any) => {
+          const productInfo = product.Product;
+          let grnStatus = 'NO_GRN';
+          let totalOrderedQuantity = product.total_quantity || product.quantity || 0;
+          let totalReceivedQuantity = 0;
+          let grnDetails: any[] = [];
+
+          // Check if GRN exists for this PO and product
+          if (grns.length > 0) {
+            grns.forEach((grn: any) => {
+              const lines = isDCPO ? grn.Lines : (grn.Line || []);
+              // For DC, match by catalogue_id, for FC match by sku
+              const productLine = lines.find((line: any) => 
+                isDCPO ? line.sku_id === product.catalogue_id : line.sku_id === productInfo.sku
+              );
+              
+              if (productLine) {
+                totalReceivedQuantity += productLine.received_qty || 0;
+                
+                grnDetails.push({
+                  grnId: grn.id,
+                  grnStatus: grn.status,
+                  lineStatus: productLine.line_status,
+                  orderedQuantity: productLine.ordered_qty,
+                  receivedQuantity: productLine.received_qty,
+                  sku: productLine.sku_id,
+                  varianceReason: productLine.variance_reason,
+                  grnType: isDCPO ? 'DC' : 'FC'
+                });
+
+                // Determine overall GRN status
+                if (totalReceivedQuantity === 0) {
+                  grnStatus = 'PENDING';
+                } else if (totalReceivedQuantity >= totalOrderedQuantity) {
+                  grnStatus = 'COMPLETED';
+                } else {
+                  grnStatus = 'PARTIAL';
+                }
+              }
+            });
+          }
+
+          // Handle different product model structures
+          const productData = isDCPO ? {
+            id: productInfo.id,
+            name: productInfo.name,
+            description: productInfo.description,
+            mrp: productInfo.mrp,
+            ean_upc: productInfo.ean_upc,
+            image_url: productInfo.image_url,
+            weight: productInfo.weight,
+            length: productInfo.length,
+            height: productInfo.height,
+            width: productInfo.width,
+            gst: productInfo.gst,
+            cess: productInfo.cess,
+            hsn: productInfo.hsn,
+            sku: product.catalogue_id, // Use catalogue_id as sku for DC
+            category_id: productInfo.category_id,
+            brand_id: productInfo.brand_id
+          } : productInfo.toJSON();
+
+          return {
+            ...productData,
+            poId: po.id,
+            poCode: isDCPO ? po.poId : po.fcPOCode,
+            poType: isDCPO ? 'DC' : 'FC',
+            totalOrderedQuantity,
+            totalReceivedQuantity,
+            availableQuantity: totalReceivedQuantity, // Available for FC operations
+            grnStatus,
+            grnDetails,
+            poStatus: po.status,
+            priority: po.priority,
+            totalAmount: po.totalAmount,
+            createdAt: po.createdAt
+          };
+        });
+
+        return {
+          po: {
+            id: po.id,
+            poCode: isDCPO ? po.poId : po.fcPOCode,
+            poType: isDCPO ? 'DC' : 'FC',
+            status: po.status,
+            priority: po.priority,
+            totalAmount: po.totalAmount,
+            createdAt: po.createdAt
+          },
+          products: processedProducts
+        };
+      });
+
+      return ResponseHandler.success(res, {
+        message: 'Approved POs ready for GRN retrieved successfully',
+        data: processedData,
+        pagination: {
+          currentPage: parseInt(page.toString()),
+          totalPages: Math.ceil(totalCount / parseInt(limit.toString())),
+          totalItems: totalCount,
+          itemsPerPage: parseInt(limit.toString())
+        }
+      });
+
+    } catch (error: any) {
+      console.error('Get FC-POs ready for GRN error:', error);
+      return ResponseHandler.error(res, error.message || 'Failed to fetch approved FC-POs ready for GRN', 500);
+    }
+  }
+
+  /**
+   * Get all SKUs that have been GRN completed (available for FC operations)
+   * GET /api/fc/skus/grn-completed
+   */
+  static async getGRNCompletedSKUs(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { fcId, page = 1, limit = 20, search } = req.query;
+
+      if (!fcId) {
+        return ResponseHandler.error(res, 'FC ID is required', 400);
+      }
+
+      const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
+
+      // Build search conditions
+      const whereClause: any = {};
+      if (search) {
+        whereClause[Op.or] = [
+          { catalogue_id: { [Op.like]: `%${search}%` } },
+          { name: { [Op.like]: `%${search}%` } },
+          { description: { [Op.like]: `%${search}%` } },
+          { sku: { [Op.like]: `%${search}%` } },
+        ];
+      }
+
+      // Get FC-POs with completed GRNs
+      const { count, rows } = await FCPurchaseOrder.findAndCountAll({
+        where: {
+          fcId: fcId,
+          status: 'APPROVED',
+          ...whereClause
+        },
+        include: [
+          {
+            model: FCPOProduct,
+            as: 'Products',
+            required: false,
+            include: [
+              {
+                model: ParentProductMasterDC,
+                as: 'Product',
+                required: true
+              }
+            ]
+          },
+          {
+            model: FCGrn,
+            as: 'FCGrns',
+            required: true,
+            where: {
+              status: 'completed'
+            },
+            include: [
+              {
+                model: FCGrnLine,
+                as: 'Line',
+                required: true,
+                where: {
+                  line_status: 'completed'
+                }
+              }
+            ]
+          }
         ],
         limit: parseInt(limit.toString()),
-        offset,
-        order: [['name', 'ASC']],
+        offset: offset,
+        order: [['createdAt', 'DESC']],
         distinct: true
+      });
+
+      // Process the data
+      const processedData = rows.map((fcPO: any) => {
+        const products = fcPO.Products || [];
+        const fcGrns = fcPO.FCGrns || [];
+        
+        const processedProducts = products.map((product: any) => {
+          const productInfo = product.Product;
+          let totalReceivedQuantity = 0;
+          let grnDetails: any[] = [];
+
+          // Calculate total received quantity from completed GRNs
+          fcGrns.forEach((grn: any) => {
+            const lines = grn.Lines || [];
+            const productLine = lines.find((line: any) => line.sku_id === productInfo.sku);
+            
+            if (productLine) {
+              totalReceivedQuantity += productLine.received_qty || 0;
+              
+              grnDetails.push({
+                grnId: grn.id,
+                grnStatus: grn.status,
+                lineStatus: productLine.line_status,
+                orderedQuantity: productLine.ordered_qty,
+                receivedQuantity: productLine.received_qty,
+                sku: productLine.sku_id,
+                varianceReason: productLine.variance_reason
+              });
+            }
+          });
+
+          return {
+            ...productInfo.toJSON(),
+            fcPOId: fcPO.id,
+            fcPOCode: fcPO.fcPOCode,
+            totalReceivedQuantity,
+            availableQuantity: totalReceivedQuantity, // Available for FC operations
+            grnStatus: 'COMPLETED',
+            grnDetails,
+            fcPOStatus: fcPO.status,
+            priority: fcPO.priority,
+            totalAmount: fcPO.totalAmount,
+            createdAt: fcPO.createdAt
+          };
+        });
+
+        return {
+          fcPO: {
+            id: fcPO.id,
+            fcPOCode: fcPO.fcPOCode,
+            status: fcPO.status,
+            priority: fcPO.priority,
+            totalAmount: fcPO.totalAmount,
+            createdAt: fcPO.createdAt
+          },
+          products: processedProducts
+        };
       });
 
       return ResponseHandler.success(res, {
         message: 'GRN completed SKUs retrieved successfully',
-        data: rows,
+        data: processedData,
         pagination: {
-          total: count,
-          page: parseInt(page.toString()),
-          pages: Math.ceil(count / parseInt(limit.toString())),
-          limit: parseInt(limit.toString()),
-        },
+          currentPage: parseInt(page.toString()),
+          totalPages: Math.ceil(count / parseInt(limit.toString())),
+          totalItems: count,
+          itemsPerPage: parseInt(limit.toString())
+        }
       });
 
     } catch (error: any) {
@@ -273,42 +396,36 @@ export class FCSKUController {
         return ResponseHandler.error(res, 'Catalogue ID is required', 400);
       }
 
-      const sku = await ParentProductMasterDC.findOne({
+      const product = await ParentProductMasterDC.findOne({
         where: { catalogue_id: catalogueId },
-        attributes: [
-          'id',
-          'catalogue_id',
-          'name',
-          'description',
-          'mrp',
-          'ean_upc',
-          'weight',
-          'length',
-          'height',
-          'width',
-          'gst',
-          'cess',
-          'status',
-          'category_id',
-          'brand_id',
-          'hsn',
-          'image_url',
-          'inventory_threshold'
+        include: [
+          {
+            model: FCPOProduct,
+            as: 'FCPOProducts',
+            required: false,
+            include: [
+              {
+                model: FCPurchaseOrder,
+                as: 'PurchaseOrder',
+                required: false
+              }
+            ]
+          }
         ]
       });
 
-      if (!sku) {
-        return ResponseHandler.error(res, 'SKU not found', 404);
+      if (!product) {
+        return ResponseHandler.error(res, 'Product not found', 404);
       }
 
       return ResponseHandler.success(res, {
-        message: 'SKU details retrieved successfully',
-        data: sku,
+        message: 'Product details retrieved successfully',
+        data: product
       });
 
     } catch (error: any) {
       console.error('Get SKU by catalogue ID error:', error);
-      return ResponseHandler.error(res, error.message || 'Failed to fetch SKU details', 500);
+      return ResponseHandler.error(res, error.message || 'Failed to fetch product details', 500);
     }
   }
 }

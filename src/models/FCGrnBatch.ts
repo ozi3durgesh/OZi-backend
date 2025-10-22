@@ -1,7 +1,7 @@
 import { DataTypes, Model } from 'sequelize';
 import sequelize from '../config/database';
 import { GRNBatchAttributes, GRNBatchCreationAttributes } from '../types';
-import GRNLine from './GrnLine';
+import FCGrnLine from './FCGrnLine';
 
 class GRNBatch
   extends Model<GRNBatchAttributes, GRNBatchCreationAttributes>
@@ -52,7 +52,7 @@ GRNBatch.init(
   },
   {
     sequelize,
-    tableName: 'grn_batches',
+    tableName: 'fc_grn_batches',
     timestamps: false,
     indexes: [{ fields: ['grn_line_id'] }],
   }

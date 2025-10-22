@@ -21,8 +21,8 @@ export class DCFCPOController {
         return ResponseHandler.error(res, 'User authentication required', 401);
       }
 
-      // Check if user has DC access (Role ID 1 or 3)
-      if (![1, 3].includes(userRoleId)) {
+      // Check if user has DC access (Role ID 1, 3, or 7)
+      if (![1, 3, 7].includes(userRoleId)) {
         return ResponseHandler.error(res, FC_PO_CONSTANTS.ERRORS.ACCESS_DENIED, 403);
       }
 
@@ -83,8 +83,8 @@ export class DCFCPOController {
         return ResponseHandler.error(res, 'User authentication required', 401);
       }
 
-      // Check if user has DC access (Role ID 1 or 3)
-      if (![1, 3].includes(userRoleId)) {
+      // Check if user has DC access (Role ID 1, 3, or 7)
+      if (![1, 3, 7].includes(userRoleId)) {
         return ResponseHandler.error(res, FC_PO_CONSTANTS.ERRORS.ACCESS_DENIED, 403);
       }
 
@@ -128,8 +128,8 @@ export class DCFCPOController {
         return ResponseHandler.error(res, 'User authentication required', 401);
       }
 
-      // Check if user has DC access (Role ID 1 or 3)
-      if (![1, 3].includes(userRoleId)) {
+      // Check if user has DC access (Role ID 1, 3, or 7)
+      if (![1, 3, 7].includes(userRoleId)) {
         return ResponseHandler.error(res, FC_PO_CONSTANTS.ERRORS.ACCESS_DENIED, 403);
       }
 
@@ -141,7 +141,7 @@ export class DCFCPOController {
 
       // Get statistics for different statuses
       const [pending, approved, rejected, total] = await Promise.all([
-        FCPOService.getFCPOs({ dcId: parseInt(dcId as string), status: 'DRAFT' }, 1, 1),
+        FCPOService.getFCPOs({ dcId: parseInt(dcId as string), status: 'PENDING_APPROVAL' }, 1, 1),
         FCPOService.getFCPOs({ dcId: parseInt(dcId as string), status: 'APPROVED' }, 1, 1),
         FCPOService.getFCPOs({ dcId: parseInt(dcId as string), status: 'REJECTED' }, 1, 1),
         FCPOService.getFCPOs({ dcId: parseInt(dcId as string) }, 1, 1),
@@ -191,8 +191,8 @@ export class DCFCPOController {
         return ResponseHandler.error(res, 'Action must be either APPROVED or REJECTED', 400);
       }
 
-      // Check if user has DC access (Role ID 1 or 3)
-      if (![1, 3].includes(userRoleId)) {
+      // Check if user has DC access (Role ID 1, 3, or 7)
+      if (![1, 3, 7].includes(userRoleId)) {
         return ResponseHandler.error(res, FC_PO_CONSTANTS.ERRORS.ACCESS_DENIED, 403);
       }
 

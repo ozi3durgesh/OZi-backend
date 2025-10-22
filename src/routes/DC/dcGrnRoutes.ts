@@ -22,6 +22,13 @@ router.get('/dc-po/:dcPoId/products', DCGrnController.getDCPOProductsForGRN);
 router.post('/', DCGrnController.createDCGrn);
 
 /**
+ * @route GET /api/dc/grn/actual
+ * @desc Get actual DC GRN records (not POs)
+ * @access Authenticated
+ */
+router.get('/actual', DCGrnController.getActualDCGrnList);
+
+/**
  * @route GET /api/dc/grn/list
  * @desc Get DC GRN list with SKU splits grouped by PO
  * @access Authenticated

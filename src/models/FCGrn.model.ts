@@ -4,7 +4,7 @@ import User from './User';
 import { GRNAttributes, GRNCreationAttributes } from '../types/index';
 import PurchaseOrder from './PurchaseOrder';
 
-class GRN
+class FCGrn
   extends Model<GRNAttributes, GRNCreationAttributes>
   implements GRNAttributes
 {
@@ -19,7 +19,7 @@ class GRN
     | 'variance-review'
     | 'rtv-initiated';
   declare created_by: number;
-  public closeReason!: string | null;
+  public close_reason!: string | null;
   declare approved_by: number | null;
   declare created_at: Date;
   declare updated_at: Date;
@@ -28,7 +28,7 @@ class GRN
   declare fc_id?: number;
 }
 
-GRN.init(
+FCGrn.init(
   {
     id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
     po_id: { type: DataTypes.INTEGER, allowNull: false },
@@ -46,7 +46,7 @@ GRN.init(
       defaultValue: 'partial',
     },
 
-    closeReason: {
+    close_reason: {
       type: DataTypes.STRING(255),
       allowNull: true,
     },
@@ -99,10 +99,10 @@ GRN.init(
   },
   {
     sequelize,
-    tableName: 'grns',
+    tableName: 'fc_grns',
     timestamps: false,
     indexes: [{ fields: ['po_id'] }, { fields: ['status'] }],
   }
 );
 // Associations are defined in models/index.ts to avoid conflicts
-export default GRN;
+export default FCGrn;

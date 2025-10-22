@@ -741,9 +741,9 @@ export class DCPOService {
           ],
           include: [
             {
-              model: ParentProductMasterDC,
+              model: ProductMaster,
               as: 'Product',
-              attributes: ['id', 'catalogue_id', 'name', 'mrp', 'hsn', 'brand_id'],
+              attributes: ['id', 'catelogue_id', 'name', 'mrp', 'hsn', 'brand_id'],
             },
             {
               model: DCPOSkuMatrix,
@@ -1124,7 +1124,7 @@ export class DCPOService {
             : originalPO.final_delivery_date,
           pi_file_url: data.pi_url ?? originalPO.pi_file_url,
           totalAmount: 0.0, // will calculate later if needed
-          status: 'DRAFT', // or PENDING_CATEGORY_HEAD etc.
+          status: 'PENDING_CATEGORY_HEAD', // or PENDING_CATEGORY_HEAD etc.
           createdBy: userId, // logged-in user performing edit
         },
         { transaction }
@@ -1154,9 +1154,13 @@ export class DCPOService {
             ),
           }))
         );
-        console.log("edit---------",editedProducts)
         await POProductEdit.bulkCreate(editedProducts, { transaction });
       }
+
+      //update isEdited flag in Dcpurchaseorder
+      originalPO.update({
+        isEdited: true
+      }, {transaction});
 
       await transaction.commit();
       return editedPO;
@@ -1166,5 +1170,39 @@ export class DCPOService {
     }
   }
 
+  static async approvePO(poId: number, userId: number, isApproved:boolean) {
+
+    try {
+      // 1️ Check if original DC Purchase Order exists
+      const editedPO = await PurchaseOrderEdit.findOne(
+        {where: { purchase_order_id: poId },}
+      );
+      if (!editedPO) {
+        throw new Error('DC Purchase Order Edit not found');
+      }
+
+      if(editedPO.status == "APPROVED"){
+        throw new Error("PO is already Approved");
+      }
+      
+      if (isApproved){
+        var status = "APPROVED"
+      } else {
+        var status = "REJECTED"
+      }
+
+      // 3️ Create edited PO header
+      await editedPO.update({
+          status: status,
+          approvedBy: userId, // We don't have user ID from token
+          approvedAt: new Date(),
+      })
+
+      return "PO Approved successfully";
+
+    } catch (error) {
+      throw error;
+    }
+  }
 
 }

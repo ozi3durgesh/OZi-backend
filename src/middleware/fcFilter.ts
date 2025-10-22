@@ -217,8 +217,8 @@ export class FCValidator {
    * Validate GRN belongs to FC
    */
   static async validateGRNFC(grnId: number, fcId: number): Promise<boolean> {
-    const { GRN } = await import('../models/index.js');
-    return this.validateFCResource(GRN, grnId, fcId, 'fc_id');
+    const { FCGrn } = await import('../models/index.js');
+    return this.validateFCResource(FCGrn, grnId, fcId, 'fc_id');
   }
 
   /**

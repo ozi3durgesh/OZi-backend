@@ -32,6 +32,7 @@ class DCPurchaseOrder extends Model<
   declare updatedBy: number | null;
   declare createdAt: CreationOptional<Date>;
   declare updatedAt: CreationOptional<Date>;
+  declare isEdited: boolean | false;
 }
 
 DCPurchaseOrder.init(
@@ -159,6 +160,12 @@ DCPurchaseOrder.init(
       allowNull: false,
       defaultValue: DataTypes.NOW,
     },
+    isEdited:{
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false
+
+    }
   },
   {
     sequelize,

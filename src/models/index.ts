@@ -19,10 +19,10 @@ import Rider from './Rider';
 import ScannerBin from './ScannerBin';
 import ScannerSku from './ScannerSku';
 import BinLocation from './BinLocation';
-import GRN from './Grn.model';
-import GRNLine from './GrnLine';
-import GRNBatch from './GrnBatch';
-import GRNPhoto from './GrnPhoto';
+import FCGrn from './FCGrn.model';
+import FCGrnLine from './FCGrnLine';
+import FCGrnBatch from './FCGrnBatch';
+import FCGrnPhoto from './FCGrnPhoto';
 import PurchaseOrder from './PurchaseOrder';
 import EcomLog from './EcomLog';
 import ProductMaster from './NewProductMaster';
@@ -218,32 +218,34 @@ ProductMaster.hasMany(PicklistItem, {
 POProduct.belongsTo(ProductMaster, { foreignKey: 'sku_id', targetKey: 'sku_id', as: 'sku' });
 ProductMaster.hasMany(POProduct, { foreignKey: 'sku_id', sourceKey: 'sku_id', as: 'products' });
 
-// GRN associations
-GRN.belongsTo(PurchaseOrder, { foreignKey: 'po_id', as: 'PO' });
-GRN.belongsTo(User, { foreignKey: 'created_by', as: 'GrnCreatedBy' });
-GRN.belongsTo(User, { foreignKey: 'approved_by', as: 'ApprovedBy' });
-User.hasMany(GRN, { foreignKey: 'created_by', as: 'CreatedGrns' });
-User.hasMany(GRN, { foreignKey: 'approved_by', as: 'ApprovedGrns' });
-PurchaseOrder.hasMany(GRN, { foreignKey: 'po_id', as: 'GRNs' });
+// FC-GRN associations
+FCGrn.belongsTo(FCPurchaseOrder, { foreignKey: 'po_id', as: 'FCPO' });
+FCGrn.belongsTo(User, { foreignKey: 'created_by', as: 'GrnCreatedBy' });
+FCGrn.belongsTo(User, { foreignKey: 'approved_by', as: 'ApprovedBy' });
+FCGrn.belongsTo(FulfillmentCenter, { foreignKey: 'fc_id', as: 'FulfillmentCenter' });
+User.hasMany(FCGrn, { foreignKey: 'created_by', as: 'CreatedFCGrns' });
+User.hasMany(FCGrn, { foreignKey: 'approved_by', as: 'ApprovedFCGrns' });
+FCPurchaseOrder.hasMany(FCGrn, { foreignKey: 'po_id', as: 'FCGrns' });
+FulfillmentCenter.hasMany(FCGrn, { foreignKey: 'fc_id', as: 'FCGrns' });
 
-// GRN Line associations
-GRN.hasMany(GRNLine, { foreignKey: 'grn_id', as: 'Line' });
-GRNLine.belongsTo(GRN, { foreignKey: 'grn_id', as: 'GrnId' });
+// FC-GRN Line associations
+FCGrn.hasMany(FCGrnLine, { foreignKey: 'grn_id', as: 'Line' });
+FCGrnLine.belongsTo(FCGrn, { foreignKey: 'grn_id', as: 'FCGrn' });
 
-// GRN Batch associations
-GRNLine.hasMany(GRNBatch, { foreignKey: 'grn_line_id', as: 'Batches' });
-GRNBatch.belongsTo(GRNLine, { foreignKey: 'grn_line_id', as: 'Line' });
+// FC-GRN Batch associations
+FCGrnLine.hasMany(FCGrnBatch, { foreignKey: 'grn_line_id', as: 'Batches' });
+FCGrnBatch.belongsTo(FCGrnLine, { foreignKey: 'grn_line_id', as: 'Line' });
 
-// GRN Photo associations
-GRN.hasMany(GRNPhoto, { foreignKey: 'grn_id', as: 'Photos' });
-GRNPhoto.belongsTo(GRN, { foreignKey: 'grn_id', as: 'GRN' });
+// FC-GRN Photo associations
+FCGrn.hasMany(FCGrnPhoto, { foreignKey: 'grn_id', as: 'Photos' });
+FCGrnPhoto.belongsTo(FCGrn, { foreignKey: 'grn_id', as: 'FCGrn' });
 
-PurchaseOrder.hasMany(GRNPhoto, { foreignKey: 'po_id', as: 'Photos' });
-GRNPhoto.belongsTo(PurchaseOrder, { foreignKey: 'po_id', as: 'PurchaseOrder' });
+FCPurchaseOrder.hasMany(FCGrnPhoto, { foreignKey: 'po_id', as: 'FCGrnPhotos' });
+FCGrnPhoto.belongsTo(FCPurchaseOrder, { foreignKey: 'po_id', as: 'FCPurchaseOrder' });
 
 // Putaway associations
-PutawayTask.belongsTo(GRN, { foreignKey: 'grn_id', as: 'GRN' });
-PutawayTask.belongsTo(GRNLine, { foreignKey: 'grn_line_id', as: 'GRNLine' });
+PutawayTask.belongsTo(FCGrn, { foreignKey: 'grn_id', as: 'FCGRN' });
+PutawayTask.belongsTo(FCGrnLine, { foreignKey: 'grn_line_id', as: 'FCGRNLine' });
 PutawayTask.belongsTo(User, { foreignKey: 'assigned_to', as: 'AssignedTo' });
 PutawayTask.belongsTo(User, { foreignKey: 'created_by', as: 'CreatedBy' });
 
@@ -665,10 +667,10 @@ export {
   EcomLog,
   ProductMaster,
   BinLocation,
-  GRN,
-  GRNLine,
-  GRNBatch,
-  GRNPhoto,
+  FCGrn,
+  FCGrnLine,
+  FCGrnBatch,
+  FCGrnPhoto,
   PurchaseOrder,
   POProduct,
   TokenBlacklist,
