@@ -1157,6 +1157,11 @@ export class DCPOService {
         await POProductEdit.bulkCreate(editedProducts, { transaction });
       }
 
+      //update isEdited flag in Dcpurchaseorder
+      originalPO.update({
+        isEdited: true
+      }, {transaction});
+
       await transaction.commit();
       return editedPO;
     } catch (error) {
