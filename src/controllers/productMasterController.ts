@@ -466,6 +466,114 @@ export class ProductMasterController {
 
     return errors;
   }
+
+  /**
+   * Add variants to an existing product catalog
+   */
+  async addVariantsToProduct(req: Request, res: Response): Promise<void> {
+    console.log('🚀 [ProductMasterController] addVariantsToProduct called');
+    console.log('📋 [ProductMasterController] Request body:', JSON.stringify(req.body, null, 2));
+    
+    try {
+      const userId = (req as any).user?.id;
+      console.log(`👤 [ProductMasterController] User ID: ${userId}`);
+      
+      if (!userId) {
+        console.log('❌ [ProductMasterController] User not authenticated');
+        res.status(401).json({
+          success: false,
+          message: 'User not authenticated'
+        });
+        return;
+      }
+
+      // Validate required fields
+      const { catalogueId, colors, ageSizes } = req.body;
+      
+      if (!catalogueId) {
+        console.log('❌ [ProductMasterController] Missing catalogue ID');
+        res.status(400).json({
+          success: false,
+          message: 'Catalogue ID is required'
+        });
+        return;
+      }
+
+      if ((!colors || colors.length === 0) && (!ageSizes || ageSizes.length === 0)) {
+        console.log('❌ [ProductMasterController] No variants provided');
+        res.status(400).json({
+          success: false,
+          message: 'At least one color or age/size must be provided'
+        });
+        return;
+      }
+
+      // Validate catalogue ID format
+      if (!/^4\d{6}$/.test(catalogueId)) {
+        console.log('❌ [ProductMasterController] Invalid catalogue ID format');
+        res.status(400).json({
+          success: false,
+          message: 'Catalogue ID must be 7 digits starting with 4'
+        });
+        return;
+      }
+
+      const newVariants = {
+        colors: colors || undefined,
+        ageSizes: ageSizes || undefined
+      };
+
+      console.log('📦 [ProductMasterController] Prepared variant data:', {
+        catalogueId,
+        newVariants
+      });
+
+      console.log('🔄 [ProductMasterController] Calling ProductMasterService.addVariantsToProduct...');
+      const newProducts = await ProductMasterService.addVariantsToProduct(catalogueId, newVariants, userId);
+      console.log(`✅ [ProductMasterController] Service returned ${newProducts.length} new variants`);
+
+      const responseData = newProducts.map(product => ({
+        id: product.id,
+        catelogue_id: product.catelogue_id,
+        product_id: product.product_id,
+        sku_id: product.sku_id,
+        name: product.name,
+        color: product.color,
+        age_size: product.age_size,
+        category: product.category,
+        mrp: product.mrp,
+        brand_id: product.brand_id,
+        created_at: product.created_at
+      }));
+
+      console.log('📤 [ProductMasterController] Sending response:', {
+        success: true,
+        message: `Successfully added ${newProducts.length} variant(s) to catalogue ${catalogueId}`,
+        variantCount: newProducts.length
+      });
+
+      res.status(201).json({
+        success: true,
+        message: `Successfully added ${newProducts.length} variant(s) to catalogue ${catalogueId}`,
+        data: responseData,
+        catalogueId,
+        addedVariants: newProducts.length
+      });
+
+    } catch (error: any) {
+      console.error('❌ [ProductMasterController] Error adding variants:', error);
+      console.error('❌ [ProductMasterController] Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      res.status(500).json({
+        success: false,
+        message: 'Failed to add variants to product',
+        error: error.message
+      });
+    }
+  }
 }
 
 export default new ProductMasterController();

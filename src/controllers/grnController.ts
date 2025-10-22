@@ -20,6 +20,7 @@ import { rejects } from 'assert';
 import { S3Service } from '../services/s3Service';
 import DirectInventoryService from '../services/DirectInventoryService';
 import { INVENTORY_OPERATIONS } from '../config/inventoryConstants';
+import { ProductMasterService } from '../services/productMasterService';
 
 export class GrnController {
   /**
@@ -357,6 +358,39 @@ export class GrnController {
         }
       }
 
+      // Update average cost to OZI for all SKUs in this GRN
+      console.log('💰 Updating average cost to OZI for GRN SKUs...');
+      const costUpdates: Array<{
+        sku: string;
+        status: 'success' | 'failed' | 'error';
+        message: string;
+        previous_cost?: number;
+        new_cost?: number;
+      }> = [];
+
+      for (const line of input.lines) {
+        if (line.receivedQty > 0) {
+          try {
+            const costResult = await ProductMasterService.calculateAndUpdateAverageCost(line.skuId, userId);
+            costUpdates.push({
+              sku: line.skuId,
+              status: 'success',
+              message: `Average cost updated successfully`,
+              previous_cost: costResult.avg_cost_to_ozi,
+              new_cost: costResult.avg_cost_to_ozi
+            });
+            console.log(`✅ Average cost updated for SKU ${line.skuId}`);
+          } catch (costError: any) {
+            console.error(`❌ Average cost update failed for SKU ${line.skuId}:`, costError.message);
+            costUpdates.push({
+              sku: line.skuId,
+              status: 'failed',
+              message: costError.message
+            });
+          }
+        }
+      }
+
       const createdGrn = await GRN.findByPk(grn.id, {
         include: [
           { model: User, as: 'GrnCreatedBy', attributes: ['id', 'email'] },
@@ -384,6 +418,12 @@ export class GrnController {
             failed_updates: inventoryUpdates.filter(u => u.status === 'failed').length,
             error_updates: inventoryUpdates.filter(u => u.status === 'error').length,
             updates: inventoryUpdates
+          },
+          costUpdates: {
+            total_updates: costUpdates.length,
+            successful_updates: costUpdates.filter(u => u.status === 'success').length,
+            failed_updates: costUpdates.filter(u => u.status === 'failed').length,
+            updates: costUpdates
           }
         },
         error: null,
@@ -771,6 +811,54 @@ export class GrnController {
       }
 
       await grn.update({ status, updated_at: new Date() });
+
+      // If GRN is being marked as completed, update average costs
+      if (status === 'completed') {
+        console.log('💰 GRN marked as completed, updating average costs...');
+        const userId = req.user?.id || 1; // Default to user ID 1 if not available
+        
+        try {
+          // Get all GRN lines for this GRN
+          const grnLines = await GRNLine.findAll({
+            where: { grn_id: id }
+          });
+
+          const costUpdates: Array<{
+            sku: string;
+            status: 'success' | 'failed' | 'error';
+            message: string;
+            previous_cost?: number;
+            new_cost?: number;
+          }> = [];
+
+          for (const line of grnLines) {
+            if (line.received_qty > 0) {
+              try {
+                const costResult = await ProductMasterService.calculateAndUpdateAverageCost(line.sku_id, userId);
+                costUpdates.push({
+                  sku: line.sku_id,
+                  status: 'success',
+                  message: `Average cost updated successfully`,
+                  previous_cost: costResult.avg_cost_to_ozi,
+                  new_cost: costResult.avg_cost_to_ozi
+                });
+                console.log(`✅ Average cost updated for SKU ${line.sku_id}`);
+              } catch (costError: any) {
+                console.error(`❌ Average cost update failed for SKU ${line.sku_id}:`, costError.message);
+                costUpdates.push({
+                  sku: line.sku_id,
+                  status: 'failed',
+                  message: costError.message
+                });
+              }
+            }
+          }
+
+          console.log(`💰 Average cost updates completed: ${costUpdates.filter(u => u.status === 'success').length}/${costUpdates.length} successful`);
+        } catch (error) {
+          console.error('❌ Error updating average costs on GRN completion:', error);
+        }
+      }
 
       res.status(200).json({
         statusCode: 200,

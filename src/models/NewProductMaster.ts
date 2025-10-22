@@ -45,33 +45,34 @@ export interface ProductMasterUpdateAttributes extends Partial<ProductMasterCrea
 export class ProductMaster extends Model<ProductMasterAttributes, ProductMasterCreationAttributes> 
   implements ProductMasterAttributes {
   
-  public id!: number;
-  public status!: number;
-  public catelogue_id!: string;
-  public product_id!: string;
-  public sku_id!: string;
-  public color?: string;
-  public age_size?: string;
-  public name!: string;
-  public category!: string;
-  public description!: string;
-  public image_url?: string;
-  public mrp!: number;
-  public avg_cost_to_ozi?: number;
-  public ean_upc?: string;
-  public brand_id!: number;
-  public weight?: number;
-  public length?: number;
-  public height?: number;
-  public width?: number;
-  public inventory_threshold?: number;
-  public gst!: number;
-  public cess!: number;
-  public hsn!: string;
-  public created_by!: number;
-  public created_at!: Date;
-  public updated_at!: Date;
-  public logs!: any[];
+  // Use declare to avoid shadowing Sequelize's getters/setters
+  declare id: number;
+  declare status: number;
+  declare catelogue_id: string;
+  declare product_id: string;
+  declare sku_id: string;
+  declare color?: string;
+  declare age_size?: string;
+  declare name: string;
+  declare category: string;
+  declare description: string;
+  declare image_url?: string;
+  declare mrp: number;
+  declare avg_cost_to_ozi?: number;
+  declare ean_upc?: string;
+  declare brand_id: number;
+  declare weight?: number;
+  declare length?: number;
+  declare height?: number;
+  declare width?: number;
+  declare inventory_threshold?: number;
+  declare gst: number;
+  declare cess: number;
+  declare hsn: string;
+  declare created_by: number;
+  declare created_at: Date;
+  declare updated_at: Date;
+  declare logs: any[];
 }
 
 // Initialize the model
@@ -93,7 +94,7 @@ ProductMaster.init(
     catelogue_id: {
       type: DataTypes.STRING(7),
       allowNull: false,
-      unique: true,
+      unique: false, // Allow multiple products to share the same catalogue ID (for variants)
       validate: {
         len: [7, 7], // Exactly 7 characters
         is: /^4\d{6}$/, // Must start with 4 and be 7 digits total
@@ -297,7 +298,7 @@ ProductMaster.init(
     indexes: [
       {
         fields: ['catelogue_id'],
-        unique: true,
+        unique: false, // Allow multiple products to share the same catalogue ID
       },
       {
         fields: ['sku_id'],
