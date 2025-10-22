@@ -51,7 +51,7 @@ export class FCPOService {
           fcId: data.fcId,
           dcId: data.dcId,
           totalAmount,
-          status: 'DRAFT',
+          status: 'PENDING_APPROVAL',
           priority: (data.priority as 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT') || 'MEDIUM',
           description: data.description,
           notes: data.notes,

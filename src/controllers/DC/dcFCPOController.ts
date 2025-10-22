@@ -141,7 +141,7 @@ export class DCFCPOController {
 
       // Get statistics for different statuses
       const [pending, approved, rejected, total] = await Promise.all([
-        FCPOService.getFCPOs({ dcId: parseInt(dcId as string), status: 'DRAFT' }, 1, 1),
+        FCPOService.getFCPOs({ dcId: parseInt(dcId as string), status: 'PENDING_APPROVAL' }, 1, 1),
         FCPOService.getFCPOs({ dcId: parseInt(dcId as string), status: 'APPROVED' }, 1, 1),
         FCPOService.getFCPOs({ dcId: parseInt(dcId as string), status: 'REJECTED' }, 1, 1),
         FCPOService.getFCPOs({ dcId: parseInt(dcId as string) }, 1, 1),
