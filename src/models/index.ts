@@ -56,7 +56,6 @@ import FCPOApproval from './FCPOApproval';
 import FCSkuSplitted from './FCSkuSplitted';
 import PurchaseOrderEdit from './PurchaseOrderEdits';
 import POProductEdit from './POProductEdit';
-import ParentProductMasterDC from './ParentProductMasterDC';
 
 // Set up associations
 Coupon.hasMany(CouponTranslation, {
@@ -702,5 +701,4 @@ export {
   FCSkuSplitted,
   PurchaseOrderEdit,
   POProductEdit,
-  ParentProductMasterDC
 };

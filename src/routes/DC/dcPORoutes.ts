@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, isAdmin } from '../../middleware/auth';
+import { authenticate, isAdmin, isCategoryHead } from '../../middleware/auth';
 import { DCPOController } from '../../controllers/DC/dcPOController';
 import dcSkuSplittingRoutes from './dcSkuSplittingRoutes';
 import multer from 'multer';
@@ -62,7 +62,7 @@ router.get('/approval/:token', DCPOController.getApprovalDetails);
 router.post('/approval/:token', DCPOController.processApproval);
 
 router.put('/purchase-orders/:id/edit', DCPOController.editPO);
-router.put('/purchase-orders/:id/approve',isAdmin, DCPOController.approvePO);
+router.put('/purchase-orders/:id/approve',isCategoryHead, DCPOController.approvePO);
 
 // Direct approval/rejection without hierarchy (Authorized users - Role ID 1, 3, or 7)
 router.post('/purchase-orders/:id/direct-approve', DCPOController.directApproval);

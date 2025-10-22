@@ -65,7 +65,7 @@ export class FCPOService {
       const skuMatrixRecords: any[] = [];
 
       for (const product of data.products) {
-        // Find the product by catalogue_id
+        // Find the product by catalogue_id in ProductMaster table
         const parentProduct = await ProductMaster.findOne({
           where: { catelogue_id: product.catelogue_id },
           transaction,

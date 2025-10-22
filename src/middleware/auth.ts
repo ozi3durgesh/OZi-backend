@@ -214,6 +214,8 @@ export const hasRole = (allowedRoles: string | string[]) => {
  */
 export const isAdmin = hasRole('admin');
 
+export const isCategoryHead = hasRole('category_head')
+
 /**
  * Middleware for routes that require admin or manager roles
  */
