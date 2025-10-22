@@ -565,54 +565,71 @@ export class FCGrnController {
       } = req.query as GRNFilters;
 
       const offset: number = (page - 1) * limit;
-      const whereClause: any = {};
 
-      if (status) whereClause.status = status;
-
-      if (po_id) whereClause.po_id = po_id;
-      if (startDate && endDate) {
-        whereClause.created_at = {
-          [Op.between]: [
-            new Date(startDate as string),
-            new Date(endDate as string),
-          ],
-        };
-      }
-
-      const { count, rows } = await FCGrn.findAndCountAll({
-        where: whereClause,
+      // Get FC Purchase Orders with APPROVED or REJECTED status
+      const { count, rows: purchaseOrders } = await FCPurchaseOrder.findAndCountAll({
+        where: {
+          status: ['APPROVED', 'REJECTED']
+        },
         include: [
           {
-            model: FCPurchaseOrder,
-            as: 'FCPO',
-            attributes: ['id', 'po_id', 'status'],
-            where: search ? { po_id: { [Op.like]: `%${search}%` } } : {},
+            model: User,
+            as: 'CreatedBy',
+            attributes: ['id', 'email', 'name']
           },
           {
-            model: FCGrnLine,
-            as: 'Line',
+            model: FCPOProduct,
+            as: 'Products',
             attributes: [
-              'id',
-              'sku_id',
-              'ordered_qty',
-              'received_qty',
-              'qc_pass_qty',
-              'qc_fail_qty',
-              'rtv_qty',
-              'held_qty',
-            ],
-          },
-          { model: User, as: 'GrnCreatedBy', attributes: ['id', 'email'] },
+              'id', 'catalogueId', 'productName', 'quantity', 'unitPrice', 
+              'totalAmount', 'mrp', 'description', 'createdAt'
+            ]
+          }
         ],
+        order: [['createdAt', 'DESC']],
         limit: Number(limit),
-        offset,
-        order: [['created_at', 'DESC']],
+        offset
+      });
+
+      // Transform the data to match the expected GRN format
+      const grnList = purchaseOrders.map((po: any) => {
+        return {
+          id: po.id,
+          po_id: po.id,
+          status: po.status.toLowerCase(),
+          closeReason: po.status === 'REJECTED' ? po.rejectionReason : null,
+          created_by: po.CreatedBy?.id || null,
+          created_at: po.createdAt,
+          updated_at: po.updatedAt,
+          FCPO: {
+            id: po.id,
+            po_id: po.poId,
+            status: po.status.toLowerCase()
+          },
+          Line: po.Products?.map((product: any) => ({
+            id: product.id,
+            sku_id: product.catalogueId,
+            ordered_qty: product.quantity,
+            received_qty: 0, // No received quantity for PO products
+            qc_pass_qty: 0,
+            qc_fail_qty: 0,
+            rtv_qty: 0,
+            held_qty: 0,
+            product_details: {
+              name: product.productName,
+              description: product.description,
+              mrp: product.mrp,
+              unit_price: product.unitPrice,
+              total_amount: product.totalAmount
+            }
+          })) || []
+        };
       });
 
       const totalPages = Math.ceil(count / limit);
 
       const response = {
-        grn: rows,
+        grn: grnList,
         pagination: {
           page: parseInt(page.toString()),
           limit: parseInt(limit.toString()),
@@ -628,7 +645,7 @@ export class FCGrnController {
         error: null,
       });
     } catch (error) {
-      console.error('Error fetching warehouses:', error);
+      console.error('Error fetching FC GRN list:', error);
       res.status(500).json({
         statusCode: 500,
         success: false,

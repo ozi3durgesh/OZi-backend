@@ -368,8 +368,9 @@ export class DCSkuSplittingController {
         return ResponseHandler.error(res, 'Lines array is required and must not be empty', 400);
       }
 
-      if (!status || !['partial', 'completed', 'closed', 'pending-qc', 'variance-review', 'rtv-initiated'].includes(status)) {
-        return ResponseHandler.error(res, 'Valid status is required', 400);
+      // Status is now optional - will be auto-calculated if not provided
+      if (status && !['partial', 'completed', 'closed', 'pending-qc', 'variance-review', 'rtv-initiated'].includes(status)) {
+        return ResponseHandler.error(res, 'Invalid status provided', 400);
       }
 
       // Validate each line
@@ -418,11 +419,36 @@ export class DCSkuSplittingController {
         }
       }
 
+      // Auto-calculate status if not provided
+      let calculatedStatus = status;
+      if (!status) {
+        let allCompleted = true;
+        let hasPartial = false;
+        
+        for (const line of lines) {
+          const totalProcessed = (line.qcPassQty || 0) + (line.rejectedQty || 0);
+          if (totalProcessed < line.orderedQty) {
+            allCompleted = false;
+            if (totalProcessed > 0) {
+              hasPartial = true;
+            }
+          }
+        }
+        
+        if (allCompleted) {
+          calculatedStatus = 'completed';
+        } else if (hasPartial) {
+          calculatedStatus = 'partial';
+        } else {
+          calculatedStatus = 'pending';
+        }
+      }
+
       const result = await DCSkuSplittingService.createDCGrnFromSkuSplits({
         poId,
         lines,
         closeReason,
-        status
+        status: calculatedStatus
       }, userId);
 
       return ResponseHandler.success(res, {
@@ -430,7 +456,7 @@ export class DCSkuSplittingController {
         data: {
           grn_id: result.grnId,
           po_id: poId,
-          status: status,
+          status: calculatedStatus,
           lines_processed: lines.length
         }
       });
