@@ -99,7 +99,7 @@ export class FCPOService {
           cess: product.cess || parentProduct.cess || 0,
           imageUrl: product.image_url || parentProduct.image_url || '',
           brandId: product.brand_id || parentProduct.brand_id || 1,
-          categoryId: product.category_id || 1,
+          categoryId: product.category_id || parentProduct.category || 1,
           status: 1,
         };
 
@@ -195,7 +195,7 @@ export class FCPOService {
               {
                 model: ProductMaster,
                 as: 'Product',
-                attributes: ['id', 'catalogue_id', 'name', 'description', 'mrp'],
+                attributes: ['id', 'name', 'description', 'mrp'],
               },
             ],
           },
@@ -528,7 +528,7 @@ export class FCPOService {
             {
               model: ProductMaster,
               as: 'Product',
-              attributes: ['id', 'catalogue_id', 'name', 'description', 'mrp'],
+              attributes: ['id', 'name', 'description', 'mrp'],
             },
           ],
         },
@@ -717,9 +717,9 @@ export class FCPOService {
     return await ProductMaster.findAll({
       where: {
         // Add any filters for products available for FC PO
-        status: 'ACTIVE',
+        status: 1,
       },
-      attributes: ['id', 'catalogue_id', 'name', 'description', 'mrp'],
+      attributes: ['id', 'name', 'description', 'mrp'],
       order: [['name', 'ASC']],
     });
   }
