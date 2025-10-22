@@ -39,7 +39,7 @@ DCPOApproval.init(
       },
     },
     approverRole: {
-      type: DataTypes.ENUM('creator', 'category_head', 'admin', 'founder'),
+      type: DataTypes.ENUM('creator', 'category_head', 'admin', 'founder', 'direct_approval'),
       allowNull: false,
     },
     approverId: {

@@ -502,4 +502,56 @@ export class DCPOController {
     }
   }
 
+  /**
+   * Direct approval/rejection of DC Purchase Order without hierarchy
+   * POST /api/dc-pos/:id/direct-approve
+   */
+  static async directApproval(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { id } = req.params;
+      const { action, comments } = req.body;
+      const userId = req.user?.id;
+      const userRoleId = req.user?.roleId;
+
+      if (!userId) {
+        return ResponseHandler.error(res, 'User authentication required', 401);
+      }
+
+      if (!id) {
+        return ResponseHandler.error(res, 'DC Purchase Order ID is required', 400);
+      }
+
+      if (!action || !['APPROVED', 'REJECTED'].includes(action)) {
+        return ResponseHandler.error(res, 'Action must be either APPROVED or REJECTED', 400);
+      }
+
+      // Check if user has permission for direct approval (Role ID 1, 3, or 7)
+      if (![1, 3, 7].includes(userRoleId)) {
+        return ResponseHandler.error(res, 'Access denied. Only authorized users can perform direct approval', 403);
+      }
+
+      if (action === 'REJECTED' && !comments) {
+        return ResponseHandler.error(res, 'Comments are required for rejection', 400);
+      }
+
+      const result = await DCPOService.directApproval(
+        parseInt(id),
+        action,
+        userId,
+        comments
+      );
+
+      return ResponseHandler.success(res, {
+        message: action === 'APPROVED' 
+          ? 'DC Purchase Order approved successfully' 
+          : 'DC Purchase Order rejected successfully',
+        data: result,
+      });
+
+    } catch (error: any) {
+      console.error('Direct approval error:', error);
+      return ResponseHandler.error(res, error.message || 'Failed to process direct approval', error.statusCode || 500);
+    }
+  }
+
 }

@@ -503,6 +503,7 @@ export class DCPOService {
     }
   }
 
+
   /**
    * Process approval/rejection
    */
@@ -1243,7 +1244,7 @@ export class DCPOService {
       }
 
       // Check if PO is in a state that can be directly approved/rejected
-      const validStatuses = [
+      const validStatuses: string[] = [
         DC_PO_CONSTANTS.STATUS.PENDING_CATEGORY_HEAD,
         DC_PO_CONSTANTS.STATUS.PENDING_ADMIN,
         DC_PO_CONSTANTS.STATUS.PENDING_CREATOR_REVIEW

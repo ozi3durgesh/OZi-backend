@@ -64,7 +64,8 @@ router.post('/approval/:token', DCPOController.processApproval);
 router.put('/purchase-orders/:id/edit', DCPOController.editPO);
 router.put('/purchase-orders/:id/approve',isAdmin, DCPOController.approvePO);
 
-router.post('')
+// Direct approval/rejection without hierarchy (Authorized users - Role ID 1, 3, or 7)
+router.post('/purchase-orders/:id/direct-approve', DCPOController.directApproval);
 
 // SKU Splitting routes
 router.use('/', dcSkuSplittingRoutes);

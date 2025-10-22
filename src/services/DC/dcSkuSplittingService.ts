@@ -262,7 +262,7 @@ export class DCSkuSplittingService {
       po_id: poId,
       name: product.productName,
       status: 1,
-      category_id: product.category_id || 0,
+      category_id: Number(product.category_id) || 0,
       sku,
       received_quantity: product.quantity,
       sku_splitted_quantity: skuSplittedQuantity,
