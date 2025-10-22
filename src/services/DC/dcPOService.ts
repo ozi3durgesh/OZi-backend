@@ -741,9 +741,9 @@ export class DCPOService {
           ],
           include: [
             {
-              model: ParentProductMasterDC,
+              model: ProductMaster,
               as: 'Product',
-              attributes: ['id', 'catalogue_id', 'name', 'mrp', 'hsn', 'brand_id'],
+              attributes: ['id', 'catelogue_id', 'name', 'mrp', 'hsn', 'brand_id'],
             },
             {
               model: DCPOSkuMatrix,
