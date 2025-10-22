@@ -1,17 +1,17 @@
 import { Request, Response } from 'express';
 
-import GRNBatch from '../models/GrnBatch';
+import FCGrnBatch from '../models/FCGrnBatch';
 import { CreateGRNBatchRequest, GRNFilters } from '../types';
-import GRNLine from '../models/GrnLine';
+import FCGrnLine from '../models/FCGrnLine';
 
-export class GrnBatchController {
-  static async createGrnBatch(req: Request, res: Response) {
+export class FCGrnBatchController {
+  static async createFCGrnBatch(req: Request, res: Response) {
     const data: CreateGRNBatchRequest = req.body;
-    const existingGRNBatch = await GRNBatch.findOne({
+    const existingFCGrnBatch = await FCGrnBatch.findOne({
       where: { grn_line_id: data.grnLineId, batch_no: data.batchNo },
     });
 
-    if (existingGRNBatch) {
+    if (existingFCGrnBatch) {
       res.status(400).json({
         statusCode: 400,
         success: false,
@@ -20,7 +20,7 @@ export class GrnBatchController {
       });
       return;
     }
-    const createdGrnBatch = await GRNBatch.create({
+    const createdGrnBatch = await FCGrnBatch.create({
       grn_line_id: data.grnLineId,
       batch_no: data.batchNo,
       expiry_date: data.expiry,
@@ -34,14 +34,14 @@ export class GrnBatchController {
       error: null,
     });
   }
-  static async getGrnBatchs(req: Request, res: Response) {
+  static async getFCGrnBatchs(req: Request, res: Response) {
     try {
       const { page = 1, limit = 10 } = req.query as GRNFilters;
 
       const offset: number = (Number(page) - 1) * Number(limit);
       const whereClause: any = {};
 
-      const { count, rows } = await GRNBatch.findAndCountAll({
+      const { count, rows } = await FCGrnBatch.findAndCountAll({
         where: whereClause,
         limit: Number(limit),
         offset,
@@ -74,10 +74,10 @@ export class GrnBatchController {
     }
   }
 
-  static async getGrnBatchById(req: Request, res: Response) {
+  static async getFCGrnBatchById(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const batch = await GRNBatch.findByPk(id);
+      const batch = await FCGrnBatch.findByPk(id);
 
       if (!batch) {
         return res.status(404).json({ message: 'Batch not found' });
@@ -92,10 +92,10 @@ export class GrnBatchController {
     }
   }
 
-  static async getGrnBatchByGrnLineId(req: Request, res: Response) {
+  static async getFCGrnBatchByGrnLineId(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const batches = await GRNBatch.findAll({
+      const batches = await FCGrnBatch.findAll({
         where: {
           grn_line_id: id,
         },
@@ -114,12 +114,12 @@ export class GrnBatchController {
     }
   }
 
-  static async updateGrnBatch(req: Request, res: Response) {
+  static async updateFCGrnBatch(req: Request, res: Response) {
     try {
       const { id } = req.params;
       const updates: Partial<CreateGRNBatchRequest> = req.body;
 
-      const batch = await GRNBatch.findByPk(id);
+      const batch = await FCGrnBatch.findByPk(id);
       if (!batch) {
         return res.status(404).json({ message: 'Batch not found' });
       }
@@ -139,10 +139,10 @@ export class GrnBatchController {
     }
   }
 
-  static async deleteGrnBatch(req: Request, res: Response) {
+  static async deleteFCGrnBatch(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const batch = await GRNBatch.findByPk(id);
+      const batch = await FCGrnBatch.findByPk(id);
 
       if (!batch) {
         return res.status(404).json({ message: 'Batch not found' });

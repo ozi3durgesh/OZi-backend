@@ -1,7 +1,7 @@
 import { DataTypes, Model } from 'sequelize';
 import sequelize from '../config/database';
 import { GRNLineAttributes, GRNLineCreationAttributes } from '../types';
-import GRN from './Grn.model';
+import FCGrn from './FCGrn.model';
 
 class GRNLine
   extends Model<GRNLineAttributes, GRNLineCreationAttributes>
@@ -122,7 +122,7 @@ GRNLine.init(
   },
   {
     sequelize,
-    tableName: 'grn_lines',
+    tableName: 'fc_grn_lines',
     timestamps: false,
     indexes: [{ fields: ['grn_id'] }, { fields: ['sku_id'] }],
   }

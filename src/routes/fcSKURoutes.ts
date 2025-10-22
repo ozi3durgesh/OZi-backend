@@ -9,7 +9,7 @@ router.use(authenticate);
 
 /**
  * @route GET /api/fc/skus/grn-status
- * @desc Get all SKUs with GRN status (done, rejected, pending) with complete details
+ * @desc Get all approved FC-POs ready for GRN with complete details
  * @access Private (FC users)
  */
 router.get('/grn-status', FCSKUController.getSKUsWithGRNStatus);

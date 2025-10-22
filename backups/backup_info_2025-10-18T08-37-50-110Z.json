@@ -1,9 +1,0 @@
-{
-  "timestamp": "2025-10-18T08:37:50.811Z",
-  "parent_product_master_count": 7,
-  "product_master_count": 2007,
-  "backup_files": {
-    "parent_product_master": "/Users/akashdip/Desktop/oms1/OZi-backend/backups/parent_product_master_backup_2025-10-18T08-37-50-110Z.json",
-    "product_master": "/Users/akashdip/Desktop/oms1/OZi-backend/backups/product_master_backup_2025-10-18T08-37-50-110Z.json"
-  }
-}

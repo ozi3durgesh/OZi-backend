@@ -13,7 +13,7 @@ import pickingRoutes from './routes/pickingRoutes';
 import packingRoutes from './routes/packingRoutes';
 import handoverRoutes from './routes/handoverRoutes';
 import warehouseRoutes from './routes/warehouseRoutes';
-import grnRoutes from './routes/grnRoutes';
+import fcGrnRoutes from './routes/FCGrnRoutes';
 import easyEcomWebhookRoutes from './routes/easyEcomWebhookRoutes';
 import { errorHandler } from './middleware/errorHandler';
 import vendorRoutes from './routes/vendorRoutes';
@@ -70,7 +70,7 @@ app.use('/api/picklist', pickingRoutes);
 app.use('/api/packing', packingRoutes);
 app.use('/api/handover', handoverRoutes);
 app.use('/api/warehouses', warehouseRoutes);
-app.use('/api/grn', grnRoutes);
+app.use('/api/fc/grn', fcGrnRoutes);
 
 // FC Selection routes must come BEFORE vendor/product routes to avoid FC filtering middleware
 app.use('/api/fc-selection', fcSelectionRoutes);
