@@ -65,8 +65,8 @@ router.post('/:id/submit', FCPOController.submitForApproval);
 
 /**
  * @route POST /api/fc-po/:id/approve
- * @desc Approve/Reject FC Purchase Order (DC Dashboard - Role ID 1 or 3)
- * @access Private (DC Admin/Manager - Role ID 1 or 3)
+ * @desc Approve/Reject FC Purchase Order (DC Dashboard - Role ID 1, 3, or 7)
+ * @access Private (DC Admin/Manager/Approver - Role ID 1, 3, or 7)
  */
 router.post('/:id/approve', FCPOController.processApproval);
 

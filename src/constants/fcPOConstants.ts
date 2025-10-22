@@ -11,7 +11,7 @@ export const FC_PO_CONSTANTS = {
   ERRORS: {
     PO_NOT_FOUND: 'FC Purchase Order not found',
     INVALID_STATUS: 'Invalid status for this operation',
-    ACCESS_DENIED: 'Access denied. Only DC users with role ID 1 or 3 can approve/reject FC Purchase Orders',
+    ACCESS_DENIED: 'Access denied. Only DC users with role ID 1, 3, or 7 can approve/reject FC Purchase Orders',
     ALREADY_APPROVED: 'FC Purchase Order is already approved',
     ALREADY_REJECTED: 'FC Purchase Order is already rejected',
     INVALID_APPROVER: 'Invalid approver role',
@@ -50,5 +50,6 @@ export const FC_PO_CONSTANTS = {
   ROLE_IDS: {
     DC_ADMIN: 1,
     DC_MANAGER: 3,
+    DC_APPROVER: 7,
   },
 };
