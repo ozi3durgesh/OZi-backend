@@ -686,8 +686,20 @@ export class DCPOService {
       order: [['createdAt', 'DESC']],
     });
 
+    // Transform the data to handle status logic for edited POs
+    const transformedRows = rows.map(po => {
+      const poData = po.toJSON();
+      
+      // If the PO is edited, set status to PENDING_CATEGORY_HEAD
+      if (poData.isEdited && poData.status === 'APPROVED') {
+        poData.status = 'PENDING_CATEGORY_HEAD';
+      }
+      
+      return poData;
+    });
+
     return {
-      purchaseOrders: rows,
+      purchaseOrders: transformedRows,
       pagination: {
         page,
         limit,
