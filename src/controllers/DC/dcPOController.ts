@@ -477,4 +477,29 @@ export class DCPOController {
     }
   }
 
+  static async approvePO(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const userId = (req as any).user?.id; // from auth middleware
+      const isApproved = req.body.isApproved;
+
+      const editedPO = await DCPOService.approvePO(
+        parseInt(id),
+        parseInt(userId),
+        isApproved
+      );
+
+      return res.status(200).json({
+        message: 'Edited PO saved successfully.',
+        editedPO,
+      });
+    } catch (error: any) {
+      console.error('Error editing PO:', error);
+      return res.status(500).json({
+        message: error.message || 'Error saving edited PO',
+        error,
+      });
+    }
+  }
+
 }
