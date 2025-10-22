@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { ResponseHandler } from '../../middleware/responseHandler';
-import { DCGrn, DCGrnLine, DCGrnBatch, DCGrnPhoto, DCPurchaseOrder, User, DistributionCenter, DCPOProduct, ParentProductMasterDC, DCSkuSplitted } from '../../models';
+import { DCGrn, DCGrnLine, DCGrnBatch, DCGrnPhoto, DCPurchaseOrder, User, DistributionCenter, DCPOProduct, ProductMaster, DCSkuSplitted } from '../../models';
 import { Transaction } from 'sequelize';
 import sequelize from '../../config/database';
 
@@ -24,7 +24,7 @@ export class DCGrnController {
             as: 'Products',
             include: [
               {
-                model: ParentProductMasterDC,
+                model: ProductMaster,
                 as: 'Product',
                 attributes: ['id', 'catalogue_id', 'name', 'description', 'mrp', 'ean_upc']
               }

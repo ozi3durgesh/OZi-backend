@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { ResponseHandler } from '../../middleware/responseHandler';
-import { ParentProductMasterDC, FCPurchaseOrder, FCPOProduct, FCGrn, FCGrnLine, DCPurchaseOrder, DCPOProduct, DCGrn, DCGrnLine, ProductMaster } from '../../models';
+import { FCPurchaseOrder, FCPOProduct, FCGrn, FCGrnLine, DCPurchaseOrder, DCPOProduct, DCGrn, DCGrnLine, ProductMaster } from '../../models';
 import { Op } from 'sequelize';
 
 interface AuthRequest extends Request {
@@ -45,7 +45,7 @@ export class FCSKUController {
             required: false,
             include: [
               {
-                model: ParentProductMasterDC,
+                model: ProductMaster,
                 as: 'Product',
                 required: true
               }
@@ -275,7 +275,7 @@ export class FCSKUController {
             required: false,
             include: [
               {
-                model: ParentProductMasterDC,
+                model: ProductMaster,
                 as: 'Product',
                 required: true
               }
@@ -454,8 +454,8 @@ export class FCSKUController {
         return ResponseHandler.error(res, 'Catalogue ID is required', 400);
       }
 
-      const product = await ParentProductMasterDC.findOne({
-        where: { catalogue_id: catalogueId },
+      const product = await ProductMaster.findOne({
+        where: { catelogue_id: catalogueId },
         include: [
           {
             model: FCPOProduct,
