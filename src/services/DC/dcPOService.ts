@@ -1158,7 +1158,7 @@ export class DCPOService {
       }
 
       //update isEdited flag in Dcpurchaseorder
-      originalPO.update({
+      await originalPO.update({
         isEdited: true
       }, {transaction});
 
