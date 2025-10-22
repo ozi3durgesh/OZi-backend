@@ -184,6 +184,7 @@ export class FCSKUController {
             cess: productInfo.cess,
             hsn: productInfo.hsn,
             sku: productInfo.sku_id, // Use sku_id from ProductMaster table
+            catelogue_id: productInfo.catelogue_id, // Add catalogue_id
             category_id: productInfo.category_id,
             brand_id: productInfo.brand_id
           } : productInfo.toJSON();
