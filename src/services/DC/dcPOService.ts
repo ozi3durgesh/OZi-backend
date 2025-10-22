@@ -148,8 +148,12 @@ export class DCPOService {
       ]
     });
 
-    if (products.length !== catalogueIds.length) {
-      const error: any = new Error(`Products not found. Requested: ${catalogueIds.join(', ')}, Found: ${products.map(p => p.catelogue_id).join(', ')}`);
+    // Check if all requested catalogue IDs exist (handle multiple variants per catalogue_id)
+    const foundCatalogueIds = [...new Set(products.map(p => p.catelogue_id))];
+    const missingCatalogueIds = catalogueIds.filter(id => !foundCatalogueIds.includes(id));
+    
+    if (missingCatalogueIds.length > 0) {
+      const error: any = new Error(`Products not found for catalogue IDs: ${missingCatalogueIds.join(', ')}`);
       error.statusCode = 400;
       throw error;
     }
