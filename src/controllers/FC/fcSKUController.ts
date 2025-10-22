@@ -140,9 +140,9 @@ export class FCSKUController {
           if (grns.length > 0) {
             grns.forEach((grn: any) => {
               const lines = isDCPO ? grn.Lines : (grn.Line || []);
-              // For DC, match by catalogue_id, for FC match by sku
+              // For DC, match by sku_id, for FC match by sku
               const productLine = lines.find((line: any) => 
-                isDCPO ? line.sku_id === product.catalogue_id : line.sku_id === productInfo.sku
+                isDCPO ? line.sku_id === productInfo.sku_id : line.sku_id === productInfo.sku
               );
               
               if (productLine) {
@@ -159,13 +159,10 @@ export class FCSKUController {
                   grnType: isDCPO ? 'DC' : 'FC'
                 });
 
-                // Determine overall GRN status
-                if (totalReceivedQuantity === 0) {
-                  grnStatus = 'PENDING';
-                } else if (totalReceivedQuantity >= totalOrderedQuantity) {
-                  grnStatus = 'COMPLETED';
-                } else {
-                  grnStatus = 'PARTIAL';
+                // Use the actual line_status from DC GRN data
+                // If multiple GRN lines exist, use the most recent status
+                if (grnStatus === 'NO_GRN' || productLine.line_status === 'completed') {
+                  grnStatus = productLine.line_status.toUpperCase();
                 }
               }
             });
@@ -186,7 +183,7 @@ export class FCSKUController {
             gst: productInfo.gst,
             cess: productInfo.cess,
             hsn: productInfo.hsn,
-            sku: product.catalogue_id, // Use catalogue_id as sku for DC
+            sku: productInfo.sku_id, // Use sku_id from ProductMaster table
             category_id: productInfo.category_id,
             brand_id: productInfo.brand_id
           } : productInfo.toJSON();
