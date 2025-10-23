@@ -72,19 +72,19 @@ export class DCSkuSplittingService {
       return 'completed';
     }
     
-    // 3. if "ordered_qty" > "rejected_qty" == 0 and "qc_pass_qty" == 0 then "line_status" = pending
-    if (orderedQty > rejectedQty && rejectedQty === 0 && qcPassQty === 0) {
-      return 'pending';
-    }
-    
-    // 4. if "ordered_qty" == "rejected_qty" + "qc_pass_qty" then "line_status" = partial
+    // 3. if "ordered_qty" == "rejected_qty" + "qc_pass_qty" then "line_status" = partial
     if (orderedQty === (rejectedQty + qcPassQty)) {
       return 'partial';
     }
     
-    // 5. if both rejectedQty > 0 and qcPassQty > 0 but total < orderedQty, then partial
-    if (rejectedQty > 0 && qcPassQty > 0) {
+    // 4. if "ordered_qty" > "rejected_qty" (but not 0 < ordered_qty) OR "qc_pass_qty" (but not 0 < ordered_qty) then "line_status" = partial
+    if ((orderedQty > rejectedQty && rejectedQty > 0) || (qcPassQty > 0 && qcPassQty < orderedQty)) {
       return 'partial';
+    }
+    
+    // 5. if "ordered_qty" > "rejected_qty" == 0 and "qc_pass_qty" == 0 then "line_status" = pending
+    if (orderedQty > rejectedQty && rejectedQty === 0 && qcPassQty === 0) {
+      return 'pending';
     }
     
     // Default fallback - if none of the above conditions match, return pending
