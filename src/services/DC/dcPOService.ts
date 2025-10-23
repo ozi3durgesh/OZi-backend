@@ -691,9 +691,9 @@ export class DCPOService {
       const poData = po.toJSON();
       
       // If the PO is edited, set status to PENDING_CATEGORY_HEAD
-      if (poData.isEdited && poData.status === 'APPROVED') {
-        poData.status = 'PENDING_CATEGORY_HEAD';
-      }
+      // if (poData.isEdited && poData.status === 'APPROVED') {
+      //   poData.status = 'PENDING_CATEGORY_HEAD';
+      // }
       
       return poData;
     });
