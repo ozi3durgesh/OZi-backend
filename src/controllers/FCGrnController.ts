@@ -4,7 +4,7 @@ import sequelize from '../config/database';
 import { QueryTypes } from 'sequelize';
 import FCGrnLine from '../models/FCGrnLine';
 import FCGrnBatch from '../models/FCGrnBatch';
-import { User, FCPurchaseOrder, FCPOProduct } from '../models';
+import { User, FCPurchaseOrder, FCPOProduct, ProductMaster } from '../models';
 import FCGrn from '../models/FCGrn.model';
 import FCGrnPhoto from '../models/FCGrnPhoto';
 import {
@@ -122,10 +122,31 @@ export class FCGrnController {
       );
 
       for (const line of input.lines) {
-        const fcPOProduct = await FCPOProduct.findOne({
-          where: { fcPOId: input.poId, catalogueId: line.skuId },
+        // First, get all FC PO products for this PO
+        const fcPOProducts = await FCPOProduct.findAll({
+          where: { fcPOId: input.poId },
           transaction: t,
         });
+
+        // Find the product that contains the SKU in its SKU matrix
+        let fcPOProduct = null;
+        for (const product of fcPOProducts) {
+          try {
+            const skuMatrix = product.skuMatrixOnCatalogueId 
+              ? (typeof product.skuMatrixOnCatalogueId === 'string' 
+                  ? JSON.parse(product.skuMatrixOnCatalogueId)
+                  : product.skuMatrixOnCatalogueId)
+              : [];
+            
+            if (Array.isArray(skuMatrix) && skuMatrix.some((item: any) => item.sku === line.skuId)) {
+              fcPOProduct = product;
+              break;
+            }
+          } catch (error) {
+            console.error('Error parsing SKU matrix:', error);
+          }
+        }
+
         if (!fcPOProduct) {
           await t.rollback();
           res.status(400).json({
@@ -193,18 +214,29 @@ export class FCGrnController {
         }
 
         // Validate S3 URL if provided
-        if (line.photos) {
-          if (!FCGrnController.isValidS3Url(line.photos)) {
-            await t.rollback();
-            res.status(400).json({
-              statusCode: 400,
-              success: false,
-              data: null,
-              error: `Invalid S3 URL format for SKU ${line.skuId}. Please upload images first using the photo upload API.`,
-            });
-            return;
+        if (line.photos && line.photos.length > 0) {
+          // Handle both string and array formats
+          const photoUrls = Array.isArray(line.photos) ? line.photos : [line.photos];
+          for (const photoUrl of photoUrls) {
+            if (photoUrl && !FCGrnController.isValidS3Url(photoUrl)) {
+              await t.rollback();
+              res.status(400).json({
+                statusCode: 400,
+                success: false,
+                data: null,
+                error: `Invalid S3 URL format for SKU ${line.skuId}. Please upload images first using the photo upload API.`,
+              });
+              return;
+            }
           }
         }
+
+        // Calculate line status using the same logic as DC GRN
+        const calculatedLineStatus = FCGrnController.calculateLineStatus(
+          line.orderedQty,
+          line.rejectedQty || 0,
+          line.qcPassQty ?? line.receivedQty
+        );
 
         const grnLine = await FCGrnLine.create(
           {
@@ -218,30 +250,31 @@ export class FCGrnController {
             qc_fail_qty: line.rejectedQty ?? 0,
             held_qty: line.heldQty ?? 0,
             rtv_qty: line.rtvQty ?? 0,
-            line_status:
-              newTotalReceived === 0
-                ? 'pending'
-                : newTotalReceived < line.orderedQty
-                  ? 'partial'
-                  : 'completed',
+            line_status: calculatedLineStatus,
           },
           { transaction: t }
         );
 
         // Create FCGrnPhoto record for the S3 URL
-        if (line.photos) {
+        if (line.photos && line.photos.length > 0) {
           try {
-            // Create FCGrnPhoto record for the S3 URL (already uploaded via photo upload API)
-            await FCGrnPhoto.create(
-              {
-                sku_id: line.skuId,
-                grn_id: fcGrn.id,
-                po_id: input.poId,
-                url: line.photos,
-                reason: 'sku-level-photo',
-              },
-              { transaction: t }
-            );
+            // Handle both string and array formats for photos
+            const photoUrls = Array.isArray(line.photos) ? line.photos : [line.photos];
+            
+            for (const photoUrl of photoUrls) {
+              if (photoUrl && typeof photoUrl === 'string') {
+                await FCGrnPhoto.create(
+                  {
+                    sku_id: line.skuId,
+                    grn_id: fcGrn.id,
+                    po_id: input.poId,
+                    url: photoUrl,
+                    reason: 'sku-level-photo',
+                  },
+                  { transaction: t }
+                );
+              }
+            }
           } catch (photoError) {
             await t.rollback();
             console.error('FCGrn Photo creation error:', photoError);
@@ -592,24 +625,80 @@ const createdGrn = await FCGrn.findByPk(fcGrn.id, {
     }
   }
 
+  /**
+   * Calculate line status based on business logic (same as DC GRN)
+   * @param orderedQty - Ordered quantity
+   * @param rejectedQty - Rejected quantity  
+   * @param qcPassQty - QC passed quantity
+   * @returns line_status: 'pending' | 'partial' | 'rejected' | 'completed'
+   */
+  private static calculateLineStatus(orderedQty: number, rejectedQty: number, qcPassQty: number): string {
+    // Handle edge case where ordered_qty is 0
+    if (orderedQty === 0) {
+      return 'pending';
+    }
+    
+    // 1. if "ordered_qty" == "rejected_qty" then "line_status" = rejected
+    if (orderedQty === rejectedQty) {
+      return 'rejected';
+    }
+    
+    // 2. if "ordered_qty" == "qc_pass_qty" then "line_status" = completed
+    if (orderedQty === qcPassQty) {
+      return 'completed';
+    }
+    
+    // 3. if "ordered_qty" == "rejected_qty" + "qc_pass_qty" then "line_status" = partial
+    if (orderedQty === (rejectedQty + qcPassQty)) {
+      return 'partial';
+    }
+    
+    // 4. if "ordered_qty" > "rejected_qty" (but not 0 < ordered_qty) OR "qc_pass_qty" (but not 0 < ordered_qty) then "line_status" = partial
+    if ((orderedQty > rejectedQty && rejectedQty > 0) || (qcPassQty > 0 && qcPassQty < orderedQty)) {
+      return 'partial';
+    }
+    
+    // 5. if "ordered_qty" > "rejected_qty" == 0 and "qc_pass_qty" == 0 then "line_status" = pending
+    if (orderedQty > rejectedQty && rejectedQty === 0 && qcPassQty === 0) {
+      return 'pending';
+    }
+    
+    // Default fallback - if none of the above conditions match, return pending
+    return 'pending';
+  }
+
   static async getFCGrnDetails(req: Request, res: Response): Promise<void> {
     try {
-      const {
-        status,
-        po_id,
-        page = 1,
-        limit = 10,
-        search,
-        startDate,
-        endDate,
-      } = req.query as GRNFilters;
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
 
-      const offset: number = (page - 1) * limit;
+      // Validate pagination parameters
+      if (page < 1) {
+        res.status(400).json({
+          statusCode: 400,
+          success: false,
+          data: null,
+          error: 'Page number must be greater than 0',
+        });
+        return;
+      }
+      if (limit < 1 || limit > 100) {
+        res.status(400).json({
+          statusCode: 400,
+          success: false,
+          data: null,
+          error: 'Limit must be between 1 and 100',
+        });
+        return;
+      }
 
-      // Get FC Purchase Orders with APPROVED or REJECTED status
+      const offset = (page - 1) * limit;
+
+      // Get FC Purchase Orders with APPROVED, REJECTED, or PENDING_CATEGORY_HEAD status
+      // PENDING_CATEGORY_HEAD means the PO was approved but then edited
       const { count, rows: purchaseOrders } = await FCPurchaseOrder.findAndCountAll({
         where: {
-          status: ['APPROVED', 'REJECTED']
+          status: ['APPROVED', 'REJECTED', 'PENDING_CATEGORY_HEAD']
         },
         include: [
           {
@@ -622,66 +711,206 @@ const createdGrn = await FCGrn.findByPk(fcGrn.id, {
             as: 'Products',
             attributes: [
               'id', 'catalogueId', 'productName', 'quantity', 'unitPrice', 
-              'totalAmount', 'mrp', 'description', 'createdAt'
+              'totalAmount', 'mrp', 'description', 'hsn', 'ean_upc',
+              'weight', 'length', 'height', 'width', 'gst', 'cess', 'image_url',
+              'brand_id', 'category_id', 'skuMatrixOnCatalogueId'
+            ]
+          },
+          {
+            model: FCGrn,
+            as: 'FCGrns',
+            include: [
+              {
+            model: FCGrnLine,
+            as: 'Line',
+                attributes: [
+                  'id', 'sku_id', 'ordered_qty', 'received_qty', 'pending_qty',
+                  'rejected_qty', 'qc_pass_qty', 'qc_fail_qty', 'rtv_qty', 'held_qty',
+                  'line_status', 'variance_reason', 'remarks'
+                ]
+              }
             ]
           }
         ],
         order: [['createdAt', 'DESC']],
-        limit: Number(limit),
+        limit,
         offset
       });
 
       // Transform the data to match the expected GRN format
-      const grnList = purchaseOrders.map((po: any) => {
+      const grnList = await Promise.all(purchaseOrders.map(async (po: any) => {
+        // Check if GRN exists for this PO
+        const hasGrn = po.FCGrns && po.FCGrns.length > 0;
+        const grnData = hasGrn ? po.FCGrns[0] : null;
+        
+        const lines = await Promise.all((po.Products || []).map(async (product: any) => {
+          // Parse SKU matrix to get actual SKUs
+          let skuMatrix: any[] = [];
+          try {
+            if (product.skuMatrixOnCatalogueId) {
+              skuMatrix = typeof product.skuMatrixOnCatalogueId === 'string' 
+                ? JSON.parse(product.skuMatrixOnCatalogueId)
+                : product.skuMatrixOnCatalogueId;
+            }
+          } catch (error) {
+            console.error('Error parsing SKU matrix:', error);
+            skuMatrix = [];
+          }
+
+          // Get the first SKU from the matrix (or fallback to catalogueId)
+          const actualSku = skuMatrix.length > 0 ? skuMatrix[0].sku : product.catalogueId;
+          
+          // Find corresponding GRN line for this product using the actual SKU
+          const grnLine = grnData?.Line?.find((line: any) => line.sku_id === actualSku);
+          
+          // Fetch product details from ProductMaster
+          let productDetails = {
+            name: product.productName,
+            description: product.description,
+            mrp: product.mrp,
+            ean_upc: product.ean_upc,
+            image_url: product.image_url,
+            weight: product.weight,
+            length: product.length,
+            height: product.height,
+            width: product.width,
+            gst: product.gst,
+            cess: product.cess
+          };
+
+          // Try to fetch from ProductMaster if we have a proper SKU
+          if (actualSku && actualSku.length >= 12) {
+            try {
+              const productMaster = await ProductMaster.findOne({
+                where: { sku_id: actualSku },
+                attributes: [
+                  'id', 'status', 'catelogue_id', 'product_id', 'sku_id', 'color', 'age_size',
+                  'name', 'category', 'description', 'image_url', 'mrp', 'avg_cost_to_ozi',
+                  'ean_upc', 'brand_id', 'weight', 'length', 'height', 'width', 
+                  'inventory_threshold', 'gst', 'cess', 'hsn', 'created_by', 'created_at', 'updated_at'
+                ]
+              });
+              
+              if (productMaster) {
+                productDetails = {
+                  id: productMaster.id,
+                  status: productMaster.status,
+                  catelogue_id: productMaster.catelogue_id,
+                  product_id: productMaster.product_id,
+                  sku_id: productMaster.sku_id,
+                  color: productMaster.color,
+                  age_size: productMaster.age_size,
+                  name: productMaster.name,
+                  category: productMaster.category,
+                  description: productMaster.description,
+                  image_url: productMaster.image_url,
+                  mrp: productMaster.mrp,
+                  avg_cost_to_ozi: productMaster.avg_cost_to_ozi,
+                  ean_upc: productMaster.ean_upc,
+                  brand_id: productMaster.brand_id,
+                  weight: productMaster.weight,
+                  length: productMaster.length,
+                  height: productMaster.height,
+                  width: productMaster.width,
+                  inventory_threshold: productMaster.inventory_threshold,
+                  gst: productMaster.gst,
+                  cess: productMaster.cess,
+                  hsn: productMaster.hsn,
+                  created_by: productMaster.created_by,
+                  created_at: productMaster.created_at,
+                  updated_at: productMaster.updated_at
+                };
+              }
+            } catch (error) {
+              console.error('Error fetching product details from ProductMaster:', error);
+              // Fall back to PO product details
+            }
+          }
+          
+          if (grnLine) {
+            // Calculate line status based on business logic
+            const calculatedLineStatus = FCGrnController.calculateLineStatus(
+              grnLine.ordered_qty,
+              grnLine.rejected_qty,
+              grnLine.qc_pass_qty
+            );
+            
+            // Use actual GRN line data
+            return {
+              id: grnLine.id,
+              sku_id: grnLine.sku_id,
+              ordered_qty: grnLine.ordered_qty,
+              received_qty: grnLine.received_qty,
+              pending_qty: grnLine.pending_qty,
+              rejected_qty: grnLine.rejected_qty,
+              qc_pass_qty: grnLine.qc_pass_qty,
+              qc_fail_qty: grnLine.qc_fail_qty,
+              rtv_qty: grnLine.rtv_qty,
+              held_qty: grnLine.held_qty,
+              line_status: calculatedLineStatus,
+              product_details: productDetails
+            };
+          } else {
+            // Fall back to PO data if no GRN line exists
+            // Calculate line status for fallback case (all quantities are 0 except ordered_qty)
+            const calculatedLineStatus = FCGrnController.calculateLineStatus(
+              product.quantity, // ordered_qty
+              0, // rejected_qty
+              0  // qc_pass_qty
+            );
+            
+            return {
+              id: product.id,
+              sku_id: actualSku,
+              ordered_qty: product.quantity,
+              received_qty: 0,
+              pending_qty: product.quantity,
+              rejected_qty: 0,
+              qc_pass_qty: 0,
+              qc_fail_qty: 0,
+              rtv_qty: 0,
+              held_qty: 0,
+              line_status: calculatedLineStatus,
+              product_details: productDetails
+            };
+          }
+        }));
+        
         return {
-          id: po.id,
+          id: hasGrn ? grnData.id : po.id,
           po_id: po.id,
-          status: po.status.toLowerCase(),
-          closeReason: po.status === 'REJECTED' ? po.rejectionReason : null,
-          created_by: po.CreatedBy?.id || null,
-          created_at: po.createdAt,
-          updated_at: po.updatedAt,
+          status: hasGrn ? grnData.status : po.status.toLowerCase(),
+          closeReason: hasGrn ? grnData.closeReason : (po.status === 'REJECTED' ? po.rejectionReason : null),
+          created_by: hasGrn ? grnData.created_by : (po.CreatedBy?.id || null),
+          created_at: hasGrn ? grnData.created_at : po.createdAt,
+          updated_at: hasGrn ? grnData.updated_at : po.updatedAt,
           FCPO: {
             id: po.id,
             po_id: po.poId,
-            status: po.status.toLowerCase()
+            vendor_name: `FC-${po.fcId}`,
+            approval_status: po.status.toLowerCase()
           },
-          Line: po.Products?.map((product: any) => ({
-            id: product.id,
-            sku_id: product.catalogueId,
-            ordered_qty: product.quantity,
-            received_qty: 0, // No received quantity for PO products
-            qc_pass_qty: 0,
-            qc_fail_qty: 0,
-            rtv_qty: 0,
-            held_qty: 0,
-            product_details: {
-              name: product.productName,
-              description: product.description,
-              mrp: product.mrp,
-              unit_price: product.unitPrice,
-              total_amount: product.totalAmount
-            }
-          })) || []
+          Line: lines
         };
-      });
+      }));
 
       const totalPages = Math.ceil(count / limit);
-
-      const response = {
-        grn: grnList,
-        pagination: {
-          page: parseInt(page.toString()),
-          limit: parseInt(limit.toString()),
-          total: count,
-          totalPages,
-        },
-      };
 
       res.status(200).json({
         statusCode: 200,
         success: true,
-        data: response,
+        data: {
+          message: 'FC GRN list retrieved successfully',
+          data: {
+            grn: grnList,
+            pagination: {
+              page: page,
+              limit: limit,
+              total: count,
+              totalPages: totalPages
+            }
+          }
+        },
         error: null,
       });
     } catch (error) {

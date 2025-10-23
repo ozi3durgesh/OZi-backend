@@ -90,7 +90,7 @@ GRNLine.init(
     },
 
     line_status: {
-      type: DataTypes.ENUM('completed', 'partial', 'pending'),
+      type: DataTypes.ENUM('completed', 'partial', 'pending', 'rejected'),
       allowNull: false,
       defaultValue: 'pending',
     },
