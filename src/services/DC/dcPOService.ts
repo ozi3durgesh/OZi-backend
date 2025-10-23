@@ -14,7 +14,7 @@ import { EmailService } from '../emailService';
 import { DCSkuSplittingService } from './dcSkuSplittingService';
 import { DCInventory1Service } from '../DCInventory1Service';
 import  PurchaseOrderEdit  from '../../models/PurchaseOrderEdits'
-import  POProductEdit  from '../../models/POProductEdit';
+import  POEditHistory  from '../../models/POEditHistory';
 
 interface DCPOFilters {
   search?: string;
@@ -1109,82 +1109,169 @@ export class DCPOService {
   }
 
   static async editPO(poId: number, data: EditPOData, userId: number) {
-    const transaction: Transaction = await sequelize.transaction();
+  const transaction = await sequelize.transaction();
 
-    try {
-      // 1️ Check if original DC Purchase Order exists
-      const originalPO = await DCPurchaseOrder.findByPk(poId);
-      if (!originalPO) {
-        throw new Error('DC Purchase Order not found');
+  try {
+    // 1️⃣ Fetch existing PO and products once
+    const existingPO = await DCPurchaseOrder.findByPk(poId, {
+  include: [{ model: DCPOProduct, as: 'Products' }],
+  transaction,
+});
+
+    if (!existingPO) throw new Error('DC Purchase Order not found');
+    if (existingPO.isEdited)
+      throw new Error('This PO has already been edited once.');
+
+    const editLogs: any[] = [];
+
+    // Convert products array to Map for quick access
+    const existingProductsMap = new Map(
+      existingPO.Products.map((p: any) => [p.catalogue_id, p])
+    );
+
+    const updatedProducts: any[] = [];
+    const newProducts: any[] = [];
+
+    // 2️⃣ Iterate through input products
+    if (data.products?.length) {
+      for (const product of data.products) {
+        for (const skuItem of product.sku_matrix_on_catelogue_id) {
+          const existingProduct = existingProductsMap.get(skuItem.catalogue_id);
+
+          if (existingProduct) {
+            // Compare field-wise differences
+            const productFields = [
+              'quantity',
+              'unitPrice',
+              'totalAmount',
+              'mrp',
+              'hsn',
+              'ean_upc',
+              'weight',
+              'length',
+              'height',
+              'width',
+            ];
+
+            let modified = false;
+
+            for (const field of productFields) {
+              const newValue = (skuItem as any)[field];
+              const oldValue = (existingProduct as any)[field];
+
+              // Compare only if defined and changed
+              if (
+                newValue !== undefined &&
+                newValue !== null &&
+                newValue !== oldValue
+              ) {
+                modified = true;
+
+                // Add to history log
+                editLogs.push({
+                  po_id: poId,
+                  product_id: existingProduct.id,
+                  field,
+                  old_value: oldValue,
+                  new_value: newValue,
+                  change_type: 'PRODUCT_EDITED',
+                  changed_by: userId,
+                  changed_at: new Date(),
+                });
+
+                // Update in-memory for batch update
+                (existingProduct as any)[field] = newValue;
+              }
+            }
+
+            if (modified) updatedProducts.push(existingProduct);
+          } else {
+            // Product doesn’t exist → new addition
+            const newProduct = {
+              dcPOId: poId,
+              productId: parseInt(skuItem.catalogue_id),
+              catalogue_id: skuItem.catalogue_id,
+              productName: skuItem.product_name,
+              quantity: skuItem.quantity,
+              unitPrice: parseFloat(skuItem.selling_price),
+              totalAmount:
+                parseFloat(skuItem.selling_price) * parseFloat(skuItem.quantity),
+              mrp: parseFloat(skuItem.mrp),
+              hsn: skuItem.hsn,
+              ean_upc: skuItem.ean_upc,
+              weight: skuItem.weight,
+              length: skuItem.length,
+              height: skuItem.height,
+              width: skuItem.width,
+              sku_matrix_on_catelogue_id: JSON.stringify(
+                product.sku_matrix_on_catelogue_id
+              ),
+            };
+
+            newProducts.push(newProduct);
+
+            // Log product addition
+            editLogs.push({
+              po_id: poId,
+              field: 'product',
+              old_value: null,
+              new_value: JSON.stringify(newProduct),
+              change_type: 'PRODUCT_ADDED',
+              changed_by: userId,
+              changed_at: new Date(),
+            });
+          }
+        }
       }
-
-      // 2️ Prevent multiple edits
-      const alreadyEdited = await PurchaseOrderEdit.findOne({
-        where: { purchase_order_id: poId },
-      });
-      if (alreadyEdited) {
-        throw new Error('This PO has already been edited once.');
-      }
-
-      // 3️ Create edited PO header
-      const editedPO = await PurchaseOrderEdit.create(
-        {
-          poId: `EDIT-${originalPO.poId}`, // unique edit reference
-          purchase_order_id: poId,
-          vendor_id: data.vendorId ?? originalPO.vendorId,
-          dc_id: data.dcId ?? originalPO.dcId,
-          priority: data.priority ?? originalPO.priority,
-          description: data.description ?? originalPO.description,
-          final_delivery_date: data.final_delivery_date
-            ? new Date(data.final_delivery_date)
-            : originalPO.final_delivery_date,
-          pi_file_url: data.pi_url ?? originalPO.pi_file_url,
-          totalAmount: 0.0, // will calculate later if needed
-          status: 'PENDING_CATEGORY_HEAD', // or PENDING_CATEGORY_HEAD etc.
-          createdBy: userId, // logged-in user performing edit
-        },
-        { transaction }
-      );
-
-      // 4️ Create edited products
-      if (data.products && data.products.length) {
-        const editedProducts = data.products.flatMap((product: any) =>
-          product.sku_matrix_on_catelogue_id.map((skuItem: any) => ({
-            purchase_order_edit_id: editedPO.id,
-            product_id: parseInt(skuItem.catalogue_id),
-            catalogue_id: skuItem.catalogue_id,
-            product_name: skuItem.product_name,
-            quantity: skuItem.quantity,
-            unitPrice: parseFloat(skuItem.selling_price),
-            totalAmount: parseFloat(product.totalPrice),
-            mrp: parseFloat(skuItem.mrp),
-            hsn: skuItem.hsn,
-            ean_upc: skuItem.ean_upc,
-            weight: skuItem.weight,
-            length: skuItem.length,
-            height: skuItem.height,
-            width: skuItem.width,
-            // brand_id: skuItem.brand ? parseInt(skuItem.brand) : null,
-            sku_matrix_on_catelogue_id: JSON.stringify(
-              product.sku_matrix_on_catelogue_id
-            ),
-          }))
-        );
-        await POProductEdit.bulkCreate(editedProducts, { transaction });
-      }
-
-      //update isEdited flag in Dcpurchaseorder
-      await originalPO.update({
-        isEdited: true
-      }, {transaction});
-
-      await transaction.commit();
-      return editedPO;
-    } catch (error) {
-      await transaction.rollback();
-      throw error;
     }
+
+    // 3️⃣ Bulk update existing modified products
+    if (updatedProducts.length) {
+      // If DB supports it, use upsert-like pattern
+      await DCPOProduct.bulkCreate(
+        updatedProducts.map((p: any) => p.toJSON()),
+        {
+          updateOnDuplicate: [
+            'quantity',
+            'unitPrice',
+            'totalAmount',
+            'mrp',
+            'hsn',
+            'ean_upc',
+            'weight',
+            'length',
+            'height',
+            'width',
+            'updatedAt',
+          ],
+          transaction,
+        }
+      );
+    }
+
+    // 4️⃣ Bulk insert new products
+    if (newProducts.length) {
+      await DCPOProduct.bulkCreate(newProducts, { transaction });
+    }
+
+    // 5️⃣ Save edit history
+    if (editLogs.length) {
+      await POEditHistory.bulkCreate(editLogs, { transaction });
+    }
+
+    // 6️⃣ Mark PO as edited (only once)
+    existingPO.isEdited = true;
+    existingPO.status = 'PENDING_CATEGORY_HEAD'
+    await existingPO.save({ transaction });
+
+    await transaction.commit();
+    return { message: 'PO edited successfully (products only)', poId };
+  } catch (err) {
+    await transaction.rollback();
+    throw err;
   }
+}
+
 
   static async approvePO(poId: number, userId: number, isApproved:boolean) {
 
