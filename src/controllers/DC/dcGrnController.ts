@@ -10,6 +10,43 @@ interface AuthRequest extends Request {
 
 export class DCGrnController {
   /**
+   * Calculate line status based on business logic
+   * @param orderedQty - Ordered quantity
+   * @param rejectedQty - Rejected quantity  
+   * @param qcPassQty - QC passed quantity
+   * @returns line_status: 'pending' | 'partial' | 'rejected' | 'completed'
+   */
+  private static calculateLineStatus(orderedQty: number, rejectedQty: number, qcPassQty: number): string {
+    // Handle edge case where ordered_qty is 0
+    if (orderedQty === 0) {
+      return 'pending';
+    }
+    
+    // 1. if "ordered_qty" == "rejected_qty" then "line_status" = rejected
+    if (orderedQty === rejectedQty) {
+      return 'rejected';
+    }
+    
+    // 2. if "ordered_qty" == "qc_pass_qty" then "line_status" = completed
+    if (orderedQty === qcPassQty) {
+      return 'completed';
+    }
+    
+    // 3. if "ordered_qty" > "rejected_qty" == 0 and "qc_pass_qty" == 0 then "line_status" = pending
+    if (orderedQty > rejectedQty && rejectedQty === 0 && qcPassQty === 0) {
+      return 'pending';
+    }
+    
+    // 4. if "ordered_qty" == "rejected_qty" + "qc_pass_qty" then "line_status" = partial
+    if (orderedQty === (rejectedQty + qcPassQty)) {
+      return 'partial';
+    }
+    
+    // Default fallback - if none of the above conditions match, return pending
+    return 'pending';
+  }
+
+  /**
    * Get DC PO products for GRN creation
    */
   static async getDCPOProductsForGRN(req: AuthRequest, res: Response): Promise<Response> {
@@ -701,6 +738,13 @@ export class DCGrnController {
             const grnLine = grnData?.Lines?.find((line: any) => line.sku_id === actualSku);
             
             if (grnLine) {
+              // Calculate line status based on business logic
+              const calculatedLineStatus = DCGrnController.calculateLineStatus(
+                grnLine.ordered_qty,
+                grnLine.rejected_qty,
+                grnLine.qc_pass_qty
+              );
+              
               // Use actual GRN line data
               return {
                 id: grnLine.id,
@@ -713,7 +757,7 @@ export class DCGrnController {
                 qc_fail_qty: grnLine.qc_fail_qty,
                 rtv_qty: grnLine.rtv_qty,
                 held_qty: grnLine.held_qty,
-                line_status: grnLine.line_status,
+                line_status: calculatedLineStatus,
                 product_details: {
                   name: product.productName,
                   description: product.description,
@@ -730,6 +774,13 @@ export class DCGrnController {
               };
             } else {
               // Fall back to PO data if no GRN line exists
+              // Calculate line status for fallback case (all quantities are 0 except ordered_qty)
+              const calculatedLineStatus = DCGrnController.calculateLineStatus(
+                product.quantity, // ordered_qty
+                0, // rejected_qty
+                0  // qc_pass_qty
+              );
+              
               return {
                 id: product.id,
                 sku_id: actualSku,
@@ -741,7 +792,7 @@ export class DCGrnController {
                 qc_fail_qty: 0,
                 rtv_qty: 0,
                 held_qty: 0,
-                line_status: 'pending',
+                line_status: calculatedLineStatus,
                 product_details: {
                   name: product.productName,
                   description: product.description,
