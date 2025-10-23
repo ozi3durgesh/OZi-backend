@@ -1388,6 +1388,7 @@ export class DCPOService {
       await DCPOApproval.update(
         {
           action,
+          approverRole,
           approverId: userId,
           comments,
           approvedAt: new Date(),
