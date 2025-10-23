@@ -22,211 +22,223 @@ export class FCSKUController {
 
       const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
 
-      // Build search conditions
-      const whereClause: any = {};
-      if (search) {
-        whereClause[Op.or] = [
-          { fcPOCode: { [Op.like]: `%${search}%` } },
-          { description: { [Op.like]: `%${search}%` } },
-        ];
-      }
-
-      // Get all approved FC-POs with their products ready for GRN
-      const { count: fcCount, rows: fcRows } = await FCPurchaseOrder.findAndCountAll({
+      // Get all DC GRN lines with completed, partial, or rejected status
+      const dcGrnLines = await DCGrnLine.findAll({
         where: {
-          fcId: fcId,
-          status: 'APPROVED',
-          ...whereClause
-        },
-        include: [
-          {
-            model: FCPOProduct,
-            as: 'Products',
-            required: false,
-            include: [
-              {
-                model: ProductMaster,
-                as: 'Product',
-                required: true
-              }
-            ]
-          },
-          {
-            model: FCGrn,
-            as: 'FCGrns',
-            required: false,
-            include: [
-              {
-                model: FCGrnLine,
-                as: 'Line',
-                required: false
-              }
-            ]
+          line_status: {
+            [Op.in]: ['completed', 'partial', 'rejected']
           }
-        ],
-        limit: parseInt(limit.toString()),
-        offset: offset,
-        order: [['createdAt', 'DESC']],
-        distinct: true
-      });
-
-      // Get completed DC GRNs that are ready for FC processing
-      const dcWhereClause: any = {
-        status: 'completed'
-      };
-      
-      // Note: dcId filter is optional for now to show all completed DC GRNs
-      // if (dcId) {
-      //   dcWhereClause.dc_id = dcId;
-      // }
-
-      const { count: dcCount, rows: dcRows } = await DCPurchaseOrder.findAndCountAll({
-        where: {
-          status: 'APPROVED',
-          ...whereClause
         },
         include: [
-          {
-            model: DCPOProduct,
-            as: 'Products',
-            required: false,
-            include: [
-              {
-                model: ProductMaster,
-                as: 'Product',
-                required: true
-              }
-            ]
-          },
           {
             model: DCGrn,
-            as: 'DCGrns',
-            where: dcWhereClause,
+            as: 'DCGrn',
             required: true,
             include: [
               {
-                model: DCGrnLine,
-                as: 'Lines',
-                required: true
+                model: DCPurchaseOrder,
+                as: 'DCPO',
+                required: true,
+                where: {
+                  status: 'approved'
+                }
               }
             ]
           }
-        ],
-        limit: parseInt(limit.toString()),
-        offset: offset,
-        order: [['createdAt', 'DESC']],
-        distinct: true
+        ]
       });
 
-      // Combine FC and DC data
-      const allRows = [...fcRows, ...dcRows];
-      const totalCount = fcCount + dcCount;
-
-      // Process the data to include GRN status and quantities
-      const processedData = allRows.map((po: any) => {
-        const products = po.Products || [];
-        const isDCPO = po.DCGrns && po.DCGrns.length > 0;
-        const grns = isDCPO ? po.DCGrns : (po.FCGrns || []);
-        
-        // Calculate GRN status and quantities for each product
-        const processedProducts = products.map((product: any) => {
-          const productInfo = product.Product;
-          let grnStatus = 'NO_GRN';
-          let totalOrderedQuantity = product.total_quantity || product.quantity || 0;
-          let totalReceivedQuantity = 0;
-          let grnDetails: any[] = [];
-
-          // Check if GRN exists for this PO and product
-          if (grns.length > 0) {
-            grns.forEach((grn: any) => {
-              const lines = isDCPO ? grn.Lines : (grn.Line || []);
-              // For DC, match by sku_id, for FC match by sku
-              const productLine = lines.find((line: any) => 
-                isDCPO ? line.sku_id === productInfo.sku_id : line.sku_id === productInfo.sku
-              );
-              
-              if (productLine) {
-                totalReceivedQuantity += productLine.received_qty || 0;
-                
-                grnDetails.push({
-                  grnId: grn.id,
-                  grnStatus: grn.status,
-                  lineStatus: productLine.line_status,
-                  orderedQuantity: productLine.ordered_qty,
-                  receivedQuantity: productLine.received_qty,
-                  sku: productLine.sku_id,
-                  varianceReason: productLine.variance_reason,
-                  grnType: isDCPO ? 'DC' : 'FC'
-                });
-
-                // Use the actual line_status from DC GRN data
-                // If multiple GRN lines exist, use the most recent status
-                if (grnStatus === 'NO_GRN' || productLine.line_status === 'completed') {
-                  grnStatus = productLine.line_status.toUpperCase();
+      // Get all FC GRN lines with completed, partial, or rejected status
+      const fcGrnLines = await FCGrnLine.findAll({
+        where: {
+          line_status: {
+            [Op.in]: ['completed', 'partial', 'rejected']
+          }
+        },
+        include: [
+          {
+            model: FCGrn,
+            as: 'FCGrn',
+            required: true,
+            include: [
+              {
+                model: FCPurchaseOrder,
+                as: 'FCPO',
+                required: true,
+                where: {
+                  fcId: fcId,
+                  status: 'APPROVED'
                 }
               }
+            ]
+          }
+        ]
+      });
+
+      // Process DC GRN lines
+      const dcData = new Map();
+      dcGrnLines.forEach((line: any) => {
+        const po = line.DCGrn.DCPO;
+        const skuId = line.sku_id;
+        
+        if (!dcData.has(po.id)) {
+          dcData.set(po.id, {
+            po: {
+              id: po.id,
+              poCode: po.poId,
+              poType: 'DC',
+              status: po.status,
+              priority: po.priority,
+              totalAmount: po.totalAmount,
+              createdAt: po.createdAt
+            },
+            products: new Map()
+          });
+        }
+
+        const poData = dcData.get(po.id);
+        if (!poData.products.has(skuId)) {
+          poData.products.set(skuId, {
+            sku_id: skuId,
+            ordered_qty: line.ordered_qty,
+            received_qty: line.received_qty,
+            qc_pass_qty: line.qc_pass_qty,
+            line_status: line.line_status,
+            grnDetails: []
+          });
+        }
+
+        const product = poData.products.get(skuId);
+        product.grnDetails.push({
+          grnId: line.DCGrn.id,
+          grnStatus: line.DCGrn.status,
+          lineStatus: line.line_status,
+          orderedQuantity: line.ordered_qty,
+          receivedQuantity: line.received_qty,
+          qcPassQuantity: line.qc_pass_qty,
+          sku: line.sku_id,
+          varianceReason: line.variance_reason,
+          grnType: 'DC'
+        });
+      });
+
+      // Process FC GRN lines
+      const fcData = new Map();
+      fcGrnLines.forEach((line: any) => {
+        const po = line.FCGrn.FCPO;
+        const skuId = line.sku_id;
+        
+        if (!fcData.has(po.id)) {
+          fcData.set(po.id, {
+            po: {
+              id: po.id,
+              poCode: po.fcPOCode,
+              poType: 'FC',
+              status: po.status,
+              priority: po.priority,
+              totalAmount: po.totalAmount,
+              createdAt: po.createdAt
+            },
+            products: new Map()
+          });
+        }
+
+        const poData = fcData.get(po.id);
+        if (!poData.products.has(skuId)) {
+          poData.products.set(skuId, {
+            sku_id: skuId,
+            ordered_qty: line.ordered_qty,
+            received_qty: line.received_qty,
+            qc_pass_qty: line.qc_pass_qty,
+            line_status: line.line_status,
+            grnDetails: []
+          });
+        }
+
+        const product = poData.products.get(skuId);
+        product.grnDetails.push({
+          grnId: line.FCGrn.id,
+          grnStatus: line.FCGrn.status,
+          lineStatus: line.line_status,
+          orderedQuantity: line.ordered_qty,
+          receivedQuantity: line.received_qty,
+          qcPassQuantity: line.qc_pass_qty,
+          sku: line.sku_id,
+          varianceReason: line.variance_reason,
+          grnType: 'FC'
+        });
+      });
+
+      // Combine and process data
+      const allData = [...Array.from(dcData.values()), ...Array.from(fcData.values())];
+      
+      const processedData = await Promise.all(allData.map(async (poData: any) => {
+        const products: any[] = [];
+        
+        for (const [skuId, productData] of poData.products) {
+          // Get product details from ProductMaster
+          const productMaster = await ProductMaster.findOne({
+            where: { sku_id: skuId }
+          });
+
+          if (productMaster) {
+            products.push({
+              id: productMaster.id,
+              status: productMaster.status,
+              catelogue_id: productMaster.catelogue_id,
+              product_id: productMaster.product_id,
+              sku_id: productMaster.sku_id,
+              color: productMaster.color,
+              age_size: productMaster.age_size,
+              name: productMaster.name,
+              category: productMaster.category,
+              description: productMaster.description,
+              image_url: productMaster.image_url,
+              mrp: productMaster.mrp,
+              avg_cost_to_ozi: productMaster.avg_cost_to_ozi,
+              ean_upc: productMaster.ean_upc,
+              brand_id: productMaster.brand_id,
+              weight: productMaster.weight,
+              length: productMaster.length,
+              height: productMaster.height,
+              width: productMaster.width,
+              inventory_threshold: productMaster.inventory_threshold,
+              gst: productMaster.gst,
+              cess: productMaster.cess,
+              hsn: productMaster.hsn,
+              created_by: productMaster.created_by,
+              created_at: productMaster.created_at,
+              updated_at: productMaster.updated_at,
+              logs: productMaster.logs || [],
+              poId: poData.po.id,
+              poCode: poData.po.poCode,
+              poType: poData.po.poType,
+              totalOrderedQuantity: productData.ordered_qty,
+              totalReceivedQuantity: productData.received_qty,
+              availableQuantity: productData.qc_pass_qty, // Only QC pass quantity
+              grnStatus: productData.line_status.toUpperCase(),
+              grnDetails: productData.grnDetails,
+              poStatus: poData.po.status,
+              priority: poData.po.priority,
+              totalAmount: poData.po.totalAmount,
+              createdAt: poData.po.createdAt
             });
           }
-
-          // Handle different product model structures
-          const productData = isDCPO ? {
-            id: productInfo.id,
-            name: productInfo.name,
-            description: productInfo.description,
-            mrp: productInfo.mrp,
-            ean_upc: productInfo.ean_upc,
-            image_url: productInfo.image_url,
-            weight: productInfo.weight,
-            length: productInfo.length,
-            height: productInfo.height,
-            width: productInfo.width,
-            gst: productInfo.gst,
-            cess: productInfo.cess,
-            hsn: productInfo.hsn,
-            sku: productInfo.sku_id, // Use sku_id from ProductMaster table
-            catelogue_id: productInfo.catelogue_id, // Add catalogue_id
-            category_id: productInfo.category_id,
-            brand_id: productInfo.brand_id
-          } : productInfo.toJSON();
-
-          return {
-            ...productData,
-            poId: po.id,
-            poCode: isDCPO ? po.poId : po.fcPOCode,
-            poType: isDCPO ? 'DC' : 'FC',
-            totalOrderedQuantity,
-            totalReceivedQuantity,
-            availableQuantity: totalReceivedQuantity, // Available for FC operations
-            grnStatus,
-            grnDetails,
-            poStatus: po.status,
-            priority: po.priority,
-            totalAmount: po.totalAmount,
-            createdAt: po.createdAt
-          };
-        });
+        }
 
         return {
-          po: {
-            id: po.id,
-            poCode: isDCPO ? po.poId : po.fcPOCode,
-            poType: isDCPO ? 'DC' : 'FC',
-            status: po.status,
-            priority: po.priority,
-            totalAmount: po.totalAmount,
-            createdAt: po.createdAt
-          },
-          products: processedProducts
+          po: poData.po,
+          products: products
         };
-      });
+      }));
 
       return ResponseHandler.success(res, {
         message: 'Approved POs ready for GRN retrieved successfully',
         data: processedData,
         pagination: {
           currentPage: parseInt(page.toString()),
-          totalPages: Math.ceil(totalCount / parseInt(limit.toString())),
-          totalItems: totalCount,
+          totalPages: Math.ceil(processedData.length / parseInt(limit.toString())),
+          totalItems: processedData.length,
           itemsPerPage: parseInt(limit.toString())
         }
       });
