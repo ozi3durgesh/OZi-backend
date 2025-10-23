@@ -1125,9 +1125,10 @@ export class DCPOService {
     const editLogs: any[] = [];
 
     // Convert products array to Map for quick access
-    const existingProductsMap = new Map(
-      existingPO.Products.map((p: any) => [p.catalogue_id, p])
-    );
+    const existingProductsMap: Map<string, DCPOProduct> = new Map(
+  (existingPO.Products ?? []).map((p: DCPOProduct) => [p.catalogue_id, p])
+);
+
 
     const updatedProducts: any[] = [];
     const newProducts: any[] = [];
