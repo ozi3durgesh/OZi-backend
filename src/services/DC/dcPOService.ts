@@ -1229,25 +1229,41 @@ export class DCPOService {
     // 3️⃣ Bulk update existing modified products
     if (updatedProducts.length) {
       // If DB supports it, use upsert-like pattern
-      await DCPOProduct.bulkCreate(
-        updatedProducts.map((p: any) => p.toJSON()),
-        {
-          updateOnDuplicate: [
-            'quantity',
-            'unitPrice',
-            'totalAmount',
-            'mrp',
-            'hsn',
-            'ean_upc',
-            'weight',
-            'length',
-            'height',
-            'width',
-            'updatedAt',
-          ],
-          transaction,
-        }
-      );
+      const safeUpdatedProducts = updatedProducts.map((p: any) => ({
+  id: p.id,                     // primary key, used for update
+  dcPOId: p.dcPOId,             // required
+  productId: p.productId,       // required
+  catalogue_id: p.catalogue_id, // required
+  productName: p.productName,   // required
+  quantity: p.quantity,
+  unitPrice: p.unitPrice,
+  totalAmount: p.totalAmount,
+  mrp: p.mrp,
+  hsn: p.hsn,
+  ean_upc: p.ean_upc,
+  weight: p.weight,
+  length: p.length,
+  height: p.height,
+  width: p.width,
+  updatedAt: new Date(),
+}));
+
+await DCPOProduct.bulkCreate(safeUpdatedProducts, {
+  updateOnDuplicate: [
+    'quantity',
+    'unitPrice',
+    'totalAmount',
+    'mrp',
+    'hsn',
+    'ean_upc',
+    'weight',
+    'length',
+    'height',
+    'width',
+    'updatedAt',
+  ],
+  transaction,
+});
     }
 
     // 4️⃣ Bulk insert new products
