@@ -138,7 +138,7 @@ export class FCFilterMiddlewareFactory {
    * Create FC filter middleware for putaway tasks
    */
   static createPutawayFilter() {
-    return this.createModelFilter('PutawayTask', 'fc_id');
+    return this.createModelFilter('FC_PutawayTask', 'fc_id');
   }
 
   /**

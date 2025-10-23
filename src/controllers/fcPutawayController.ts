@@ -3,8 +3,8 @@ import { Op, QueryTypes } from 'sequelize';
 import sequelize from '../config/database';
 import FCGrn from '../models/FCGrn.model';
 import FCGrnLine from '../models/FCGrnLine';
-import PurchaseOrder from '../models/PurchaseOrder';
-import Product from '../models/productModel';
+import FCPurchaseOrder from '../models/FCPurchaseOrder';
+import ProductMaster from '../models/NewProductMaster';
 import BinLocation from '../models/BinLocation';
 import ScannerSku from '../models/ScannerSku';
 import ScannerBin from '../models/ScannerBin';
@@ -16,47 +16,31 @@ import { INVENTORY_OPERATIONS } from '../config/inventoryConstants';
 const convertProductDetailKeys = (productData: any) => {
   return {
     id: productData.id,
-    cpId: productData.CPId,
-    status: productData.Status,
-    modelNum: productData.ModelNum,
-    category: productData.Category,
-    sku: productData.SKU,
-    parentSku: productData.ParentSKU,
-    isMps: productData.IS_MPS,
-    productName: productData.ProductName,
-    description: productData.Description,
-    manufacturerDescription: productData.ManufacturerDescription,
-    hsn: productData.hsn,
-    imageUrl: productData.ImageURL,
-    mrp: productData.MRP,
-    cost: productData.COST,
-    eanUpc: productData.EAN_UPC,
-    color: productData.Color,
-    size: productData.Size,
-    brand: productData.Brand,
-    weight: productData.Weight,
-    length: productData.Length,
-    height: productData.Height,
-    width: productData.Width,
-    accountingSku: productData.AccountingSKU,
-    accountingUnit: productData.AccountingUnit,
-    spThreshold: productData.SPThreshold,
-    inventoryThreshold: productData.InventoryThreshold,
-    erpSystemId: productData.ERPSystemId,
-    syncTally: productData.SyncTally,
-    shelfLife: productData.ShelfLife,
-    shelfLifePercentage: productData.ShelfLifePercentage,
-    productExpiryInDays: productData.ProductExpiryInDays,
-    reverseWeight: productData.ReverseWeight,
-    reverseLength: productData.ReverseLength,
-    reverseHeight: productData.ReverseHeight,
-    reverseWidth: productData.ReverseWidth,
+    status: productData.status,
+    catelogue_id: productData.catelogue_id,
+    product_id: productData.product_id,
+    sku_id: productData.sku_id,
+    color: productData.color,
+    age_size: productData.age_size,
+    name: productData.name,
+    category: productData.category,
+    description: productData.description,
+    image_url: productData.image_url,
+    mrp: productData.mrp,
+    avg_cost_to_ozi: productData.avg_cost_to_ozi,
+    ean_upc: productData.ean_upc,
+    brand_id: productData.brand_id,
+    weight: productData.weight,
+    length: productData.length,
+    height: productData.height,
+    width: productData.width,
+    inventory_threshold: productData.inventory_threshold,
     gst: productData.gst,
-    cess: productData.CESS,
-    createdDate: productData.CreatedDate,
-    lastUpdatedDate: productData.LastUpdatedDate,
-    skuType: productData.SKUType,
-    materialType: productData.MaterialType,
+    cess: productData.cess,
+    hsn: productData.hsn,
+    created_by: productData.created_by,
+    created_at: productData.created_at,
+    updated_at: productData.updated_at,
   };
 };
 
@@ -69,23 +53,40 @@ export class FCPutawayController {
       const offset = (page - 1) * limit;
       const statusFilter = req.query.status as string; // Get status filter from query params
 
-      // First, get all FCGrn lines with the required putaway_status
+      // Get current FC ID from auth token
+      const currentFcId = req.user?.currentFcId;
+      if (!currentFcId) {
+        res.status(403).json({
+          statusCode: 403,
+          success: false,
+          data: null,
+          error: 'No Fulfillment Center selected. Please select a FC first.',
+        });
+        return;
+      }
+
+
+      // First, get all FCGrn lines with the required line_status (temporarily without FC filtering)
       const allGrnLines = await FCGrnLine.findAll({
         include: [
           {
             model: FCGrn,
-            as: 'GrnId',
+            as: 'FCGrn',
+            // Temporarily remove FC filtering since fc_id is not populated in existing records
+            // where: {
+            //   fc_id: currentFcId, // Filter by current FC
+            // },
             include: [
               {
-                model: PurchaseOrder,
-                as: 'PO',
-                attributes: ['id', 'po_id', 'vendor_name'],
+                model: FCPurchaseOrder,
+                as: 'FCPO',
+                attributes: ['id', 'po_id'],
               },
             ],
           },
         ],
         where: {
-          putaway_status: statusFilter 
+          line_status: statusFilter 
             ? statusFilter 
             : {
                 [Op.in]: ['pending', 'partial', 'completed'],
@@ -93,6 +94,7 @@ export class FCPutawayController {
         },
         order: [['created_at', 'DESC']],
       });
+      
 
       // Group FCGrn lines by FCGrn ID to get unique FCGrns with detailed SKU information
       const grnMap = new Map();
@@ -101,13 +103,12 @@ export class FCPutawayController {
       
       allGrnLines.forEach((grnLine: any) => {
         const grnId = grnLine.grn_id;
-        const grn = grnLine.GrnId;
+        const grn = grnLine.FCGrn;
         
-        // Skip SKUs that haven't gone through FCGrn flow or have been rejected/ignored
-        // Only include SKUs with qc_pass_qty > 0 OR received_qty > 0 (processed SKUs)
-        // This excludes: rejected SKUs (qc_pass_qty = 0) and ignored/unprocessed SKUs
-        const isValidSku = grnLine.received_qty > 0 && 
-                          !(grnLine.received_qty === 0 && grnLine.rejected_qty > 0);
+        
+        // Include SKUs that have been processed (received_qty > 0) and have valid line_status
+        // This includes: pending, partial, completed statuses
+        const isValidSku = grnLine.received_qty > 0;
         
         if (!isValidSku) {
           return; // Skip this SKU
@@ -116,7 +117,8 @@ export class FCPutawayController {
         if (!grnMap.has(grnId)) {
           grnMap.set(grnId, {
             grn: grnId,
-            poId: grn?.po_id || 'N/A',
+            grnId: grn?.id || grnId, // Use the actual GRN ID from the database
+            poId: grn?.FCPO?.po_id || (grn?.po_id ? `FCPO${grn.po_id}` : 'N/A'), // Map numeric po_id to FCPO string
             skuIds: new Set(), // Store individual SKU IDs
             skuQcDetails: new Map(), // Store QC details for each SKU
             quantity: 0,
@@ -150,11 +152,11 @@ export class FCPutawayController {
           qcRejectedQty: qcRejectedQty,
           qcFailedQty: grnLine.qc_fail_qty || 0,
           itemsPutAway: itemsPutAway >= 0 ? itemsPutAway : 0,
-          poId: grn?.po_id
+          poId: grn?.FCPO?.po_id
         });
         
         // Track across all FCGrns for this PO and SKU
-        const poSkuKey = `${grn?.po_id}-${grnLine.sku_id}`;
+        const poSkuKey = `${grn?.FCPO?.po_id}-${grnLine.sku_id}`;
         if (!skuPoTracker.has(poSkuKey)) {
           skuPoTracker.set(poSkuKey, {
             orderedQty: orderedQty,
@@ -167,16 +169,16 @@ export class FCPutawayController {
         tracker.totalRejected += qcRejectedQty;
         
         // Only add to quantity for pending or partial items
-        if (grnLine.putaway_status === 'pending' || grnLine.putaway_status === 'partial') {
+        if (grnLine.line_status === 'pending' || grnLine.line_status === 'partial') {
           grnData.quantity += grnLine.qc_pass_qty; // Use qc_pass_qty for remaining quantity
         }
         
         // Track status types
-        if (grnLine.putaway_status === 'partial') {
+        if (grnLine.line_status === 'partial') {
           grnData.hasPartial = true;
-        } else if (grnLine.putaway_status === 'completed') {
+        } else if (grnLine.line_status === 'completed') {
           grnData.hasCompleted = true;
-        } else if (grnLine.putaway_status === 'pending') {
+        } else if (grnLine.line_status === 'pending') {
           grnData.hasPending = true;
         }
       });
@@ -202,8 +204,8 @@ export class FCPutawayController {
           const skuArray = Array.from(grnData.skuIds) as string[];
           const productDetails = await Promise.all(
             skuArray.map(async (skuId) => {
-              const product = await Product.findOne({
-                where: { sku: skuId }
+              const product = await ProductMaster.findOne({
+                where: { sku_id: skuId }
               });
               
               const qcDetails = grnData.skuQcDetails.get(skuId) || {
@@ -241,6 +243,7 @@ export class FCPutawayController {
 
           return {
             grn: grnData.grn,
+            grnId: grnData.grnId, // Add the actual GRN ID
             poId: grnData.poId,
             sku: grnData.skuIds.size, // Count of unique SKUs
             sku_id: skuArray, // Array of SKU IDs
@@ -276,12 +279,17 @@ export class FCPutawayController {
         error: null,
       });
     } catch (error: any) {
-      console.error('Error fetching FCGrn putaway list:', error);
+      console.error('❌ Error fetching FCGrn putaway list:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       res.status(500).json({
         statusCode: 500,
         success: false,
         data: null,
-        error: 'Internal server error',
+        error: error.message || 'Internal server error',
       });
     }
   }
@@ -297,7 +305,7 @@ export class FCPutawayController {
       const { count, rows } = await FCGrn.findAndCountAll({
         include: [
           {
-            model: PurchaseOrder,
+            model: FCPurchaseOrder,
             as: 'PO',
             attributes: ['id', 'po_id', 'vendor_name'],
           },
@@ -385,8 +393,30 @@ export class FCPutawayController {
         return;
       }
 
-      // Get the FCGrn data from grns table
-      const grn = await FCGrn.findByPk(grnId);
+      // Get current FC ID from auth token
+      const currentFcId = req.user?.currentFcId;
+      if (!currentFcId) {
+        res.status(403).json({
+          statusCode: 403,
+          success: false,
+          data: null,
+          error: 'No Fulfillment Center selected. Please select a FC first.',
+        });
+        return;
+      }
+
+      // Get the FCGrn data from grns table with FC filtering
+      // If fc_id is null, allow access (for backward compatibility)
+      // If fc_id is set, filter by current FC
+      const grn = await FCGrn.findOne({
+        where: {
+          id: grnId,
+          [Op.or]: [
+            { fc_id: null }, // Allow GRNs without fc_id (backward compatibility)
+            { fc_id: currentFcId } // Allow GRNs with matching fc_id
+          ]
+        },
+      } as any);
 
       if (!grn) {
         res.status(404).json({
@@ -448,8 +478,8 @@ export class FCPutawayController {
       }
 
       // Find product in product_master table
-      const product = await Product.findOne({
-        where: { sku: sku_id },
+      const product = await ProductMaster.findOne({
+        where: { sku_id: sku_id },
       });
 
       if (!product) {
@@ -462,7 +492,19 @@ export class FCPutawayController {
         return;
       }
 
-      // Check if SKU exists in the specified FCGrn line with QC passed quantity
+      // Get current FC ID from auth token
+      const currentFcId = req.user?.currentFcId;
+      if (!currentFcId) {
+        res.status(403).json({
+          statusCode: 403,
+          success: false,
+          data: null,
+          error: 'No Fulfillment Center selected. Please select a FC first.',
+        });
+        return;
+      }
+
+      // Check if SKU exists in the specified FCGrn line with QC passed quantity and FC filtering
       const grnLine = await FCGrnLine.findOne({
         where: {
           sku_id: sku_id,
@@ -474,12 +516,15 @@ export class FCPutawayController {
         include: [
           {
             model: FCGrn,
-            as: 'Grn',
+            as: 'FCGrn',
+            where: {
+              fc_id: currentFcId, // Filter by current FC
+            },
             include: [
               {
-                model: PurchaseOrder,
-                as: 'PO',
-                attributes: ['po_id', 'vendor_name'],
+                model: FCPurchaseOrder,
+                as: 'FCPO',
+                attributes: ['po_id'],
               },
             ],
           },
@@ -503,7 +548,7 @@ export class FCPutawayController {
           message: 'SKU scanned successfully',
           skuId: sku_id,
           grnId: grnLine.grn_id,
-          poId: (grnLine as any).GrnId?.po_id || 'N/A',
+          poId: (grnLine as any).FCGrn?.FCPO?.po_id || 'N/A',
           availableQuantity: grnLine.qc_pass_qty,
         },
         error: null,
@@ -561,21 +606,21 @@ export class FCPutawayController {
       let product: any;
       
       // First, try to find by SKU directly
-      product = await Product.findOne({
-        where: { sku: sku_id }
+      product = await ProductMaster.findOne({
+        where: { sku_id: sku_id }
       });
       
       if (product) {
-        resolvedSku = product.SKU;
+        resolvedSku = product.sku_id;
         foundBy = 'sku';
       } else {
         // If not found by SKU, try to find by EAN_UPC
-        product = await Product.findOne({
+        product = await ProductMaster.findOne({
           where: { ean_upc: sku_id }
         });
         
         if (product) {
-          resolvedSku = product.SKU;
+          resolvedSku = product.sku_id;
           foundBy = 'ean';
         } else {
           // Neither SKU nor EAN found
@@ -589,7 +634,21 @@ export class FCPutawayController {
         }
       }
   
-      // Check if SKU exists in the specific FCGrn line with QC passed quantity
+      // Get current FC ID from auth token
+      const currentFcId = req.user?.currentFcId;
+      if (!currentFcId) {
+        res.status(403).json({
+          statusCode: 403,
+          success: false,
+          data: null,
+          error: 'No Fulfillment Center selected. Please select a FC first.',
+        });
+        return;
+      }
+
+      // Check if SKU exists in the specific FCGrn line with QC passed quantity and FC filtering
+      // If fc_id is null, allow access (for backward compatibility)
+      // If fc_id is set, filter by current FC
       const grnLine = await FCGrnLine.findOne({
         where: {
           sku_id: resolvedSku,
@@ -601,15 +660,19 @@ export class FCPutawayController {
         include: [
           {
             model: FCGrn,
-            as: 'GrnId',
+            as: 'FCGrn',
             where: {
               po_id: po_id,
-            },
+              [Op.or]: [
+                { fc_id: null }, // Allow GRNs without fc_id (backward compatibility)
+                { fc_id: currentFcId } // Allow GRNs with matching fc_id
+              ]
+            } as any,
             include: [
               {
-                model: PurchaseOrder,
-                as: 'PO',
-                attributes: ['po_id', 'vendor_name'],
+                model: FCPurchaseOrder,
+                as: 'FCPO',
+                attributes: ['po_id'],
               },
             ],
           },
@@ -884,10 +947,10 @@ export class FCPutawayController {
             message: 'SKU scanned but bin location error occurred',
             skuId: sku_id,
             grnId: grnLine.grn_id,
-            poId: (grnLine as any).GrnId?.po_id || 'N/A',
+            poId: (grnLine as any).FCGrn?.FCPO?.po_id || 'N/A',
             availableQuantity: grnLine.qc_pass_qty,
             scannedProductDetail: convertProductDetailKeys(product.dataValues),
-            vendorName: (grnLine as any).GrnId?.PO?.vendor_name || '',
+            vendorName: 'N/A', // FCPurchaseOrder doesn't have vendor_name field
             binLocation: null,
             binSuggested: null
           },
@@ -906,10 +969,10 @@ export class FCPutawayController {
           foundBy: foundBy,
           skuScannedId: resolvedSku, // This is what gets stored in scanned_sku table
           grnId: grnLine.grn_id,
-          poId: (grnLine as any).GrnId?.po_id || 'N/A',
+          poId: (grnLine as any).FCGrn?.FCPO?.po_id || 'N/A',
           availableQuantity: grnLine.qc_pass_qty,
           scannedProductDetail: convertProductDetailKeys(product.dataValues),
-          vendorName: (grnLine as any).GrnId?.PO?.vendor_name || '',
+          vendorName: 'N/A', // FCPurchaseOrder doesn't have vendor_name field
           binLocation: binLocation,
           binSuggested: binSuggested
         },
@@ -954,8 +1017,8 @@ export class FCPutawayController {
       }
 
       // Get product details
-      const product = await Product.findOne({
-        where: { sku: sku_id },
+      const product = await ProductMaster.findOne({
+        where: { sku_id: sku_id },
       });
 
       if (!product) {
@@ -972,8 +1035,8 @@ export class FCPutawayController {
       const grn = await FCGrn.findByPk(grn_id, {
         include: [
           {
-            model: PurchaseOrder,
-            as: 'PO',
+            model: FCPurchaseOrder,
+            as: 'FCPO',
             attributes: ['po_id', 'vendor_name'],
           },
           {
@@ -997,9 +1060,9 @@ export class FCPutawayController {
 
       const productDetails = {
         scannedProductDetail: convertProductDetailKeys(product.dataValues), // Return all product fields from product_master table
-        poId: (grn as any).PO?.po_id || '',
+        poId: (grn as any).FCPO?.po_id || '',
         grn: grn.id,
-        vendorName: (grn as any).PO?.vendor_name || '',
+        vendorName: 'N/A', // FCPurchaseOrder doesn't have vendor_name field
         availableQuantity: (grn as any).Line?.[0]?.qc_pass_qty || 0,
       };
 
@@ -1077,9 +1140,30 @@ export class FCPutawayController {
         return;
       }
 
-      // Get FCGrn line
+      // Get current FC ID from auth token
+      const currentFcId = req.user?.currentFcId;
+      if (!currentFcId) {
+        res.status(403).json({
+          statusCode: 403,
+          success: false,
+          data: null,
+          error: 'No Fulfillment Center selected. Please select a FC first.',
+        });
+        return;
+      }
+
+      // Get FCGrn line with FC filtering
       const grnLine = await FCGrnLine.findOne({
         where: { grn_id: grn_id, sku_id: sku_id },
+        include: [
+          {
+            model: FCGrn,
+            as: 'FCGrn',
+            where: {
+              fc_id: currentFcId, // Filter by current FC
+            },
+          },
+        ],
       });
 
       if (!grnLine) {
@@ -1143,7 +1227,7 @@ export class FCPutawayController {
         await grnLine.update(
           { 
             qc_pass_qty: newRemainingQty,
-            putaway_status: putawayStatus
+            line_status: putawayStatus
           },
           { transaction }
         );
@@ -1302,7 +1386,7 @@ export class FCPutawayController {
             updated_grn_line: {
               qc_pass_qty: newRemainingQty,
               remaining_qty: newRemainingQty, // Remaining quantity for this SKU
-              putaway_status: putawayStatus
+              line_status: putawayStatus
             },
             updated_bin_location: {
               bin_code: bin_location,
@@ -1359,8 +1443,25 @@ export class FCPutawayController {
   // Debug endpoint to check database
   static async debugDatabase(req: AuthRequest, res: Response): Promise<void> {
     try {
+      console.log('🔍 Debug: Starting database check...');
+      
+      // Check user context
+      const currentFcId = req.user?.currentFcId;
+      console.log('🔍 Debug: Current FC ID:', currentFcId);
+      
       // Check total FCGrns
       const totalGrns = await FCGrn.count();
+      console.log('🔍 Debug: Total FCGrns:', totalGrns);
+      
+      // Check FCGrns with fc_id
+      const grnsWithFcId = await FCGrn.count({
+        where: {
+          fc_id: {
+            [Op.ne]: null as any
+          }
+        }
+      });
+      console.log('🔍 Debug: FCGrns with fc_id:', grnsWithFcId);
       
       // Check FCGrns by status
       const grnsByStatus = await FCGrn.findAll({
@@ -1370,6 +1471,7 @@ export class FCPutawayController {
 
       // Check total FCGrn lines
       const totalGrnLines = await FCGrnLine.count();
+      console.log('🔍 Debug: Total FCGrn lines:', totalGrnLines);
       
       // Check FCGrn lines with QC passed quantities
       const grnLinesWithQc = await FCGrnLine.count({
@@ -1384,18 +1486,35 @@ export class FCPutawayController {
       const sampleGrn = await FCGrn.findOne({
         include: [
           {
-            model: PurchaseOrder,
-            as: 'PO',
+            model: FCPurchaseOrder,
+            as: 'FCPO',
             attributes: ['id', 'po_id'],
           },
         ],
       });
 
+      // Test FC filtering
+      let fcFilteredGrns = 0;
+      if (currentFcId) {
+        fcFilteredGrns = await FCGrn.count({
+          where: {
+            fc_id: currentFcId
+          }
+        });
+        console.log('🔍 Debug: FC filtered GRNs:', fcFilteredGrns);
+      }
+
       res.status(200).json({
         statusCode: 200,
         success: true,
         data: {
+          userContext: {
+            currentFcId,
+            availableFcs: (req.user as any)?.availableFcs
+          },
           totalGrns,
+          grnsWithFcId,
+          fcFilteredGrns,
           grnsByStatus: grnsByStatus.map((item: any) => ({
             status: item.status,
             count: item.getDataValue('count')
@@ -1406,19 +1525,20 @@ export class FCPutawayController {
             id: sampleGrn.get('id'),
             poId: sampleGrn.get('po_id'),
             status: sampleGrn.get('status'),
+            fcId: sampleGrn.get('fc_id'),
             createdAt: sampleGrn.get('created_at'),
-            purchaseOrder: (sampleGrn as any).PO
+            purchaseOrder: (sampleGrn as any).FCPO
           } : null
         },
         error: null,
       });
     } catch (error: any) {
-      console.error('Error in debug endpoint:', error);
+      console.error('❌ Error in debug endpoint:', error);
       res.status(500).json({
         statusCode: 500,
         success: false,
         data: null,
-        error: 'Internal server error',
+        error: error.message || 'Internal server error',
       });
     }
   }

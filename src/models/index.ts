@@ -29,7 +29,7 @@ import ProductMaster from './NewProductMaster';
 import POProduct from './POProduct';
 import TokenBlacklist from './TokenBlacklist';
 import ReturnRequestItem from './ReturnRequestItem';
-import PutawayTask from './PutawayTask';
+import FC_PutawayTask from './FC_PutawayTask';
 import PutawayAudit from './PutawayAudit';
 import Inventory from './Inventory';
 import InventoryLog from './InventoryLog';
@@ -243,15 +243,15 @@ FCPurchaseOrder.hasMany(FCGrnPhoto, { foreignKey: 'po_id', as: 'FCGrnPhotos' });
 FCGrnPhoto.belongsTo(FCPurchaseOrder, { foreignKey: 'po_id', as: 'FCPurchaseOrder' });
 
 // Putaway associations
-PutawayTask.belongsTo(FCGrn, { foreignKey: 'grn_id', as: 'FCGRN' });
-PutawayTask.belongsTo(FCGrnLine, { foreignKey: 'grn_line_id', as: 'FCGRNLine' });
-PutawayTask.belongsTo(User, { foreignKey: 'assigned_to', as: 'AssignedTo' });
-PutawayTask.belongsTo(User, { foreignKey: 'created_by', as: 'CreatedBy' });
+FC_PutawayTask.belongsTo(FCGrn, { foreignKey: 'grn_id', as: 'FCGRN' });
+FC_PutawayTask.belongsTo(FCGrnLine, { foreignKey: 'grn_line_id', as: 'FCGRNLine' });
+FC_PutawayTask.belongsTo(User, { foreignKey: 'assigned_to', as: 'AssignedTo' });
+FC_PutawayTask.belongsTo(User, { foreignKey: 'created_by', as: 'CreatedBy' });
 
-PutawayAudit.belongsTo(PutawayTask, { foreignKey: 'putaway_task_id', as: 'PutawayTask' });
+PutawayAudit.belongsTo(FC_PutawayTask, { foreignKey: 'putaway_task_id', as: 'PutawayTask' });
 PutawayAudit.belongsTo(User, { foreignKey: 'performed_by', as: 'PerformedBy' });
 
-PutawayTask.hasMany(PutawayAudit, { foreignKey: 'putaway_task_id', as: 'AuditLogs' });
+FC_PutawayTask.hasMany(PutawayAudit, { foreignKey: 'putaway_task_id', as: 'AuditLogs' });
 
 // Inventory associations
 Inventory.hasMany(InventoryLog, { foreignKey: 'sku', sourceKey: 'sku', as: 'Logs' });
@@ -673,7 +673,7 @@ export {
   PurchaseOrder,
   POProduct,
   TokenBlacklist,
-  PutawayTask,
+  FC_PutawayTask,
   PutawayAudit,
   ReturnRequestItem,
   Inventory,
