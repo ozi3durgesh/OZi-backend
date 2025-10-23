@@ -129,7 +129,7 @@ export class FCGrnController {
         });
 
         // Find the product that contains the SKU in its SKU matrix
-        let fcPOProduct = null;
+        let fcPOProduct: any = null;
         for (const product of fcPOProducts) {
           try {
             const skuMatrix = product.skuMatrixOnCatalogueId 
@@ -764,7 +764,7 @@ const createdGrn = await FCGrn.findByPk(fcGrn.id, {
           const grnLine = grnData?.Line?.find((line: any) => line.sku_id === actualSku);
           
           // Fetch product details from ProductMaster
-          let productDetails = {
+          let productDetails: any = {
             name: product.productName,
             description: product.description,
             mrp: product.mrp,
