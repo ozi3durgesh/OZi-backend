@@ -655,10 +655,11 @@ export class DCGrnController {
 
       const offset = (page - 1) * limit;
 
-      // Get DC Purchase Orders with APPROVED or REJECTED status
+      // Get DC Purchase Orders with APPROVED, REJECTED, or PENDING_CATEGORY_HEAD status
+      // PENDING_CATEGORY_HEAD means the PO was approved but then edited
       const { count, rows: purchaseOrders } = await DCPurchaseOrder.findAndCountAll({
         where: {
-          status: ['APPROVED', 'REJECTED']
+          status: ['APPROVED', 'REJECTED', 'PENDING_CATEGORY_HEAD']
         },
         include: [
           {

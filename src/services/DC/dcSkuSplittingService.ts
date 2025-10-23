@@ -50,6 +50,48 @@ export class DCSkuSplittingService {
   }
 
   /**
+   * Calculate line status based on business logic
+   * @param orderedQty - Ordered quantity
+   * @param rejectedQty - Rejected quantity  
+   * @param qcPassQty - QC passed quantity
+   * @returns line_status: 'pending' | 'partial' | 'rejected' | 'completed'
+   */
+  static calculateLineStatus(orderedQty: number, rejectedQty: number, qcPassQty: number): 'pending' | 'partial' | 'rejected' | 'completed' {
+    // Handle edge case where ordered_qty is 0
+    if (orderedQty === 0) {
+      return 'pending';
+    }
+    
+    // 1. if "ordered_qty" == "rejected_qty" then "line_status" = rejected
+    if (orderedQty === rejectedQty) {
+      return 'rejected';
+    }
+    
+    // 2. if "ordered_qty" == "qc_pass_qty" then "line_status" = completed
+    if (orderedQty === qcPassQty) {
+      return 'completed';
+    }
+    
+    // 3. if "ordered_qty" > "rejected_qty" == 0 and "qc_pass_qty" == 0 then "line_status" = pending
+    if (orderedQty > rejectedQty && rejectedQty === 0 && qcPassQty === 0) {
+      return 'pending';
+    }
+    
+    // 4. if "ordered_qty" == "rejected_qty" + "qc_pass_qty" then "line_status" = partial
+    if (orderedQty === (rejectedQty + qcPassQty)) {
+      return 'partial';
+    }
+    
+    // 5. if both rejectedQty > 0 and qcPassQty > 0 but total < orderedQty, then partial
+    if (rejectedQty > 0 && qcPassQty > 0) {
+      return 'partial';
+    }
+    
+    // Default fallback - if none of the above conditions match, return pending
+    return 'pending';
+  }
+
+  /**
    * Generate unique SKU with catalogue_id: catalogue_id + 5 random digits
    */
   static generateUniqueSkuWithCatalogueId(catalogueId: string): string {
@@ -643,37 +685,145 @@ export class DCSkuSplittingService {
         transaction
       });
 
-      if (existingGrn) {
-        throw new Error(`GRN already exists for DC Purchase Order ${data.poId}`);
+      // Validate each line in the request
+      for (const line of data.lines) {
+        // Check if this SKU already has a GRN line for this PO
+        if (existingGrn) {
+          const existingLine = await DCGrnLine.findOne({
+            where: {
+              dc_grn_id: existingGrn.id,
+              sku_id: line.skuId
+            },
+            transaction
+          });
+          
+          if (existingLine) {
+            // Check if the line status allows further GRN processing
+            if (existingLine.line_status === 'completed') {
+              throw new Error(`GRN line for SKU ${line.skuId} is already completed. Cannot process further GRN for this SKU.`);
+            }
+            if ((existingLine.line_status as string) === 'rejected') {
+              throw new Error(`GRN line for SKU ${line.skuId} is already rejected. Cannot process further GRN for this SKU.`);
+            }
+            // If partial or pending, we can continue
+          }
+        }
+
+        // Validate orderedQty matches the PO line
+        // First check if it's a catalogue_id in DCPOProduct
+        let poLine = await DCPOProduct.findOne({
+          where: {
+            dcPOId: data.poId,
+            catalogue_id: line.skuId
+          },
+          transaction
+        });
+
+        // If not found, check if it's a generated SKU in the SKU matrix
+        if (!poLine) {
+          const poProducts = await DCPOProduct.findAll({
+            where: {
+              dcPOId: data.poId
+            },
+            transaction
+          });
+
+          // Check each product's SKU matrix for the SKU
+          for (const product of poProducts) {
+            if (product.sku_matrix_on_catelogue_id) {
+              try {
+                const skuMatrix = typeof product.sku_matrix_on_catelogue_id === 'string' 
+                  ? JSON.parse(product.sku_matrix_on_catelogue_id)
+                  : product.sku_matrix_on_catelogue_id;
+                
+                const matchingSku = skuMatrix.find((sku: any) => sku.sku === line.skuId);
+                if (matchingSku) {
+                  poLine = product;
+                  break;
+                }
+              } catch (error) {
+                console.error('Error parsing SKU matrix:', error);
+              }
+            }
+          }
+        }
+
+        if (!poLine) {
+          throw new Error(`SKU ${line.skuId} not found in DC Purchase Order ${data.poId}`);
+        }
+
+        if (poLine.quantity !== line.orderedQty) {
+          throw new Error(`Ordered quantity for SKU ${line.skuId} (${line.orderedQty}) does not match PO line quantity (${poLine.quantity})`);
+        }
       }
 
-      // Create DC GRN
-      const dcGrn = await DCGrn.create({
-        dc_po_id: data.poId,
-        status: data.status || 'partial',
-        closeReason: data.closeReason || null,
-        created_by: createdBy,
-        dc_id: dcPO.dcId
-      }, { transaction });
+      // Create or get existing DC GRN
+      let dcGrn;
+      if (existingGrn) {
+        dcGrn = existingGrn;
+      } else {
+        dcGrn = await DCGrn.create({
+          dc_po_id: data.poId,
+          status: data.status || 'partial',
+          closeReason: data.closeReason || null,
+          created_by: createdBy,
+          dc_id: dcPO.dcId
+        }, { transaction });
+      }
 
-      // Create GRN lines for each line item
+      // Create or update GRN lines for each line item
       for (const line of data.lines) {
         const pendingQty = line.orderedQty - line.receivedQty;
-        const lineStatus = pendingQty === 0 ? 'completed' : (line.receivedQty > 0 ? 'partial' : 'pending');
+        const rejectedQty = line.rejectedQty || 0;
+        const qcPassQty = line.qcPassQty || 0;
+        
+        // Calculate line status using business logic
+        const lineStatus = this.calculateLineStatus(line.orderedQty, rejectedQty, qcPassQty);
 
-        const grnLine = await DCGrnLine.create({
-          dc_grn_id: dcGrn.id,
-          sku_id: line.skuId,
-          ordered_qty: line.orderedQty,
-          received_qty: line.receivedQty,
-          pending_qty: pendingQty,
-          rejected_qty: line.rejectedQty || 0,
-          qc_pass_qty: line.qcPassQty,
-          qc_fail_qty: line.receivedQty - line.qcPassQty,
-          line_status: lineStatus,
-          putaway_status: 'pending',
-          remarks: line.remarks || null
-        }, { transaction });
+        // Check if GRN line already exists for this SKU
+        let grnLine = await DCGrnLine.findOne({
+          where: {
+            dc_grn_id: dcGrn.id,
+            sku_id: line.skuId
+          },
+          transaction
+        });
+
+        if (grnLine) {
+          // Update existing line - accumulate quantities
+          const newReceivedQty = grnLine.received_qty + line.receivedQty;
+          const newRejectedQty = grnLine.rejected_qty + rejectedQty;
+          const newQcPassQty = grnLine.qc_pass_qty + qcPassQty;
+          const newPendingQty = line.orderedQty - newReceivedQty;
+          
+          // Recalculate line status with accumulated quantities
+          const newLineStatus = this.calculateLineStatus(line.orderedQty, newRejectedQty, newQcPassQty);
+
+          await grnLine.update({
+            received_qty: newReceivedQty,
+            pending_qty: newPendingQty,
+            rejected_qty: newRejectedQty,
+            qc_pass_qty: newQcPassQty,
+            qc_fail_qty: newReceivedQty - newQcPassQty,
+            line_status: newLineStatus as 'pending' | 'partial' | 'completed' | 'rejected',
+            remarks: line.remarks || grnLine.remarks
+          }, { transaction });
+        } else {
+          // Create new line
+          grnLine = await DCGrnLine.create({
+            dc_grn_id: dcGrn.id,
+            sku_id: line.skuId,
+            ordered_qty: line.orderedQty,
+            received_qty: line.receivedQty,
+            pending_qty: pendingQty,
+            rejected_qty: rejectedQty,
+            qc_pass_qty: qcPassQty,
+            qc_fail_qty: line.receivedQty - qcPassQty,
+            line_status: lineStatus as 'pending' | 'partial' | 'completed' | 'rejected',
+            putaway_status: 'pending',
+            remarks: line.remarks || null
+          }, { transaction });
+        }
 
         // Create batches if provided
         if (line.batches && line.batches.length > 0) {
