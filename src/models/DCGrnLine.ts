@@ -15,7 +15,7 @@ export interface DCGrnLineAttributes {
   qc_fail_qty: number;
   rtv_qty: number;
   held_qty: number;
-  line_status: 'completed' | 'partial' | 'pending';
+  line_status: 'completed' | 'partial' | 'pending' | 'rejected';
   putaway_status: string;
   variance_reason?: 'short' | 'excess' | 'damage' | 'wrong' | 'near-expiry' | null;
   remarks?: string | null;
@@ -35,7 +35,7 @@ export interface DCGrnLineCreationAttributes {
   qc_fail_qty?: number;
   rtv_qty?: number;
   held_qty?: number;
-  line_status?: 'completed' | 'partial' | 'pending';
+  line_status?: 'completed' | 'partial' | 'pending' | 'rejected';
   putaway_status?: string;
   variance_reason?: 'short' | 'excess' | 'damage' | 'wrong' | 'near-expiry' | null;
   remarks?: string | null;
@@ -121,7 +121,7 @@ DCGrnLine.init(
       defaultValue: 0,
     },
     line_status: {
-      type: DataTypes.ENUM('completed', 'partial', 'pending'),
+      type: DataTypes.ENUM('completed', 'partial', 'pending', 'rejected'),
       allowNull: false,
       defaultValue: 'pending',
     },

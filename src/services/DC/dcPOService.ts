@@ -1404,6 +1404,7 @@ await DCPOProduct.bulkCreate(safeUpdatedProducts, {
       await DCPOApproval.update(
         {
           action,
+          approverRole,
           approverId: userId,
           comments,
           approvedAt: new Date(),
