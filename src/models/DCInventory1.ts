@@ -11,22 +11,24 @@ class DCInventory1 extends Model<
   InferAttributes<DCInventory1>,
   InferCreationAttributes<DCInventory1>
 > {
-  declare id: CreationOptional<number>;
+  declare sku_id: string;
   declare catalogue_id: string;
   declare po_raise_quantity: number;
   declare po_approve_quantity: number;
-  declare sku_split: Record<string, number> | null;
-  declare grn_done: Record<string, number> | null;
+  declare grn_done: number;
   declare created_at: CreationOptional<Date>;
   declare updated_at: CreationOptional<Date>;
 }
 
 DCInventory1.init(
   {
-    id: {
-      type: DataTypes.INTEGER,
-      autoIncrement: true,
+    sku_id: {
+      type: DataTypes.STRING(13),
+      allowNull: false,
       primaryKey: true,
+      validate: {
+        len: [12, 13],
+      },
     },
     catalogue_id: {
       type: DataTypes.STRING(7),
@@ -49,15 +51,13 @@ DCInventory1.init(
         min: 0,
       },
     },
-    sku_split: {
-      type: DataTypes.JSON,
-      allowNull: true,
-      defaultValue: null,
-    },
     grn_done: {
-      type: DataTypes.JSON,
-      allowNull: true,
-      defaultValue: null,
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+      validate: {
+        min: 0,
+      },
     },
     created_at: {
       type: DataTypes.DATE,
@@ -79,9 +79,11 @@ DCInventory1.init(
     createdAt: 'created_at',
     updatedAt: 'updated_at',
     indexes: [
+      { fields: ['sku_id'] },
       { fields: ['catalogue_id'] },
       { fields: ['po_raise_quantity'] },
       { fields: ['po_approve_quantity'] },
+      { fields: ['grn_done'] },
     ],
   }
 );

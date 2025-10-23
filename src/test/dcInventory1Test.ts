@@ -16,33 +16,18 @@ export class DCInventory1Test {
     try {
       // Step 1: PO Raised (50 items)
       console.log('Step 1: PO Raised (50 items)');
-      await DCInventory1Service.updateOnPORaise('1000000', 50);
+      await DCInventory1Service.updateOnPORaise('100000101001', '1000000', 50);
       
       // Step 2: PO Approved (50 items)
       console.log('Step 2: PO Approved (50 items)');
-      await DCInventory1Service.updateOnPOApprove('1000000', 50);
+      await DCInventory1Service.updateOnPOApprove('100000101001', 50);
       
-      // Step 3: SKU Split (5 SKUs × 10 items each)
-      console.log('Step 3: SKU Split (5 SKUs × 10 items each)');
-      const skuSplitData = {
-        'SKU001': 10,
-        'SKU002': 10,
-        'SKU003': 10,
-        'SKU004': 10,
-        'SKU005': 10
-      };
-      await DCInventory1Service.updateOnSKUSplit('1000000', skuSplitData);
+      // Step 3: SKU Split removed from DC Inventory 1
+      console.log('Step 3: SKU Split operations removed from DC Inventory 1');
       
-      // Step 4: GRN Done (all SKUs received)
-      console.log('Step 4: GRN Done (all SKUs received)');
-      const grnData = {
-        'SKU001': 10,
-        'SKU002': 10,
-        'SKU003': 10,
-        'SKU004': 10,
-        'SKU005': 10
-      };
-      await DCInventory1Service.updateOnGRNDone('1000000', grnData);
+      // Step 4: GRN Done (50 items received)
+      console.log('Step 4: GRN Done (50 items received)');
+      await DCInventory1Service.updateOnGRNDone('100000101001', 50);
       
       // Verify final state
       const record = await DCInventory1Service.getByCatalogueId('1000000');
@@ -62,7 +47,7 @@ export class DCInventory1Test {
     try {
       // Step 1: PO Raised (50 items)
       console.log('Step 1: PO Raised (50 items)');
-      await DCInventory1Service.updateOnPORaise('1000001', 50);
+      await DCInventory1Service.updateOnPORaise('100000101002', '1000001', 50);
       
       // Step 2: PO Rejected (no further updates)
       console.log('Step 2: PO Rejected (no further updates)');
@@ -86,7 +71,7 @@ export class DCInventory1Test {
     try {
       // Additional PO raised (50 more items)
       console.log('Additional PO raised (50 more items)');
-      await DCInventory1Service.updateOnPORaise('1000000', 50);
+      await DCInventory1Service.updateOnPORaise('100000101001', '1000000', 50);
       
       // Verify final state
       const record = await DCInventory1Service.getByCatalogueId('1000000');

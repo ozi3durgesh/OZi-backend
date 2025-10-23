@@ -293,7 +293,16 @@ export class DCPOService {
 
     // Update DC Inventory 1 for PO raise
     for (const product of validatedProducts) {
+      // Get the actual SKU from SKU matrix if available, otherwise use catalogue_id
+      let skuId = product.catalogue_id.toString().padStart(12, '0');
+      
+      if (product.skuMatrix && product.skuMatrix.length > 0) {
+        // Use the first SKU from the matrix as the primary SKU
+        skuId = product.skuMatrix[0].sku;
+      }
+      
       await DCInventory1Service.updateOnPORaise(
+        skuId,
         product.catalogue_id.toString(),
         product.quantity
       );
@@ -607,12 +616,30 @@ export class DCPOService {
         // Update DC Inventory 1 for PO approval
         const products = await DCPOProduct.findAll({
           where: { dcPOId: po.id },
-          attributes: ['catalogue_id', 'quantity']
+          attributes: ['catalogue_id', 'quantity', 'sku_matrix_on_catelogue_id']
         });
 
         for (const product of products) {
+          // Get the actual SKU from SKU matrix if available, otherwise use catalogue_id
+          let skuId = product.catalogue_id.toString().padStart(12, '0');
+          
+          if (product.sku_matrix_on_catelogue_id) {
+            try {
+              const skuMatrix = typeof product.sku_matrix_on_catelogue_id === 'string' 
+                ? JSON.parse(product.sku_matrix_on_catelogue_id)
+                : product.sku_matrix_on_catelogue_id;
+              
+              if (skuMatrix && skuMatrix.length > 0) {
+                // Use the first SKU from the matrix as the primary SKU
+                skuId = skuMatrix[0].sku;
+              }
+            } catch (error) {
+              console.error('Error parsing SKU matrix for PO approval:', error);
+            }
+          }
+          
           await DCInventory1Service.updateOnPOApprove(
-            product.catalogue_id,
+            skuId,
             product.quantity
           );
         }
@@ -1017,12 +1044,30 @@ export class DCPOService {
     // Update DC Inventory 1 for PO approval
     const products = await DCPOProduct.findAll({
       where: { dcPOId: poId },
-      attributes: ['catalogue_id', 'quantity']
+      attributes: ['catalogue_id', 'quantity', 'sku_matrix_on_catelogue_id']
     });
 
     for (const product of products) {
+      // Get the actual SKU from SKU matrix if available, otherwise use catalogue_id
+      let skuId = product.catalogue_id.toString().padStart(12, '0');
+      
+      if (product.sku_matrix_on_catelogue_id) {
+        try {
+          const skuMatrix = typeof product.sku_matrix_on_catelogue_id === 'string' 
+            ? JSON.parse(product.sku_matrix_on_catelogue_id)
+            : product.sku_matrix_on_catelogue_id;
+          
+          if (skuMatrix && skuMatrix.length > 0) {
+            // Use the first SKU from the matrix as the primary SKU
+            skuId = skuMatrix[0].sku;
+          }
+        } catch (error) {
+          console.error('Error parsing SKU matrix for PO approval:', error);
+        }
+      }
+      
       await DCInventory1Service.updateOnPOApprove(
-        product.catalogue_id,
+        skuId,
         product.quantity
       );
     }
@@ -1422,13 +1467,31 @@ await DCPOProduct.bulkCreate(safeUpdatedProducts, {
       if (action === 'APPROVED') {
         const products = await DCPOProduct.findAll({
           where: { dcPOId: po.id },
-          attributes: ['catalogue_id', 'quantity'],
+          attributes: ['catalogue_id', 'quantity', 'sku_matrix_on_catelogue_id'],
           transaction
         });
 
         for (const product of products) {
+          // Get the actual SKU from SKU matrix if available, otherwise use catalogue_id
+          let skuId = product.catalogue_id.toString().padStart(12, '0');
+          
+          if (product.sku_matrix_on_catelogue_id) {
+            try {
+              const skuMatrix = typeof product.sku_matrix_on_catelogue_id === 'string' 
+                ? JSON.parse(product.sku_matrix_on_catelogue_id)
+                : product.sku_matrix_on_catelogue_id;
+              
+              if (skuMatrix && skuMatrix.length > 0) {
+                // Use the first SKU from the matrix as the primary SKU
+                skuId = skuMatrix[0].sku;
+              }
+            } catch (error) {
+              console.error('Error parsing SKU matrix for PO approval:', error);
+            }
+          }
+          
           await DCInventory1Service.updateOnPOApprove(
-            product.catalogue_id,
+            skuId,
             product.quantity
           );
         }

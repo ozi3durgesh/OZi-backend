@@ -6,19 +6,20 @@ export class DCInventory1Service {
    * Update or create DC inventory record when PO is raised
    */
   static async updateOnPORaise(
+    skuId: string,
     catalogueId: string,
     quantity: number,
     transaction?: Transaction
   ): Promise<void> {
     try {
       const [record, created] = await DCInventory1.findOrCreate({
-        where: { catalogue_id: catalogueId },
+        where: { sku_id: skuId },
         defaults: {
+          sku_id: skuId,
           catalogue_id: catalogueId,
           po_raise_quantity: quantity,
           po_approve_quantity: 0,
-          sku_split: null,
-          grn_done: null,
+          grn_done: 0,
         },
         transaction,
       });
@@ -33,7 +34,7 @@ export class DCInventory1Service {
         );
       }
 
-      console.log(`✅ DC Inventory updated for catalogue ${catalogueId}: +${quantity} PO raised`);
+      console.log(`✅ DC Inventory updated for SKU ${skuId}: +${quantity} PO raised`);
     } catch (error) {
       console.error('❌ Error updating DC Inventory on PO raise:', error);
       throw error;
@@ -44,18 +45,18 @@ export class DCInventory1Service {
    * Update DC inventory record when PO is approved
    */
   static async updateOnPOApprove(
-    catalogueId: string,
+    skuId: string,
     quantity: number,
     transaction?: Transaction
   ): Promise<void> {
     try {
       const record = await DCInventory1.findOne({
-        where: { catalogue_id: catalogueId },
+        where: { sku_id: skuId },
         transaction,
       });
 
       if (!record) {
-        console.warn(`⚠️ No DC Inventory record found for catalogue ${catalogueId}`);
+        console.warn(`⚠️ No DC Inventory record found for SKU ${skuId}`);
         return;
       }
 
@@ -66,93 +67,61 @@ export class DCInventory1Service {
         { transaction }
       );
 
-      console.log(`✅ DC Inventory updated for catalogue ${catalogueId}: +${quantity} PO approved`);
+      console.log(`✅ DC Inventory updated for SKU ${skuId}: +${quantity} PO approved`);
     } catch (error) {
       console.error('❌ Error updating DC Inventory on PO approve:', error);
       throw error;
     }
   }
 
-  /**
-   * Update DC inventory record when SKU split is done
-   */
-  static async updateOnSKUSplit(
-    catalogueId: string,
-    skuSplitData: Record<string, number>,
-    transaction?: Transaction
-  ): Promise<void> {
-    try {
-      const record = await DCInventory1.findOne({
-        where: { catalogue_id: catalogueId },
-        transaction,
-      });
-
-      if (!record) {
-        console.warn(`⚠️ No DC Inventory record found for catalogue ${catalogueId}`);
-        return;
-      }
-
-      // Merge with existing sku_split data
-      const existingSkuSplit = record.sku_split || {};
-      const mergedSkuSplit = { ...existingSkuSplit };
-
-      // Add new SKU split data
-      Object.entries(skuSplitData).forEach(([sku, quantity]) => {
-        mergedSkuSplit[sku] = (mergedSkuSplit[sku] || 0) + quantity;
-      });
-
-      await record.update(
-        {
-          sku_split: mergedSkuSplit,
-        },
-        { transaction }
-      );
-
-      console.log(`✅ DC Inventory updated for catalogue ${catalogueId}: SKU split updated`);
-    } catch (error) {
-      console.error('❌ Error updating DC Inventory on SKU split:', error);
-      throw error;
-    }
-  }
 
   /**
    * Update DC inventory record when GRN is done
    */
   static async updateOnGRNDone(
-    catalogueId: string,
-    grnData: Record<string, number>,
+    skuId: string,
+    quantity: number,
     transaction?: Transaction
   ): Promise<void> {
     try {
       const record = await DCInventory1.findOne({
-        where: { catalogue_id: catalogueId },
+        where: { sku_id: skuId },
         transaction,
       });
 
       if (!record) {
-        console.warn(`⚠️ No DC Inventory record found for catalogue ${catalogueId}`);
+        console.warn(`⚠️ No DC Inventory record found for SKU ${skuId}`);
         return;
       }
 
-      // Merge with existing grn_done data
-      const existingGrnDone = record.grn_done || {};
-      const mergedGrnDone = { ...existingGrnDone };
-
-      // Add new GRN data
-      Object.entries(grnData).forEach(([sku, quantity]) => {
-        mergedGrnDone[sku] = (mergedGrnDone[sku] || 0) + quantity;
-      });
-
       await record.update(
         {
-          grn_done: mergedGrnDone,
+          grn_done: record.grn_done + quantity,
         },
         { transaction }
       );
 
-      console.log(`✅ DC Inventory updated for catalogue ${catalogueId}: GRN done updated`);
+      console.log(`✅ DC Inventory updated for SKU ${skuId}: +${quantity} GRN done`);
     } catch (error) {
       console.error('❌ Error updating DC Inventory on GRN done:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get DC inventory record by SKU ID
+   */
+  static async getBySkuId(
+    skuId: string,
+    transaction?: Transaction
+  ): Promise<DCInventory1 | null> {
+    try {
+      return await DCInventory1.findOne({
+        where: { sku_id: skuId },
+        transaction,
+      });
+    } catch (error) {
+      console.error('❌ Error fetching DC Inventory by SKU ID:', error);
       throw error;
     }
   }

@@ -261,9 +261,8 @@ export class DCSkuSplittingService {
         const skuSplitData_for_inventory = {
           [sku]: skuSplittedQuantity
         };
-        console.log(`🔍 SKU Split Update Hook: Updating DC Inventory for catalogue ${catalogueId} with data:`, skuSplitData_for_inventory);
-        await DCInventory1Service.updateOnSKUSplit(catalogueId, skuSplitData_for_inventory);
-        console.log(`✅ SKU Split Update Hook: DC Inventory updated successfully`);
+        // SKU split operations removed from DC Inventory 1
+        console.log(`🔍 SKU Split Update Hook: SKU split operations removed from DC Inventory 1`);
       } catch (error) {
         console.error(`❌ SKU Split Update Hook Error:`, error);
         // Don't throw the error to prevent breaking the SKU split operation
@@ -340,9 +339,8 @@ export class DCSkuSplittingService {
       const skuSplitData_for_inventory = {
         [sku]: skuSplittedQuantity
       };
-      console.log(`🔍 SKU Split Hook: Updating DC Inventory for catalogue ${catalogueId} with data:`, skuSplitData_for_inventory);
-      await DCInventory1Service.updateOnSKUSplit(catalogueId, skuSplitData_for_inventory);
-      console.log(`✅ SKU Split Hook: DC Inventory updated successfully`);
+      // SKU split operations removed from DC Inventory 1
+      console.log(`🔍 SKU Split Hook: SKU split operations removed from DC Inventory 1`);
     } catch (error) {
       console.error(`❌ SKU Split Hook Error:`, error);
       // Don't throw the error to prevent breaking the SKU split operation
@@ -868,13 +866,11 @@ export class DCSkuSplittingService {
             ready_for_grn: readyForGrn,
             grn_completed: grnCompleted
           }, { transaction });
-
-          // Update DC Inventory 1 for GRN done
-          const grnData = {
-            [line.skuId]: line.receivedQty
-          };
-          await DCInventory1Service.updateOnGRNDone(skuSplit.catalogue_id, grnData, transaction);
         }
+
+        // Always update DC Inventory 1 for GRN done with QC passed quantity only
+        // Only count QC passed quantities, not rejected ones
+        await DCInventory1Service.updateOnGRNDone(line.skuId, line.qcPassQty, transaction);
       }
 
       await transaction.commit();
