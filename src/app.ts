@@ -71,6 +71,8 @@ app.use('/api/packing', packingRoutes);
 app.use('/api/handover', handoverRoutes);
 app.use('/api/warehouses', warehouseRoutes);
 app.use('/api/fc/grn', fcGrnRoutes);
+// Add alias route for /api/grn to point to FC GRN routes
+app.use('/api/grn', fcGrnRoutes);
 
 // FC Selection routes must come BEFORE vendor/product routes to avoid FC filtering middleware
 app.use('/api/fc-selection', fcSelectionRoutes);
