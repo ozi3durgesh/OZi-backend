@@ -29,7 +29,7 @@ interface CreateDCPOData {
   dcId: number;
   products: Array<{
     catelogue_id: string;
-    totoal_quantity: number;
+    total_quantity: number;
     totalPrice: number;
     description?: string;
     notes?: string;
@@ -136,11 +136,11 @@ export class DCPOService {
         productId: 1, // Use default product ID
         catalogue_id: productData.catelogue_id, // Store catalogue_id as provided
         productName: productData.sku_matrix_on_catelogue_id?.[0]?.product_name || 'Unknown Product',
-        quantity: productData.totoal_quantity,
-        unitPrice: productData.totalPrice / productData.totoal_quantity, // Calculate unit price
+        quantity: productData.total_quantity,
+        unitPrice: productData.totalPrice / productData.total_quantity, // Calculate unit price
         totalAmount: productTotal,
         mrp: productData.sku_matrix_on_catelogue_id?.[0]?.mrp || 0,
-        cost: productData.totalPrice / productData.totoal_quantity, // Use calculated cost
+        cost: productData.totalPrice / productData.total_quantity, // Use calculated cost
         description: productData.description || '',
         notes: productData.notes || '',
         // Additional product details from SKU matrix
