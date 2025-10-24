@@ -9,6 +9,9 @@ import { S3Service } from '../services/s3Service';
 
 const router = Router();
 
+// Create controller instance
+const fcGrnController = new FCGrnController();
+
 // Apply authentication and FC filtering to all GRN routes
 router.use(authenticate);
 router.use(FCFilterMiddlewareFactory.createGRNFilter());
@@ -16,16 +19,16 @@ router.use(FCFilterMiddlewareFactory.createGRNFilter());
 router.get('/');
 
 // FC GRN Management Routes
-router.post('/', FCGrnController.createFCGrn);
+router.post('/', fcGrnController.createFCGrn.bind(fcGrnController));
 router.get('/list', FCGrnController.getFCGrnDetails);
 router.get('/stats/status-wise', FCGrnController.getFCGrnStats);
 router.get('/fix-constraints', FCGrnController.fixConstraints);
 router.get('/po/:poId', FCGrnController.getFCGrnsByPoIdWithDetails);
 router.get('/:id', FCGrnController.getFCGrnById);
-router.post('/create-flow', FCGrnController.createFullFCFCGrn);
+router.post('/create-flow', fcGrnController.createFullFCFCGrn.bind(fcGrnController));
 
 router.put('/:id', FCGrnController.updateFCGrn);
-router.patch('/:id/status', FCGrnController.updateFCGrnStatus);
+router.patch('/:id/status', fcGrnController.updateFCGrnStatus.bind(fcGrnController));
 router.delete('/:id', FCGrnController.deleteFCGrn);
 
 // FC Grn-line route

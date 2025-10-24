@@ -22,6 +22,12 @@ import { INVENTORY_OPERATIONS } from '../config/inventoryConstants';
 import ProductMasterService from '../services/productMasterService';
 
 export class FCGrnController {
+  private productMasterService: ProductMasterService;
+
+  constructor() {
+    this.productMasterService = new ProductMasterService();
+  }
+
   /**
    * Validate if the provided string is a valid S3 URL
    * @param url - URL to validate
@@ -36,7 +42,7 @@ export class FCGrnController {
     }
   }
 
-  static async createFCGrn(req: AuthRequest, res: Response): Promise<void> {
+  async createFCGrn(req: AuthRequest, res: Response): Promise<void> {
     try {
       const data: GRNRequest = req.body;
       const userId = req.user?.id;
@@ -93,7 +99,7 @@ export class FCGrnController {
       });
     }
   }
-  static async createFullFCFCGrn(req: AuthRequest, res: Response) {
+  async createFullFCFCGrn(req: AuthRequest, res: Response) {
     const input: CreateFullGRNInput = req.body;
     const userId = req.user?.id;
 
@@ -400,7 +406,7 @@ const costUpdates: Array<{
 for (const line of input.lines) {
   if (line.receivedQty > 0) {
     try {
-      const costResult = await ProductMasterService.calculateAndUpdateAverageCost(line.skuId, userId);
+      const costResult = await this.productMasterService.calculateAndUpdateAverageCost(line.skuId, userId);
       costUpdates.push({
         sku: line.skuId,
         status: 'success',
@@ -1036,7 +1042,7 @@ const createdGrn = await FCGrn.findByPk(fcGrn.id, {
     }
   }
 
-  static async updateFCGrnStatus(req: AuthRequest, res: Response): Promise<void> {
+  async updateFCGrnStatus(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
       const { status } = req.body;
@@ -1076,7 +1082,7 @@ const createdGrn = await FCGrn.findByPk(fcGrn.id, {
           for (const line of grnLines) {
             if (line.received_qty > 0) {
               try {
-                const costResult = await ProductMasterService.calculateAndUpdateAverageCost(line.sku_id, userId);
+                const costResult = await this.productMasterService.calculateAndUpdateAverageCost(line.sku_id, userId);
                 costUpdates.push({
                   sku: line.sku_id,
                   status: 'success',

@@ -11,7 +11,9 @@ export interface ProductMasterAttributes {
   color?: string;
   age_size?: string;
   name: string;
+  portfolio_category: string;
   category: string;
+  sub_category: string;
   description: string;
   image_url?: string;
   mrp: number;
@@ -29,17 +31,17 @@ export interface ProductMasterAttributes {
   created_by: number;
   created_at: Date;
   updated_at: Date;
-  logs: any[];
 }
 
 // Define the interface for creation attributes (excluding auto-generated fields)
 export interface ProductMasterCreationAttributes extends Optional<ProductMasterAttributes, 
-  'id' | 'catelogue_id' | 'product_id' | 'sku_id' | 'avg_cost_to_ozi' | 'created_by' | 'created_at' | 'updated_at' | 'logs'> {}
+  'id' | 'catelogue_id' | 'product_id' | 'sku_id' | 'avg_cost_to_ozi' | 'created_by' | 'created_at' | 'updated_at'> {
+  portfolio_category: string;
+  sub_category: string;
+}
 
 // Define the interface for update attributes
-export interface ProductMasterUpdateAttributes extends Partial<ProductMasterCreationAttributes> {
-  logs?: any[];
-}
+export interface ProductMasterUpdateAttributes extends Partial<ProductMasterCreationAttributes> {}
 
 // Define the ProductMaster model
 export class ProductMaster extends Model<ProductMasterAttributes, ProductMasterCreationAttributes> 
@@ -54,7 +56,9 @@ export class ProductMaster extends Model<ProductMasterAttributes, ProductMasterC
   declare color?: string;
   declare age_size?: string;
   declare name: string;
+  declare portfolio_category: string;
   declare category: string;
+  declare sub_category: string;
   declare description: string;
   declare image_url?: string;
   declare mrp: number;
@@ -72,7 +76,6 @@ export class ProductMaster extends Model<ProductMasterAttributes, ProductMasterC
   declare created_by: number;
   declare created_at: Date;
   declare updated_at: Date;
-  declare logs: any[];
 }
 
 // Initialize the model
@@ -137,12 +140,30 @@ ProductMaster.init(
         len: [1, 255],
       },
     },
+    portfolio_category: {
+      type: DataTypes.STRING(100),
+      allowNull: false,
+      field: 'portfolio_category',
+      validate: {
+        notEmpty: true,
+        len: [1, 100],
+      },
+    },
     category: {
-      type: DataTypes.STRING(255),
+      type: DataTypes.STRING(100),
       allowNull: false,
       validate: {
         notEmpty: true,
-        len: [1, 255],
+        len: [1, 100],
+      },
+    },
+    sub_category: {
+      type: DataTypes.STRING(100),
+      allowNull: false,
+      field: 'sub_category',
+      validate: {
+        notEmpty: true,
+        len: [1, 100],
       },
     },
     description: {
@@ -283,11 +304,6 @@ ProductMaster.init(
       allowNull: false,
       defaultValue: DataTypes.NOW,
     },
-    logs: {
-      type: DataTypes.JSON,
-      allowNull: false,
-      defaultValue: [],
-    },
   },
   {
     sequelize,
@@ -320,10 +336,20 @@ ProductMaster.init(
         fields: ['age_size'],
       },
       {
+        fields: ['portfolio_category'],
+      },
+      {
         fields: ['category'],
+      },
+      {
+        fields: ['sub_category'],
+      },
+      {
+        fields: ['portfolio_category', 'category', 'sub_category'],
       },
     ],
   }
 );
 
 export default ProductMaster;
+

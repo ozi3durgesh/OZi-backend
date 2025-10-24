@@ -56,6 +56,7 @@ import FCPOApproval from './FCPOApproval';
 import FCSkuSplitted from './FCSkuSplitted';
 import PurchaseOrderEdit from './PurchaseOrderEdits';
 import POProductEdit from './POProductEdit';
+import ProductMasterAudit from './ProductMasterAudit';
 
 // Set up associations
 Coupon.hasMany(CouponTranslation, {
@@ -643,6 +644,17 @@ POProductEdit.belongsTo(PurchaseOrderEdit, {
 
 // Return system associations are defined in individual model files
 
+// ProductMasterAudit associations
+ProductMasterAudit.belongsTo(ProductMaster, {
+  foreignKey: 'productMasterId',
+  as: 'ProductMaster',
+});
+
+ProductMaster.hasMany(ProductMasterAudit, {
+  foreignKey: 'productMasterId',
+  as: 'AuditLogs',
+});
+
 export {
   User,
   Order,
@@ -701,4 +713,5 @@ export {
   FCSkuSplitted,
   PurchaseOrderEdit,
   POProductEdit,
+  ProductMasterAudit,
 };

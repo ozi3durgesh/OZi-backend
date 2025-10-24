@@ -209,7 +209,6 @@ export class FCSKUController {
               created_by: productMaster.created_by,
               created_at: productMaster.created_at,
               updated_at: productMaster.updated_at,
-              logs: productMaster.logs || [],
               poId: poData.po.id,
               poCode: poData.po.poCode,
               poType: poData.po.poType,

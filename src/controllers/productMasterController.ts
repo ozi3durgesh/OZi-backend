@@ -3,6 +3,11 @@ import ProductMasterService from '../services/productMasterService';
 import { ProductMasterCreationAttributes } from '../models/NewProductMaster';
 
 export class ProductMasterController {
+  private productMasterService: ProductMasterService;
+
+  constructor() {
+    this.productMasterService = new ProductMasterService();
+  }
   
   /**
    * Create a new product
@@ -25,8 +30,8 @@ export class ProductMasterController {
       }
 
       // Validate mandatory fields
-      const mandatoryFields = ['name', 'category', 'description', 'mrp', 'brand_id', 'gst', 'cess', 'hsn'];
-      const missingFields = mandatoryFields.filter(field => !req.body[field]);
+      const mandatoryFields = ['name', 'portfolio_category', 'category', 'sub_category', 'description', 'mrp', 'brand_id', 'gst', 'cess', 'hsn'];
+      const missingFields = mandatoryFields.filter(field => req.body[field] === undefined || req.body[field] === null || req.body[field] === '');
       
       console.log(`🔍 [ProductMasterController] Mandatory fields check: missing=${missingFields.join(', ')}`);
       
@@ -61,7 +66,9 @@ export class ProductMasterController {
         colors: req.body.colors || undefined,
         ageSizes: req.body.ageSizes || undefined,
         name: req.body.name,
+        portfolio_category: req.body.portfolio_category,
         category: req.body.category,
+        sub_category: req.body.sub_category,
         description: req.body.description,
         mrp: parseFloat(req.body.mrp),
         brand_id: parseInt(req.body.brand_id),
@@ -83,13 +90,15 @@ export class ProductMasterController {
         colors: productData.colors,
         ageSizes: productData.ageSizes,
         name: productData.name,
+        portfolio_category: productData.portfolio_category,
         category: productData.category,
+        sub_category: productData.sub_category,
         mrp: productData.mrp,
         brand_id: productData.brand_id
       });
 
       console.log('🔄 [ProductMasterController] Calling ProductMasterService.createProduct...');
-      const newProducts = await ProductMasterService.createProduct(productData, userId);
+      const newProducts = await this.productMasterService.createProduct(productData, userId);
       console.log(`✅ [ProductMasterController] Service returned ${newProducts.length} products`);
 
       const responseData = newProducts.map(product => ({
@@ -100,7 +109,9 @@ export class ProductMasterController {
         name: product.name,
         color: product.color,
         age_size: product.age_size,
+        portfolio_category: product.portfolio_category,
         category: product.category,
+        sub_category: product.sub_category,
         mrp: product.mrp,
         brand_id: product.brand_id,
         created_at: product.created_at
@@ -182,7 +193,9 @@ export class ProductMasterController {
       if (req.body.color) updateData.color = req.body.color;
       if (req.body.age_size) updateData.age_size = req.body.age_size;
       if (req.body.name) updateData.name = req.body.name;
+      if (req.body.portfolio_category) updateData.portfolio_category = req.body.portfolio_category;
       if (req.body.category) updateData.category = req.body.category;
+      if (req.body.sub_category) updateData.sub_category = req.body.sub_category;
       if (req.body.description) updateData.description = req.body.description;
       if (req.body.mrp) updateData.mrp = parseFloat(req.body.mrp);
       if (req.body.brand_id) updateData.brand_id = parseInt(req.body.brand_id);
@@ -201,7 +214,7 @@ export class ProductMasterController {
       if (req.body.inventory_threshold !== undefined) updateData.inventory_threshold = req.body.inventory_threshold ? parseInt(req.body.inventory_threshold) : null;
 
       console.log(`🔍 [ProductMasterController] Calling ProductMasterService.updateProduct with skuId=${skuId}, userId=${userId}`);
-      const updatedProduct = await ProductMasterService.updateProduct(skuId, updateData, userId);
+      const updatedProduct = await this.productMasterService.updateProduct(skuId, updateData, userId);
       console.log(`✅ [ProductMasterController] ProductMasterService.updateProduct completed successfully`);
 
       res.status(200).json({
@@ -248,7 +261,7 @@ export class ProductMasterController {
         return;
       }
 
-      const product = await ProductMasterService.getProductBySkuId(skuId);
+      const product = await this.productMasterService.getProductBySkuId(skuId);
       
       if (!product) {
         res.status(404).json({
@@ -288,7 +301,7 @@ export class ProductMasterController {
         return;
       }
 
-      const products = await ProductMasterService.getProductsByCatalogueId(catalogueId);
+      const products = await this.productMasterService.getProductsByCatalogueId(catalogueId);
 
       res.status(200).json({
         success: true,
@@ -320,7 +333,7 @@ export class ProductMasterController {
       if (req.query.color) filters.color = req.query.color as string;
       if (req.query.age_size) filters.age_size = req.query.age_size as string;
 
-      const result = await ProductMasterService.getAllProducts(page, limit, filters);
+      const result = await this.productMasterService.getAllProducts(page, limit, filters);
 
       res.status(200).json({
         success: true,
@@ -378,7 +391,7 @@ export class ProductMasterController {
         return;
       }
 
-      const updatedProduct = await ProductMasterService.updateAverageCost(skuId, parseFloat(avg_cost_to_ozi), userId);
+      const updatedProduct = await this.productMasterService.updateAverageCost(skuId, parseFloat(avg_cost_to_ozi), userId);
 
       res.status(200).json({
         success: true,
@@ -408,9 +421,9 @@ export class ProductMasterController {
 
     // Validate mandatory fields for creation
     if (!isUpdate) {
-      const mandatoryFields = ['name', 'category', 'description', 'mrp', 'brand_id', 'gst', 'cess', 'hsn'];
+      const mandatoryFields = ['name', 'portfolio_category', 'category', 'sub_category', 'description', 'mrp', 'brand_id', 'gst', 'cess', 'hsn'];
       mandatoryFields.forEach(field => {
-        if (!data[field]) {
+        if (data[field] === undefined || data[field] === null || data[field] === '') {
           errors.push(`${field} is required`);
         }
       });
@@ -529,7 +542,7 @@ export class ProductMasterController {
       });
 
       console.log('🔄 [ProductMasterController] Calling ProductMasterService.addVariantsToProduct...');
-      const newProducts = await ProductMasterService.addVariantsToProduct(catalogueId, newVariants, userId);
+      const newProducts = await this.productMasterService.addVariantsToProduct(catalogueId, newVariants, userId);
       console.log(`✅ [ProductMasterController] Service returned ${newProducts.length} new variants`);
 
       const responseData = newProducts.map(product => ({
@@ -540,7 +553,9 @@ export class ProductMasterController {
         name: product.name,
         color: product.color,
         age_size: product.age_size,
+        portfolio_category: product.portfolio_category,
         category: product.category,
+        sub_category: product.sub_category,
         mrp: product.mrp,
         brand_id: product.brand_id,
         created_at: product.created_at
@@ -570,6 +585,206 @@ export class ProductMasterController {
       res.status(500).json({
         success: false,
         message: 'Failed to add variants to product',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Bulk update SKUs
+   */
+  async bulkUpdateSKUs(req: Request, res: Response): Promise<Response> {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'User authentication required'
+        });
+      }
+
+      const { skuIds, updates, batchId } = req.body;
+
+      if (!skuIds || !Array.isArray(skuIds) || skuIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'SKU IDs array is required'
+        });
+      }
+
+      if (!updates || typeof updates !== 'object') {
+        return res.status(400).json({
+          success: false,
+          message: 'Updates object is required'
+        });
+      }
+
+      const result = await this.productMasterService.bulkUpdateSKUs(skuIds, updates, userId, batchId);
+
+      return res.status(200).json({
+        success: true,
+        message: result.message,
+        data: {
+          updatedCount: result.updatedCount,
+          batchId: result.batchId
+        }
+      });
+
+    } catch (error: any) {
+      console.error('Bulk update SKUs error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to bulk update SKUs',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Bulk update SKUs with individual updates per SKU
+   */
+  async bulkUpdateSKUsIndividual(req: Request, res: Response): Promise<Response> {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'User authentication required'
+        });
+      }
+
+      const { skuUpdates } = req.body;
+
+      if (!skuUpdates || !Array.isArray(skuUpdates) || skuUpdates.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'SKU updates array is required'
+        });
+      }
+
+      // Validate each SKU update
+      for (const skuUpdate of skuUpdates) {
+        if (!skuUpdate.skuId || !skuUpdate.updates || typeof skuUpdate.updates !== 'object') {
+          return res.status(400).json({
+            success: false,
+            message: 'Each SKU update must have skuId and updates object'
+          });
+        }
+      }
+
+      const result = await this.productMasterService.bulkUpdateSKUsIndividual(skuUpdates, userId);
+
+      return res.status(200).json({
+        success: true,
+        message: result.message,
+        data: {
+          updatedCount: result.updatedCount,
+          batchId: result.batchId
+        }
+      });
+
+    } catch (error: any) {
+      console.error('Individual bulk update SKUs error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to bulk update SKUs',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Revert bulk changes
+   */
+  async revertBulkChanges(req: Request, res: Response): Promise<Response> {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'User authentication required'
+        });
+      }
+
+      const { batchId } = req.params;
+
+      if (!batchId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Batch ID is required'
+        });
+      }
+
+      const result = await this.productMasterService.revertBulkChanges(batchId, userId);
+
+      return res.status(200).json({
+        success: true,
+        message: result.message,
+        data: {
+          revertedCount: result.revertedCount
+        }
+      });
+
+    } catch (error: any) {
+      console.error('Revert bulk changes error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to revert bulk changes',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Get change history for a batch
+   */
+  async getChangeHistory(req: Request, res: Response): Promise<Response> {
+    try {
+      const { batchId } = req.params;
+
+      if (!batchId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Batch ID is required'
+        });
+      }
+
+      const history = await this.productMasterService.getChangeHistory(batchId);
+
+      return res.status(200).json({
+        success: true,
+        message: 'Change history retrieved successfully',
+        data: history
+      });
+
+    } catch (error: any) {
+      console.error('Get change history error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to get change history',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Get batch history
+   */
+  async getBatchHistory(req: Request, res: Response): Promise<Response> {
+    try {
+      const history = await this.productMasterService.getBatchHistory();
+
+      return res.status(200).json({
+        success: true,
+        message: 'Batch history retrieved successfully',
+        data: history
+      });
+
+    } catch (error: any) {
+      console.error('Get batch history error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to get batch history',
         error: error.message
       });
     }

@@ -1,6 +1,8 @@
 import { ProductMaster, ProductMasterCreationAttributes, ProductMasterUpdateAttributes } from '../models/NewProductMaster';
+import { ProductMasterAudit } from '../models';
+import { User } from '../models';
 import sequelize from '../config/database';
-import { QueryTypes } from 'sequelize';
+import { QueryTypes, Op } from 'sequelize';
 
 export class ProductMasterService {
   
@@ -90,7 +92,9 @@ export class ProductMasterService {
       colors: productData.colors,
       ageSizes: productData.ageSizes,
       name: productData.name,
+      portfolio_category: productData.portfolio_category,
       category: productData.category,
+      sub_category: productData.sub_category,
       userId
     });
 
@@ -109,13 +113,11 @@ export class ProductMasterService {
       
       // Calculate total number of products to create (colors * age/sizes)
       const totalProducts = colors.length * ageSizes.length;
-      console.log(`🔍 [ProductMasterService] Generating ${totalProducts} catalogue_ids for all combinations...`);
+      console.log(`🔍 [ProductMasterService] Creating ${totalProducts} products with smart ID generation...`);
       
-      // Generate all catalogue_ids upfront to avoid race conditions
-      const catalogueIds = await this.generateCatalogueIds(totalProducts, transaction);
-      console.log(`✅ [ProductMasterService] Generated catalogue_ids: [${catalogueIds.join(', ')}]`);
-      
-      let catalogueIndex = 0;
+      // Generate a single catalogue_id for all variants of this product
+      const catalogueId = await this.generateCatalogueId();
+      console.log(`✅ [ProductMasterService] Generated single catalogue_id: ${catalogueId}`);
       
       // Create products for each color and age/size combination
       for (let colorIndex = 0; colorIndex < colors.length; colorIndex++) {
@@ -123,10 +125,14 @@ export class ProductMasterService {
         
         console.log(`🎨 [ProductMasterService] Processing color ${colorIndex + 1}/${colors.length}: ${color}`);
         
+        // Generate product_id based on color (same catalogue_id, different product_id per color)
+        const productId = await this.generateProductId(catalogueId, colorIndex);
+        console.log(`📝 [ProductMasterService] Generated product_id for color ${color}: ${productId}`);
+        
         for (let ageSizeIndex = 0; ageSizeIndex < ageSizes.length; ageSizeIndex++) {
           const ageSize = ageSizes[ageSizeIndex];
-          const catalogueId = catalogueIds[catalogueIndex];
-          const productId = await this.generateProductId(catalogueId, colorIndex);
+          
+          // Generate sku_id based on size (same product_id, different sku_id per size)
           const skuId = await this.generateSkuId(productId, ageSizeIndex);
           
           console.log(`📏 [ProductMasterService] Processing age/size ${ageSizeIndex + 1}/${ageSizes.length}: ${ageSize}`);
@@ -139,8 +145,13 @@ export class ProductMasterService {
             sku_id: skuId,
             color: color || undefined,
             age_size: ageSize || undefined,
-            name: productData.name
+            name: productData.name,
+            portfolio_category: productData.portfolio_category,
+            category: productData.category,
+            sub_category: productData.sub_category
           });
+
+          console.log(`🔍 [ProductMasterService] Full productData object:`, JSON.stringify(productData, null, 2));
 
           const newProduct = await ProductMaster.create({
             ...productData,
@@ -149,19 +160,33 @@ export class ProductMasterService {
             catelogue_id: catalogueId,
             product_id: productId,
             sku_id: skuId,
-            created_by: userId,
-            logs: [{
+            created_by: userId
+          }, { transaction });
+          
+          // Create audit record for product creation
+          await ProductMasterAudit.create({
+            productMasterId: newProduct.id,
+            fieldName: 'product_creation',
+            oldValue: null,
+            newValue: 'CREATED',
+            operationType: 'CREATE',
+            batchId: null,
+            userId,
               action: 'CREATE',
+            description: `Product created with SKU ${skuId}`,
+            metadata: JSON.stringify({
               timestamp: new Date().toISOString(),
-              user_id: userId,
-              changes: {
-                created: {
+              skuId: skuId,
+              catalogueId: catalogueId,
+              productId: productId,
+              color: color || undefined,
+              ageSize: ageSize || undefined,
+              createdData: {
                   ...productData,
                   color: color || undefined,
                   age_size: ageSize || undefined
                 }
-              }
-            }]
+            })
           }, { transaction });
           
           console.log(`✅ [ProductMasterService] Successfully created product:`, {
@@ -172,7 +197,6 @@ export class ProductMasterService {
           });
           
           createdProducts.push(newProduct);
-          catalogueIndex++;
         }
       }
 
@@ -222,23 +246,48 @@ export class ProductMasterService {
       // Update the product
       await product.update(updateData, { transaction });
       
-      // Add log entry
-      const newLog = {
+      // Create audit records for each changed field
+      const auditRecords: Array<{
+        productMasterId: number;
+        fieldName: string;
+        oldValue: string | null;
+        newValue: string | null;
+        operationType: 'UPDATE';
+        batchId: string | null;
+        userId: number;
+        action: string;
+        description: string;
+        metadata: string;
+      }> = [];
+      for (const [fieldName, newValue] of Object.entries(updateData)) {
+        const oldValue = originalData[fieldName];
+        if (oldValue !== newValue) {
+          auditRecords.push({
+            productMasterId: product.id,
+            fieldName,
+            oldValue: oldValue?.toString() || null,
+            newValue: newValue?.toString() || null,
+            operationType: 'UPDATE' as const,
+            batchId: null,
+            userId,
         action: 'UPDATE',
+            description: `Updated ${fieldName} from "${oldValue}" to "${newValue}"`,
+            metadata: JSON.stringify({
         timestamp: new Date().toISOString(),
-        user_id: userId,
-        changes: {
-          before: originalData,
-          after: updateData
+              skuId: skuId,
+              changes: { before: originalData, after: updateData }
+            })
+          });
         }
-      };
+      }
       
-      // Ensure logs is an array (handle case where it might be null or undefined)
-      const currentLogs = product.logs || [];
-      console.log(`📝 [ProductMasterService] Current logs:`, currentLogs);
-      const updatedLogs = [...currentLogs, newLog];
-      console.log(`📝 [ProductMasterService] Updated logs:`, updatedLogs);
-      await product.update({ logs: updatedLogs }, { transaction });
+      // Create audit records
+      if (auditRecords.length > 0) {
+        for (const auditRecord of auditRecords) {
+          await ProductMasterAudit.create(auditRecord, { transaction });
+        }
+        console.log(`📝 [ProductMasterService] Created ${auditRecords.length} audit records`);
+      }
 
       await transaction.commit();
       return product;
@@ -361,25 +410,31 @@ export class ProductMasterService {
       const originalCost = product.avg_cost_to_ozi || 0;
       
       await product.update({
-        avg_cost_to_ozi: parseFloat(newAverageCost.toFixed(2)),
-        logs: [
-          ...(product.logs || []),
-          {
-            action: 'AVERAGE_COST_UPDATE',
-            timestamp: new Date().toISOString(),
-            user_id: userId,
-            changes: {
-              previous_cost: originalCost,
-              new_cost: parseFloat(newAverageCost.toFixed(2)),
-              calculation_details: {
-                total_cost: totalCost,
-                total_quantity: totalQuantity,
-                grn_entries_count: grnLines.length,
-                calculation_method: 'weighted_average'
-              }
-            }
+        avg_cost_to_ozi: parseFloat(newAverageCost.toFixed(2))
+      }, { transaction });
+
+      // Create audit record for average cost update
+      await ProductMasterAudit.create({
+        productMasterId: product.id,
+        fieldName: 'avg_cost_to_ozi',
+        oldValue: originalCost.toString(),
+        newValue: parseFloat(newAverageCost.toFixed(2)).toString(),
+        operationType: 'UPDATE',
+        batchId: null,
+        userId,
+        action: 'AVERAGE_COST_UPDATE',
+        description: `Average cost updated from ${originalCost} to ${parseFloat(newAverageCost.toFixed(2))}`,
+        metadata: JSON.stringify({
+          timestamp: new Date().toISOString(),
+          previous_cost: originalCost,
+          new_cost: parseFloat(newAverageCost.toFixed(2)),
+          calculation_details: {
+            total_cost: totalCost,
+            total_quantity: totalQuantity,
+            grn_entries_count: grnLines.length,
+            calculation_method: 'weighted_average'
           }
-        ]
+        })
       }, { transaction });
 
       console.log(`✅ [ProductMasterService] Updated average cost for SKU ${skuId}: ${originalCost} → ${newAverageCost.toFixed(2)}`);
@@ -633,7 +688,9 @@ export class ProductMasterService {
           const newProduct = await ProductMaster.create({
             // Copy base product data
             name: baseProduct.name,
+            portfolio_category: baseProduct.portfolio_category,
             category: baseProduct.category,
+            sub_category: baseProduct.sub_category,
             description: baseProduct.description,
             mrp: baseProduct.mrp,
             brand_id: baseProduct.brand_id,
@@ -655,24 +712,33 @@ export class ProductMasterService {
             catelogue_id: catalogueId,
             product_id: currentProductId!,
             sku_id: skuId,
-            created_by: userId,
-            logs: [{
-              action: 'ADD_VARIANT',
+            created_by: userId
+          }, { transaction });
+
+          // Create audit record for variant creation
+          await ProductMasterAudit.create({
+            productMasterId: newProduct.id,
+            fieldName: 'variant_creation',
+            oldValue: null,
+            newValue: 'VARIANT_CREATED',
+            operationType: 'CREATE',
+            batchId: null,
+            userId,
+            action: 'ADD_VARIANT',
+            description: `Added variant with color: ${color || 'N/A'}, size: ${ageSize || 'N/A'}`,
+            metadata: JSON.stringify({
               timestamp: new Date().toISOString(),
-              user_id: userId,
-              changes: {
-                added_variant: {
-                  color: color || undefined,
-                  age_size: ageSize || undefined,
-                  product_id: currentProductId!,
-                  sku_id: skuId
-                },
-                base_product: {
-                  catalogue_id: catalogueId,
-                  name: baseProduct.name
-                }
+              added_variant: {
+                color: color || undefined,
+                age_size: ageSize || undefined,
+                product_id: currentProductId!,
+                sku_id: skuId
+              },
+              base_product: {
+                catalogue_id: catalogueId,
+                name: baseProduct.name
               }
-            }]
+            })
           }, { transaction });
 
           console.log(`✅ [ProductMasterService] Successfully created variant:`, {
@@ -706,6 +772,447 @@ export class ProductMasterService {
       throw error;
     }
   }
+  async bulkUpdateSKUs(
+    skuIds: string[],
+    updates: Record<string, any>,
+    userId: number,
+    batchId?: string
+  ): Promise<{ success: boolean; message: string; updatedCount: number; batchId: string }> {
+    const transaction = await sequelize.transaction();
+    const actualBatchId = batchId || `bulk_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    try {
+      console.log(`🔄 [ProductMasterService] Starting bulk update for ${skuIds.length} SKUs`);
+      console.log(`📝 [ProductMasterService] Updates:`, updates);
+      console.log(`🏷️ [ProductMasterService] Batch ID: ${actualBatchId}`);
+
+      // Get existing products to track changes
+      const existingProducts = await ProductMaster.findAll({
+        where: { sku_id: { [Op.in]: skuIds } },
+        transaction,
+      });
+
+      if (existingProducts.length !== skuIds.length) {
+        throw new Error(`Some SKUs not found. Requested: ${skuIds.length}, Found: ${existingProducts.length}`);
+      }
+
+      // Create audit records for changes
+      const auditRecords: Array<{
+        productMasterId: number;
+        fieldName: string;
+        oldValue: string | null;
+        newValue: string | null;
+        operationType: 'BULK_UPDATE';
+        batchId: string;
+        userId: number;
+        action: string;
+        description: string;
+        metadata: string | null;
+      }> = [];
+      
+      for (const product of existingProducts) {
+        for (const [fieldName, newValue] of Object.entries(updates)) {
+          const oldValue = (product as any).getDataValue(fieldName);
+          if (oldValue !== newValue) {
+            auditRecords.push({
+              productMasterId: product.id,
+              fieldName,
+              oldValue: oldValue?.toString() || null,
+              newValue: newValue?.toString() || null,
+              operationType: 'BULK_UPDATE' as const,
+              batchId: actualBatchId,
+              userId,
+              action: 'BULK_UPDATE',
+              description: `Bulk updated ${fieldName} from "${oldValue}" to "${newValue}"`,
+              metadata: JSON.stringify({
+                timestamp: new Date().toISOString(),
+                batchId: actualBatchId,
+                skuId: product.sku_id
+              })
+            });
+          }
+        }
+      }
+
+      // Perform bulk update
+      const [updatedCount] = await ProductMaster.update(updates, {
+        where: { sku_id: { [Op.in]: skuIds } },
+        transaction,
+      });
+
+      // Create audit records
+      if (auditRecords.length > 0) {
+        for (const record of auditRecords) {
+          await ProductMasterAudit.create({
+            productMasterId: record.productMasterId,
+            fieldName: record.fieldName,
+            oldValue: record.oldValue,
+            newValue: record.newValue,
+            operationType: record.operationType,
+            batchId: record.batchId,
+            userId: record.userId,
+            action: record.action,
+            description: record.description,
+            metadata: record.metadata,
+          }, { transaction });
+        }
+      }
+
+      await transaction.commit();
+      console.log(`✅ [ProductMasterService] Bulk update completed. Updated ${updatedCount} SKUs`);
+
+      return {
+        success: true,
+        message: `Successfully updated ${updatedCount} SKUs`,
+        updatedCount,
+        batchId: actualBatchId,
+      };
+
+    } catch (error) {
+      console.error('❌ [ProductMasterService] Bulk update failed:', {
+        error: (error as Error).message,
+        stack: (error as Error).stack,
+        name: (error as Error).name
+      });
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  /**
+   * Bulk update SKUs with individual updates per SKU
+   */
+  async bulkUpdateSKUsIndividual(
+    skuUpdates: Array<{ skuId: string; updates: Record<string, any> }>,
+    userId: number,
+    batchId?: string
+  ): Promise<{ success: boolean; message: string; updatedCount: number; batchId: string }> {
+    const transaction = await sequelize.transaction();
+    const actualBatchId = batchId || `bulk_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    try {
+      console.log(`🔄 [ProductMasterService] Starting individual bulk update for ${skuUpdates.length} SKUs`);
+      console.log(`🏷️ [ProductMasterService] Batch ID: ${actualBatchId}`);
+
+      // Get all SKU IDs
+      const skuIds = skuUpdates.map(sku => sku.skuId);
+      
+      // Get existing products to track changes
+      const existingProducts = await ProductMaster.findAll({
+        where: { sku_id: { [Op.in]: skuIds } },
+        transaction,
+      });
+
+      if (existingProducts.length !== skuIds.length) {
+        throw new Error(`Some SKUs not found. Requested: ${skuIds.length}, Found: ${existingProducts.length}`);
+      }
+
+      // Create audit records for changes
+      const auditRecords: Array<{
+        productMasterId: number;
+        fieldName: string;
+        oldValue: string | null;
+        newValue: string | null;
+        operationType: 'BULK_UPDATE';
+        batchId: string;
+        userId: number;
+        action: string;
+        description: string;
+        metadata: string | null;
+      }> = [];
+      
+      // Process each SKU individually
+      for (const skuUpdate of skuUpdates) {
+        const product = existingProducts.find(p => p.sku_id === skuUpdate.skuId);
+        if (!product) continue;
+
+        for (const [fieldName, newValue] of Object.entries(skuUpdate.updates)) {
+          const oldValue = (product as any).getDataValue(fieldName);
+          if (oldValue !== newValue) {
+            auditRecords.push({
+              productMasterId: product.id,
+              fieldName,
+              oldValue: oldValue?.toString() || null,
+              newValue: newValue?.toString() || null,
+              operationType: 'BULK_UPDATE' as const,
+              batchId: actualBatchId,
+              userId,
+              action: 'BULK_UPDATE',
+              description: `Bulk updated ${fieldName} from "${oldValue}" to "${newValue}"`,
+              metadata: JSON.stringify({
+                timestamp: new Date().toISOString(),
+                batchId: actualBatchId,
+                skuId: product.sku_id
+              })
+            });
+          }
+        }
+      }
+
+      // Update products individually
+      let updatedCount = 0;
+      for (const skuUpdate of skuUpdates) {
+        const product = existingProducts.find(p => p.sku_id === skuUpdate.skuId);
+        if (!product) continue;
+
+        await ProductMaster.update(skuUpdate.updates, {
+          where: { sku_id: skuUpdate.skuId },
+          transaction,
+        });
+        updatedCount++;
+      }
+
+      // Create audit records
+      for (const auditRecord of auditRecords) {
+        await ProductMasterAudit.create(auditRecord, { transaction });
+      }
+
+      await transaction.commit();
+      
+      console.log(`✅ [ProductMasterService] Individual bulk update completed: ${updatedCount} SKUs updated`);
+      
+      return {
+        success: true,
+        message: `Successfully updated ${updatedCount} SKUs`,
+        updatedCount,
+        batchId: actualBatchId,
+      };
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  /**
+   * Revert changes by batch ID
+   */
+  async revertBulkChanges(
+    batchId: string,
+    userId: number
+  ): Promise<{ success: boolean; message: string; revertedCount: number }> {
+    const transaction = await sequelize.transaction();
+    
+    try {
+      console.log(`🔄 [ProductMasterService] Starting revert for batch: ${batchId}`);
+
+      // Get all audit records for this batch
+      const auditRecords = await ProductMasterAudit.findAll({
+        where: { batchId, operationType: 'BULK_UPDATE' },
+        order: [['createdAt', 'DESC']],
+        transaction,
+      });
+
+      if (auditRecords.length === 0) {
+        throw new Error(`No changes found for batch ID: ${batchId}`);
+      }
+
+      // Group changes by product ID
+      const changesByProduct: Record<number, Record<string, string | null>> = {};
+      for (const record of auditRecords) {
+        if (!changesByProduct[record.productMasterId]) {
+          changesByProduct[record.productMasterId] = {};
+        }
+        changesByProduct[record.productMasterId][record.fieldName] = record.oldValue;
+      }
+
+      // Revert changes
+      let revertedCount = 0;
+      const revertAuditRecords: Array<{
+        productMasterId: number;
+        fieldName: string;
+        oldValue: string | null;
+        newValue: string | null;
+        operationType: 'REVERT';
+        batchId: string;
+        userId: number;
+        action: string;
+        description: string;
+        metadata: string | null;
+      }> = [];
+      
+      for (const [productId, fieldChanges] of Object.entries(changesByProduct)) {
+        const [updatedCount] = await ProductMaster.update(fieldChanges, {
+          where: { id: parseInt(productId) },
+          transaction,
+        });
+
+        if (updatedCount > 0) {
+          revertedCount++;
+          
+          // Create audit records for revert operation
+          for (const [fieldName, oldValue] of Object.entries(fieldChanges)) {
+            revertAuditRecords.push({
+              productMasterId: parseInt(productId),
+              fieldName,
+              oldValue: fieldChanges[fieldName],
+              newValue: oldValue,
+              operationType: 'REVERT' as const,
+              batchId: `revert_${batchId}`,
+              userId,
+              action: 'REVERT',
+              description: `Reverted ${fieldName} from "${fieldChanges[fieldName]}" back to "${oldValue}"`,
+              metadata: JSON.stringify({
+                timestamp: new Date().toISOString(),
+                originalBatchId: batchId,
+                revertReason: 'User requested revert'
+              })
+            });
+          }
+        }
+      }
+
+      // Create revert audit records
+      if (revertAuditRecords.length > 0) {
+        for (const record of revertAuditRecords) {
+          await ProductMasterAudit.create({
+            productMasterId: record.productMasterId,
+            fieldName: record.fieldName,
+            oldValue: record.oldValue,
+            newValue: record.newValue,
+            operationType: record.operationType,
+            batchId: record.batchId,
+            userId: record.userId,
+            action: record.action,
+            description: record.description,
+            metadata: record.metadata,
+          }, { transaction });
+        }
+      }
+
+      await transaction.commit();
+      console.log(`✅ [ProductMasterService] Revert completed. Reverted ${revertedCount} products`);
+
+      return {
+        success: true,
+        message: `Successfully reverted changes for ${revertedCount} products`,
+        revertedCount,
+      };
+
+    } catch (error) {
+      console.error('❌ [ProductMasterService] Revert failed:', {
+        error: (error as Error).message,
+        stack: (error as Error).stack,
+        name: (error as Error).name
+      });
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  /**
+   * Get change history for a batch
+   */
+  async getChangeHistory(batchId: string): Promise<any[]> {
+    try {
+      const auditRecords = await ProductMasterAudit.findAll({
+        where: { batchId },
+        order: [['createdAt', 'DESC']],
+      });
+
+      // Get product and user details separately
+      const productIds = [...new Set(auditRecords.map(r => r.productMasterId))];
+      const userIds = [...new Set(auditRecords.map(r => r.userId))];
+
+      const products = await ProductMaster.findAll({
+        where: { id: { [Op.in]: productIds } },
+        attributes: ['id', 'name', 'sku_id', 'product_id', 'catelogue_id'],
+      });
+
+      const users = await User.findAll({
+        where: { id: { [Op.in]: userIds } },
+        attributes: ['id', 'name', 'email'],
+      });
+
+      const productMap = new Map(products.map(p => [p.id, p]));
+      const userMap = new Map(users.map(u => [u.id, u]));
+
+      return auditRecords.map(record => ({
+        id: record.id,
+        productId: record.productMasterId,
+        productName: productMap.get(record.productMasterId)?.name || 'Unknown',
+        skuId: productMap.get(record.productMasterId)?.sku_id || '',
+        productIdValue: productMap.get(record.productMasterId)?.product_id || '',
+        catalogueId: productMap.get(record.productMasterId)?.catelogue_id || '',
+        fieldName: record.fieldName,
+        oldValue: record.oldValue,
+        newValue: record.newValue,
+        operationType: record.operationType,
+        batchId: record.batchId,
+        userId: record.userId,
+        userName: userMap.get(record.userId)?.name || 'Unknown',
+        userEmail: userMap.get(record.userId)?.email || '',
+        createdAt: record.createdAt,
+      }));
+
+    } catch (error) {
+      console.error('❌ [ProductMasterService] Get change history failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all batch IDs with their summary
+   */
+  async getBatchHistory(): Promise<any[]> {
+    try {
+      console.log('🔍 [ProductMasterService] getBatchHistory called');
+      
+      const batches = await ProductMasterAudit.findAll({
+        attributes: [
+          'batchId',
+          'operationType',
+          'userId',
+          [sequelize.fn('COUNT', sequelize.col('id')), 'changeCount'],
+          [sequelize.fn('COUNT', sequelize.fn('DISTINCT', sequelize.col('product_master_id'))), 'productCount'],
+          [sequelize.fn('COUNT', sequelize.fn('DISTINCT', sequelize.col('field_name'))), 'fieldCount'],
+          [sequelize.fn('MIN', sequelize.col('created_at')), 'createdAt'],
+          [sequelize.fn('MAX', sequelize.col('created_at')), 'lastUpdated'],
+        ],
+        group: ['batchId', 'operationType', 'userId'],
+        order: [['createdAt', 'DESC']],
+      });
+
+      console.log(`📊 [ProductMasterService] Found ${batches.length} batches`);
+
+      if (batches.length === 0) {
+        console.log('📊 [ProductMasterService] No batches found, returning empty array');
+        return [];
+      }
+
+      // Get user details separately
+      const userIds = [...new Set(batches.map(b => b.userId))];
+      console.log(`👥 [ProductMasterService] Getting user details for IDs: ${userIds.join(', ')}`);
+      
+      const users = await User.findAll({
+        where: { id: { [Op.in]: userIds } },
+        attributes: ['id', 'name', 'email'],
+      });
+
+      console.log(`👥 [ProductMasterService] Found ${users.length} users`);
+
+      const userMap = new Map(users.map(u => [u.id, u]));
+
+      const result = batches.map(batch => ({
+        batchId: batch.batchId,
+        operationType: batch.operationType,
+        changeCount: (batch as any).getDataValue('changeCount'),
+        productCount: (batch as any).getDataValue('productCount'),
+        fieldCount: (batch as any).getDataValue('fieldCount'),
+        createdAt: (batch as any).getDataValue('createdAt'),
+        lastUpdated: (batch as any).getDataValue('lastUpdated'),
+        userId: batch.userId,
+        userName: userMap.get(batch.userId)?.name || 'Unknown',
+        userEmail: userMap.get(batch.userId)?.email || '',
+      }));
+
+      console.log(`✅ [ProductMasterService] Returning ${result.length} batch records`);
+      return result;
+
+    } catch (error) {
+      console.error('❌ [ProductMasterService] Get batch history failed:', error);
+      throw error;
+    }
+  }
 }
 
-export default new ProductMasterService();
+export default ProductMasterService;
