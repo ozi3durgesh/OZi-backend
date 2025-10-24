@@ -52,6 +52,35 @@ export class DCGrnController {
   }
 
   /**
+   * Calculate overall GRN status based on line statuses
+   * @param lineStatuses - Array of line statuses
+   * @returns grn_status: 'pending' | 'partial' | 'completed' | 'rejected'
+   */
+  private static calculateGrnStatus(lineStatuses: string[]): string {
+    if (!lineStatuses || lineStatuses.length === 0) {
+      return 'pending';
+    }
+
+    // If all lines are completed, GRN is completed
+    if (lineStatuses.every(status => status === 'completed')) {
+      return 'completed';
+    }
+
+    // If all lines are rejected, GRN is rejected
+    if (lineStatuses.every(status => status === 'rejected')) {
+      return 'rejected';
+    }
+
+    // If all lines are pending, GRN is pending
+    if (lineStatuses.every(status => status === 'pending')) {
+      return 'pending';
+    }
+
+    // If there's a mix of statuses (some completed, some pending, etc.), GRN is partial
+    return 'partial';
+  }
+
+  /**
    * Get DC PO products for GRN creation
    */
   static async getDCPOProductsForGRN(req: AuthRequest, res: Response): Promise<Response> {
@@ -709,21 +738,8 @@ export class DCGrnController {
         const hasGrn = po.DCGrns && po.DCGrns.length > 0;
         const grnData = hasGrn ? po.DCGrns[0] : null;
         
-        return {
-          id: hasGrn ? grnData.id : po.id,
-          po_id: po.id,
-          status: hasGrn ? grnData.status : po.status.toLowerCase(),
-          closeReason: hasGrn ? grnData.closeReason : (po.status === 'REJECTED' ? po.rejectionReason : null),
-          created_by: hasGrn ? grnData.created_by : (po.CreatedBy?.id || null),
-          created_at: hasGrn ? grnData.created_at : po.createdAt,
-          updated_at: hasGrn ? grnData.updated_at : po.updatedAt,
-          PO: {
-            id: po.id,
-            po_id: po.poId,
-            vendor_name: `Vendor-${po.vendorId}`,
-            approval_status: po.status.toLowerCase()
-          },
-          Line: po.Products?.map((product: any) => {
+        // Process products to get line statuses first
+        const processedLines = po.Products?.map((product: any) => {
             // Parse SKU matrix to get actual SKUs
             let skuMatrix: any[] = [];
             try {
@@ -814,7 +830,27 @@ export class DCGrnController {
                 }
               };
             }
-          }) || []
+          }) || [];
+
+        // Calculate overall GRN status based on line statuses
+        const lineStatuses = processedLines.map((line: any) => line.line_status);
+        const calculatedGrnStatus = hasGrn ? DCGrnController.calculateGrnStatus(lineStatuses) : po.status.toLowerCase();
+        
+        return {
+          id: hasGrn ? grnData.id : po.id,
+          po_id: po.id,
+          status: calculatedGrnStatus,
+          closeReason: hasGrn ? grnData.closeReason : (po.status === 'REJECTED' ? po.rejectionReason : null),
+          created_by: hasGrn ? grnData.created_by : (po.CreatedBy?.id || null),
+          created_at: hasGrn ? grnData.created_at : po.createdAt,
+          updated_at: hasGrn ? grnData.updated_at : po.updatedAt,
+          PO: {
+            id: po.id,
+            po_id: po.poId,
+            vendor_name: `Vendor-${po.vendorId}`,
+            approval_status: po.status.toLowerCase()
+          },
+          Line: processedLines
         };
       });
 
