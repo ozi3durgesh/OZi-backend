@@ -641,6 +641,37 @@ POProductEdit.belongsTo(PurchaseOrderEdit, {
   as: 'purchaseOrderEdit',
 });
 
+PickingWave.belongsTo(FulfillmentCenter, {
+  foreignKey: 'fc_id',
+  as: 'FulfillmentCenter'
+});
+
+FulfillmentCenter.hasMany(PickingWave, {
+  foreignKey: 'fc_id',
+  as: 'PickingWaves'
+});
+
+BinLocation.belongsTo(FulfillmentCenter, {
+  foreignKey: 'fc_id',
+  as: 'FulfillmentCenter'
+});
+
+FulfillmentCenter.hasMany(BinLocation, {
+  foreignKey: 'fc_id',
+  as: 'BinLocations'
+});
+
+PicklistItem.belongsTo(FulfillmentCenter, {
+  foreignKey: 'fc_id',
+  as: 'FulfillmentCenter'
+});
+
+FulfillmentCenter.hasMany(PicklistItem, {
+  foreignKey: 'fc_id',
+  as: 'PickingListItems'
+});
+
+
 // Return system associations are defined in individual model files
 
 export {

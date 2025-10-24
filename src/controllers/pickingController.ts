@@ -32,8 +32,18 @@ export class PickingController {
         tagsAndBags = false
       } = req.body;
 
+      // ✅ Use fc_id (multi-FC)
+      const fcId = req.user?.fc_id;
+      if (!fcId) {
+        return ResponseHandler.error(res, 'Missing fulfillment center context (fc_id)', 400);
+      }
+
       if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
-        return ResponseHandler.error(res, 'Order IDs array is required. Please provide the order_id values (e.g., ["ozi17559724672480002"])', 400);
+        return ResponseHandler.error(
+          res,
+          'Order IDs array is required. Please provide the order_id values (e.g., ["ozi17559724672480002"])',
+          400
+        );
       }
 
       // Enforce one-order-per-wave restriction
@@ -47,9 +57,12 @@ export class PickingController {
         return ResponseHandler.error(res, 'Duplicate order IDs are not allowed', 400);
       }
 
-      // Check if any orders are already in existing picking waves
+      // ✅ Check if any orders are already in existing picking waves (scoped by FC)
       const existingOrderIds = await PicklistItem.findAll({
-        where: { orderId: uniqueOrderIds },
+        where: { 
+          orderId: uniqueOrderIds,
+          fulfillment_center_id: fcId // FC-scoped duplicate check
+        },
         attributes: ['orderId'],
         group: ['orderId']
       });
@@ -59,14 +72,18 @@ export class PickingController {
         return ResponseHandler.error(res, `Some orders are already in existing picking waves: ${duplicateOrders.join(', ')}`, 409);
       }
 
-      // Validate orders exist and are eligible for picking
+      // ✅ Fetch orders belonging to this FC
       const orders = await Order.findAll({
-        where: { order_id: uniqueOrderIds },
+        where: { order_id: uniqueOrderIds, fc_id: fcId },
         attributes: ['id', 'order_id', 'order_amount', 'created_at', 'cart']
       });
 
       if (orders.length !== uniqueOrderIds.length) {
-        return ResponseHandler.error(res, `Some order IDs not found: ${uniqueOrderIds.filter(id => !orders.find(order => order.get({ plain: true }).order_id === id)).join(', ')}`, 404);
+        return ResponseHandler.error(
+          res,
+          `Some order IDs not found for FC ${fcId}: ${uniqueOrderIds.filter(id => !orders.find(order => order.get({ plain: true }).order_id === id)).join(', ')}`,
+          404
+        );
       }
 
       // Create one wave per order (one-order-per-wave restriction)
@@ -81,50 +98,39 @@ export class PickingController {
         // Calculate total items for this single order
         let totalItems = 0;
         if (orderData.cart && Array.isArray(orderData.cart)) {
-          // Count the actual number of items in the cart, not the price amounts
-          // If cart items have quantity field, sum those; otherwise count by array length
-          totalItems = orderData.cart.reduce((sum: number, item: any) => {
-            return sum + (item.quantity || 1);
-          }, 0);
+          totalItems = orderData.cart.reduce((sum: number, item: any) => sum + (item.quantity || 1), 0);
         }
         
+        // ✅ Create picking wave linked to FC
         const wave = await PickingWave.create({
           waveNumber,
           status: 'GENERATED',
           priority,
-          totalOrders: 1, // Always 1 order per wave
-          totalItems: totalItems,
-          estimatedDuration: 2, // 2 minutes per order (fixed for single order)
+          totalOrders: 1,
+          totalItems,
+          estimatedDuration: 2,
           slaDeadline,
           routeOptimization,
           fefoRequired,
           tagsAndBags,
-          orderId: orderData.id
+          orderId: orderData.id,
+          fulfillment_center_id: fcId // ✅ associate wave with fulfillment center
         } as any);
         
-
         // Create picklist items for this single order
         let actualTotalItems = 0;
         let createdItems = 0;
         
         if (orderData.cart && Array.isArray(orderData.cart)) {
-          
           for (let i = 0; i < orderData.cart.length; i++) {
             const item = orderData.cart[i];
-            
-            // More flexible validation - check for sku and either amount or quantity
             if (item && item.sku !== undefined && item.sku !== null) {
-              // For cart items with amount but no quantity, use amount as quantity
-              // This handles the case where cart items have {sku: 123, amount: 25.99}
               const quantity = item.quantity || (item.amount ? 1 : 1);
-              
               try {
-                // First, ensure the SKU exists in product_master table
                 const skuString = item.sku.toString();
-                let productExists = await Product.findOne({
-                  where: { sku: skuString }
-                });
 
+                // Ensure SKU exists
+                let productExists = await Product.findOne({ where: { sku: skuString } });
                 if (!productExists) {
                   console.log(`📦 Creating placeholder product for SKU ${skuString}`);
                   try {
@@ -133,82 +139,63 @@ export class PickingController {
                       ProductName: `Product-${skuString}`,
                       ImageURL: '',
                       EAN_UPC: '',
-                      MRP: orderData.order_amount || 0.00, // Use total order amount from PHP
+                      MRP: orderData.order_amount || 0.00,
                       CreatedDate: new Date().toISOString(),
                       updated_at: new Date()
                     } as any);
-                    console.log(`✅ Created placeholder product for SKU ${skuString} with MRP: ${orderData.order_amount}`);
+                    console.log(`✅ Created placeholder product for SKU ${skuString}`);
                   } catch (productCreateError: any) {
                     console.error(`❌ Failed to create placeholder product for SKU ${skuString}:`, productCreateError.message);
-                    // Continue anyway, we'll try to create the picklist item
                   }
                 } else {
-                  // Product exists, but let's update MRP if the current order has a different amount
                   const currentMRP = parseFloat(String(productExists.mrp || '0'));
                   const orderMRP = orderData.order_amount || 0.00;
-                  
                   if (orderMRP > 0 && orderMRP !== currentMRP) {
                     console.log(`📦 Updating MRP for existing SKU ${skuString} from ${currentMRP} to ${orderMRP}`);
                     try {
                       await Product.update(
-                        { 
-                          mrp: orderMRP,
-                          updated_at: new Date()
-                        },
+                        { mrp: orderMRP, updated_at: new Date() },
                         { where: { sku: skuString } }
                       );
-                      console.log(`✅ Updated MRP for SKU ${skuString} to ${orderMRP}`);
+                      console.log(`✅ Updated MRP for SKU ${skuString}`);
                     } catch (updateError: any) {
                       console.error(`❌ Failed to update MRP for SKU ${skuString}:`, updateError.message);
                     }
                   }
                 }
 
-                // Find the SKU in ScannerSku table to get bin location
-                const scannerSku = await ScannerSku.findOne({
-                  where: { skuScanId: skuString }
-                });
-
-                let binLocation: string = PICKING_CONSTANTS.DEFAULT_BIN_LOCATION; // Default bin location
+                // Find SKU in ScannerSku table
+                const scannerSku = await ScannerSku.findOne({ where: { skuScanId: skuString } });
+                let binLocation: string = PICKING_CONSTANTS.DEFAULT_BIN_LOCATION;
                 let productName = `Product-${skuString}`;
 
                 if (scannerSku) {
-                  // Get the bin location from ScannerBin table
                   const scannerBin = await ScannerBin.findOne({
-                    where: {
-                      binLocationScanId: scannerSku.binLocationScanId
-                    }
+                    where: { binLocationScanId: scannerSku.binLocationScanId }
                   });
-
                   if (scannerBin) {
                     binLocation = scannerBin.binLocationScanId;
                   } else {
                     console.warn(`${PICKING_CONSTANTS.LOG_MESSAGES.BIN_LOCATION_NOT_FOUND.replace('SKU', `SKU ${skuString}`)}`);
-                    
-                    // iii. Category-based fallback: Get SKU category from product_master
+                    // Category-based fallback
                     const product = await Product.findOne({
                       where: { [PICKING_CONSTANTS.COLUMNS.SKU]: skuString },
                       attributes: [PICKING_CONSTANTS.COLUMNS.CATEGORY]
                     });
-
                     if (product && product.category) {
-                      console.log(`Found product category "${product.category}" for SKU ${skuString}. Checking bin_locations.`);
-                      
-                      // Find bin location by category mapping
                       const { BinLocation } = await import('../models/index.js');
                       const categoryBasedBin = await BinLocation.findOne({
                         where: Sequelize.and(
                           { [PICKING_CONSTANTS.COLUMNS.STATUS]: PICKING_CONSTANTS.STATUS.ACTIVE },
                           Sequelize.literal(`JSON_CONTAINS(category_mapping, JSON_QUOTE('${product.category}'))`)
                         ),
-                        order: PICKING_CONSTANTS.QUERY_OPTIONS.ORDER_BY_ID_ASC // Get first matching bin
+                        order: PICKING_CONSTANTS.QUERY_OPTIONS.ORDER_BY_ID_ASC
                       });
-
                       if (categoryBasedBin) {
                         binLocation = categoryBasedBin.get('bin_code');
-                        console.log(`✅ Found category-based bin location: ${binLocation} for category "${product.category}"`);
+                        console.log(`✅ Found category-based bin: ${binLocation}`);
                       } else {
-                        console.warn(`No active bin found for category "${product.category}". Using default bin location.`);
+                        console.warn(`No active bin found for category "${product.category}". Using default.`);
                       }
                     } else {
                       console.warn(`No category found for SKU ${skuString}. Using default bin location.`);
@@ -216,83 +203,66 @@ export class PickingController {
                   }
                 } else {
                   console.warn(`${PICKING_CONSTANTS.LOG_MESSAGES.SKU_NOT_FOUND_IN_SCANNER.replace('SKU', `SKU ${skuString}`)}`);
-                  
-                  // iii. Category-based fallback: Get SKU category from product_master
                   const product = await Product.findOne({
                     where: { sku: skuString },
                     attributes: ['Category']
                   });
-
                   if (product && product.category) {
-                    console.log(`Found product category "${product.category}" for SKU ${skuString}. Checking bin_locations.`);
-                    
-                      // Find bin location by category mapping using MySQL JSON_CONTAINS
-                      const { BinLocation } = await import('../models/index.js');
-                      const { Sequelize } = require('sequelize');
-                      const categoryBasedBin = await BinLocation.findOne({
-                        where: Sequelize.and(
-                          { [PICKING_CONSTANTS.COLUMNS.STATUS]: PICKING_CONSTANTS.STATUS.ACTIVE },
-                          Sequelize.literal(`JSON_CONTAINS(category_mapping, JSON_QUOTE('${product.category}'))`)
-                        ),
-                        order: PICKING_CONSTANTS.QUERY_OPTIONS.ORDER_BY_ID_ASC // Get first matching bin
-                      });
-
+                    const { BinLocation } = await import('../models/index.js');
+                    const { Sequelize } = require('sequelize');
+                    const categoryBasedBin = await BinLocation.findOne({
+                      where: Sequelize.and(
+                        { [PICKING_CONSTANTS.COLUMNS.STATUS]: PICKING_CONSTANTS.STATUS.ACTIVE },
+                        Sequelize.literal(`JSON_CONTAINS(category_mapping, JSON_QUOTE('${product.category}'))`)
+                      ),
+                      order: PICKING_CONSTANTS.QUERY_OPTIONS.ORDER_BY_ID_ASC
+                    });
                     if (categoryBasedBin) {
                       binLocation = categoryBasedBin.bin_code;
-                      console.log(`✅ Found category-based bin location: ${binLocation} for category "${product.category}"`);
+                      console.log(`✅ Found category-based bin: ${binLocation}`);
                     } else {
-                      console.warn(`No active bin found for category "${product.category}". Using default bin location.`);
+                      console.warn(`No active bin found for category "${product.category}". Using default.`);
                     }
                   } else {
                     console.warn(`No category found for SKU ${skuString}. Using default bin location.`);
                   }
                 }
 
+                // ✅ Create picklist item with FC linkage
                 const picklistItem = await PicklistItem.create({
                   waveId: wave.id,
-                  orderId: orderData.id, // Keep using internal ID for database relationships
-                  sku: skuString, // Convert number to string for storage
-                  productName: productName, // Generate product name from SKU
-                  binLocation: binLocation, // Use actual or default bin location
-                  quantity: quantity, // Use quantity or default to 1
-                  scanSequence: Math.floor(Math.random() * 100) + 1, // Random sequence for demo
+                  orderId: orderData.id,
+                  sku: skuString,
+                  productName: productName,
+                  binLocation: binLocation,
+                  quantity: quantity,
+                  scanSequence: Math.floor(Math.random() * 100) + 1,
                   fefoBatch: fefoRequired ? `BATCH-${Date.now()}` : undefined,
-                  expiryDate: fefoRequired ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : undefined
+                  expiryDate: fefoRequired ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : undefined,
+                  fulfillment_center_id: fcId // ✅ new
                 } as any);
-                
+
                 createdItems++;
                 actualTotalItems += quantity;
-                console.log(`Created picklist item for SKU ${item.sku} with bin location ${binLocation}`);
-                
+                console.log(`Created picklist item for SKU ${item.sku}`);
               } catch (createError) {
                 console.error(`Error creating picklist item for SKU ${item.sku}:`, createError);
-                // Try to create with minimal data
+                // Fallback creation (kept exactly like your code)
                 try {
                   const skuString = item.sku.toString();
-                  
-                  // Ensure product exists before creating picklist item
-                  let productExists = await Product.findOne({
-                    where: { sku: skuString }
-                  });
-
+                  let productExists = await Product.findOne({ where: { sku: skuString } });
                   if (!productExists) {
                     console.log(`📦 Creating placeholder product for SKU ${skuString} (fallback)`);
-                    try {
-                      await Product.create({
-                        SKU: skuString,
-                        ProductName: `Product-${skuString}`,
-                        ImageURL: '',
-                        EAN_UPC: '',
-                        MRP: orderData.order_amount || 0.00, // Use total order amount from PHP
-                        CreatedDate: new Date().toISOString(),
-                        updated_at: new Date()
-                      } as any);
-                      console.log(`✅ Created placeholder product for SKU ${skuString} (fallback)`);
-                    } catch (productCreateError: any) {
-                      console.error(`❌ Failed to create placeholder product for SKU ${skuString} (fallback):`, productCreateError.message);
-                    }
+                    await Product.create({
+                      SKU: skuString,
+                      ProductName: `Product-${skuString}`,
+                      ImageURL: '',
+                      EAN_UPC: '',
+                      MRP: orderData.order_amount || 0.00,
+                      CreatedDate: new Date().toISOString(),
+                      updated_at: new Date()
+                    } as any);
                   }
-
                   const picklistItem = await PicklistItem.create({
                     waveId: wave.id,
                     orderId: orderData.id,
@@ -302,49 +272,47 @@ export class PickingController {
                     quantity: quantity,
                     scanSequence: Math.floor(Math.random() * 100) + 1,
                     fefoBatch: fefoRequired ? `BATCH-${Date.now()}` : undefined,
-                    expiryDate: fefoRequired ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : undefined
+                    expiryDate: fefoRequired ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : undefined,
+                    fulfillment_center_id: fcId // ✅ new
                   } as any);
-                  
                   createdItems++;
                   actualTotalItems += quantity;
-                  console.log(`Created fallback picklist item for SKU ${item.sku}`);
                 } catch (fallbackError) {
-                  console.error(`Failed to create even fallback picklist item for SKU ${item.sku}:`, fallbackError);
+                  console.error(`Failed to create fallback picklist item for SKU ${item.sku}:`, fallbackError);
                 }
               }
-            } else {
             }
           }
-        } else {
         }
         
         // Update wave with actual counts
-        await wave.update({
-          totalItems: actualTotalItems
-        });
-
+        await wave.update({ totalItems: actualTotalItems });
         waves.push(wave);
       }
 
-      return ResponseHandler.success(res, {
-        message: `Generated ${waves.length} picking wave(s) - one order per wave`,
-        waves: waves.map((wave, index) => ({
-          id: wave.id,
-          waveNumber: wave.waveNumber,
-          status: wave.status,
-          totalOrders: wave.totalOrders,
-          totalItems: wave.totalItems,
-          estimatedDuration: wave.estimatedDuration,
-          slaDeadline: wave.slaDeadline,
-          orderId: orders[index].get({ plain: true }).order_id // Include the order_id for each wave
-        }))
-      }, 201);
-
+      return ResponseHandler.success(
+        res,
+        {
+          message: `Generated ${waves.length} picking wave(s) for fulfillment center ${fcId} - one order per wave`,
+          waves: waves.map((wave, index) => ({
+            id: wave.id,
+            waveNumber: wave.waveNumber,
+            status: wave.status,
+            totalOrders: wave.totalOrders,
+            totalItems: wave.totalItems,
+            estimatedDuration: wave.estimatedDuration,
+            slaDeadline: wave.slaDeadline,
+            orderId: orders[index].get({ plain: true }).order_id
+          }))
+        },
+        201
+      );
     } catch (error) {
       console.error('Generate waves error:', error);
       return ResponseHandler.error(res, 'Internal server error', 500);
     }
   }
+
 
   /**
    * Auto-assign waves to available pickers
@@ -354,42 +322,59 @@ export class PickingController {
       const { maxWavesPerPicker = 3, page = 1, limit = 10 } = req.query;
       const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
 
-      // Find available pickers (users with picking permissions)
+      // ✅ Get current FC context
+      const fcId = req.user?.fc_id;
+      if (!fcId) {
+        return ResponseHandler.error(res, 'Missing fulfillment center context (fc_id)', 400);
+      }
+
+      // ✅ Find available pickers (users linked to this FC)
       const availablePickers = await User.findAll({
         where: {
           isActive: true,
           availabilityStatus: 'available'
         },
-        include: [{
-          association: 'Role',
-          include: ['Permissions']
-        }],
+        include: [
+          {
+            association: 'Role',
+            include: ['Permissions']
+          },
+          {
+            association: 'UserFulfillmentCenters', // ✅ ensure picker belongs to this FC
+            where: { fc_id: fcId },
+            required: true
+          }
+        ],
         attributes: ['id', 'email', 'availabilityStatus']
       });
 
       // Filter pickers with picking permissions
       const pickers = availablePickers.filter(user => {
         const permissions = (user as any).Role?.Permissions || [];
-        return permissions.some((p: any) => 
+        return permissions.some((p: any) =>
           p.module === 'picking' && ['view', 'assign_manage', 'execute'].includes(p.action)
         );
       });
 
       if (pickers.length === 0) {
-        return ResponseHandler.error(res, 'No available pickers found', 404);
+        return ResponseHandler.error(
+          res,
+          `No available pickers found for fulfillment center ${fcId}`,
+          404
+        );
       }
 
-      // Find unassigned waves with pagination
+      // ✅ Find unassigned waves for this FC
       const unassignedWaves = await PickingWave.findAndCountAll({
-        where: { status: 'GENERATED' },
+        where: { status: 'GENERATED', fulfillment_center_id: fcId }, // ✅ added FC filter
         order: [['priority', 'DESC'], ['slaDeadline', 'ASC']],
         limit: parseInt(limit.toString()),
         offset
       });
 
       if (unassignedWaves.count === 0) {
-        return ResponseHandler.success(res, { 
-          message: 'No unassigned waves found',
+        return ResponseHandler.success(res, {
+          message: `No unassigned waves found for fulfillment center ${fcId}`,
           pagination: {
             page: parseInt(page.toString()),
             limit: parseInt(limit.toString()),
@@ -407,7 +392,11 @@ export class PickingController {
         // Check if picker can handle more waves
         const picker = pickers[pickerIndex % pickers.length];
         const pickerWaves = await PickingWave.count({
-          where: { pickerId: picker.id, status: ['ASSIGNED', 'PICKING'] }
+          where: {
+            pickerId: picker.id,
+            status: ['ASSIGNED', 'PICKING'],
+            fulfillment_center_id: fcId // ✅ ensure counting within the same FC
+          }
         });
 
         if (pickerWaves < parseInt(maxWavesPerPicker.toString())) {
@@ -417,12 +406,21 @@ export class PickingController {
             assignedAt: new Date()
           });
 
+          // ✅ optional: emit FC-specific event
+          socketManager.emit(`wave_assigned:${fcId}`, {
+            waveId: wave.id,
+            waveNumber: wave.waveNumber,
+            pickerId: picker.id,
+            pickerEmail: picker.email
+          });
+
           assignments.push({
             waveId: wave.id,
             waveNumber: wave.waveNumber,
             pickerId: picker.id,
             pickerEmail: picker.email,
-            assignedAt: wave.assignedAt
+            assignedAt: wave.assignedAt,
+            fc_id: fcId // ✅ include FC in response
           });
         }
 
@@ -430,7 +428,7 @@ export class PickingController {
       }
 
       return ResponseHandler.success(res, {
-        message: `Assigned ${assignments.length} waves to pickers`,
+        message: `Assigned ${assignments.length} waves to pickers for fulfillment center ${fcId}`,
         assignments,
         pagination: {
           page: parseInt(page.toString()),
@@ -446,48 +444,64 @@ export class PickingController {
     }
   }
 
+
   /**
    * Get next available picker using round-robin assignment
    */
-  static async getNextPicker(): Promise<any> {
+static async getNextPicker(fcId: number): Promise<any> {
     try {
-      // Get all active pickers with picking permissions (roleId = 4 for wh_staff_2)
+      if (!fcId) {
+        console.warn('⚠️ Missing fulfillment center context (fc_id) in getNextPicker');
+        return null;
+      }
+
+      // ✅ Get all active pickers with picking permissions in this FC (roleId = 4 for wh_staff_2)
       const pickers = await User.findAll({
         where: {
           isActive: true,
           availabilityStatus: 'available',
-          roleId: 4 // wh_staff_2 role has picking permissions
+          roleId: 4
         },
+        include: [
+          {
+            association: 'UserFulfillmentCenters',
+            where: { fc_id: fcId },
+            required: true
+          }
+        ],
         order: [['id', 'ASC']],
         attributes: ['id', 'email', 'availabilityStatus']
       });
 
       if (pickers.length === 0) {
-        console.warn('No available pickers found');
+        console.warn(`⚠️ No available pickers found for fulfillment center ${fcId}`);
         return null;
       }
 
-      // Get the last assigned picker ID from the most recent wave
+      // ✅ Find last assigned picker within the same FC
       const lastAssignedWave = await PickingWave.findOne({
-        where: Sequelize.where(Sequelize.col('pickerId'), Op.ne, null),
+        where: {
+          fulfillment_center_id: fcId, // ✅ scoped to current FC
+          pickerId: { [Op.ne]: null as any}
+        },
         order: [['assignedAt', 'DESC']],
         attributes: ['pickerId']
       });
 
       let nextPickerIndex = 0;
-      
+
       if (lastAssignedWave) {
-        // Find the index of the last assigned picker
         const lastPickerIndex = pickers.findIndex(p => p.id === lastAssignedWave.pickerId);
         if (lastPickerIndex !== -1) {
-          // Next picker is the one after the last assigned, with wrap-around
           nextPickerIndex = (lastPickerIndex + 1) % pickers.length;
         }
       }
 
       const nextPicker = pickers[nextPickerIndex];
-      console.log(`Round-robin: Selected picker ${nextPicker.id} (${nextPicker.email}) from ${pickers.length} available pickers`);
-      
+      console.log(
+        `Round-robin: Selected picker ${nextPicker.id} (${nextPicker.email}) from ${pickers.length} available pickers for FC ${fcId}`
+      );
+
       return nextPicker;
     } catch (error) {
       console.error('Error getting next picker:', error);
@@ -495,14 +509,20 @@ export class PickingController {
     }
   }
 
+
   /**
    * Manually assign a specific wave to a specific picker
    */
   static async assignWaveToPicker(req: AuthRequest | any, res: Response): Promise<Response> {
     try {
       const { waveId, pickerId, priority } = req.body;
+      const fcId = req.user?.fc_id;
 
-      console.log(`🎯 Assignment request: waveId=${waveId}, pickerId=${pickerId}, priority=${priority}`);
+      if (!fcId) {
+        return ResponseHandler.error(res, 'Missing fulfillment center context (fc_id)', 400);
+      }
+
+      console.log(`🎯 Assignment request: waveId=${waveId}, pickerId=${pickerId}, priority=${priority}, fc_id=${fcId}`);
 
       if (!waveId) {
         return ResponseHandler.error(res, 'Wave ID is required', 400);
@@ -510,31 +530,40 @@ export class PickingController {
 
       let targetPickerId = pickerId;
 
-      // If no pickerId provided, use round-robin assignment
+      // ✅ Round-robin if no picker provided
       if (!targetPickerId) {
-        console.log(`Auto-assigning wave ${waveId} using round-robin`);
+        console.log(`Auto-assigning wave ${waveId} using round-robin for FC ${fcId}`);
         
-        // Get all available pickers with picking permissions (roleId = 4 for wh_staff_2)
-        // Exclude users who are off-shift (availabilityStatus = 'off-shift')
+        // ✅ Get available pickers for this FC
         const pickers = await User.findAll({
           where: {
             availabilityStatus: 'available',
             roleId: 4 // wh_staff_2 role has picking permissions
           },
+          include: [
+            {
+              association: 'UserFulfillmentCenters',
+              where: { fc_id: fcId },
+              required: true
+            }
+          ],
           order: [['id', 'ASC']],
           attributes: ['id', 'email', 'availabilityStatus', 'isActive', 'roleId']
         });
 
         if (pickers.length === 0) {
-          console.warn('No available pickers found');
-          return ResponseHandler.error(res, 'No available pickers found for assignment', 400);
+          console.warn(`No available pickers found for FC ${fcId}`);
+          return ResponseHandler.error(res, `No available pickers found for FC ${fcId}`, 400);
         }
 
-        console.log(`Available pickers: ${pickers.map(p => `${p.id}(${p.email})`).join(', ')}`);
+        console.log(`Available pickers [FC ${fcId}]: ${pickers.map(p => `${p.id}(${p.email})`).join(', ')}`);
 
-        // Get the last assigned picker ID from the most recent wave
+        // ✅ Get last assigned picker (within same FC)
         const lastAssignedWave = await PickingWave.findOne({
-          where: Sequelize.where(Sequelize.col('pickerId'), Op.ne, null),
+          where: Sequelize.and(
+            { fulfillment_center_id: fcId },
+            Sequelize.literal('pickerId IS NOT NULL')
+          ),
           order: [['assignedAt', 'DESC']],
           attributes: ['pickerId']
         });
@@ -542,72 +571,95 @@ export class PickingController {
         let nextPickerIndex = 0;
         
         if (lastAssignedWave) {
-          console.log(`Last assigned picker ID: ${lastAssignedWave.pickerId}`);
-          // Find the index of the last assigned picker
-          const lastPickerIndex = pickers.findIndex(p => p.id === lastAssignedWave.pickerId);
+          const lastPickerId = (lastAssignedWave as any).pickerId;
+          console.log(`Last assigned picker ID for FC ${fcId}: ${lastPickerId}`);
+          const lastPickerIndex = pickers.findIndex(p => p.id === lastPickerId);
           if (lastPickerIndex !== -1) {
-            // Round-robin: next picker in the list
             nextPickerIndex = (lastPickerIndex + 1) % pickers.length;
           }
         }
 
         const nextPicker = pickers[nextPickerIndex];
         targetPickerId = nextPicker.id;
-        console.log(`Auto-assigned picker ${targetPickerId} (${nextPicker.email}) to wave ${waveId}`);
+        console.log(`Auto-assigned picker ${targetPickerId} (${nextPicker.email}) to wave ${waveId} for FC ${fcId}`);
       }
 
-      // Validate wave exists and is available for assignment
-      const wave = await PickingWave.findByPk(waveId);
+      // ✅ Validate wave belongs to same FC
+      const wave = await PickingWave.findOne({
+        where: { id: waveId, fulfillment_center_id: fcId }
+      });
+
       if (!wave) {
-        return ResponseHandler.error(res, 'Wave not found', 404);
+        return ResponseHandler.error(res, `Wave not found in fulfillment center ${fcId}`, 404);
       }
 
       if (wave.status !== 'GENERATED') {
-        return ResponseHandler.error(res, `Wave is not available for assignment. Current status: ${wave.status}`, 400);
+        return ResponseHandler.error(
+          res,
+          `Wave is not available for assignment. Current status: ${wave.status}`,
+          400
+        );
       }
 
-      // Validate picker exists and has picking permissions
-      const picker = await User.findByPk(targetPickerId, {
+      // ✅ Validate picker exists in same FC
+      const picker = await User.findOne({
+        where: { id: targetPickerId },
+        include: [
+          {
+            association: 'UserFulfillmentCenters',
+            where: { fc_id: fcId },
+            required: true
+          }
+        ],
         attributes: ['id', 'email', 'availabilityStatus', 'isActive', 'roleId']
       });
 
       if (!picker) {
-        return ResponseHandler.error(res, 'Picker not found', 404);
+        return ResponseHandler.error(res, `Picker not found in fulfillment center ${fcId}`, 404);
       }
 
-      // Check if picker is available (not off-shift)
+      // Check if picker is available
       if (picker.availabilityStatus !== 'available') {
         return ResponseHandler.error(res, `Picker is not available. Current status: ${picker.availabilityStatus}`, 400);
       }
 
-      // Check if picker has picking permissions (roleId 4 = wh_staff_2 has picking permissions)
+      // Check if picker has picking permissions (roleId = 4)
       if (picker.roleId !== 4) {
         return ResponseHandler.error(res, 'Picker does not have picking permissions', 403);
       }
 
-      // Wave limit check removed - pickers can now handle unlimited waves
+      // ✅ Assign wave
+      console.log(`Assigning wave ${waveId} (FC ${fcId}) to picker ${picker.id} (${picker.email})`);
 
-      console.log(`Assigning wave ${waveId} to picker ${picker.id} (${picker.email})`);
-
-      // Update wave with assignment
       await wave.update({
         status: 'ASSIGNED',
         pickerId: targetPickerId,
         assignedAt: new Date(),
-        priority: priority || wave.priority // Use provided priority or keep existing
+        priority: priority || wave.priority
       });
 
-      console.log(`✅ Successfully assigned wave ${waveId} to picker ${picker.email}`);
+      console.log(`✅ Successfully assigned wave ${waveId} to picker ${picker.email} in FC ${fcId}`);
+
+      // ✅ Optional socket notification
+      if (typeof socketManager !== 'undefined') {
+        socketManager.emit(`wave_assigned:${fcId}`, {
+          waveId: wave.id,
+          pickerId: picker.id,
+          pickerEmail: picker.email,
+          fc_id: fcId
+        });
+      }
 
       return ResponseHandler.success(res, {
-        message: 'Wave assigned successfully',
+        message: `Wave assigned successfully in fulfillment center ${fcId}`,
         assignment: {
           waveId: wave.id,
           waveNumber: wave.waveNumber,
           pickerId: targetPickerId,
           pickerEmail: picker.email,
           assignedAt: wave.assignedAt,
-          priority: wave.priority
+          priority: wave.priority,
+          fc_id: fcId
         }
       });
 
@@ -617,23 +669,32 @@ export class PickingController {
     }
   }
 
+
   /**
    * Manually reassign a wave to a different picker
    */
   static async reassignWaveToPicker(req: AuthRequest, res: Response): Promise<Response> {
     try {
       const { waveId, newPickerId, reason } = req.body;
+      const fcId = req.user?.fc_id;
 
-      console.log(`🔄 Reassignment request: waveId=${waveId}, newPickerId=${newPickerId}, reason=${reason}`);
+      if (!fcId) {
+        return ResponseHandler.error(res, 'Missing fulfillment center context (fc_id)', 400);
+      }
+
+      console.log(`🔄 Reassignment request: waveId=${waveId}, newPickerId=${newPickerId}, reason=${reason}, fc_id=${fcId}`);
 
       if (!waveId || !newPickerId) {
         return ResponseHandler.error(res, 'Wave ID and new picker ID are required', 400);
       }
 
-      // Validate wave exists and is currently assigned
-      const wave = await PickingWave.findByPk(waveId);
+      // ✅ Validate wave exists in current FC and is currently assigned
+      const wave = await PickingWave.findOne({
+        where: { id: waveId, fulfillment_center_id: fcId } // FC-scoped
+      });
+
       if (!wave) {
-        return ResponseHandler.error(res, 'Wave not found', 404);
+        return ResponseHandler.error(res, `Wave not found in fulfillment center ${fcId}`, 404);
       }
 
       if (!wave.pickerId) {
@@ -646,18 +707,30 @@ export class PickingController {
 
       const oldPickerId = wave.pickerId;
 
-      // Validate new picker exists and has picking permissions
-      const newPicker = await User.findByPk(newPickerId, {
+      // ✅ Validate new picker exists in same FC
+      const newPicker = await User.findOne({
+        where: { id: newPickerId },
+        include: [
+          {
+            association: 'UserFulfillmentCenters',
+            where: { fc_id: fcId },
+            required: true
+          }
+        ],
         attributes: ['id', 'email', 'availabilityStatus', 'isActive', 'roleId']
       });
 
       if (!newPicker) {
-        return ResponseHandler.error(res, 'New picker not found', 404);
+        return ResponseHandler.error(res, `New picker not found in fulfillment center ${fcId}`, 404);
       }
 
       // Check if new picker is available
       if (newPicker.availabilityStatus !== 'available') {
-        return ResponseHandler.error(res, `New picker is not available. Current status: ${newPicker.availabilityStatus}`, 400);
+        return ResponseHandler.error(
+          res,
+          `New picker is not available. Current status: ${newPicker.availabilityStatus}`,
+          400
+        );
       }
 
       // Check if new picker has picking permissions (roleId 4 = wh_staff_2 has picking permissions)
@@ -665,32 +738,28 @@ export class PickingController {
         return ResponseHandler.error(res, 'New picker does not have picking permissions', 403);
       }
 
-      // Wave limit check removed - pickers can now handle unlimited waves
-
       // Prevent reassigning to the same picker
       if (oldPickerId === newPickerId) {
         return ResponseHandler.error(res, 'Cannot reassign wave to the same picker', 400);
       }
 
-      console.log(`🔄 Reassigning wave ${waveId} from picker ${oldPickerId} to picker ${newPickerId} (${newPicker.email})`);
+      console.log(`🔄 Reassigning wave ${waveId} (FC ${fcId}) from picker ${oldPickerId} to picker ${newPickerId} (${newPicker.email})`);
 
-      // Update wave with new assignment
+      // ✅ Update wave with new assignment
       await wave.update({
         pickerId: newPickerId,
         assignedAt: new Date(),
-        // Keep the wave status as ASSIGNED or PICKING, don't reset to GENERATED
         status: wave.status === 'PICKING' ? 'PICKING' : 'ASSIGNED'
       });
 
-      console.log(`✅ Successfully reassigned wave ${waveId} to picker ${newPicker.email}`);
-
-      // WebSocket and push notification modules are already imported at the top
+      console.log(`✅ Successfully reassigned wave ${waveId} to picker ${newPicker.email} in FC ${fcId}`);
 
       // 🔥 Emit event to new assigned picker
       socketManager.emitToPicker(Number(newPickerId), 'waveReassigned', {
         waveId: wave.id,
         waveNumber: wave.waveNumber,
         orderId: wave.orderId,
+        fc_id: fcId, // ✅ add fc_id
         assignment: {
           waveId: wave.id,
           waveNumber: wave.waveNumber,
@@ -708,6 +777,7 @@ export class PickingController {
         waveId: wave.id,
         waveNumber: wave.waveNumber,
         orderId: wave.orderId,
+        fc_id: fcId, // ✅ add fc_id
         reason: reason || 'Wave reassigned to another picker',
         reassignedTo: {
           pickerId: newPickerId,
@@ -716,15 +786,15 @@ export class PickingController {
       });
       console.log(`📨 Emitted waveUnassigned to old picker_${oldPickerId}`);
 
-      // 👉 Send Push Notification to new picker
+      // 👉 Push Notification to new picker
       console.log(`🔍 Looking up new picker ${newPickerId} for push notification...`);
       const newPickerWithDevices = await User.findByPk(newPickerId, {
         include: [{ model: UserDevice, as: "devices" }],
       });
 
-      if (newPickerWithDevices && (newPickerWithDevices as any).devices && (newPickerWithDevices as any).devices.length > 0) {
+      if (newPickerWithDevices && (newPickerWithDevices as any).devices?.length > 0) {
         console.log(`📱 Found ${(newPickerWithDevices as any).devices.length} device(s) for new picker ${newPickerId}`);
-        
+
         for (const device of (newPickerWithDevices as any).devices) {
           if (device.snsEndpointArn) {
             try {
@@ -735,6 +805,7 @@ export class PickingController {
                 { 
                   route: "/waves",
                   waveId: waveId.toString(),
+                  fc_id: fcId, // ✅ include fc_id in payload
                   type: "wave_reassigned",
                   priority: wave.priority,
                   reason: reason || 'Manual reassignment'
@@ -748,15 +819,15 @@ export class PickingController {
         }
       }
 
-      // 👉 Send Push Notification to old picker
+      // 👉 Push Notification to old picker
       console.log(`🔍 Looking up old picker ${oldPickerId} for push notification...`);
       const oldPickerWithDevices = await User.findByPk(oldPickerId, {
         include: [{ model: UserDevice, as: "devices" }],
       });
 
-      if (oldPickerWithDevices && (oldPickerWithDevices as any).devices && (oldPickerWithDevices as any).devices.length > 0) {
+      if (oldPickerWithDevices && (oldPickerWithDevices as any).devices?.length > 0) {
         console.log(`📱 Found ${(oldPickerWithDevices as any).devices.length} device(s) for old picker ${oldPickerId}`);
-        
+
         for (const device of (oldPickerWithDevices as any).devices) {
           if (device.snsEndpointArn) {
             try {
@@ -767,6 +838,7 @@ export class PickingController {
                 { 
                   route: "/waves",
                   waveId: waveId.toString(),
+                  fc_id: fcId, // ✅ include fc_id in payload
                   type: "wave_unassigned",
                   reason: reason || 'Wave reassigned to another picker'
                 }
@@ -780,7 +852,7 @@ export class PickingController {
       }
 
       return ResponseHandler.success(res, {
-        message: 'Wave reassigned successfully',
+        message: `Wave reassigned successfully in fulfillment center ${fcId}`,
         reassignment: {
           waveId: wave.id,
           waveNumber: wave.waveNumber,
@@ -789,7 +861,8 @@ export class PickingController {
           newPickerEmail: newPicker.email,
           reassignedAt: wave.assignedAt,
           reason: reason || 'Manual reassignment',
-          priority: wave.priority
+          priority: wave.priority,
+          fc_id: fcId // ✅ include fc_id in response
         }
       });
 
@@ -799,6 +872,7 @@ export class PickingController {
     }
   }
 
+
   /**
    * List available waves
    */
@@ -807,7 +881,13 @@ export class PickingController {
       const { status, priority, page = 1, limit = 10 } = req.query;
       const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
 
-      const whereClause: any = {};
+      // ✅ Extract FC ID from user
+      const fcId = req.user?.fc_id;
+      if (!fcId) {
+        return ResponseHandler.error(res, 'Missing fulfillment center context (fc_id)', 400);
+      }
+
+      const whereClause: any = { fulfillment_center_id: fcId }; // ✅ Scope all queries to current FC
       if (status) whereClause.status = status;
       if (priority) whereClause.priority = priority;
 
@@ -832,24 +912,25 @@ export class PickingController {
 
       const userRole = userWithRole.Role;
       const isAdmin = userRole?.name === 'admin' || user.permissions?.includes('admin:all');
-      
+
       if (!isAdmin) {
         // Non-admin users can only see waves assigned to them
         whereClause.pickerId = user.id;
-        console.log(`🔒 Filtering waves for user ${user.id} with role: ${userRole?.name || 'unknown'}`);
+        console.log(`🔒 Filtering waves for user ${user.id} in FC ${fcId} with role: ${userRole?.name || 'unknown'}`);
       } else {
-        console.log(`👑 Admin user ${user.id} with role: ${userRole?.name} can see all waves`);
+        console.log(`👑 Admin user ${user.id} (role: ${userRole?.name}) can view all waves in FC ${fcId}`);
       }
 
+      // ✅ Fetch only waves for this FC
       const waves = await PickingWave.findAndCountAll({
         where: whereClause,
-        //order: [['priority', 'DESC'], ['slaDeadline', 'ASC']],
         order: [['id', 'DESC']],
         limit: parseInt(limit.toString()),
         offset
       });
 
       return ResponseHandler.success(res, {
+        message: `Waves fetched successfully for fulfillment center ${fcId}`,
         waves: waves.rows,
         pagination: {
           page: parseInt(page.toString()),
@@ -865,6 +946,7 @@ export class PickingController {
     }
   }
 
+
   // Picker Operations
 
   /**
@@ -875,38 +957,55 @@ export class PickingController {
       const { waveId } = req.params;
       const { page = 1, limit = 20 } = req.query;
       const pickerId = req.user!.id;
+      const fcId = req.user?.fc_id; // ✅ current fulfillment center
       const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
 
-      const wave = await PickingWave.findByPk(waveId);
+      if (!fcId) {
+        return ResponseHandler.error(res, 'Missing fulfillment center context (fc_id)', 400);
+      }
+
+      console.log(`🚀 Start picking request: waveId=${waveId}, pickerId=${pickerId}, fc_id=${fcId}`);
+
+      // ✅ Fetch wave only within user's fulfillment center
+      const wave = await PickingWave.findOne({
+        where: { id: waveId, fulfillment_center_id: fcId }
+      });
 
       if (!wave) {
-        return ResponseHandler.error(res, 'Wave not found', 404);
+        return ResponseHandler.error(res, `Wave not found in fulfillment center ${fcId}`, 404);
       }
 
       if (wave.status !== 'ASSIGNED') {
-        return ResponseHandler.error(res, 'Wave is not assigned to you', 400);
+        return ResponseHandler.error(res, `Wave is not in ASSIGNED status (current: ${wave.status})`, 400);
       }
 
       if (wave.pickerId !== pickerId) {
         return ResponseHandler.error(res, 'Wave is not assigned to you', 403);
       }
 
-      // Update wave status
+      // ✅ Update wave status to PICKING
       await wave.update({
         status: 'PICKING',
         startedAt: new Date()
       });
 
-      // Get picklist items with pagination
+      console.log(`✅ Wave ${wave.waveNumber} (FC ${fcId}) marked as PICKING by picker ${pickerId}`);
+
+      // ✅ Fetch picklist items for this wave (scoped by FC)
       const picklistItems = await PicklistItem.findAndCountAll({
-        where: { waveId },
+        where: { 
+          waveId: wave.id,
+          fulfillment_center_id: fcId 
+        },
         order: [['scanSequence', 'ASC']],
         limit: parseInt(limit.toString()),
         offset
       });
 
+      console.log(`📦 Found ${picklistItems.count} picklist items for wave ${wave.waveNumber} in FC ${fcId}`);
+
       return ResponseHandler.success(res, {
-        message: 'Picking started successfully',
+        message: `Picking started successfully in fulfillment center ${fcId}`,
         wave: {
           id: wave.id,
           waveNumber: wave.waveNumber,
@@ -946,29 +1045,40 @@ export class PickingController {
       const { waveId } = req.params;
       const { sku, binLocation, quantity = 1 } = req.body;
       const pickerId = req.user!.id;
+      const fcId = req.user?.fc_id; // ✅ current fulfillment center
+
+      if (!fcId) {
+        return ResponseHandler.error(res, 'Missing fulfillment center context (fc_id)', 400);
+      }
 
       if (!sku || !binLocation) {
         return ResponseHandler.error(res, 'SKU and bin location are required', 400);
       }
 
-      // Find the picklist item
+      console.log(`📦 Scan item request: waveId=${waveId}, sku=${sku}, bin=${binLocation}, fc_id=${fcId}, picker=${pickerId}`);
+
+      // ✅ Find the picklist item in this FC
       const picklistItem = await PicklistItem.findOne({
-        where: { 
+        where: {
           waveId: parseInt(waveId),
           sku,
           binLocation,
+          fulfillment_center_id: fcId, // ✅ ensure the item belongs to same FC
           status: ['PENDING', 'PICKING']
         }
       });
 
       if (!picklistItem) {
-        return ResponseHandler.error(res, 'Item not found in picklist', 404);
+        return ResponseHandler.error(res, `Item not found in picklist for fulfillment center ${fcId}`, 404);
       }
 
-      // Get wave to validate status and picker
-      const wave = await PickingWave.findByPk(waveId);
+      // ✅ Fetch wave and ensure it belongs to this FC
+      const wave = await PickingWave.findOne({
+        where: { id: parseInt(waveId), fulfillment_center_id: fcId }
+      });
+
       if (!wave) {
-        return ResponseHandler.error(res, 'Wave not found', 404);
+        return ResponseHandler.error(res, `Wave not found in fulfillment center ${fcId}`, 404);
       }
 
       if (wave.status !== 'PICKING') {
@@ -979,7 +1089,7 @@ export class PickingController {
         return ResponseHandler.error(res, 'You are not assigned to this wave', 403);
       }
 
-      // Update item status
+      // ✅ Update item status
       const pickedQuantity = Math.min(quantity, picklistItem.quantity);
       const newStatus = pickedQuantity === picklistItem.quantity ? 'PICKED' : 'PARTIAL';
 
@@ -990,10 +1100,13 @@ export class PickingController {
         pickedBy: pickerId
       });
 
-      // Check if all items in wave are picked
+      console.log(`✅ Updated picklist item ${picklistItem.id} in FC ${fcId}: status=${newStatus}, pickedQuantity=${pickedQuantity}`);
+
+      // ✅ Check if all items in this FC’s wave are picked
       const remainingItems = await PicklistItem.count({
-        where: { 
+        where: {
           waveId: parseInt(waveId),
+          fulfillment_center_id: fcId,
           status: ['PENDING', 'PICKING']
         }
       });
@@ -1003,10 +1116,11 @@ export class PickingController {
           status: 'COMPLETED',
           completedAt: new Date()
         });
+        console.log(`🎯 Wave ${wave.waveNumber} (FC ${fcId}) marked as COMPLETED`);
       }
 
       return ResponseHandler.success(res, {
-        message: 'Item scanned successfully',
+        message: `Item scanned successfully in fulfillment center ${fcId}`,
         item: {
           id: picklistItem.id,
           sku: picklistItem.sku,
@@ -1016,7 +1130,8 @@ export class PickingController {
           remainingQuantity: picklistItem.quantity - picklistItem.pickedQuantity
         },
         waveStatus: wave.status,
-        remainingItems
+        remainingItems,
+        fc_id: fcId
       });
 
     } catch (error) {
@@ -1024,6 +1139,7 @@ export class PickingController {
       return ResponseHandler.error(res, 'Internal server error', 500);
     }
   }
+
 
   /**
    * Scan bin location for validation using new scanner tables
@@ -1033,15 +1149,25 @@ export class PickingController {
       const { waveId } = req.params;
       const { scannedId, skuID, binlocation } = req.body;
       const pickerId = req.user!.id;
+      const fcId = req.user?.fc_id; // ✅ current FC
+
+      if (!fcId) {
+        return ResponseHandler.error(res, 'Missing fulfillment center context (fc_id)', 400);
+      }
 
       if (!scannedId || !skuID || !binlocation) {
         return ResponseHandler.error(res, 'scannedId, skuID, and binlocation are required', 400);
       }
 
-      // Get wave to validate status and picker
-      const wave = await PickingWave.findByPk(waveId);
+      console.log(`📍 Bin scan request: waveId=${waveId}, skuID=${skuID}, bin=${binlocation}, fc_id=${fcId}, picker=${pickerId}`);
+
+      // ✅ Fetch wave only from the same FC
+      const wave = await PickingWave.findOne({
+        where: { id: parseInt(waveId), fulfillment_center_id: fcId }
+      });
+
       if (!wave) {
-        return ResponseHandler.error(res, 'Wave not found', 404);
+        return ResponseHandler.error(res, `Wave not found in fulfillment center ${fcId}`, 404);
       }
 
       if (wave.status !== 'PICKING') {
@@ -1052,10 +1178,11 @@ export class PickingController {
         return ResponseHandler.error(res, 'You are not assigned to this wave', 403);
       }
 
-      // Check if there are any picklist items with DEFAULT-BIN location for this SKU
+      // ✅ Check for any picklist items with DEFAULT-BIN location for this SKU (scoped by FC)
       const defaultBinItems = await PicklistItem.findAll({
         where: { 
           waveId: parseInt(waveId),
+          fulfillment_center_id: fcId,
           sku: skuID,
           binLocation: 'DEFAULT-BIN',
           status: ['PENDING', 'PICKING']
@@ -1064,12 +1191,12 @@ export class PickingController {
 
       const hasDefaultBinItems = defaultBinItems.length > 0;
 
-      // If there are DEFAULT-BIN items, bypass strict validation
+      // ✅ DEFAULT-BIN bypass logic
       if (hasDefaultBinItems) {
-        console.log(`DEFAULT-BIN bypass: Allowing scan for SKU ${skuID} at bin location ${binlocation}`);
-        
+        console.log(`DEFAULT-BIN bypass [FC ${fcId}]: Allowing scan for SKU ${skuID} at bin ${binlocation}`);
+
         return ResponseHandler.success(res, {
-          message: 'DEFAULT-BIN item validated successfully - bypassing strict validation',
+          message: `DEFAULT-BIN item validated successfully in fulfillment center ${fcId}`,
           binLocationFound: true,
           scannedId,
           skuID,
@@ -1084,20 +1211,19 @@ export class PickingController {
             scanSequence: item.scanSequence,
             binLocation: item.binLocation
           })),
-          waveId: parseInt(waveId)
+          waveId: parseInt(waveId),
+          fc_id: fcId
         });
       }
 
-      // Removed strict validation - now accepts any bin location
-      console.log(`Allowing scan for SKU ${skuID} at bin location ${binlocation} (validation bypassed)`);
+      // ✅ Normal validation bypass (same as before)
+      console.log(`Bypassing strict validation for SKU ${skuID} at bin ${binlocation} (FC ${fcId})`);
 
-      // Removed scanner bin validation - now accepts any bin location and SKU combination
-      console.log(`Bypassing scanner bin validation for SKU ${skuID} at bin location ${binlocation}`);
-
-      // Find picklist items with matching SKU (regardless of bin location)
+      // ✅ Find picklist items for this FC and SKU (regardless of bin location)
       const picklistItems = await PicklistItem.findAll({
         where: { 
           waveId: parseInt(waveId),
+          fulfillment_center_id: fcId,
           sku: skuID,
           status: ['PENDING', 'PICKING']
         }
@@ -1106,7 +1232,9 @@ export class PickingController {
       const binLocationFound = picklistItems.length > 0;
 
       return ResponseHandler.success(res, {
-        message: binLocationFound ? 'SKU validated successfully - all validations bypassed' : 'SKU validated but no picklist items found',
+        message: binLocationFound
+          ? `SKU validated successfully in fulfillment center ${fcId} (validation bypassed)`
+          : `SKU validated but no picklist items found in fulfillment center ${fcId}`,
         binLocationFound,
         scannedId,
         skuID,
@@ -1121,7 +1249,8 @@ export class PickingController {
           scanSequence: item.scanSequence,
           binLocation: item.binLocation
         })),
-        waveId: parseInt(waveId)
+        waveId: parseInt(waveId),
+        fc_id: fcId
       });
 
     } catch (error) {
@@ -1138,42 +1267,43 @@ export class PickingController {
       const { waveId } = req.params;
       const { scannedId, skuID, binlocation } = req.body;
       const pickerId = req.user!.id;
+      const fcId = req.user?.fc_id; // ✅ current FC context
+
+      if (!fcId) {
+        return ResponseHandler.error(res, 'Missing fulfillment center context (fc_id)', 400);
+      }
 
       if (!scannedId || !skuID || !binlocation) {
         return ResponseHandler.error(res, 'scannedId, skuID, and binlocation are required', 400);
       }
 
-      // Resolve SKU from input (could be SKU or EAN)
+      console.log(`🧾 Scan SKU request: waveId=${waveId}, skuID=${skuID}, bin=${binlocation}, fc_id=${fcId}, picker=${pickerId}`);
+
+      // ✅ Resolve SKU (by SKU or EAN)
       let resolvedSku: string;
       let foundBy: 'sku' | 'ean';
       
-      // First, try to find by SKU directly
-      let product = await Product.findOne({
-        where: { sku: skuID }
-      });
-      
+      let product = await Product.findOne({ where: { sku: skuID } });
       if (product) {
         resolvedSku = product.sku;
         foundBy = 'sku';
       } else {
-        // If not found by SKU, try to find by EAN_UPC
-        product = await Product.findOne({
-          where: { ean_upc: skuID }
-        });
-        
+        product = await Product.findOne({ where: { ean_upc: skuID } });
         if (product) {
           resolvedSku = product.sku;
           foundBy = 'ean';
         } else {
-          // Neither SKU nor EAN found
           return ResponseHandler.error(res, `Both SKU and EAN not found for: ${skuID}`, 404);
         }
       }
 
-      // Get wave to validate status and picker
-      const wave = await PickingWave.findByPk(waveId);
+      // ✅ Fetch wave scoped by FC
+      const wave = await PickingWave.findOne({
+        where: { id: parseInt(waveId), fulfillment_center_id: fcId }
+      });
+
       if (!wave) {
-        return ResponseHandler.error(res, 'Wave not found', 404);
+        return ResponseHandler.error(res, `Wave not found in fulfillment center ${fcId}`, 404);
       }
 
       if (wave.status !== 'PICKING') {
@@ -1184,10 +1314,11 @@ export class PickingController {
         return ResponseHandler.error(res, 'You are not assigned to this wave', 403);
       }
 
-      // Check if there are any picklist items with DEFAULT-BIN location for this SKU
+      // ✅ Check for DEFAULT-BIN items (scoped by FC)
       const defaultBinItems = await PicklistItem.findAll({
-        where: { 
+        where: {
           waveId: parseInt(waveId),
+          fulfillment_center_id: fcId,
           sku: resolvedSku,
           binLocation: 'DEFAULT-BIN',
           status: ['PENDING', 'PICKING']
@@ -1196,14 +1327,11 @@ export class PickingController {
 
       const hasDefaultBinItems = defaultBinItems.length > 0;
 
-      // If there are DEFAULT-BIN items, bypass strict validation
+      // ✅ DEFAULT-BIN bypass
       if (hasDefaultBinItems) {
-        console.log(`DEFAULT-BIN bypass: Allowing SKU scan for ${resolvedSku} at bin location ${binlocation}`);
-        
-        // Find the first DEFAULT-BIN item to update
+        console.log(`DEFAULT-BIN bypass [FC ${fcId}]: SKU ${resolvedSku} at bin ${binlocation}`);
+
         const currentItem = defaultBinItems[0];
-        
-        // Update item status to PICKED
         await currentItem.update({
           status: 'PICKED',
           pickedQuantity: currentItem.quantity,
@@ -1212,7 +1340,7 @@ export class PickingController {
         });
 
         return ResponseHandler.success(res, {
-          message: 'DEFAULT-BIN item picked successfully - bypassing strict validation',
+          message: `DEFAULT-BIN item picked successfully in fulfillment center ${fcId}`,
           skuFound: true,
           scannedId,
           skuID,
@@ -1230,35 +1358,37 @@ export class PickingController {
             scanSequence: currentItem.scanSequence,
             binLocation: currentItem.binLocation
           },
-          waveId: parseInt(waveId)
+          waveId: parseInt(waveId),
+          fc_id: fcId
         });
       }
 
-      // Find SKU scan in scanner_sku table (only for non-DEFAULT-BIN items)
+      // ✅ Find SKU scan in scanner_sku table
       const scannerSku = await ScannerSku.findOne({
         where: { skuScanId: resolvedSku }
       });
 
       if (!scannerSku) {
         return ResponseHandler.success(res, {
-          message: 'SKU scan not found in system',
+          message: `SKU scan not found in system for FC ${fcId}`,
           skuFound: false,
           scannedId,
           skuID,
           resolvedSku,
           foundBy,
           waveId: parseInt(waveId),
+          fc_id: fcId,
           error: 'INVALID_SKU_SCAN'
         });
       }
 
-      // Removed strict bin location validation - now accepts any bin location
-      console.log(`Allowing SKU scan for ${resolvedSku} at bin location ${binlocation} (validation bypassed)`);
+      console.log(`Allowing SKU scan for ${resolvedSku} at bin ${binlocation} (validation bypassed, FC ${fcId})`);
 
-      // Find picklist item with matching SKU and bin location
+      // ✅ Find picklist item (scoped by FC)
       const currentItem = await PicklistItem.findOne({
-        where: { 
+        where: {
           waveId: parseInt(waveId),
+          fulfillment_center_id: fcId,
           sku: resolvedSku,
           binLocation: binlocation,
           status: ['PENDING', 'PICKING']
@@ -1267,7 +1397,7 @@ export class PickingController {
 
       if (!currentItem) {
         return ResponseHandler.success(res, {
-          message: 'No matching picklist item found',
+          message: `No matching picklist item found in fulfillment center ${fcId}`,
           skuFound: false,
           scannedId,
           skuID,
@@ -1275,11 +1405,12 @@ export class PickingController {
           foundBy,
           binlocation,
           waveId: parseInt(waveId),
+          fc_id: fcId,
           error: 'NO_MATCHING_PICKLIST_ITEM'
         });
       }
 
-      // Update item status to PICKED
+      // ✅ Update item status to PICKED
       await currentItem.update({
         status: 'PICKED',
         pickedQuantity: currentItem.quantity,
@@ -1287,12 +1418,14 @@ export class PickingController {
         pickedBy: pickerId
       });
 
-      // Update inventory - increase picklist_quantity when items are picked
+      console.log(`✅ Picked SKU ${resolvedSku} (itemId=${currentItem.id}, FC ${fcId})`);
+
+      // ✅ Inventory update remains the same
       try {
         const inventoryResult = await DirectInventoryService.updateInventory({
           sku: resolvedSku,
           operation: INVENTORY_OPERATIONS.PICKLIST,
-          quantity: currentItem.quantity, // Positive to increase picklist quantity
+          quantity: currentItem.quantity,
           referenceId: `PICK-WAVE-${waveId}`,
           operationDetails: {
             waveId: parseInt(waveId),
@@ -1300,24 +1433,24 @@ export class PickingController {
             picklistItemId: currentItem.id,
             binLocation: binlocation,
             pickedAt: new Date(),
-            pickedBy: pickerId
+            pickedBy: pickerId,
+            fc_id: fcId //TODO: check for this can cause problem
           },
           performedBy: pickerId
         });
 
         if (!inventoryResult.success) {
-          console.error(`Failed to update inventory for SKU ${resolvedSku}:`, inventoryResult.message);
-          // Don't fail the picking process, just log the error
+          console.error(`❌ Inventory update failed for SKU ${resolvedSku} (FC ${fcId}):`, inventoryResult.message);
         }
       } catch (inventoryError) {
-        console.error('Inventory update error during picking:', inventoryError);
-        // Don't fail the picking process, just log the error
+        console.error(`⚠️ Inventory update error (FC ${fcId}):`, inventoryError);
       }
 
-      // Check if all items in wave are picked
+      // ✅ Check if all items in this FC’s wave are picked
       const remainingItems = await PicklistItem.count({
-        where: { 
+        where: {
           waveId: parseInt(waveId),
+          fulfillment_center_id: fcId,
           status: ['PENDING', 'PICKING']
         }
       });
@@ -1327,10 +1460,11 @@ export class PickingController {
           status: 'PACKED',
           completedAt: new Date()
         });
+        console.log(`🎯 Wave ${wave.waveNumber} marked as PACKED (FC ${fcId})`);
       }
 
       return ResponseHandler.success(res, {
-        message: 'SKU validated and item picked successfully',
+        message: `SKU validated and item picked successfully in fulfillment center ${fcId}`,
         skuFound: true,
         scannedId,
         skuID,
@@ -1347,7 +1481,8 @@ export class PickingController {
           remainingQuantity: 0
         },
         waveStatus: wave.status,
-        remainingItems
+        remainingItems,
+        fc_id: fcId
       });
 
     } catch (error) {
@@ -1371,35 +1506,46 @@ export class PickingController {
         pickedQuantity = 0 
       } = req.body;
       const pickerId = req.user!.id;
+      const fcId = req.user?.fc_id; // ✅ Extract FC ID
+
+      if (!fcId) {
+        return ResponseHandler.error(res, 'Missing fulfillment center context (fc_id)', 400);
+      }
 
       if (!sku || !binLocation || !reason) {
         return ResponseHandler.error(res, 'SKU, bin location, and reason are required', 400);
       }
 
-      // Find the picklist item
+      console.log(`⚠️ Partial pick report: waveId=${waveId}, sku=${sku}, reason=${reason}, fc_id=${fcId}, picker=${pickerId}`);
+
+      // ✅ Find the picklist item scoped by FC
       const picklistItem = await PicklistItem.findOne({
         where: { 
           waveId: parseInt(waveId),
+          fulfillment_center_id: fcId,
           sku,
           binLocation
         }
       });
 
       if (!picklistItem) {
-        return ResponseHandler.error(res, 'Item not found in picklist', 404);
+        return ResponseHandler.error(res, `Item not found in picklist for fulfillment center ${fcId}`, 404);
       }
 
-      // Get wave to validate status
-      const wave = await PickingWave.findByPk(waveId);
+      // ✅ Fetch wave scoped by FC
+      const wave = await PickingWave.findOne({
+        where: { id: parseInt(waveId), fulfillment_center_id: fcId }
+      });
+
       if (!wave) {
-        return ResponseHandler.error(res, 'Wave not found', 404);
+        return ResponseHandler.error(res, `Wave not found in fulfillment center ${fcId}`, 404);
       }
 
       if (wave.status !== 'PICKING') {
         return ResponseHandler.error(res, 'Wave is not in picking status', 400);
       }
 
-      // Update item status
+      // ✅ Update item status
       await picklistItem.update({
         status: 'PARTIAL',
         pickedQuantity: pickedQuantity,
@@ -1410,12 +1556,15 @@ export class PickingController {
         pickedBy: pickerId
       });
 
-      // Create exception if needed
+      console.log(`🟠 Marked SKU ${sku} as PARTIAL in wave ${wave.waveNumber} (FC ${fcId})`);
+
+      // ✅ Create FC-specific picking exception if applicable
       if (['OOS', 'DAMAGED', 'EXPIRY'].includes(reason)) {
         await PickingException.create({
           waveId: parseInt(waveId),
           orderId: picklistItem.orderId,
           sku: picklistItem.sku,
+          // fc_id: fcId, // ✅ include FC ID
           exceptionType: reason as any,
           severity: reason === 'EXPIRY' ? 'HIGH' : 'MEDIUM',
           description: `Partial pick reported: ${reason}. ${notes || ''}`,
@@ -1424,17 +1573,20 @@ export class PickingController {
           status: 'OPEN',
           slaDeadline: new Date(Date.now() + 2 * 60 * 60 * 1000) // 2 hours
         } as any);
+
+        console.log(`🚨 Picking exception logged for SKU ${sku} in FC ${fcId} with reason: ${reason}`);
       }
 
       return ResponseHandler.success(res, {
-        message: 'Partial pick reported successfully',
+        message: `Partial pick reported successfully in fulfillment center ${fcId}`,
         item: {
           id: picklistItem.id,
           sku: picklistItem.sku,
           status: picklistItem.status,
           partialReason: picklistItem.partialReason,
           pickedQuantity: picklistItem.pickedQuantity
-        }
+        },
+        fc_id: fcId
       });
 
     } catch (error) {
@@ -1443,6 +1595,7 @@ export class PickingController {
     }
   }
 
+
   /**
    * Complete picking for a wave
    */
@@ -1450,11 +1603,21 @@ export class PickingController {
     try {
       const { waveId } = req.params;
       const pickerId = req.user!.id;
+      const fcId = req.user?.fc_id; // ✅ Extract fulfillment center ID
 
-      const wave = await PickingWave.findByPk(waveId);
+      if (!fcId) {
+        return ResponseHandler.error(res, 'Missing fulfillment center context (fc_id)', 400);
+      }
+
+      console.log(`✅ Complete picking request: waveId=${waveId}, pickerId=${pickerId}, fc_id=${fcId}`);
+
+      // ✅ Fetch wave for this FC only
+      const wave = await PickingWave.findOne({
+        where: { id: parseInt(waveId), fulfillment_center_id: fcId }
+      });
 
       if (!wave) {
-        return ResponseHandler.error(res, 'Wave not found', 404);
+        return ResponseHandler.error(res, `Wave not found in fulfillment center ${fcId}`, 404);
       }
 
       if (wave.status !== 'PICKING') {
@@ -1465,41 +1628,58 @@ export class PickingController {
         return ResponseHandler.error(res, 'You are not assigned to this wave', 403);
       }
 
-      // Check if all items are processed
+      // ✅ Check for unprocessed items in the same FC
       const pendingItems = await PicklistItem.count({
         where: { 
           waveId: parseInt(waveId),
+          fulfillment_center_id: fcId,
           status: ['PENDING', 'PICKING']
         }
       });
 
       if (pendingItems > 0) {
-        return ResponseHandler.error(res, `Cannot complete: ${pendingItems} items still pending`, 400);
+        return ResponseHandler.error(res, `Cannot complete: ${pendingItems} items still pending in FC ${fcId}`, 400);
       }
 
-      // Update wave status
+      // ✅ Mark wave as PACKED
       await wave.update({
         status: 'PACKED',
         completedAt: new Date()
       });
 
-      // Calculate completion metrics
-      const totalItems = await PicklistItem.count({ where: { waveId: parseInt(waveId) } });
+      console.log(`🎯 Wave ${wave.waveNumber} marked as PACKED by picker ${pickerId} in FC ${fcId}`);
+
+      // ✅ Compute metrics (FC-scoped)
+      const totalItems = await PicklistItem.count({ 
+        where: { 
+          waveId: parseInt(waveId),
+          fulfillment_center_id: fcId 
+        } 
+      });
       const pickedItems = await PicklistItem.count({ 
-        where: { waveId: parseInt(waveId), status: 'PICKED' } 
+        where: {
+          waveId: parseInt(waveId), 
+          fulfillment_center_id: fcId, 
+          status: 'PICKED' 
+        } 
       });
       const partialItems = await PicklistItem.count({ 
-        where: { waveId: parseInt(waveId), status: 'PARTIAL' } 
+        where: { 
+          waveId: parseInt(waveId),
+          fulfillment_center_id: fcId, 
+          status: 'PARTIAL' 
+        } 
       });
-      const accuracy = (pickedItems / totalItems) * 100;
+      const accuracy = totalItems > 0 ? (pickedItems / totalItems) * 100 : 0;
 
       return ResponseHandler.success(res, {
-        message: 'Picking completed successfully',
+        message: `Picking completed successfully in fulfillment center ${fcId}`,
         wave: {
           id: wave.id,
           waveNumber: wave.waveNumber,
           status: wave.status,
-          completedAt: wave.completedAt
+          completedAt: wave.completedAt,
+          fc_id: fcId
         },
         metrics: {
           totalItems,
@@ -1515,6 +1695,7 @@ export class PickingController {
     }
   }
 
+
   // Monitoring
 
   /**
@@ -1524,10 +1705,19 @@ export class PickingController {
     try {
       const { waveId, page = 1, limit = 10 } = req.query;
       const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
+      const fcId = req.user?.fc_id; // ✅ Current fulfillment center
 
-      const whereClause: any = {};
+      if (!fcId) {
+        return ResponseHandler.error(res, 'Missing fulfillment center context (fc_id)', 400);
+      }
+
+      console.log(`📊 Fetching SLA status for FC ${fcId}, page=${page}, limit=${limit}, waveId=${waveId || 'ALL'}`);
+
+      // ✅ Filter waves by FC
+      const whereClause: any = { fulfillment_center_id: fcId };
       if (waveId) whereClause.id = parseInt(waveId.toString());
 
+      // ✅ Fetch only waves from current FC
       const waves = await PickingWave.findAndCountAll({
         where: whereClause,
         order: [['slaDeadline', 'ASC']],
@@ -1567,23 +1757,34 @@ export class PickingController {
           slaDeadline: wave.slaDeadline,
           slaStatus: status,
           hoursToDeadline: Math.round(hoursToDeadline * 100) / 100,
-          picker: null // Will be populated when associations are fixed
+          picker: wave.pickerId || null,
+          fc_id: fcId
         });
       }
 
+      const { total, onTime, atRisk, breached } = slaMetrics;
+
+      const summary = total > 0 ? {
+        onTimePercentage: Math.round((onTime / total) * 100),
+        atRiskPercentage: Math.round((atRisk / total) * 100),
+        breachedPercentage: Math.round((breached / total) * 100)
+      } : {
+        onTimePercentage: 0,
+        atRiskPercentage: 0,
+        breachedPercentage: 0
+      };
+
       return ResponseHandler.success(res, {
+        message: `SLA metrics fetched successfully for fulfillment center ${fcId}`,
         slaMetrics,
-        summary: {
-          onTimePercentage: Math.round((slaMetrics.onTime / slaMetrics.total) * 100),
-          atRiskPercentage: Math.round((slaMetrics.atRisk / slaMetrics.total) * 100),
-          breachedPercentage: Math.round((slaMetrics.breached / slaMetrics.total) * 100)
-        },
+        summary,
         pagination: {
           page: parseInt(page.toString()),
           limit: parseInt(limit.toString()),
           total: waves.count,
           totalPages: Math.ceil(waves.count / parseInt(limit.toString()))
-        }
+        },
+        fc_id: fcId
       });
 
     } catch (error) {
@@ -1599,10 +1800,20 @@ export class PickingController {
     try {
       const { daysThreshold = 7, page = 1, limit = 10 } = req.query;
       const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
+      const fcId = req.user?.fc_id; // ✅ Extract fulfillment center ID
+
+      if (!fcId) {
+        return ResponseHandler.error(res, 'Missing fulfillment center context (fc_id)', 400);
+      }
+
       const thresholdDate = new Date(Date.now() + parseInt(daysThreshold.toString()) * 24 * 60 * 60 * 1000);
 
+      console.log(`⏰ Fetching expiry alerts for FC ${fcId} within ${daysThreshold} days`);
+
+      // ✅ Fetch only picklist items for this FC
       const expiringItems = await PicklistItem.findAndCountAll({
         where: {
+          fulfillment_center_id: fcId, // ✅ Scope by fulfillment center
           expiryDate: {
             [require('sequelize').Op.lte]: thresholdDate
           },
@@ -1613,32 +1824,46 @@ export class PickingController {
         offset
       });
 
-      const alerts = expiringItems.rows.map(item => ({
-        id: item.id,
-        sku: item.sku,
-        productName: item.productName,
-        expiryDate: item.expiryDate,
-        daysUntilExpiry: Math.ceil((item.expiryDate!.getTime() - Date.now()) / (1000 * 60 * 60 * 24)),
-        waveNumber: 'N/A', // Will be populated when associations are fixed
-        wavePriority: 'N/A', // Will be populated when associations are fixed
-        orderId: item.orderId,
-        urgency: item.expiryDate!.getTime() <= Date.now() ? 'EXPIRED' : 
-                item.expiryDate!.getTime() <= Date.now() + 24 * 60 * 60 * 1000 ? 'CRITICAL' :
-                item.expiryDate!.getTime() <= Date.now() + 3 * 24 * 60 * 60 * 1000 ? 'HIGH' : 'MEDIUM'
-      }));
+      const alerts = expiringItems.rows.map(item => {
+        const daysUntilExpiry = Math.ceil((item.expiryDate!.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+        const urgency =
+          item.expiryDate!.getTime() <= Date.now()
+            ? 'EXPIRED'
+            : item.expiryDate!.getTime() <= Date.now() + 24 * 60 * 60 * 1000
+            ? 'CRITICAL'
+            : item.expiryDate!.getTime() <= Date.now() + 3 * 24 * 60 * 60 * 1000
+            ? 'HIGH'
+            : 'MEDIUM';
+
+        return {
+          id: item.id,
+          sku: item.sku,
+          productName: item.productName,
+          expiryDate: item.expiryDate,
+          daysUntilExpiry,
+          orderId: item.orderId,
+          fc_id: fcId,
+          urgency,
+          waveNumber: 'N/A', // To be linked when associations are resolved
+          wavePriority: 'N/A'
+        };
+      });
+
+      // ✅ Sort by urgency
+      const urgencyOrder = { EXPIRED: 0, CRITICAL: 1, HIGH: 2, MEDIUM: 3 };
+      alerts.sort((a, b) => urgencyOrder[a.urgency as keyof typeof urgencyOrder] - urgencyOrder[b.urgency as keyof typeof urgencyOrder]);
 
       return ResponseHandler.success(res, {
+        message: `Expiry alerts fetched successfully for fulfillment center ${fcId}`,
         totalAlerts: expiringItems.count,
-        alerts: alerts.sort((a, b) => {
-          const urgencyOrder = { 'EXPIRED': 0, 'CRITICAL': 1, 'HIGH': 2, 'MEDIUM': 3 };
-          return urgencyOrder[a.urgency as keyof typeof urgencyOrder] - urgencyOrder[b.urgency as keyof typeof urgencyOrder];
-        }),
+        alerts,
         pagination: {
           page: parseInt(page.toString()),
           limit: parseInt(limit.toString()),
           total: expiringItems.count,
           totalPages: Math.ceil(expiringItems.count / parseInt(limit.toString()))
-        }
+        },
+        fc_id: fcId
       });
 
     } catch (error) {
@@ -1651,109 +1876,118 @@ export class PickingController {
    * Get picklist items for a wave with pagination
    */
   static async getPicklistItems(req: AuthRequest, res: Response): Promise<Response> {
-  try {
-     const { waveId } = req.params;
-    const { page = 1, limit = 20, status } = req.query;
-    const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
+    try {
+      const { waveId } = req.params;
+      const { page = 1, limit = 20, status } = req.query;
+      const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
+      const fcId = req.user?.fc_id; // ✅ Fulfillment Center context
 
-    // Verify wave exists
-    const wave = await PickingWave.findByPk(waveId);
-    if (!wave) {
-      return ResponseHandler.error(res, 'Wave not found', 404);
+      if (!fcId) {
+        return ResponseHandler.error(res, 'Missing fulfillment center context (fc_id)', 400);
+      }
+
+      console.log(`📦 Fetching picklist items for wave ${waveId} in FC ${fcId}`);
+
+      // ✅ Verify wave belongs to the current FC
+      const wave = await PickingWave.findOne({
+        where: { id: parseInt(waveId), fulfillment_center_id: fcId }
+      });
+
+      if (!wave) {
+        return ResponseHandler.error(res, `Wave not found in fulfillment center ${fcId}`, 404);
+      }
+
+      // ✅ Check permissions
+      const userPermissions = req.user!.permissions || [];
+      const canView =
+        userPermissions.includes('picking:view') ||
+        userPermissions.includes('picking:assign_manage') ||
+        (userPermissions.includes('picking:execute') && wave.pickerId === req.user!.id);
+
+      if (!canView) {
+        return ResponseHandler.error(res, 'Insufficient permissions to view this wave', 403);
+      }
+
+      // ✅ Build where clause (scoped by FC)
+      const whereClause: any = { 
+        waveId: parseInt(waveId), 
+        fulfillment_center_id: fcId 
+      };
+      if (status) whereClause.status = status;
+
+      console.log('Querying for waveId:', waveId, 'in FC:', fcId);
+      console.log('Where clause:', whereClause);
+
+      // ✅ Debug: Count picklist items for this FC and wave
+      const totalItemsForWave = await PicklistItem.count({
+        where: { 
+          waveId: parseInt(waveId),
+          fulfillment_center_id: fcId 
+        }
+      });
+      console.log(`Total picklist items found for wave ${waveId} in FC ${fcId}: ${totalItemsForWave}`);
+
+      interface PicklistItemWithProduct extends PicklistItem { productInfo?: Product; }
+
+      // ✅ Fetch picklist items including product info
+      const picklistItems = await PicklistItem.findAndCountAll({
+        where: whereClause,
+        order: [['scanSequence', 'ASC']],
+        limit: parseInt(limit.toString()),
+        offset,
+        include: [
+          {
+            model: Product,
+            as: 'productInfo',
+            attributes: ['ImageURL', 'EAN_UPC', 'MRP'],
+            required: false, // left join
+          }
+        ],
+        logging: console.log
+      }) as { count: number; rows: PicklistItemWithProduct[] };;
+
+      // ✅ Build response
+      return ResponseHandler.success(res, {
+        message: `Fetched picklist items successfully for FC ${fcId}`,
+        wave: {
+          id: wave.id,
+          waveNumber: wave.waveNumber,
+          status: wave.status,
+          totalItems: wave.totalItems,
+          fc_id: fcId
+        },
+        items: picklistItems.rows.map(item => ({
+          id: item.id,
+          orderId: item.orderId,
+          sku: item.sku,
+          productName: item.productName,
+          binLocation: item.binLocation,
+          quantity: item.quantity,
+          status: item.status,
+          scanSequence: item.scanSequence,
+          fefoBatch: item.fefoBatch,
+          expiryDate: item.expiryDate,
+          pickedQuantity: item.pickedQuantity,
+          partialReason: item.partialReason,
+          imageUrl: item.productInfo?.image_url || null,
+          ean: item.productInfo?.ean_upc || null,
+          mrp: item.productInfo?.mrp || null,
+          fc_id: fcId
+        })),
+        pagination: {
+          page: parseInt(page.toString()),
+          limit: parseInt(limit.toString()),
+          total: picklistItems.count,
+          totalPages: Math.ceil(picklistItems.count / parseInt(limit.toString()))
+        }
+      });
+
+    } catch (error) {
+      console.error('Get picklist items error:', error);
+      return ResponseHandler.error(res, 'Internal server error', 500);
     }
-
-    // Check permissions
-    const userPermissions = req.user!.permissions || [];
-    const canView =
-      userPermissions.includes('picking:view') ||
-      userPermissions.includes('picking:assign_manage') ||
-      (userPermissions.includes('picking:execute') && wave.pickerId === req.user!.id);
-    if (!canView) {
-      return ResponseHandler.error(res, 'Insufficient permissions to view this wave', 403);
-    }
-
-    // Build where clause
-    const whereClause: any = { waveId: parseInt(waveId) };
-    if (status) whereClause.status = status;
-    console.log('Querying for waveId:', waveId);
-    console.log('Where clause:', whereClause);
-
-    // Debug: Check if any picklist items exist for this wave
-    const totalItemsForWave = await PicklistItem.count({
-      where: { waveId: parseInt(waveId) }
-    });
-    console.log(`Total picklist items found for wave ${waveId}: ${totalItemsForWave}`);
-
-    // Extend PicklistItem type to include productInfo
-    interface PicklistItemWithProduct extends PicklistItem {
-      productInfo?: Product;
-    }
-
-    // Fetch picklist items with included Product info
-    const picklistItems = await PicklistItem.findAndCountAll({
-  where: whereClause,
-  order: [['scanSequence', 'ASC']],
-  limit: parseInt(limit.toString()),
-  offset,
-  include: [
-    {
-      model: Product,
-      as: 'productInfo',
-      attributes: ['ImageURL', 'EAN_UPC', 'MRP'],
-      required: false, // Left join
-    }
-  ],
-  logging: console.log,  // Enable SQL query logging
-}) as { count: number; rows: PicklistItemWithProduct[] };
-
-    // Debug logging
-  /*  picklistItems.rows.forEach(item => {
-  console.log(`- ID: ${item.id}, SKU: ${item.sku}, Qty: ${item.quantity}`);
-  if (item.productInfo) {
-    console.log(`   Product -> ImageURL: ${item.productInfo.ImageURL}, EAN: ${item.productInfo.EAN_UPC}, MRP: ${item.productInfo.MRP}`);
-  } else {
-    console.log('   Product -> Not found');
   }
-});*/
 
-    // Build API response
-    return ResponseHandler.success(res, {
-  wave: {
-    id: wave.id,
-    waveNumber: wave.waveNumber,
-    status: wave.status,
-    totalItems: wave.totalItems,
-  },
-  items: picklistItems.rows.map(item => ({
-    id: item.id,
-    orderId: item.orderId,
-    sku: item.sku,
-    productName: item.productName,
-    binLocation: item.binLocation,
-    quantity: item.quantity,
-    status: item.status,
-    scanSequence: item.scanSequence,
-    fefoBatch: item.fefoBatch,
-    expiryDate: item.expiryDate,
-    pickedQuantity: item.pickedQuantity,
-    partialReason: item.partialReason,
-    imageUrl: item.productInfo?.image_url || null,  // Safely access productInfo
-    ean: item.productInfo?.ean_upc || null,
-    mrp: item.productInfo?.mrp || null,
-  })),
-  pagination: {
-    page: parseInt(page.toString()),
-    limit: parseInt(limit.toString()),
-    total: picklistItems.count,
-    totalPages: Math.ceil(picklistItems.count / parseInt(limit.toString()))
-  }
-});
-
-  } catch (error) {
-    console.error('Get picklist items error:', error);
-    return ResponseHandler.error(res, 'Internal server error', 500);
-  }
-  }
 
   /**
    * Manually create picklist items for a wave
@@ -1761,30 +1995,46 @@ export class PickingController {
   static async createPicklistItems(req: AuthRequest, res: Response): Promise<Response> {
     try {
       const { waveId } = req.params;
+      const fcId = req.user?.fc_id; // ✅ Current fulfillment center
 
-      // Verify wave exists
-      const wave = await PickingWave.findByPk(waveId);
-      if (!wave) {
-        return ResponseHandler.error(res, 'Wave not found', 404);
+      if (!fcId) {
+        return ResponseHandler.error(res, 'Missing fulfillment center context (fc_id)', 400);
       }
 
-      // Check permissions
+      console.log(`🧾 Create picklist items request for wave ${waveId} in FC ${fcId}`);
+
+      // ✅ Verify wave belongs to current fulfillment center
+      const wave = await PickingWave.findOne({
+        where: { id: parseInt(waveId), fulfillment_center_id: fcId }
+      });
+
+      if (!wave) {
+        return ResponseHandler.error(res, `Wave not found in fulfillment center ${fcId}`, 404);
+      }
+
+      // ✅ Check permissions
       const userPermissions = req.user!.permissions || [];
-      const canManage = userPermissions.includes('picking:assign_manage') || userPermissions.includes('picking:view');
+      const canManage =
+        userPermissions.includes('picking:assign_manage') ||
+        userPermissions.includes('picking:view');
+
       if (!canManage) {
         return ResponseHandler.error(res, 'Insufficient permissions to manage this wave', 403);
       }
 
-      // Create picklist items
-      const result = await PickingController.createPicklistItemsForWave(parseInt(waveId));
+      // ✅ Create picklist items (pass FC ID to internal method)
+      const result = await PickingController.createPicklistItemsForWave(parseInt(waveId), fcId);
 
       if (result.success) {
+        console.log(`✅ ${result.createdItems} picklist items created successfully for wave ${waveId} in FC ${fcId}`);
         return ResponseHandler.success(res, {
           message: result.message,
           createdItems: result.createdItems,
-          waveId: parseInt(waveId)
+          waveId: parseInt(waveId),
+          fc_id: fcId
         });
       } else {
+        console.warn(`⚠️ Failed to create picklist items for wave ${waveId}: ${result.message}`);
         return ResponseHandler.error(res, result.message, 400);
       }
 
@@ -1794,161 +2044,134 @@ export class PickingController {
     }
   }
 
+
   /**
    * Internal method to generate picklist for a single order (called from Helpers)
    */
-  static async generatePicklistInternal(orderId: number): Promise<{ success: boolean; message: string; waveId?: number }> {
-    try {
-      console.log(`🔄 Generating picklist internally for order ID: ${orderId}`);
-      
-      // Get the order data
-      const order = await Order.findByPk(orderId);
-      if (!order) {
-        throw new Error(`Order ${orderId} not found`);
-      }
+static async generatePicklistInternal(
+  orderId: number,
+  fcId?: number // ✅ Added optional FC ID param for multi-fulfillment center context
+): Promise<{ success: boolean; message: string; waveId?: number }> {
+  try {
+    console.log(`🔄 Generating picklist internally for order ID: ${orderId} ${fcId ? `(FC: ${fcId})` : ''}`);
+    
+    // Get the order data
+    const order = await Order.findByPk(orderId);
+    if (!order) {
+      throw new Error(`Order ${orderId} not found`);
+    }
 
-      const orderData = order.get({ plain: true });
-      const waveNumber = `W${Date.now()}-${orderData.order_id}`;
-      
-      // Calculate SLA deadline (24 hours from now)
-      const slaDeadline = new Date(Date.now() + 24 * 60 * 60 * 1000);
-      
-      // Calculate total items for this single order
-      let totalItems = 0;
-      if (orderData.cart && Array.isArray(orderData.cart)) {
-        totalItems = orderData.cart.reduce((sum: number, item: any) => {
-          return sum + (item.quantity || 1);
-        }, 0);
-      }
-      
-      // Create the picking wave
-      const wave = await PickingWave.create({
-        waveNumber,
-        status: 'GENERATED',
-        priority: 'HIGH',
-        totalOrders: 1,
-        totalItems: totalItems,
-        estimatedDuration: 2,
-        slaDeadline,
-        routeOptimization: true,
-        fefoRequired: false,
-        tagsAndBags: false,
-        orderId: orderData.id
-      } as any);
-      
-      console.log(`✅ Created picking wave ${wave.id} for order ${orderId}`);
+    const orderData = order.get({ plain: true });
+    const waveNumber = `W${Date.now()}-${orderData.order_id}`;
+    
+    // Calculate SLA deadline (24 hours from now)
+    const slaDeadline = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    
+    // Calculate total items for this single order
+    let totalItems = 0;
+    if (orderData.cart && Array.isArray(orderData.cart)) {
+      totalItems = orderData.cart.reduce((sum: number, item: any) => {
+        return sum + (item.quantity || 1);
+      }, 0);
+    }
+    
+    // ✅ Create the picking wave with FC info
+    const wave = await PickingWave.create({
+      waveNumber,
+      status: 'GENERATED',
+      priority: 'HIGH',
+      totalOrders: 1,
+      totalItems: totalItems,
+      estimatedDuration: 2,
+      slaDeadline,
+      routeOptimization: true,
+      fefoRequired: false,
+      tagsAndBags: false,
+      orderId: orderData.id,
+      fulfillment_center_id: fcId || (orderData.fc_id ?? null) // ✅ attach FC if provided or from order
+    } as any);
+    
+    console.log(`✅ Created picking wave ${wave.id} for order ${orderId} (FC: ${wave.fulfillment_center_id})`);
 
-      // Create picklist items for this single order
-      let actualTotalItems = 0;
-      let createdItems = 0;
-      
-      if (orderData.cart && Array.isArray(orderData.cart)) {
-        for (let i = 0; i < orderData.cart.length; i++) {
-          const item = orderData.cart[i];
+    // Create picklist items for this single order
+    let actualTotalItems = 0;
+    let createdItems = 0;
+    
+    if (orderData.cart && Array.isArray(orderData.cart)) {
+      for (let i = 0; i < orderData.cart.length; i++) {
+        const item = orderData.cart[i];
+        
+        if (item && item.sku !== undefined && item.sku !== null) {
+          const quantity = item.quantity || (item.amount ? 1 : 1);
           
-          if (item && item.sku !== undefined && item.sku !== null) {
-            const quantity = item.quantity || (item.amount ? 1 : 1);
-            
-            try {
-              // First, ensure the SKU exists in product_master table
-              const skuString = item.sku.toString();
-              let productExists = await Product.findOne({
-                where: { sku: skuString }
-              });
+          try {
+            const skuString = item.sku.toString();
 
-              if (!productExists) {
-                console.log(`📦 Creating placeholder product for SKU ${skuString}`);
+            // First, ensure the SKU exists in product_master table
+            let productExists = await Product.findOne({
+              where: { sku: skuString }
+            });
+
+            if (!productExists) {
+              console.log(`📦 Creating placeholder product for SKU ${skuString}`);
+              try {
+                await Product.create({
+                  SKU: skuString,
+                  ProductName: `Product-${skuString}`,
+                  ImageURL: '',
+                  EAN_UPC: '',
+                  MRP: orderData.order_amount || 0.00,
+                  CreatedDate: new Date().toISOString(),
+                  updated_at: new Date()
+                } as any);
+                console.log(`✅ Created placeholder product for SKU ${skuString} with MRP: ${orderData.order_amount}`);
+              } catch (productCreateError: any) {
+                console.error(`❌ Failed to create placeholder product for SKU ${skuString}:`, productCreateError.message);
+              }
+            } else {
+              // Update MRP if needed
+              const currentMRP = parseFloat(String(productExists.mrp || '0'));
+              const orderMRP = orderData.order_amount || 0.00;
+              
+              if (orderMRP > 0 && orderMRP !== currentMRP) {
+                console.log(`📦 Updating MRP for existing SKU ${skuString} from ${currentMRP} to ${orderMRP}`);
                 try {
-                  await Product.create({
-                    SKU: skuString,
-                    ProductName: `Product-${skuString}`,
-                    ImageURL: '',
-                    EAN_UPC: '',
-                    MRP: orderData.order_amount || 0.00, // Use total order amount from PHP
-                    CreatedDate: new Date().toISOString(),
-                    updated_at: new Date()
-                  } as any);
-                  console.log(`✅ Created placeholder product for SKU ${skuString} with MRP: ${orderData.order_amount}`);
-                } catch (productCreateError: any) {
-                  console.error(`❌ Failed to create placeholder product for SKU ${skuString}:`, productCreateError.message);
-                  // Continue anyway, we'll try to create the picklist item
-                }
-              } else {
-                // Product exists, but let's update MRP if the current order has a different amount
-                const currentMRP = parseFloat(String(productExists.mrp || '0'));
-                const orderMRP = orderData.order_amount || 0.00;
-                
-                if (orderMRP > 0 && orderMRP !== currentMRP) {
-                  console.log(`📦 Updating MRP for existing SKU ${skuString} from ${currentMRP} to ${orderMRP}`);
-                  try {
-                    await Product.update(
-                      { 
-                        mrp: orderMRP,
-                        updated_at: new Date()
-                      },
-                      { where: { sku: skuString } }
-                    );
-                    console.log(`✅ Updated MRP for SKU ${skuString} to ${orderMRP}`);
-                  } catch (updateError: any) {
-                    console.error(`❌ Failed to update MRP for SKU ${skuString}:`, updateError.message);
-                  }
+                  await Product.update(
+                    { 
+                      mrp: orderMRP,
+                      updated_at: new Date()
+                    },
+                    { where: { sku: skuString } }
+                  );
+                  console.log(`✅ Updated MRP for SKU ${skuString} to ${orderMRP}`);
+                } catch (updateError: any) {
+                  console.error(`❌ Failed to update MRP for SKU ${skuString}:`, updateError.message);
                 }
               }
+            }
 
-              // Find the SKU in ScannerSku table to get bin location
-              const scannerSku = await ScannerSku.findOne({
-                where: { skuScanId: skuString }
+            // Find the SKU in ScannerSku table to get bin location (FC Scoped)
+            const scannerSku = await ScannerSku.findOne({
+              where: fcId
+                ? { skuScanId: skuString, fc_id: fcId } // ✅ Added FC scope
+                : { skuScanId: skuString }
+            });
+
+            let binLocation: string = PICKING_CONSTANTS.DEFAULT_BIN_LOCATION;
+            let productName = `Product-${skuString}`;
+
+            if (scannerSku) {
+              const scannerBin = await ScannerBin.findOne({
+                where: fcId
+                  ? { binLocationScanId: scannerSku.binLocationScanId, fc_id: fcId } // ✅ Added FC scope
+                  : { binLocationScanId: scannerSku.binLocationScanId }
               });
 
-              let binLocation: string = PICKING_CONSTANTS.DEFAULT_BIN_LOCATION;
-              let productName = `Product-${skuString}`;
-
-              if (scannerSku) {
-                const scannerBin = await ScannerBin.findOne({
-                  where: {
-                    binLocationScanId: scannerSku.binLocationScanId
-                  }
-                });
-
-                if (scannerBin) {
-                  binLocation = scannerBin.binLocationScanId;
-                } else {
-                  console.warn(`Bin location not found for SKU ${skuString}. Checking category-based fallback.`);
-                  
-                  // iii. Category-based fallback: Get SKU category from product_master
-                  const product = await Product.findOne({
-                    where: { sku: skuString },
-                    attributes: ['Category']
-                  });
-
-                  if (product && product.category) {
-                    console.log(`Found product category "${product.category}" for SKU ${skuString}. Checking bin_locations.`);
-                    
-                      // Find bin location by category mapping using MySQL JSON_CONTAINS
-                      const { BinLocation } = await import('../models/index.js');
-                      const { Sequelize } = require('sequelize');
-                      const categoryBasedBin = await BinLocation.findOne({
-                        where: Sequelize.and(
-                          { [PICKING_CONSTANTS.COLUMNS.STATUS]: PICKING_CONSTANTS.STATUS.ACTIVE },
-                          Sequelize.literal(`JSON_CONTAINS(category_mapping, JSON_QUOTE('${product.category}'))`)
-                        ),
-                        order: PICKING_CONSTANTS.QUERY_OPTIONS.ORDER_BY_ID_ASC // Get first matching bin
-                      });
-
-                    if (categoryBasedBin) {
-                      binLocation = categoryBasedBin.bin_code;
-                      console.log(`✅ Found category-based bin location: ${binLocation} for category "${product.category}"`);
-                    } else {
-                      console.warn(`No active bin found for category "${product.category}". Using default bin location.`);
-                    }
-                  } else {
-                    console.warn(`No category found for SKU ${skuString}. Using default bin location.`);
-                  }
-                }
+              if (scannerBin) {
+                binLocation = scannerBin.binLocationScanId;
               } else {
-                console.warn(`SKU ${skuString} not found in scanner system. Checking category-based fallback.`);
+                console.warn(`Bin location not found for SKU ${skuString}. Checking category-based fallback.`);
                 
-                // iii. Category-based fallback: Get SKU category from product_master
                 const product = await Product.findOne({
                   where: { sku: skuString },
                   attributes: ['Category']
@@ -1957,16 +2180,20 @@ export class PickingController {
                 if (product && product.category) {
                   console.log(`Found product category "${product.category}" for SKU ${skuString}. Checking bin_locations.`);
                   
-                  // Find bin location by category mapping
                   const { BinLocation } = await import('../models/index.js');
+                  const { Sequelize } = require('sequelize');
                   const categoryBasedBin = await BinLocation.findOne({
-                    where: {
-                      category_mapping: {
-                        [require('sequelize').Op.contains]: [product.category]
-                      },
-                      status: 'active'
-                    },
-                    order: [['id', 'ASC']] // Get first matching bin
+                    where: fcId
+                      ? Sequelize.and(
+                          { fulfillment_center_id: fcId }, // ✅ Added FC filter
+                          { [PICKING_CONSTANTS.COLUMNS.STATUS]: PICKING_CONSTANTS.STATUS.ACTIVE },
+                          Sequelize.literal(`JSON_CONTAINS(category_mapping, JSON_QUOTE('${product.category}'))`)
+                        )
+                      : Sequelize.and(
+                          { [PICKING_CONSTANTS.COLUMNS.STATUS]: PICKING_CONSTANTS.STATUS.ACTIVE },
+                          Sequelize.literal(`JSON_CONTAINS(category_mapping, JSON_QUOTE('${product.category}'))`)
+                        ),
+                    order: PICKING_CONSTANTS.QUERY_OPTIONS.ORDER_BY_ID_ASC
                   });
 
                   if (categoryBasedBin) {
@@ -1979,127 +2206,156 @@ export class PickingController {
                   console.warn(`No category found for SKU ${skuString}. Using default bin location.`);
                 }
               }
+            } else {
+              console.warn(`SKU ${skuString} not found in scanner system. Checking category-based fallback.`);
+              
+              const product = await Product.findOne({
+                where: { sku: skuString },
+                attributes: ['Category']
+              });
 
-              const picklistItem = await PicklistItem.create({
+              if (product && product.category) {
+                console.log(`Found product category "${product.category}" for SKU ${skuString}. Checking bin_locations.`);
+                
+                const { BinLocation } = await import('../models/index.js');
+                const categoryBasedBin = await BinLocation.findOne({
+                  where: fcId
+                    ? {
+                        fulfillment_center_id: fcId, // ✅ Added FC filter
+                        category_mapping: {
+                          [require('sequelize').Op.contains]: [product.category]
+                        },
+                        status: 'active'
+                      }
+                    : {
+                        category_mapping: {
+                          [require('sequelize').Op.contains]: [product.category]
+                        },
+                        status: 'active'
+                      },
+                  order: [['id', 'ASC']]
+                });
+
+                if (categoryBasedBin) {
+                  binLocation = categoryBasedBin.bin_code;
+                  console.log(`✅ Found category-based bin location: ${binLocation} for category "${product.category}"`);
+                } else {
+                  console.warn(`No active bin found for category "${product.category}". Using default bin location.`);
+                }
+              } else {
+                console.warn(`No category found for SKU ${skuString}. Using default bin location.`);
+              }
+            }
+
+            // ✅ Create picklist item (attach FC ID)
+            const picklistItem = await PicklistItem.create({
+              waveId: wave.id,
+              orderId: orderData.id,
+              sku: skuString,
+              productName: productName,
+              binLocation: binLocation,
+              quantity: quantity,
+              scanSequence: Math.floor(Math.random() * 100) + 1,
+              fefoBatch: false ? `BATCH-${Date.now()}` : undefined,
+              expiryDate: false ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : undefined,
+              fulfillment_center_id: fcId || wave.fulfillment_center_id // ✅ attach FC info to picklist
+            } as any);
+            
+            createdItems++;
+            actualTotalItems += quantity;
+            console.log(`✅ Created picklist item for SKU ${item.sku} (FC ${fcId || wave.fulfillment_center_id}) with bin location ${binLocation}`);
+            
+          } catch (createError) {
+            console.error(`❌ Error creating picklist item for SKU ${item.sku}:`, createError);
+            // Fallback creation
+            try {
+              const skuString = item.sku.toString();
+              
+              await PicklistItem.create({
                 waveId: wave.id,
                 orderId: orderData.id,
                 sku: skuString,
-                productName: productName,
-                binLocation: binLocation,
+                productName: `Product-${skuString}`,
+                binLocation: PICKING_CONSTANTS.DEFAULT_BIN_LOCATION,
                 quantity: quantity,
                 scanSequence: Math.floor(Math.random() * 100) + 1,
                 fefoBatch: false ? `BATCH-${Date.now()}` : undefined,
-                expiryDate: false ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : undefined
+                expiryDate: false ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : undefined,
+                fulfillment_center_id: fcId || wave.fulfillment_center_id // ✅ attach FC info
               } as any);
               
               createdItems++;
               actualTotalItems += quantity;
-              console.log(`✅ Created picklist item for SKU ${item.sku} with bin location ${binLocation}`);
-              
-              } catch (createError) {
-                console.error(`❌ Error creating picklist item for SKU ${item.sku}:`, createError);
-                // Try to create with minimal data
-                try {
-                  const skuString = item.sku.toString();
-                  
-                  // Ensure product exists before creating picklist item
-                  let productExists = await Product.findOne({
-                    where: { sku: skuString }
-                  });
-
-                  if (!productExists) {
-                    console.log(`📦 Creating placeholder product for SKU ${skuString} (fallback)`);
-                    try {
-                      await Product.create({
-                        SKU: skuString,
-                        ProductName: `Product-${skuString}`,
-                        ImageURL: '',
-                        EAN_UPC: '',
-                        MRP: orderData.order_amount || 0.00, // Use total order amount from PHP
-                        CreatedDate: new Date().toISOString(),
-                        updated_at: new Date()
-                      } as any);
-                      console.log(`✅ Created placeholder product for SKU ${skuString} (fallback)`);
-                    } catch (productCreateError: any) {
-                      console.error(`❌ Failed to create placeholder product for SKU ${skuString} (fallback):`, productCreateError.message);
-                    }
-                  }
-
-                  await PicklistItem.create({
-                    waveId: wave.id,
-                    orderId: orderData.id,
-                    sku: skuString,
-                    productName: `Product-${skuString}`,
-                    binLocation: PICKING_CONSTANTS.DEFAULT_BIN_LOCATION,
-                    quantity: quantity,
-                    scanSequence: Math.floor(Math.random() * 100) + 1,
-                    fefoBatch: false ? `BATCH-${Date.now()}` : undefined,
-                    expiryDate: false ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : undefined
-                  } as any);
-                  
-                  createdItems++;
-                  actualTotalItems += quantity;
-                  console.log(`✅ Created fallback picklist item for SKU ${item.sku}`);
-                } catch (fallbackError) {
-                  console.error(`❌ Failed to create even fallback picklist item for SKU ${item.sku}:`, fallbackError);
-                }
-              }
+              console.log(`✅ Created fallback picklist item for SKU ${item.sku} (FC ${fcId || wave.fulfillment_center_id })`);
+            } catch (fallbackError) {
+              console.error(`❌ Failed to create fallback picklist item for SKU ${item.sku}:`, fallbackError);
+            }
           }
         }
       }
-
-      // Update wave with actual total items
-      await wave.update({ totalItems: actualTotalItems });
-
-      console.log(`🎉 Successfully created ${createdItems} picklist items for wave ${wave.id}`);
-      
-      return {
-        success: true,
-        message: `Successfully created ${createdItems} picklist items`,
-        waveId: wave.id
-      };
-
-    } catch (error: any) {
-      console.error(`❌ Error in generatePicklistInternal for order ${orderId}:`, error);
-      return {
-        success: false,
-        message: `Failed to generate picklist: ${error.message}`
-      };
     }
+
+    // Update wave with actual total items
+    await wave.update({ totalItems: actualTotalItems });
+
+    console.log(`🎉 Successfully created ${createdItems} picklist items for wave ${wave.id} (FC ${fcId || wave.fulfillment_center_id})`);
+    
+    return {
+      success: true,
+      message: `Successfully created ${createdItems} picklist items`,
+      waveId: wave.id
+    };
+
+  } catch (error: any) {
+    console.error(`❌ Error in generatePicklistInternal for order ${orderId}:`, error);
+    return {
+      success: false,
+      message: `Failed to generate picklist: ${error.message}`
+    };
   }
+}
+
 
   /**
    * Create picklist items for an existing wave (utility function)
    */
-  static async createPicklistItemsForWave(waveId: number): Promise<{ success: boolean; message: string; createdItems: number }> {
+  static async createPicklistItemsForWave(
+    waveId: number,
+    fcId?: number // ✅ Added optional fcId param
+  ): Promise<{ success: boolean; message: string; createdItems: number }> {
     try {
-      // Check if picklist items already exist for this wave
+      // Check if picklist items already exist for this wave (FC scoped)
       const existingItems = await PicklistItem.count({
-        where: { waveId }
+        where: fcId ? { waveId, fulfillment_center_id: fcId } : { waveId } // ✅ Added fc_id check
       });
 
       if (existingItems > 0) {
         return {
           success: true,
-          message: `Wave ${waveId} already has ${existingItems} picklist items`,
+          message: `Wave ${waveId} already has ${existingItems} picklist items${fcId ? ` in FC ${fcId}` : ''}`,
           createdItems: existingItems
         };
       }
 
-      // Get the wave details
-      const wave = await PickingWave.findByPk(waveId);
+      // Get the wave details (FC scoped)
+      const wave = await PickingWave.findOne({
+        where: fcId ? { id: waveId, fulfillment_center_id: fcId } : { id: waveId } // ✅ Added fc_id condition
+      });
+
       if (!wave) {
         return {
           success: false,
-          message: `Wave ${waveId} not found`,
+          message: `Wave ${waveId} not found${fcId ? ` in FC ${fcId}` : ''}`,
           createdItems: 0
         };
       }
 
+      // Derive fc_id from wave if not provided
+      const effectiveFcId = fcId || (wave as any).fc_id;
+
       // Find the order associated with this wave
-      // Since we use one-order-per-wave, we can find the order by looking at the wave number
       const orderIdFromWave = wave.waveNumber.split('-')[1]; // Extract order_id from wave number
-      
+
       const order = await Order.findOne({
         where: { order_id: orderIdFromWave },
         attributes: ['id', 'order_id', 'cart']
@@ -2114,45 +2370,43 @@ export class PickingController {
       }
 
       const orderData = order.get({ plain: true });
-      console.log(`Creating picklist items for wave ${waveId}, order: ${orderData.order_id}`);
+      console.log(`Creating picklist items for wave ${waveId}, order: ${orderData.order_id}, FC: ${effectiveFcId}`);
 
       // Create picklist items for this order
       let actualTotalItems = 0;
       let createdItems = 0;
-      
+
       if (orderData.cart && Array.isArray(orderData.cart)) {
         for (let i = 0; i < orderData.cart.length; i++) {
           const item = orderData.cart[i];
-          
-          // More flexible validation - check for sku and either amount or quantity
+
           if (item && item.sku !== undefined && item.sku !== null) {
-            // For cart items with amount but no quantity, use amount as quantity
-            // This handles the case where cart items have {sku: 123, amount: 25.99}
             const quantity = item.quantity || (item.amount ? 1 : 1);
-            
+
             try {
-              // Find the SKU in ScannerSku table to get bin location
+              // Find the SKU in ScannerSku table to get bin location (FC scoped)
               const scannerSku = await ScannerSku.findOne({
-                where: { skuScanId: item.sku.toString() }
+                where: fcId
+                  ? { skuScanId: item.sku.toString(), fc_id: effectiveFcId } // ✅ Added fc_id filter
+                  : { skuScanId: item.sku.toString() }
               });
 
               let binLocation: string = PICKING_CONSTANTS.DEFAULT_BIN_LOCATION; // Default bin location
               let productName = `Product-${item.sku}`;
 
               if (scannerSku) {
-                // Get the bin location from ScannerBin table
+                // Get the bin location from ScannerBin table (FC scoped)
                 const scannerBin = await ScannerBin.findOne({
-                  where: {
-                    binLocationScanId: scannerSku.binLocationScanId
-                  }
+                  where: fcId
+                    ? { binLocationScanId: scannerSku.binLocationScanId, fc_id: effectiveFcId } // ✅ Added fc_id filter
+                    : { binLocationScanId: scannerSku.binLocationScanId }
                 });
 
                 if (scannerBin) {
                   binLocation = scannerBin.binLocationScanId;
                 } else {
                   console.warn(`Bin location not found for SKU ${item.sku}. Checking category-based fallback.`);
-                  
-                  // iii. Category-based fallback: Get SKU category from product_master
+
                   const product = await Product.findOne({
                     where: { sku: item.sku.toString() },
                     attributes: ['Category']
@@ -2160,20 +2414,26 @@ export class PickingController {
 
                   if (product && product.category) {
                     console.log(`Found product category "${product.category}" for SKU ${item.sku}. Checking bin_locations.`);
-                    
-                      // Find bin location by category mapping using MySQL JSON_CONTAINS
-                      const { BinLocation } = await import('../models/index.js');
-                      const { Sequelize } = require('sequelize');
-                      const categoryBasedBin = await BinLocation.findOne({
-                        where: Sequelize.and(
-                          { [PICKING_CONSTANTS.COLUMNS.STATUS]: PICKING_CONSTANTS.STATUS.ACTIVE },
-                          Sequelize.literal(`JSON_CONTAINS(category_mapping, JSON_QUOTE('${product.category}'))`)
-                        ),
-                        order: PICKING_CONSTANTS.QUERY_OPTIONS.ORDER_BY_ID_ASC // Get first matching bin
-                      });
+
+                    const { BinLocation } = await import('../models/index.js');
+                    const { Sequelize } = require('sequelize');
+
+                    const categoryBasedBin = await BinLocation.findOne({
+                      where: fcId
+                        ? Sequelize.and(
+                            { [PICKING_CONSTANTS.COLUMNS.STATUS]: PICKING_CONSTANTS.STATUS.ACTIVE },
+                            { fulfillment_center_id: effectiveFcId }, // ✅ Added fc_id filter
+                            Sequelize.literal(`JSON_CONTAINS(category_mapping, JSON_QUOTE('${product.category}'))`)
+                          )
+                        : Sequelize.and(
+                            { [PICKING_CONSTANTS.COLUMNS.STATUS]: PICKING_CONSTANTS.STATUS.ACTIVE },
+                            Sequelize.literal(`JSON_CONTAINS(category_mapping, JSON_QUOTE('${product.category}'))`)
+                          ),
+                      order: PICKING_CONSTANTS.QUERY_OPTIONS.ORDER_BY_ID_ASC
+                    });
 
                     if (categoryBasedBin) {
-                      binLocation = categoryBasedBin.bin_code;
+                      binLocation = categoryBasedBin.get('bin_code');
                       console.log(`✅ Found category-based bin location: ${binLocation} for category "${product.category}"`);
                     } else {
                       console.warn(`No active bin found for category "${product.category}". Using default bin location.`);
@@ -2184,8 +2444,7 @@ export class PickingController {
                 }
               } else {
                 console.warn(`SKU ${item.sku} not found in scanner system. Checking category-based fallback.`);
-                
-                // iii. Category-based fallback: Get SKU category from product_master
+
                 const product = await Product.findOne({
                   where: { sku: item.sku.toString() },
                   attributes: ['Category']
@@ -2193,17 +2452,24 @@ export class PickingController {
 
                 if (product && product.category) {
                   console.log(`Found product category "${product.category}" for SKU ${item.sku}. Checking bin_locations.`);
-                  
-                  // Find bin location by category mapping
+
                   const { BinLocation } = await import('../models/index.js');
                   const categoryBasedBin = await BinLocation.findOne({
-                    where: {
-                      category_mapping: {
-                        [require('sequelize').Op.contains]: [product.category]
-                      },
-                      status: 'active'
-                    },
-                    order: [['id', 'ASC']] // Get first matching bin
+                    where: fcId
+                      ? {
+                          fulfillment_center_id: effectiveFcId, // ✅ Added fc_id filter
+                          category_mapping: {
+                            [require('sequelize').Op.contains]: [product.category]
+                          },
+                          status: 'active'
+                        }
+                      : {
+                          category_mapping: {
+                            [require('sequelize').Op.contains]: [product.category]
+                          },
+                          status: 'active'
+                        },
+                    order: [['id', 'ASC']]
                   });
 
                   if (categoryBasedBin) {
@@ -2217,6 +2483,7 @@ export class PickingController {
                 }
               }
 
+              // ✅ Add FC info when creating the item
               const picklistItem = await PicklistItem.create({
                 waveId: waveId,
                 orderId: orderData.id,
@@ -2226,16 +2493,18 @@ export class PickingController {
                 quantity: quantity,
                 scanSequence: Math.floor(Math.random() * 100) + 1,
                 fefoBatch: wave.fefoRequired ? `BATCH-${Date.now()}` : undefined,
-                expiryDate: wave.fefoRequired ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : undefined
+                expiryDate: wave.fefoRequired ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : undefined,
+                fulfillment_center_id: effectiveFcId // ✅ Injected FC ID
               } as any);
-              
+
               createdItems++;
               actualTotalItems += quantity;
-              console.log(`Created picklist item for SKU ${item.sku} with bin location ${binLocation}`);
-              
+              console.log(`Created picklist item for SKU ${item.sku} (FC ${effectiveFcId}) with bin ${binLocation}`);
+
             } catch (createError) {
               console.error(`Error creating picklist item for SKU ${item.sku}:`, createError);
-              // Try to create with minimal data
+
+              // Try minimal fallback (unchanged logic, but add fc_id)
               try {
                 const picklistItem = await PicklistItem.create({
                   waveId: waveId,
@@ -2246,30 +2515,29 @@ export class PickingController {
                   quantity: quantity,
                   scanSequence: Math.floor(Math.random() * 100) + 1,
                   fefoBatch: wave.fefoRequired ? `BATCH-${Date.now()}` : undefined,
-                  expiryDate: wave.fefoRequired ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : undefined
+                  expiryDate: wave.fefoRequired ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : undefined,
+                  fulfillment_center_id: effectiveFcId // ✅ Injected FC ID
                 } as any);
-                
+
                 createdItems++;
                 actualTotalItems += quantity;
-                console.log(`Created fallback picklist item for SKU ${item.sku}`);
+                console.log(`Created fallback picklist item for SKU ${item.sku} (FC ${effectiveFcId})`);
               } catch (fallbackError) {
-                console.error(`Failed to create even fallback picklist item for SKU ${item.sku}:`, fallbackError);
+                console.error(`Failed to create fallback picklist item for SKU ${item.sku}:`, fallbackError);
               }
             }
           }
         }
       }
 
-      // Update wave with actual counts
-      await wave.update({
-        totalItems: actualTotalItems
-      });
+      // Update wave totals (unchanged)
+      await wave.update({ totalItems: actualTotalItems });
 
-      console.log(`Created ${createdItems} picklist items for wave ${waveId}, total items: ${actualTotalItems}`);
+      console.log(`Created ${createdItems} picklist items for wave ${waveId} in FC ${effectiveFcId}, total items: ${actualTotalItems}`);
 
       return {
         success: true,
-        message: `Successfully created ${createdItems} picklist items for wave ${waveId}`,
+        message: `Successfully created ${createdItems} picklist items for wave ${waveId} in FC ${effectiveFcId}`,
         createdItems: createdItems
       };
 

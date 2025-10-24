@@ -28,6 +28,8 @@ export interface BinLocationAttributes {
   bin_status: string;
   created_at: Date;
   updated_at: Date;
+  fulfillment_center_id: number;
+
 }
 
 export interface BinLocationCreationAttributes extends Omit<BinLocationAttributes, 'id' | 'created_at' | 'updated_at'> {}
@@ -59,6 +61,7 @@ class BinLocation extends Model<BinLocationAttributes, BinLocationCreationAttrib
   public bin_status!: string;
   public created_at!: Date;
   public updated_at!: Date;
+  public fulfillment_center_id!: number;
 }
 
 BinLocation.init(
@@ -68,6 +71,14 @@ BinLocation.init(
       autoIncrement: true,
       primaryKey: true,
     },
+    fulfillment_center_id: {
+     type: DataTypes.INTEGER,
+     allowNull: false,
+     references: {
+       model: 'FulfillmentCenters',
+       key: 'id',
+     },
+   },
     bin_id: {
       type: DataTypes.STRING(50),
       allowNull: true,

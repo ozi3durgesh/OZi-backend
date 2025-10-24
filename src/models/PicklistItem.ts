@@ -23,6 +23,7 @@ interface PicklistItemAttributes {
   scannerId?: string;
   createdAt?: Date;
   updatedAt?: Date;
+  fulfillment_center_id: number;
 }
 
 class PicklistItem
@@ -50,7 +51,8 @@ class PicklistItem
   declare createdAt: Date;
   declare updatedAt: Date;
 
-    declare product?: Product;
+  declare product?: Product;
+  declare fulfillment_center_id: number;
 }
 
 PicklistItem.init(
@@ -60,6 +62,14 @@ PicklistItem.init(
       autoIncrement: true,
       primaryKey: true,
     },
+    fulfillment_center_id: {
+     type: DataTypes.INTEGER,
+     allowNull: false,
+     references: {
+       model: 'FulfillmentCenters',
+       key: 'id',
+     },
+   },
     waveId: {
       type: DataTypes.INTEGER,
       allowNull: false,

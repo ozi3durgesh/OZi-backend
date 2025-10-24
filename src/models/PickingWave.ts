@@ -2,6 +2,7 @@
 import { DataTypes, Model } from 'sequelize';
 import sequelize from '../config/database';
 import PicklistItem from './PicklistItem';
+import FulfillmentCenter from './FulfillmentCenter';
 
 interface PickingWaveAttributes {
   id: number;
@@ -30,6 +31,7 @@ interface PickingWaveAttributes {
   handoverBy?: number;
   dispatchNotes?: string | null;
   handoverPhoto?: string | null;
+  fulfillment_center_id: number;
 }
 
 class PickingWave extends Model<PickingWaveAttributes> implements PickingWaveAttributes {
@@ -62,10 +64,21 @@ class PickingWave extends Model<PickingWaveAttributes> implements PickingWaveAtt
 
   // Associations
   declare PicklistItems?: PicklistItem[];
+  declare fulfillment_center_id: number;
 }
 
 PickingWave.init({
   id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+
+  fulfillment_center_id: {
+     type: DataTypes.INTEGER,
+     allowNull: false,
+     references: {
+       model: 'FulfillmentCenters',
+       key: 'id',
+     },
+   },
+
   waveNumber: { type: DataTypes.STRING(50), allowNull: false, unique: true },
   status: {
     type: DataTypes.ENUM('GENERATED', 'ASSIGNED', 'PICKING', 'PACKING', 'PACKED', 'COMPLETED', 'CANCELLED'),
