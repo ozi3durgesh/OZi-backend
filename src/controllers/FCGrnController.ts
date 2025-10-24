@@ -673,6 +673,35 @@ const createdGrn = await FCGrn.findByPk(fcGrn.id, {
     return 'pending';
   }
 
+  /**
+   * Calculate overall GRN status based on line statuses
+   * @param lineStatuses - Array of line statuses
+   * @returns grn_status: 'pending' | 'partial' | 'completed' | 'rejected'
+   */
+  private static calculateGrnStatus(lineStatuses: string[]): string {
+    if (!lineStatuses || lineStatuses.length === 0) {
+      return 'pending';
+    }
+
+    // If all lines are completed, GRN is completed
+    if (lineStatuses.every(status => status === 'completed')) {
+      return 'completed';
+    }
+
+    // If all lines are rejected, GRN is rejected
+    if (lineStatuses.every(status => status === 'rejected')) {
+      return 'rejected';
+    }
+
+    // If all lines are pending, GRN is pending
+    if (lineStatuses.every(status => status === 'pending')) {
+      return 'pending';
+    }
+
+    // If there's a mix of statuses (some completed, some pending, etc.), GRN is partial
+    return 'partial';
+  }
+
   static async getFCGrnDetails(req: Request, res: Response): Promise<void> {
     try {
       const page = parseInt(req.query.page as string) || 1;
@@ -882,10 +911,14 @@ const createdGrn = await FCGrn.findByPk(fcGrn.id, {
           }
         }));
         
+        // Calculate overall GRN status based on line statuses
+        const lineStatuses = lines.map((line: any) => line.line_status);
+        const calculatedGrnStatus = hasGrn ? FCGrnController.calculateGrnStatus(lineStatuses) : po.status.toLowerCase();
+        
         return {
           id: hasGrn ? grnData.id : po.id,
           po_id: po.id,
-          status: hasGrn ? grnData.status : po.status.toLowerCase(),
+          status: calculatedGrnStatus,
           closeReason: hasGrn ? grnData.closeReason : (po.status === 'REJECTED' ? po.rejectionReason : null),
           created_by: hasGrn ? grnData.created_by : (po.CreatedBy?.id || null),
           created_at: hasGrn ? grnData.created_at : po.createdAt,
