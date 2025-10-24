@@ -22,17 +22,17 @@ router.get('/', DCInventory1Controller.getAll);
 router.get('/summary', DCInventory1Controller.getSummary);
 
 /**
- * @route GET /api/dc/inventory-1/sku/:skuId
- * @desc Get DC Inventory 1 record by SKU ID
+ * @route GET /api/dc/inventory-1/sku/:skuId/dc/:dcId
+ * @desc Get DC Inventory 1 record by SKU ID and DC ID
  * @access Private
  */
-router.get('/sku/:skuId', DCInventory1Controller.getBySkuId);
+router.get('/sku/:skuId/dc/:dcId', DCInventory1Controller.getBySkuIdAndDcId);
 
 /**
- * @route GET /api/dc/inventory-1/catalogue/:catalogueId
- * @desc Get DC Inventory 1 record by catalogue ID
+ * @route GET /api/dc/inventory-1/dc/:dcId
+ * @desc Get DC Inventory 1 records by DC ID
  * @access Private
  */
-router.get('/catalogue/:catalogueId', DCInventory1Controller.getByCatalogueId);
+router.get('/dc/:dcId', DCInventory1Controller.getByDcId);
 
 export default router;

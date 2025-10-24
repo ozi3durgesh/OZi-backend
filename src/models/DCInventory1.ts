@@ -12,7 +12,7 @@ class DCInventory1 extends Model<
   InferCreationAttributes<DCInventory1>
 > {
   declare sku_id: string;
-  declare catalogue_id: string;
+  declare dc_id: number;
   declare po_raise_quantity: number;
   declare po_approve_quantity: number;
   declare grn_done: number;
@@ -30,10 +30,13 @@ DCInventory1.init(
         len: [12, 13],
       },
     },
-    catalogue_id: {
-      type: DataTypes.STRING(7),
+    dc_id: {
+      type: DataTypes.INTEGER,
       allowNull: false,
-      unique: true,
+      primaryKey: true,
+      validate: {
+        min: 1,
+      },
     },
     po_raise_quantity: {
       type: DataTypes.INTEGER,
@@ -80,7 +83,7 @@ DCInventory1.init(
     updatedAt: 'updated_at',
     indexes: [
       { fields: ['sku_id'] },
-      { fields: ['catalogue_id'] },
+      { fields: ['dc_id'] },
       { fields: ['po_raise_quantity'] },
       { fields: ['po_approve_quantity'] },
       { fields: ['grn_done'] },
