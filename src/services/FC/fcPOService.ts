@@ -10,6 +10,8 @@ import FulfillmentCenter from '../../models/FulfillmentCenter';
 import DistributionCenter from '../../models/DistributionCenter';
 import { FC_PO_CONSTANTS } from '../../constants/fcPOConstants';
 import { Op } from 'sequelize';
+import DirectInventoryService from '../DirectInventoryService';
+import { INVENTORY_OPERATIONS } from '../../config/inventoryConstants';
 
 export class FCPOService {
   /**
@@ -181,6 +183,44 @@ export class FCPOService {
         status: 'PENDING',
         comments: 'Initial creation - pending approval',
       }, { transaction });
+
+      // Update inventory for FC PO raise (before transaction commit)
+      console.log('🔄 Updating inventory for FC PO raise...');
+      for (const product of data.products) {
+        try {
+          // Get the actual SKU from SKU matrix if available, otherwise use catalogue_id
+          let skuId = product.catelogue_id.toString().padStart(12, '0');
+          
+          if (product.sku_matrix_on_catelogue_id && product.sku_matrix_on_catelogue_id.length > 0) {
+            // Use the first SKU from the matrix as the primary SKU
+            skuId = product.sku_matrix_on_catelogue_id[0].sku;
+          }
+          
+          const inventoryResult = await DirectInventoryService.updateInventory({
+            sku: skuId,
+            operation: INVENTORY_OPERATIONS.PO,
+            quantity: product.total_quantity,
+            referenceId: `FCPO-${fcPO.id}`,
+            operationDetails: {
+              fcPOId: fcPO.id,
+              fcId: data.fcId,
+              dcId: data.dcId,
+              product_name: product.productName || 'Unknown',
+              operation: 'fc_po_raise',
+              created_date: new Date().toISOString()
+            },
+            performedBy: data.createdBy
+          });
+
+          if (inventoryResult.success) {
+            console.log(`✅ FC Inventory updated for SKU ${skuId}: +${product.total_quantity} PO raised`);
+          } else {
+            console.error(`❌ FC Inventory update failed for SKU ${skuId}: ${inventoryResult.message}`);
+          }
+        } catch (error: any) {
+          console.error(`❌ Error updating FC inventory for SKU ${product.catelogue_id}:`, error.message);
+        }
+      }
 
       await transaction.commit();
 
@@ -379,6 +419,62 @@ export class FCPOService {
         approval.comments = comments;
         approval.approvedAt = action === 'APPROVED' ? new Date() : undefined;
         await approval.save({ transaction });
+      }
+
+      // Update inventory for FC PO approval
+      if (action === 'APPROVED') {
+        console.log('🔄 Updating inventory for FC PO approval...');
+        const products = await FCPOProduct.findAll({
+          where: { fcPOId: fcPO.id },
+          attributes: ['catalogueId', 'quantity', 'skuMatrixOnCatalogueId'],
+          transaction
+        });
+
+        for (const product of products) {
+          try {
+            // Get the actual SKU from SKU matrix if available, otherwise use catalogueId
+            let skuId = product.catalogueId.toString().padStart(12, '0');
+            
+            if (product.skuMatrixOnCatalogueId) {
+              try {
+                const skuMatrix = typeof product.skuMatrixOnCatalogueId === 'string' 
+                  ? JSON.parse(product.skuMatrixOnCatalogueId)
+                  : product.skuMatrixOnCatalogueId;
+                
+                if (skuMatrix && skuMatrix.length > 0) {
+                  // Use the first SKU from the matrix as the primary SKU
+                  skuId = skuMatrix[0].sku;
+                }
+              } catch (error) {
+                console.error('Error parsing SKU matrix for FC PO approval:', error);
+              }
+            }
+            
+            const inventoryResult = await DirectInventoryService.updateInventory({
+              sku: skuId,
+              operation: INVENTORY_OPERATIONS.GRN,
+              quantity: product.quantity,
+              referenceId: `FCPO-${fcPO.id}`,
+              operationDetails: {
+                fcPOId: fcPO.id,
+                fcId: fcPO.fcId,
+                dcId: fcPO.dcId,
+                product_name: product.productName || 'Unknown',
+                operation: 'fc_po_approval',
+                approved_date: new Date().toISOString()
+              },
+              performedBy: approverId
+            });
+
+            if (inventoryResult.success) {
+              console.log(`✅ FC Inventory updated for SKU ${skuId}: +${product.quantity} PO approved`);
+            } else {
+              console.error(`❌ FC Inventory update failed for SKU ${skuId}: ${inventoryResult.message}`);
+            }
+          } catch (error: any) {
+            console.error(`❌ Error updating FC inventory for SKU ${product.catalogueId}:`, error.message);
+          }
+        }
       }
 
       await transaction.commit();
