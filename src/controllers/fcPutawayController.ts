@@ -118,7 +118,7 @@ export class FCPutawayController {
           grnMap.set(grnId, {
             grn: grnId,
             grnId: grn?.id || grnId, // Use the actual GRN ID from the database
-            poId: grn?.FCPO?.po_id || (grn?.po_id ? `FCPO${grn.po_id}` : 'N/A'), // Map numeric po_id to FCPO string
+            poId: grn?.FCPO?.id || grn?.po_id || 'N/A', // Use the actual PO ID instead of po_id string
             skuIds: new Set(), // Store individual SKU IDs
             skuQcDetails: new Map(), // Store QC details for each SKU
             quantity: 0,
