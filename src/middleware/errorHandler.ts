@@ -31,6 +31,10 @@ export const errorHandler = (
   // Database Validation Errors
   if (error.name === 'SequelizeValidationError') {
     const sequelizeError = error as any;
+    console.error('SequelizeValidationError details:', {
+      errors: sequelizeError.errors,
+      message: sequelizeError.message
+    });
     if (sequelizeError.errors && sequelizeError.errors.length > 0) {
       const validationErrors = sequelizeError.errors.map((err: any) => {
         if (err.type === 'notNull Violation') {
