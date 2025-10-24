@@ -15,13 +15,14 @@ interface InventoryUpdateResult {
 
 interface InventorySummary {
   sku: string;
-  po_quantity: number;
-  grn_quantity: number;
-  putaway_quantity: number;
-  picklist_quantity: number;
-  return_try_and_buy_quantity: number;
-  return_other_quantity: number;
-  total_available_quantity: number;
+  fc_po_raise_quantity: number;
+  fc_po_approve_quantity: number;
+  fc_grn_quantity: number;
+  fc_putaway_quantity: number;
+  fc_picklist_quantity: number;
+  fc_return_try_and_buy_quantity: number;
+  fc_return_other_quantity: number;
+  fc_total_available_quantity: number;
   total_inventory: number;
 }
 
@@ -56,23 +57,25 @@ class DirectInventoryService {
         );
 
         let currentQuantities = {
-          po_quantity: 0,
-          grn_quantity: 0,
-          putaway_quantity: 0,
-          picklist_quantity: 0,
-          return_try_and_buy_quantity: 0,
-          return_other_quantity: 0
+          fc_po_raise_quantity: 0,
+          fc_po_approve_quantity: 0,
+          fc_grn_quantity: 0,
+          fc_putaway_quantity: 0,
+          fc_picklist_quantity: 0,
+          fc_return_try_and_buy_quantity: 0,
+          fc_return_other_quantity: 0
         };
 
         if (currentInventory.length > 0) {
           const inv = currentInventory[0] as any;
           currentQuantities = {
-            po_quantity: inv.po_quantity || 0,
-            grn_quantity: inv.grn_quantity || 0,
-            putaway_quantity: inv.putaway_quantity || 0,
-            picklist_quantity: inv.picklist_quantity || 0,
-            return_try_and_buy_quantity: inv.return_try_and_buy_quantity || 0,
-            return_other_quantity: inv.return_other_quantity || 0
+            fc_po_raise_quantity: inv.fc_po_raise_quantity || 0,
+            fc_po_approve_quantity: inv.fc_po_approve_quantity || 0,
+            fc_grn_quantity: inv.fc_grn_quantity || 0,
+            fc_putaway_quantity: inv.fc_putaway_quantity || 0,
+            fc_picklist_quantity: inv.fc_picklist_quantity || 0,
+            fc_return_try_and_buy_quantity: inv.fc_return_try_and_buy_quantity || 0,
+            fc_return_other_quantity: inv.fc_return_other_quantity || 0
           };
         }
 
@@ -83,39 +86,39 @@ class DirectInventoryService {
 
         switch (operation) {
           case INVENTORY_OPERATIONS.PO:
-            previousQuantity = currentQuantities.po_quantity;
-            newQuantities.po_quantity = currentQuantities.po_quantity + quantity;
-            newQuantity = newQuantities.po_quantity;
+            previousQuantity = currentQuantities.fc_po_raise_quantity;
+            newQuantities.fc_po_raise_quantity = currentQuantities.fc_po_raise_quantity + quantity;
+            newQuantity = newQuantities.fc_po_raise_quantity;
             break;
             
           case INVENTORY_OPERATIONS.GRN:
-            previousQuantity = currentQuantities.grn_quantity;
-            newQuantities.grn_quantity = currentQuantities.grn_quantity + quantity;
-            newQuantity = newQuantities.grn_quantity;
+            previousQuantity = currentQuantities.fc_grn_quantity;
+            newQuantities.fc_grn_quantity = currentQuantities.fc_grn_quantity + quantity;
+            newQuantity = newQuantities.fc_grn_quantity;
             break;
             
           case INVENTORY_OPERATIONS.PUTAWAY:
-            previousQuantity = currentQuantities.putaway_quantity;
-            newQuantities.putaway_quantity = currentQuantities.putaway_quantity + quantity;
-            newQuantity = newQuantities.putaway_quantity;
+            previousQuantity = currentQuantities.fc_putaway_quantity;
+            newQuantities.fc_putaway_quantity = currentQuantities.fc_putaway_quantity + quantity;
+            newQuantity = newQuantities.fc_putaway_quantity;
             break;
             
           case INVENTORY_OPERATIONS.PICKLIST:
-            previousQuantity = currentQuantities.picklist_quantity;
-            newQuantities.picklist_quantity = currentQuantities.picklist_quantity + quantity;
-            newQuantity = newQuantities.picklist_quantity;
+            previousQuantity = currentQuantities.fc_picklist_quantity;
+            newQuantities.fc_picklist_quantity = currentQuantities.fc_picklist_quantity + quantity;
+            newQuantity = newQuantities.fc_picklist_quantity;
             break;
             
           case INVENTORY_OPERATIONS.RETURN_TRY_AND_BUY:
-            previousQuantity = currentQuantities.return_try_and_buy_quantity;
-            newQuantities.return_try_and_buy_quantity = currentQuantities.return_try_and_buy_quantity + quantity;
-            newQuantity = newQuantities.return_try_and_buy_quantity;
+            previousQuantity = currentQuantities.fc_return_try_and_buy_quantity;
+            newQuantities.fc_return_try_and_buy_quantity = currentQuantities.fc_return_try_and_buy_quantity + quantity;
+            newQuantity = newQuantities.fc_return_try_and_buy_quantity;
             break;
             
           case INVENTORY_OPERATIONS.RETURN_OTHER:
-            previousQuantity = currentQuantities.return_other_quantity;
-            newQuantities.return_other_quantity = currentQuantities.return_other_quantity + quantity;
-            newQuantity = newQuantities.return_other_quantity;
+            previousQuantity = currentQuantities.fc_return_other_quantity;
+            newQuantities.fc_return_other_quantity = currentQuantities.fc_return_other_quantity + quantity;
+            newQuantity = newQuantities.fc_return_other_quantity;
             break;
             
           default:
@@ -123,38 +126,41 @@ class DirectInventoryService {
         }
 
         // Calculate total available quantity (putaway - picklist)
-        const totalAvailableQuantity = Math.max(0, newQuantities.putaway_quantity - newQuantities.picklist_quantity);
+        const totalAvailableQuantity = Math.max(0, newQuantities.fc_putaway_quantity - newQuantities.fc_picklist_quantity);
         
         // Calculate total inventory
         const totalInventory = 
-          newQuantities.po_quantity + 
-          newQuantities.grn_quantity + 
-          newQuantities.putaway_quantity + 
-          newQuantities.picklist_quantity + 
-          newQuantities.return_try_and_buy_quantity + 
-          newQuantities.return_other_quantity;
+          newQuantities.fc_po_raise_quantity + 
+          newQuantities.fc_po_approve_quantity + 
+          newQuantities.fc_grn_quantity + 
+          newQuantities.fc_putaway_quantity + 
+          newQuantities.fc_picklist_quantity + 
+          newQuantities.fc_return_try_and_buy_quantity + 
+          newQuantities.fc_return_other_quantity;
 
         // Update or insert inventory record
         if (currentInventory.length > 0) {
           await sequelize.query(
             `UPDATE inventory SET 
-             po_quantity = ?, 
-             grn_quantity = ?, 
-             putaway_quantity = ?, 
-             picklist_quantity = ?, 
-             return_try_and_buy_quantity = ?, 
-             return_other_quantity = ?, 
-             total_available_quantity = ?,
+             fc_po_raise_quantity = ?, 
+             fc_po_approve_quantity = ?,
+             fc_grn_quantity = ?, 
+             fc_putaway_quantity = ?, 
+             fc_picklist_quantity = ?, 
+             fc_return_try_and_buy_quantity = ?, 
+             fc_return_other_quantity = ?, 
+             fc_total_available_quantity = ?,
              updated_at = CURRENT_TIMESTAMP
              WHERE sku = ?`,
             {
               replacements: [
-                newQuantities.po_quantity,
-                newQuantities.grn_quantity,
-                newQuantities.putaway_quantity,
-                newQuantities.picklist_quantity,
-                newQuantities.return_try_and_buy_quantity,
-                newQuantities.return_other_quantity,
+                newQuantities.fc_po_raise_quantity,
+                newQuantities.fc_po_approve_quantity,
+                newQuantities.fc_grn_quantity,
+                newQuantities.fc_putaway_quantity,
+                newQuantities.fc_picklist_quantity,
+                newQuantities.fc_return_try_and_buy_quantity,
+                newQuantities.fc_return_other_quantity,
                 totalAvailableQuantity,
                 sku
               ],
@@ -164,19 +170,20 @@ class DirectInventoryService {
         } else {
           await sequelize.query(
             `INSERT INTO inventory (
-             sku, po_quantity, grn_quantity, putaway_quantity, picklist_quantity, 
-             return_try_and_buy_quantity, return_other_quantity, total_available_quantity,
+             sku, fc_po_raise_quantity, fc_po_approve_quantity, fc_grn_quantity, fc_putaway_quantity, fc_picklist_quantity, 
+             fc_return_try_and_buy_quantity, fc_return_other_quantity, fc_total_available_quantity,
              created_at, updated_at
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
             {
               replacements: [
                 sku,
-                newQuantities.po_quantity,
-                newQuantities.grn_quantity,
-                newQuantities.putaway_quantity,
-                newQuantities.picklist_quantity,
-                newQuantities.return_try_and_buy_quantity,
-                newQuantities.return_other_quantity,
+                newQuantities.fc_po_raise_quantity,
+                newQuantities.fc_po_approve_quantity,
+                newQuantities.fc_grn_quantity,
+                newQuantities.fc_putaway_quantity,
+                newQuantities.fc_picklist_quantity,
+                newQuantities.fc_return_try_and_buy_quantity,
+                newQuantities.fc_return_other_quantity,
                 totalAvailableQuantity
               ],
               transaction
@@ -217,7 +224,7 @@ class DirectInventoryService {
             quantity_change: quantity,
             previous_quantity: previousQuantity,
             new_quantity: newQuantity,
-            total_available_quantity: totalAvailableQuantity,
+            fc_total_available_quantity: totalAvailableQuantity,
             total_inventory: totalInventory
           }
         };
@@ -256,19 +263,21 @@ class DirectInventoryService {
       const inventory = result[0] as any;
       return {
         sku: inventory.sku,
-        po_quantity: inventory.po_quantity || 0,
-        grn_quantity: inventory.grn_quantity || 0,
-        putaway_quantity: inventory.putaway_quantity || 0,
-        picklist_quantity: inventory.picklist_quantity || 0,
-        return_try_and_buy_quantity: inventory.return_try_and_buy_quantity || 0,
-        return_other_quantity: inventory.return_other_quantity || 0,
-        total_available_quantity: inventory.total_available_quantity || 0,
-        total_inventory: (inventory.po_quantity || 0) + 
-                       (inventory.grn_quantity || 0) + 
-                       (inventory.putaway_quantity || 0) + 
-                       (inventory.picklist_quantity || 0) + 
-                       (inventory.return_try_and_buy_quantity || 0) + 
-                       (inventory.return_other_quantity || 0)
+        fc_po_raise_quantity: inventory.fc_po_raise_quantity || 0,
+        fc_po_approve_quantity: inventory.fc_po_approve_quantity || 0,
+        fc_grn_quantity: inventory.fc_grn_quantity || 0,
+        fc_putaway_quantity: inventory.fc_putaway_quantity || 0,
+        fc_picklist_quantity: inventory.fc_picklist_quantity || 0,
+        fc_return_try_and_buy_quantity: inventory.fc_return_try_and_buy_quantity || 0,
+        fc_return_other_quantity: inventory.fc_return_other_quantity || 0,
+        fc_total_available_quantity: inventory.fc_total_available_quantity || 0,
+        total_inventory: (inventory.fc_po_raise_quantity || 0) + 
+                       (inventory.fc_po_approve_quantity || 0) + 
+                       (inventory.fc_grn_quantity || 0) + 
+                       (inventory.fc_putaway_quantity || 0) + 
+                       (inventory.fc_picklist_quantity || 0) + 
+                       (inventory.fc_return_try_and_buy_quantity || 0) + 
+                       (inventory.fc_return_other_quantity || 0)
       };
     } catch (error: any) {
       console.error(`❌ Error getting inventory summary for SKU ${sku}:`, error.message);
@@ -317,7 +326,7 @@ class DirectInventoryService {
         };
       }
 
-      const availableQuantity = summary.total_available_quantity;
+      const availableQuantity = summary.fc_total_available_quantity;
       const shortfall = Math.max(0, requiredQuantity - availableQuantity);
 
       return {

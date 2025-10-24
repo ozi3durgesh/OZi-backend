@@ -52,13 +52,14 @@ class InventoryService {
           
           const newInventory = await Inventory.create({
             sku,
-            po_quantity: operation === INVENTORY_OPERATIONS.PO ? quantity : 0,
-            grn_quantity: operation === INVENTORY_OPERATIONS.GRN ? quantity : 0,
-            putaway_quantity: putawayQty,
-            picklist_quantity: picklistQty,
-            return_try_and_buy_quantity: operation === INVENTORY_OPERATIONS.RETURN_TRY_AND_BUY ? quantity : 0,
-            return_other_quantity: operation === INVENTORY_OPERATIONS.RETURN_OTHER ? quantity : 0,
-            total_available_quantity: putawayQty - picklistQty,
+            fc_po_raise_quantity: operation === INVENTORY_OPERATIONS.PO ? quantity : 0,
+            fc_po_approve_quantity: 0,
+            fc_grn_quantity: operation === INVENTORY_OPERATIONS.GRN ? quantity : 0,
+            fc_putaway_quantity: putawayQty,
+            fc_picklist_quantity: picklistQty,
+            fc_return_try_and_buy_quantity: operation === INVENTORY_OPERATIONS.RETURN_TRY_AND_BUY ? quantity : 0,
+            fc_return_other_quantity: operation === INVENTORY_OPERATIONS.RETURN_OTHER ? quantity : 0,
+            fc_total_available_quantity: putawayQty - picklistQty,
           }, { transaction: activeTransaction });
 
           // Log the operation
@@ -167,13 +168,14 @@ class InventoryService {
 
       return {
         sku: inventory.sku,
-        po_quantity: inventory.po_quantity,
-        grn_quantity: inventory.grn_quantity,
-        putaway_quantity: inventory.putaway_quantity,
-        picklist_quantity: inventory.picklist_quantity,
-        return_try_and_buy_quantity: inventory.return_try_and_buy_quantity,
-        return_other_quantity: inventory.return_other_quantity,
-        total_available_quantity: inventory.total_available_quantity,
+        fc_po_raise_quantity: inventory.fc_po_raise_quantity,
+        fc_po_approve_quantity: inventory.fc_po_approve_quantity,
+        fc_grn_quantity: inventory.fc_grn_quantity,
+        fc_putaway_quantity: inventory.fc_putaway_quantity,
+        fc_picklist_quantity: inventory.fc_picklist_quantity,
+        fc_return_try_and_buy_quantity: inventory.fc_return_try_and_buy_quantity,
+        fc_return_other_quantity: inventory.fc_return_other_quantity,
+        fc_total_available_quantity: inventory.fc_total_available_quantity,
         available_for_picking: inventory.availableQuantity,
         total_inventory: inventory.totalInventory,
         created_at: inventory.created_at,
@@ -220,20 +222,20 @@ class InventoryService {
           throw new Error(INVENTORY_MESSAGES.SKU_NOT_FOUND);
         }
 
-        // Recalculate total_available_quantity
-        const calculatedAvailable = inventory.putaway_quantity - inventory.picklist_quantity;
+        // Recalculate fc_total_available_quantity
+        const calculatedAvailable = inventory.fc_putaway_quantity - inventory.fc_picklist_quantity;
         
-        if (calculatedAvailable !== inventory.total_available_quantity) {
+        if (calculatedAvailable !== inventory.fc_total_available_quantity) {
           await inventory.update({
-            total_available_quantity: calculatedAvailable,
+            fc_total_available_quantity: calculatedAvailable,
           }, { transaction: t });
 
           // Log the reconciliation
           await this.logInventoryOperation({
             sku,
             operation: 'reconciliation' as any,
-            quantityChange: calculatedAvailable - inventory.total_available_quantity,
-            previousQuantity: inventory.total_available_quantity,
+            quantityChange: calculatedAvailable - inventory.fc_total_available_quantity,
+            previousQuantity: inventory.fc_total_available_quantity,
             newQuantity: calculatedAvailable,
             operationDetails: { type: 'reconciliation', reason: 'quantity_mismatch' },
             transaction: t,
@@ -286,17 +288,17 @@ class InventoryService {
   private getQuantityForOperation(inventory: Inventory, operation: InventoryOperation): number {
     switch (operation) {
       case INVENTORY_OPERATIONS.PO:
-        return inventory.po_quantity;
+        return inventory.fc_po_raise_quantity;
       case INVENTORY_OPERATIONS.GRN:
-        return inventory.grn_quantity;
+        return inventory.fc_grn_quantity;
       case INVENTORY_OPERATIONS.PUTAWAY:
-        return inventory.putaway_quantity;
+        return inventory.fc_putaway_quantity;
       case INVENTORY_OPERATIONS.PICKLIST:
-        return inventory.picklist_quantity;
+        return inventory.fc_picklist_quantity;
       case INVENTORY_OPERATIONS.RETURN_TRY_AND_BUY:
-        return inventory.return_try_and_buy_quantity;
+        return inventory.fc_return_try_and_buy_quantity;
       case INVENTORY_OPERATIONS.RETURN_OTHER:
-        return inventory.return_other_quantity;
+        return inventory.fc_return_other_quantity;
       default:
         return 0;
     }
@@ -312,24 +314,24 @@ class InventoryService {
 
     switch (operation) {
       case INVENTORY_OPERATIONS.PO:
-        updateData.po_quantity = inventory.po_quantity + quantity;
+        updateData.fc_po_raise_quantity = inventory.fc_po_raise_quantity + quantity;
         break;
       case INVENTORY_OPERATIONS.GRN:
-        updateData.grn_quantity = inventory.grn_quantity + quantity;
+        updateData.fc_grn_quantity = inventory.fc_grn_quantity + quantity;
         break;
       case INVENTORY_OPERATIONS.PUTAWAY:
-        updateData.putaway_quantity = inventory.putaway_quantity + quantity;
-        updateData.total_available_quantity = inventory.total_available_quantity + quantity;
+        updateData.fc_putaway_quantity = inventory.fc_putaway_quantity + quantity;
+        updateData.fc_total_available_quantity = inventory.fc_total_available_quantity + quantity;
         break;
       case INVENTORY_OPERATIONS.PICKLIST:
-        updateData.picklist_quantity = inventory.picklist_quantity + quantity;
-        updateData.total_available_quantity = inventory.total_available_quantity - quantity;
+        updateData.fc_picklist_quantity = inventory.fc_picklist_quantity + quantity;
+        updateData.fc_total_available_quantity = inventory.fc_total_available_quantity - quantity;
         break;
       case INVENTORY_OPERATIONS.RETURN_TRY_AND_BUY:
-        updateData.return_try_and_buy_quantity = inventory.return_try_and_buy_quantity + quantity;
+        updateData.fc_return_try_and_buy_quantity = inventory.fc_return_try_and_buy_quantity + quantity;
         break;
       case INVENTORY_OPERATIONS.RETURN_OTHER:
-        updateData.return_other_quantity = inventory.return_other_quantity + quantity;
+        updateData.fc_return_other_quantity = inventory.fc_return_other_quantity + quantity;
         break;
     }
 

@@ -667,12 +667,12 @@ export class HandoverController {
       }
 
       // Check if we have enough picklist quantity to reduce
-      if (currentInventory.picklist_quantity < quantity) {
+      if (currentInventory.fc_picklist_quantity < quantity) {
         await transaction.rollback();
-        return ResponseHandler.error(res, `Insufficient picklist quantity for SKU ${sku}. Available: ${currentInventory.picklist_quantity}, Required: ${quantity}`, 400);
+        return ResponseHandler.error(res, `Insufficient picklist quantity for SKU ${sku}. Available: ${currentInventory.fc_picklist_quantity}, Required: ${quantity}`, 400);
       }
 
-      // Update inventory - reduce picklist_quantity since items are being dispatched
+      // Update inventory - reduce fc_picklist_quantity since items are being dispatched
       const inventoryResult = await DirectInventoryService.updateInventory({
         sku: sku,
         operation: INVENTORY_OPERATIONS.PICKLIST,
@@ -686,8 +686,8 @@ export class HandoverController {
           specialInstructions: specialInstructions,
           handedOverAt: new Date(),
           handedOverBy: dispatcherId,
-          previousPicklistQuantity: currentInventory.picklist_quantity,
-          newPicklistQuantity: currentInventory.picklist_quantity - quantity
+          previousPicklistQuantity: currentInventory.fc_picklist_quantity,
+          newPicklistQuantity: currentInventory.fc_picklist_quantity - quantity
         },
         performedBy: dispatcherId
       });
@@ -799,9 +799,9 @@ export class HandoverController {
           }
 
           // Check if we have enough putaway quantity to allocate
-          if (currentInventory.putaway_quantity < quantity) {
+          if (currentInventory.fc_putaway_quantity < quantity) {
             await transaction.rollback();
-            return ResponseHandler.error(res, `Insufficient inventory available. Current putaway: ${currentInventory.putaway_quantity}, Required: ${quantity}`, 400);
+            return ResponseHandler.error(res, `Insufficient inventory available. Current putaway: ${currentInventory.fc_putaway_quantity}, Required: ${quantity}`, 400);
           }
         }
 
@@ -913,10 +913,10 @@ export class HandoverController {
       return ResponseHandler.success(res, {
         sku: sku,
         inventory: inventorySummary,
-        availableForPicking: inventorySummary.putaway_quantity - inventorySummary.picklist_quantity,
-        totalInventory: inventorySummary.po_quantity + inventorySummary.grn_quantity + 
-                       inventorySummary.putaway_quantity + inventorySummary.return_try_and_buy_quantity + 
-                       inventorySummary.return_other_quantity
+        availableForPicking: inventorySummary.fc_putaway_quantity - inventorySummary.fc_picklist_quantity,
+        totalInventory: inventorySummary.fc_po_raise_quantity + inventorySummary.fc_grn_quantity + 
+                       inventorySummary.fc_putaway_quantity + inventorySummary.fc_return_try_and_buy_quantity + 
+                       inventorySummary.fc_return_other_quantity
       }, 200);
 
     } catch (error) {
@@ -1016,25 +1016,25 @@ export const dispatchWave = async (req: Request, res: Response) => {
           }
 
           // Check if we have enough putaway quantity to dispatch
-          if (currentInventory.putaway_quantity < quantity) {
+          if (currentInventory.fc_putaway_quantity < quantity) {
             await transaction.rollback();
             return res.status(400).json({
               success: false,
-              message: `Insufficient putaway quantity for SKU ${sku}. Available: ${currentInventory.putaway_quantity}, Required: ${quantity}`,
+              message: `Insufficient putaway quantity for SKU ${sku}. Available: ${currentInventory.fc_putaway_quantity}, Required: ${quantity}`,
             });
           }
 
           // Check if we have enough picklist quantity (items should be picked before dispatch)
-          if (currentInventory.picklist_quantity < quantity) {
+          if (currentInventory.fc_picklist_quantity < quantity) {
             await transaction.rollback();
             return res.status(400).json({
               success: false,
-              message: `Insufficient picklist quantity for SKU ${sku}. Available: ${currentInventory.picklist_quantity}, Required: ${quantity}. Items must be picked before dispatch.`,
+              message: `Insufficient picklist quantity for SKU ${sku}. Available: ${currentInventory.fc_picklist_quantity}, Required: ${quantity}. Items must be picked before dispatch.`,
             });
           }
 
-          // Update inventory: reduce putaway_quantity (items are leaving the warehouse)
-          // Note: picklist_quantity was already updated during scanning, so we only reduce putaway_quantity
+          // Update inventory: reduce fc_putaway_quantity (items are leaving the warehouse)
+          // Note: fc_picklist_quantity was already updated during scanning, so we only reduce fc_putaway_quantity
           const putawayResult = await DirectInventoryService.updateInventory({
             sku: sku,
             operation: INVENTORY_OPERATIONS.PUTAWAY,
@@ -1047,8 +1047,8 @@ export const dispatchWave = async (req: Request, res: Response) => {
               dispatchNotes: dispatchNotes,
               dispatchedAt: new Date(),
               dispatchedBy: staffId,
-              previousPutawayQuantity: currentInventory.putaway_quantity,
-              newPutawayQuantity: currentInventory.putaway_quantity - quantity,
+              previousPutawayQuantity: currentInventory.fc_putaway_quantity,
+              newPutawayQuantity: currentInventory.fc_putaway_quantity - quantity,
               operation: 'dispatch_putaway_reduction'
             },
             performedBy: staffId
