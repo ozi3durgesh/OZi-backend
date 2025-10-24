@@ -7,6 +7,7 @@ export interface ScannerSkuAttributes {
   skuScanId: string;
   sku: Array<{ skuId: string; quantity: number }>;
   binLocationScanId: string;
+  fc_id?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -18,6 +19,7 @@ class ScannerSku extends Model<ScannerSkuAttributes, ScannerSkuCreationAttribute
   declare skuScanId: string;
   declare sku: Array<{ skuId: string; quantity: number }>;
   declare binLocationScanId: string;
+  declare fc_id?: number;
   declare createdAt: Date;
   declare updatedAt: Date;
 }
@@ -43,6 +45,11 @@ ScannerSku.init({
     type: DataTypes.STRING(100),
     allowNull: false,
     comment: 'Reference to bin location scan ID',
+  },
+  fc_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'Fulfillment Center ID from auth token',
   },
   createdAt: {
     type: DataTypes.DATE,

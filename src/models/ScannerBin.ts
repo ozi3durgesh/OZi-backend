@@ -6,6 +6,7 @@ export interface ScannerBinAttributes {
   id: number;
   binLocationScanId: string;
   sku: string[];
+  fc_id?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -16,6 +17,7 @@ class ScannerBin extends Model<ScannerBinAttributes, ScannerBinCreationAttribute
   declare id: number;
   declare binLocationScanId: string;
   declare sku: string[];
+  declare fc_id?: number;
   declare createdAt: Date;
   declare updatedAt: Date;
 }
@@ -36,6 +38,11 @@ ScannerBin.init({
     type: DataTypes.JSON,
     allowNull: false,
     comment: 'JSON array of SKU IDs',
+  },
+  fc_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'Fulfillment Center ID from auth token',
   },
   createdAt: {
     type: DataTypes.DATE,

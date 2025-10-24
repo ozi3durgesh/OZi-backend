@@ -1153,6 +1153,8 @@ export class FCPutawayController {
       }
 
       // Get FCGrn line with FC filtering
+      // If fc_id is null, allow access (for backward compatibility)
+      // If fc_id is set, filter by current FC
       const grnLine = await FCGrnLine.findOne({
         where: { grn_id: grn_id, sku_id: sku_id },
         include: [
@@ -1160,8 +1162,11 @@ export class FCPutawayController {
             model: FCGrn,
             as: 'FCGrn',
             where: {
-              fc_id: currentFcId, // Filter by current FC
-            },
+              [Op.or]: [
+                { fc_id: null }, // Allow GRNs without fc_id (backward compatibility)
+                { fc_id: currentFcId } // Allow GRNs with matching fc_id
+              ]
+            } as any,
           },
         ],
       });
@@ -1263,7 +1268,8 @@ export class FCPutawayController {
             console.log(`📦 Creating new bin record for ${bin_location} with SKU ${sku_id}`);
             await ScannerBin.create({
               binLocationScanId: bin_location,
-              sku: [sku_id]
+              sku: [sku_id],
+              fc_id: currentFcId
             }, { transaction });
           }
         } catch (scannerBinError: any) {
@@ -1328,7 +1334,8 @@ export class FCPutawayController {
           await ScannerSku.create({
             skuScanId: skuScanId,
             sku: [{ skuId: sku_id, quantity: quantity }],
-            binLocationScanId: bin_location
+            binLocationScanId: bin_location,
+            fc_id: currentFcId
           }, { transaction });
         }
 
