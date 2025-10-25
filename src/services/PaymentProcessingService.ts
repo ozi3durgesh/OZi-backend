@@ -3,7 +3,8 @@ import sequelize from "../config/database.js";
 import DCPurchaseOrder from "../models/DCPurchaseOrder.js";
 import PaymentTransaction from "../models/PaymentTransaction.js";
 import CreditNote from "../models/CreditNote.js";
-import { promises } from "dns";
+import { Transaction } from "sequelize";
+
 
 
 interface CreditInfo {
@@ -17,6 +18,29 @@ interface CreditInfo {
     paymentDueDate: Date | null;
     remainingDays: number | null;
     paymentStatus: string;
+}
+
+export interface PaymentTransactionSummary {
+    id: number;
+    amount: number;
+    utrNumber: string | null;
+    receiptUrl: string | null;
+    paymentMode: string;
+    status: string;
+    remarks: string | null;
+    createdAt: Date;
+}
+
+export interface ProcessPaymentResult {
+    success: boolean;
+    message: string;
+    purchaseOrderId: number;
+    paymentStatus: string;
+    totalPaid: number;
+    totalCredit: number;
+    remaining: number;
+    overpaid: number;
+    paymentTransaction: PaymentTransactionSummary;
 }
 
 // 🧠 Helper: Create Credit Note when overpaid
@@ -39,7 +63,7 @@ async function createCreditNote(po, paymentTx, amount, reason, transaction, crea
 }
 
 // 🧮 Helper: Compute live totals
-async function getPaymentAggregates(purchaseOrderId, transaction = null) {
+async function getPaymentAggregates(purchaseOrderId, transaction?: Transaction | null) {
     const [paid, credit] = await Promise.all([
         PaymentTransaction.sum("amount", {
             where: { purchaseOrderId, status: "SUCCESS" },
@@ -66,7 +90,7 @@ export async function processPayment({
     receiptUrl = null,
     remarks = null,
     createdBy = null,
-}) {
+}): Promise<ProcessPaymentResult> {
     if (!purchaseOrderId) throw new Error("purchaseOrderId is required");
     if (!amount || amount <= 0) throw new Error("Amount must be > 0");
 
@@ -154,7 +178,7 @@ export async function processPayment({
             totalCredit,
             remaining: remaining > 0 ? remaining : 0,
             overpaid,
-            paymentTransaction: paymentTx,
+            paymentTransaction: paymentTx.get({ plain: true }) as PaymentTransactionSummary,
         };
     });
 }

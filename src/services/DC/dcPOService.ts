@@ -64,6 +64,8 @@ interface CreateDCPOData {
   notes?: string;
   priority?: string;
   createdBy: number;
+  paymentType: string;
+  creditPeriodDays: number;
 }
 
 interface EditPOData {
@@ -176,6 +178,8 @@ export class DCPOService {
       priority: data.priority || DC_PO_CONSTANTS.DEFAULTS.PRIORITY,
       status: DC_PO_CONSTANTS.STATUS.DRAFT,
       createdBy: data.createdBy,
+      paymentType: data.paymentType,
+      creditPeriodDays: data.creditPeriodDays
     } as DCPurchaseOrderCreationAttributes);
 
     // Create PO products and their SKU matrix - ignore any database errors
@@ -208,7 +212,9 @@ export class DCPOService {
           brand_id: productData.brand_id,
           category_id: productData.category_id,
           status: productData.status,
+
         });
+
 
         // Create SKU matrix entries if provided
         if (productData.skuMatrix && productData.skuMatrix.length > 0) {
