@@ -1001,7 +1001,8 @@ export interface GRNRequest {
 export interface CreateFullGRNInput {
   poId: number;
   lines: {
-    skuId: string;
+    skuId?: string;
+    ean?: string;
     orderedQty: number;
     receivedQty: number;
     rejectedQty: number;

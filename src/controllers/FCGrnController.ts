@@ -128,6 +128,47 @@ export class FCGrnController {
       );
 
       for (const line of input.lines) {
+        // Validate that either skuId or ean is provided
+        if (!line.skuId && !line.ean) {
+          await t.rollback();
+          res.status(400).json({
+            statusCode: 400,
+            success: false,
+            data: null,
+            error: 'Either skuId or ean must be provided for each line',
+          });
+          return;
+        }
+
+        // Resolve SKU from input (could be SKU or EAN)
+        let resolvedSku: string;
+        let foundBy: 'sku' | 'ean';
+        
+        if (line.skuId) {
+          resolvedSku = line.skuId;
+          foundBy = 'sku';
+        } else {
+          // Find SKU by EAN
+          const product = await ProductMaster.findOne({
+            where: { ean_upc: line.ean },
+            transaction: t,
+          });
+          
+          if (!product) {
+            await t.rollback();
+            res.status(404).json({
+              statusCode: 404,
+              success: false,
+              data: null,
+              error: `Product not found for EAN: ${line.ean}`,
+            });
+            return;
+          }
+          
+          resolvedSku = product.sku_id;
+          foundBy = 'ean';
+        }
+
         // First, get all FC PO products for this PO
         const fcPOProducts = await FCPOProduct.findAll({
           where: { fcPOId: input.poId },
@@ -144,7 +185,7 @@ export class FCGrnController {
                   : product.skuMatrixOnCatalogueId)
               : [];
             
-            if (Array.isArray(skuMatrix) && skuMatrix.some((item: any) => item.sku === line.skuId)) {
+            if (Array.isArray(skuMatrix) && skuMatrix.some((item: any) => item.sku === resolvedSku)) {
               fcPOProduct = product;
               break;
             }
@@ -159,7 +200,7 @@ export class FCGrnController {
             statusCode: 400,
             success: false,
             data: null,
-            error: `FC PO Product not found for FC PO ${input.poId} and SKU ${line.skuId}`,
+            error: `FC PO Product not found for FC PO ${input.poId} and ${foundBy === 'sku' ? 'SKU' : 'EAN'} ${foundBy === 'sku' ? line.skuId : line.ean}`,
           });
           return;
         }
@@ -170,7 +211,7 @@ export class FCGrnController {
             statusCode: 400,
             success: false,
             data: null,
-            error: `FC FCGrn already completed for SKU ${line.skuId}`,
+            error: `FC FCGrn already completed for ${foundBy === 'sku' ? 'SKU' : 'EAN'} ${foundBy === 'sku' ? line.skuId : line.ean}`,
           });
           return;
         }
@@ -183,7 +224,7 @@ export class FCGrnController {
           WHERE g.po_id = :poId AND gl.sku_id = :skuId
         `,
           {
-            replacements: { poId: input.poId, skuId: line.skuId },
+            replacements: { poId: input.poId, skuId: resolvedSku },
             type: QueryTypes.SELECT,
             transaction: t,
           }
@@ -200,7 +241,7 @@ export class FCGrnController {
             statusCode: 400,
             success: false,
             data: null,
-            error: `Received and Rejected qty cannot exceed Ordered qty for SKU ${line.skuId}`,
+            error: `Received and Rejected qty cannot exceed Ordered qty for ${foundBy === 'sku' ? 'SKU' : 'EAN'} ${foundBy === 'sku' ? line.skuId : line.ean}`,
           });
           return;
         }
@@ -214,7 +255,7 @@ export class FCGrnController {
             statusCode: 400,
             success: false,
             data: null,
-            error: `Remarks required for rejected items for SKU ${line.skuId}`,
+            error: `Remarks required for rejected items for ${foundBy === 'sku' ? 'SKU' : 'EAN'} ${foundBy === 'sku' ? line.skuId : line.ean}`,
           });
           return;
         }
@@ -230,7 +271,7 @@ export class FCGrnController {
                 statusCode: 400,
                 success: false,
                 data: null,
-                error: `Invalid S3 URL format for SKU ${line.skuId}. Please upload images first using the photo upload API.`,
+                error: `Invalid S3 URL format for ${foundBy === 'sku' ? 'SKU' : 'EAN'} ${foundBy === 'sku' ? line.skuId : line.ean}. Please upload images first using the photo upload API.`,
               });
               return;
             }
@@ -247,7 +288,7 @@ export class FCGrnController {
         const grnLine = await FCGrnLine.create(
           {
             grn_id: fcGrn.id,
-            sku_id: line.skuId,
+            sku_id: resolvedSku,
             ordered_qty: line.orderedQty,
             received_qty: line.receivedQty,
             pending_qty: line.orderedQty - newTotalReceived,
@@ -271,7 +312,7 @@ export class FCGrnController {
               if (photoUrl && typeof photoUrl === 'string') {
                 await FCGrnPhoto.create(
                   {
-                    sku_id: line.skuId,
+                    sku_id: resolvedSku,
                     grn_id: fcGrn.id,
                     po_id: input.poId,
                     url: photoUrl,
@@ -288,7 +329,7 @@ export class FCGrnController {
               statusCode: 500,
               success: false,
               data: null,
-              error: `Failed to create photo record for SKU ${line.skuId}: ${photoError}`,
+              error: `Failed to create photo record for ${foundBy === 'sku' ? 'SKU' : 'EAN'} ${foundBy === 'sku' ? line.skuId : line.ean}: ${photoError}`,
             });
             return;
           }
@@ -347,9 +388,31 @@ export class FCGrnController {
       }> = [];
       for (const line of input.lines) {
         if (line.receivedQty > 0) {
+          // Resolve SKU for inventory update
+          let resolvedSkuForInventory: string;
+          if (line.skuId) {
+            resolvedSkuForInventory = line.skuId;
+          } else {
+            const product = await ProductMaster.findOne({
+              where: { ean_upc: line.ean }
+            });
+            if (product) {
+              resolvedSkuForInventory = product.sku_id;
+            } else {
+              console.error(`❌ Product not found for EAN ${line.ean} during inventory update`);
+              inventoryUpdates.push({
+                sku: line.ean || 'unknown',
+                status: 'error',
+                quantity: line.receivedQty,
+                message: `Product not found for EAN: ${line.ean}`
+              });
+              continue;
+            }
+          }
+
           try {
             const inventoryResult = await DirectInventoryService.updateInventory({
-              sku: line.skuId,
+              sku: resolvedSkuForInventory,
               operation: INVENTORY_OPERATIONS.GRN,
               quantity: line.receivedQty,
               referenceId: `FCGrn-${fcGrn.id}`,
@@ -365,26 +428,26 @@ export class FCGrnController {
             });
 
             if (inventoryResult.success) {
-              console.log(`✅ Inventory updated for SKU ${line.skuId}: +${line.receivedQty} units`);
+              console.log(`✅ Inventory updated for SKU ${resolvedSkuForInventory}: +${line.receivedQty} units`);
               inventoryUpdates.push({
-                sku: line.skuId,
+                sku: resolvedSkuForInventory,
                 status: 'success',
                 quantity: line.receivedQty,
                 message: inventoryResult.message
               });
             } else {
-              console.error(`❌ Inventory update failed for SKU ${line.skuId}: ${inventoryResult.message}`);
+              console.error(`❌ Inventory update failed for SKU ${resolvedSkuForInventory}: ${inventoryResult.message}`);
               inventoryUpdates.push({
-                sku: line.skuId,
+                sku: resolvedSkuForInventory,
                 status: 'failed',
                 quantity: line.receivedQty,
                 message: inventoryResult.message
               });
             }
           } catch (inventoryError: any) {
-            console.error(`❌ Inventory update error for SKU ${line.skuId}:`, inventoryError.message);
+            console.error(`❌ Inventory update error for SKU ${resolvedSkuForInventory}:`, inventoryError.message);
             inventoryUpdates.push({
-              sku: line.skuId,
+              sku: resolvedSkuForInventory,
               status: 'error',
               quantity: line.receivedQty,
               message: inventoryError.message
@@ -405,20 +468,41 @@ const costUpdates: Array<{
 
 for (const line of input.lines) {
   if (line.receivedQty > 0) {
+    // Resolve SKU for cost update
+    let resolvedSkuForCost: string;
+    if (line.skuId) {
+      resolvedSkuForCost = line.skuId;
+    } else {
+      const product = await ProductMaster.findOne({
+        where: { ean_upc: line.ean }
+      });
+      if (product) {
+        resolvedSkuForCost = product.sku_id;
+      } else {
+        console.error(`❌ Product not found for EAN ${line.ean} during cost update`);
+        costUpdates.push({
+          sku: line.ean || 'unknown',
+          status: 'failed',
+          message: `Product not found for EAN: ${line.ean}`
+        });
+        continue;
+      }
+    }
+
     try {
-      const costResult = await this.productMasterService.calculateAndUpdateAverageCost(line.skuId, userId);
+      const costResult = await this.productMasterService.calculateAndUpdateAverageCost(resolvedSkuForCost, userId);
       costUpdates.push({
-        sku: line.skuId,
+        sku: resolvedSkuForCost,
         status: 'success',
         message: `Average cost updated successfully`,
         previous_cost: costResult.avg_cost_to_ozi,
         new_cost: costResult.avg_cost_to_ozi
       });
-      console.log(`✅ Average cost updated for SKU ${line.skuId}`);
+      console.log(`✅ Average cost updated for SKU ${resolvedSkuForCost}`);
     } catch (costError: any) {
-      console.error(`❌ Average cost update failed for SKU ${line.skuId}:`, costError.message);
+      console.error(`❌ Average cost update failed for SKU ${resolvedSkuForCost}:`, costError.message);
       costUpdates.push({
-        sku: line.skuId,
+        sku: resolvedSkuForCost,
         status: 'failed',
         message: costError.message
       });
