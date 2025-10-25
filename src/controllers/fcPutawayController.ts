@@ -791,7 +791,7 @@ export class FCPutawayController {
         }
       } else {
         // Case 2: SKU not found in scanner_sku, suggest bin based on category
-        const productCategory = product.Category?.toLowerCase().trim();
+        const productCategory = product.category?.toLowerCase().trim();
   
         // Error Case 1: Product category is missing
         if (!productCategory) {
