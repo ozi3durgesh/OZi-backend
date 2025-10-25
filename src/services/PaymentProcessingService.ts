@@ -31,21 +31,22 @@ export interface PaymentTransactionSummary {
     createdAt: Date;
 }
 
-export interface ProcessPaymentResult {
-    success: boolean;
-    message: string;
-    purchaseOrderId: number;
-    paymentStatus: string;
-    totalPaid: number;
-    totalCredit: number;
-    remaining: number;
-    overpaid: number;
-    paymentTransaction: PaymentTransactionSummary;
+interface ProcessPaymentResult {
+  success: boolean;
+  message: string;
+  purchaseOrderId: number;
+  paymentStatus: string;
+  totalPaid: number;
+  totalCredit: number;
+  remaining: number;
+  overpaid: number;
+  paymentTransaction: PaymentTransaction; // ✅ allow model instance
 }
 
 // 🧠 Helper: Create Credit Note when overpaid
 async function createCreditNote(po, paymentTx, amount, reason, transaction, createdBy) {
     const creditNoteNumber = `CN-${Date.now()}-${po.id}`;
+    
     return await CreditNote.create(
         {
             vendorId: po.vendorId,
@@ -63,17 +64,18 @@ async function createCreditNote(po, paymentTx, amount, reason, transaction, crea
 }
 
 // 🧮 Helper: Compute live totals
-async function getPaymentAggregates(purchaseOrderId, transaction?: Transaction | null) {
+async function getPaymentAggregates(dcPurchaseOrderId, transaction?: Transaction | null) {
     const [paid, credit] = await Promise.all([
         PaymentTransaction.sum("amount", {
-            where: { purchaseOrderId, status: "SUCCESS" },
+            where: { dcPurchaseOrderId, status: "SUCCESS" },
             transaction,
         }),
-        CreditNote.sum("amount", {
-            where: { purchaseOrderId, status: "APPROVED" },
+        CreditNote.sum("creditAmount", {
+            where: { dcPurchaseOrderId, status: "APPROVED" },
             transaction,
         }),
     ]);
+    
 
     return {
         totalPaid: Number(paid || 0),
@@ -97,12 +99,14 @@ export async function processPayment({
     return await sequelize.transaction(async (tx) => {
         // 1️⃣ Fetch PO
         const po = await DCPurchaseOrder.findByPk(purchaseOrderId, { transaction: tx });
+        
         if (!po) throw new Error("Purchase Order not found");
 
         // 2️⃣ Create Payment Transaction
+        
         const paymentTx = await PaymentTransaction.create(
             {
-                purchaseOrderId,
+                dcPurchaseOrderId: purchaseOrderId,
                 vendorId: po.vendorId,
                 paymentMode,
                 amount,
@@ -114,6 +118,8 @@ export async function processPayment({
             },
             { transaction: tx }
         );
+
+        
 
         // 3️⃣ Aggregate totals at runtime
         const { totalPaid, totalCredit } = await getPaymentAggregates(po.id, tx);
@@ -166,7 +172,9 @@ export async function processPayment({
 
         // 5️⃣ Update PO paymentStatus only
         po.paymentStatus = newStatus;
+        
         await po.save({ transaction: tx });
+        
 
         // 6️⃣ Return summary
         return {
@@ -178,7 +186,7 @@ export async function processPayment({
             totalCredit,
             remaining: remaining > 0 ? remaining : 0,
             overpaid,
-            paymentTransaction: paymentTx.get({ plain: true }) as PaymentTransactionSummary,
+            paymentTransaction: paymentTx,
         };
     });
 }

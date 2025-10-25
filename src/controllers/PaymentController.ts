@@ -5,7 +5,7 @@ class PaymentController {
     try {
       // multer puts file in req.file (receipt)
       const receiptUrl = req.file ? `/uploads/receipts/${req.file.filename}` : null;
-
+      
       const result = await processPayment({
         purchaseOrderId: Number(req.body.purchaseOrderId),
         amount: Number(req.body.amount),
@@ -15,10 +15,11 @@ class PaymentController {
         remarks: req.body.remarks,
         createdBy: req.user?.id || null,
       });
+      
 
       res.json(result);
     } catch (err) {
-      const error  = err as Error
+      const error  = err as Error      
       res.status(400).json({ success: false, message: error.message });
     }
   }
