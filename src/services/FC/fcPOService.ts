@@ -196,40 +196,46 @@ export class FCPOService {
             skuId = product.sku_matrix_on_catelogue_id[0].sku;
           }
           
-          const inventoryResult = await DirectInventoryService.updateInventory({
-            sku: skuId,
-            operation: INVENTORY_OPERATIONS.PO,
-            quantity: product.total_quantity,
-            referenceId: `FCPO-${fcPO.id}`,
-            operationDetails: {
-              fcPOId: fcPO.id,
-              fcId: data.fcId,
-              dcId: data.dcId,
-              product_name: product.productName || 'Unknown',
-              operation: 'fc_po_raise',
-              created_date: new Date().toISOString()
-            },
-            performedBy: data.createdBy
-          });
+          // Always update DC inventory total_available_quantity when FC PO is raised
+          // This should happen regardless of FC inventory update success
+          try {
+            const { DCInventory1Service } = await import('../DCInventory1Service.js');
+            await DCInventory1Service.updateOnFCPORaise(
+              skuId,
+              data.dcId,
+              product.total_quantity,
+              transaction
+            );
+            console.log(`✅ DC Inventory total_available_quantity updated for SKU ${skuId} in DC ${data.dcId}`);
+          } catch (dcInventoryError: any) {
+            console.error(`❌ Error updating DC Inventory for SKU ${skuId}:`, dcInventoryError.message);
+          }
 
-          if (inventoryResult.success) {
-            console.log(`✅ FC Inventory updated for SKU ${skuId}: +${product.total_quantity} PO raised`);
-            
-            // Update DC inventory total_available_quantity when FC PO is raised
-            try {
-              const { DCInventory1Service } = await import('../DCInventory1Service.js');
-              await DCInventory1Service.updateOnFCPORaise(
-                skuId,
-                data.dcId,
-                product.total_quantity,
-                transaction
-              );
-              console.log(`✅ DC Inventory total_available_quantity updated for SKU ${skuId} in DC ${data.dcId}`);
-            } catch (dcInventoryError: any) {
-              console.error(`❌ Error updating DC Inventory for SKU ${skuId}:`, dcInventoryError.message);
+          // Try to update FC inventory (may fail due to foreign key constraints)
+          try {
+            const inventoryResult = await DirectInventoryService.updateInventory({
+              sku: skuId,
+              operation: INVENTORY_OPERATIONS.PO,
+              quantity: product.total_quantity,
+              referenceId: `FCPO-${fcPO.id}`,
+              operationDetails: {
+                fcPOId: fcPO.id,
+                fcId: data.fcId,
+                dcId: data.dcId,
+                product_name: product.productName || 'Unknown',
+                operation: 'fc_po_raise',
+                created_date: new Date().toISOString()
+              },
+              performedBy: data.createdBy
+            });
+
+            if (inventoryResult.success) {
+              console.log(`✅ FC Inventory updated for SKU ${skuId}: +${product.total_quantity} PO raised`);
+            } else {
+              console.error(`❌ FC Inventory update failed for SKU ${skuId}: ${inventoryResult.message}`);
             }
-          } else {
-            console.error(`❌ FC Inventory update failed for SKU ${skuId}: ${inventoryResult.message}`);
+          } catch (fcInventoryError: any) {
+            console.error(`❌ FC Inventory update failed for SKU ${skuId}:`, fcInventoryError.message);
           }
         } catch (error: any) {
           console.error(`❌ Error updating FC inventory for SKU ${product.catelogue_id}:`, error.message);
@@ -464,26 +470,31 @@ export class FCPOService {
               }
             }
             
-            const inventoryResult = await DirectInventoryService.updateInventory({
-              sku: skuId,
-              operation: INVENTORY_OPERATIONS.GRN,
-              quantity: product.quantity,
-              referenceId: `FCPO-${fcPO.id}`,
-              operationDetails: {
-                fcPOId: fcPO.id,
-                fcId: fcPO.fcId,
-                dcId: fcPO.dcId,
-                product_name: product.productName || 'Unknown',
-                operation: 'fc_po_approval',
-                approved_date: new Date().toISOString()
-              },
-              performedBy: approverId
-            });
+            // Try to update FC inventory (may fail due to foreign key constraints)
+            try {
+              const inventoryResult = await DirectInventoryService.updateInventory({
+                sku: skuId,
+                operation: INVENTORY_OPERATIONS.PO_APPROVE,
+                quantity: product.quantity,
+                referenceId: `FCPO-${fcPO.id}`,
+                operationDetails: {
+                  fcPOId: fcPO.id,
+                  fcId: fcPO.fcId,
+                  dcId: fcPO.dcId,
+                  product_name: product.productName || 'Unknown',
+                  operation: 'fc_po_approval',
+                  approved_date: new Date().toISOString()
+                },
+                performedBy: approverId
+              });
 
-            if (inventoryResult.success) {
-              console.log(`✅ FC Inventory updated for SKU ${skuId}: +${product.quantity} PO approved`);
-            } else {
-              console.error(`❌ FC Inventory update failed for SKU ${skuId}: ${inventoryResult.message}`);
+              if (inventoryResult.success) {
+                console.log(`✅ FC Inventory updated for SKU ${skuId}: +${product.quantity} PO approved`);
+              } else {
+                console.error(`❌ FC Inventory update failed for SKU ${skuId}: ${inventoryResult.message}`);
+              }
+            } catch (fcInventoryError: any) {
+              console.error(`❌ FC Inventory update failed for SKU ${skuId}:`, fcInventoryError.message);
             }
           } catch (error: any) {
             console.error(`❌ Error updating FC inventory for SKU ${product.catalogueId}:`, error.message);

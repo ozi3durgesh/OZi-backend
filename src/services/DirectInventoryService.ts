@@ -61,6 +61,7 @@ class DirectInventoryService {
           fc_po_approve_quantity: 0,
           fc_grn_quantity: 0,
           fc_putaway_quantity: 0,
+          sale_available_quantity: 0,
           fc_picklist_quantity: 0,
           fc_return_try_and_buy_quantity: 0,
           fc_return_other_quantity: 0
@@ -73,6 +74,7 @@ class DirectInventoryService {
             fc_po_approve_quantity: inv.fc_po_approve_quantity || 0,
             fc_grn_quantity: inv.fc_grn_quantity || 0,
             fc_putaway_quantity: inv.fc_putaway_quantity || 0,
+            sale_available_quantity: inv.sale_available_quantity || 0,
             fc_picklist_quantity: inv.fc_picklist_quantity || 0,
             fc_return_try_and_buy_quantity: inv.fc_return_try_and_buy_quantity || 0,
             fc_return_other_quantity: inv.fc_return_other_quantity || 0
@@ -89,6 +91,12 @@ class DirectInventoryService {
             previousQuantity = currentQuantities.fc_po_raise_quantity;
             newQuantities.fc_po_raise_quantity = currentQuantities.fc_po_raise_quantity + quantity;
             newQuantity = newQuantities.fc_po_raise_quantity;
+            break;
+            
+          case INVENTORY_OPERATIONS.PO_APPROVE:
+            previousQuantity = currentQuantities.fc_po_approve_quantity;
+            newQuantities.fc_po_approve_quantity = currentQuantities.fc_po_approve_quantity + quantity;
+            newQuantity = newQuantities.fc_po_approve_quantity;
             break;
             
           case INVENTORY_OPERATIONS.GRN:
@@ -128,6 +136,9 @@ class DirectInventoryService {
         // Calculate total available quantity (putaway - picklist)
         const totalAvailableQuantity = Math.max(0, newQuantities.fc_putaway_quantity - newQuantities.fc_picklist_quantity);
         
+        // Calculate sale_available_quantity (same as fc_putaway_quantity)
+        const saleAvailableQuantity = newQuantities.fc_putaway_quantity;
+        
         // Calculate total inventory
         const totalInventory = 
           newQuantities.fc_po_raise_quantity + 
@@ -138,6 +149,10 @@ class DirectInventoryService {
           newQuantities.fc_return_try_and_buy_quantity + 
           newQuantities.fc_return_other_quantity;
 
+        // Extract fc_id and dc_id from operationDetails
+        const fcId = operationDetails?.fcId || null;
+        const dcId = operationDetails?.dcId || null;
+
         // Update or insert inventory record
         if (currentInventory.length > 0) {
           await sequelize.query(
@@ -146,10 +161,13 @@ class DirectInventoryService {
              fc_po_approve_quantity = ?,
              fc_grn_quantity = ?, 
              fc_putaway_quantity = ?, 
+             sale_available_quantity = ?,
              fc_picklist_quantity = ?, 
              fc_return_try_and_buy_quantity = ?, 
              fc_return_other_quantity = ?, 
              fc_total_available_quantity = ?,
+             fc_id = COALESCE(?, fc_id),
+             dc_id = COALESCE(?, dc_id),
              updated_at = CURRENT_TIMESTAMP
              WHERE sku = ?`,
             {
@@ -158,10 +176,13 @@ class DirectInventoryService {
                 newQuantities.fc_po_approve_quantity,
                 newQuantities.fc_grn_quantity,
                 newQuantities.fc_putaway_quantity,
+                saleAvailableQuantity,
                 newQuantities.fc_picklist_quantity,
                 newQuantities.fc_return_try_and_buy_quantity,
                 newQuantities.fc_return_other_quantity,
                 totalAvailableQuantity,
+                fcId,
+                dcId,
                 sku
               ],
               transaction
@@ -170,10 +191,10 @@ class DirectInventoryService {
         } else {
           await sequelize.query(
             `INSERT INTO inventory (
-             sku, fc_po_raise_quantity, fc_po_approve_quantity, fc_grn_quantity, fc_putaway_quantity, fc_picklist_quantity, 
-             fc_return_try_and_buy_quantity, fc_return_other_quantity, fc_total_available_quantity,
+             sku, fc_po_raise_quantity, fc_po_approve_quantity, fc_grn_quantity, fc_putaway_quantity, sale_available_quantity, fc_picklist_quantity, 
+             fc_return_try_and_buy_quantity, fc_return_other_quantity, fc_total_available_quantity, fc_id, dc_id,
              created_at, updated_at
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
             {
               replacements: [
                 sku,
@@ -181,10 +202,13 @@ class DirectInventoryService {
                 newQuantities.fc_po_approve_quantity,
                 newQuantities.fc_grn_quantity,
                 newQuantities.fc_putaway_quantity,
+                saleAvailableQuantity,
                 newQuantities.fc_picklist_quantity,
                 newQuantities.fc_return_try_and_buy_quantity,
                 newQuantities.fc_return_other_quantity,
-                totalAvailableQuantity
+                totalAvailableQuantity,
+                fcId,
+                dcId
               ],
               transaction
             }
