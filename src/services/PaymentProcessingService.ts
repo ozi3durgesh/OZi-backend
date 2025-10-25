@@ -86,8 +86,8 @@ export async function processPayment({
     purchaseOrderId,
     amount,
     paymentMode,
+    receiptUrl,
     utrNumber = null,
-    receiptUrl = null,
     remarks = null,
     createdBy = null,
 }): Promise<ProcessPaymentResult> {

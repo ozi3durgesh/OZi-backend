@@ -28,7 +28,9 @@ export class DCPOController {
         products,
         description,
         notes,
-        priority
+        priority,
+        paymentType,
+        creditPeriodDays
       } = req.body;
 
       // Skip all validation - accept any data as-is
@@ -43,6 +45,8 @@ export class DCPOController {
           notes,
           priority,
           createdBy: userId,
+          paymentType,
+          creditPeriodDays
         });
 
         return ResponseHandler.success(res, {

@@ -1,4 +1,4 @@
-import PaymentProcessingService from "../services/PaymentProcessingService";
+import { processPayment, getCreditDueInfo } from "../services/PaymentProcessingService";
 
 class PaymentController {
   async submitPayment(req, res) {
@@ -6,28 +6,30 @@ class PaymentController {
       // multer puts file in req.file (receipt)
       const receiptUrl = req.file ? `/uploads/receipts/${req.file.filename}` : null;
 
-      const result = await PaymentProcessingService.processPayment({
+      const result = await processPayment({
         purchaseOrderId: Number(req.body.purchaseOrderId),
         amount: Number(req.body.amount),
         paymentMode: req.body.paymentMode,
-        utrNumber: req.body.utrNumber,
         receiptUrl,
+        utrNumber: req.body.utrNumber,
         remarks: req.body.remarks,
         createdBy: req.user?.id || null,
       });
 
       res.json(result);
     } catch (err) {
-      res.status(400).json({ success: false, message: err.message });
+      const error  = err as Error
+      res.status(400).json({ success: false, message: error.message });
     }
   }
 
   async creditInfo(req, res) {
     try {
-      const result = await PaymentProcessingService.getCreditDueInfo(Number(req.params.id));
+      const result = await getCreditDueInfo(Number(req.params.id));
       res.json(result);
     } catch (err) {
-      res.status(400).json({ success: false, message: err.message });
+      const error  = err as Error
+      res.status(400).json({ success: false, message: error.message });
     }
   }
 }
