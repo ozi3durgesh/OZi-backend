@@ -57,6 +57,8 @@ import FCSkuSplitted from './FCSkuSplitted';
 import PurchaseOrderEdit from './PurchaseOrderEdits';
 import POProductEdit from './POProductEdit';
 import ProductMasterAudit from './ProductMasterAudit';
+import PaymentTransaction from './PaymentTransaction';
+import CreditNote from './CreditNote';
 
 // Set up associations
 Coupon.hasMany(CouponTranslation, {
@@ -655,6 +657,28 @@ ProductMaster.hasMany(ProductMasterAudit, {
   as: 'AuditLogs',
 });
 
+
+// One PO → many payments
+DCPurchaseOrder.hasMany(PaymentTransaction, {
+  foreignKey: "purchaseOrderId",
+  as: "payments",
+});
+PaymentTransaction.belongsTo(DCPurchaseOrder, { foreignKey: "purchaseOrderId" });
+
+// One PO → many credit notes
+DCPurchaseOrder.hasMany(CreditNote, {
+  foreignKey: "purchaseOrderId",
+  as: "creditNotes",
+});
+CreditNote.belongsTo(DCPurchaseOrder, { foreignKey: "purchaseOrderId" });
+
+// One PaymentTransaction → may generate one CreditNote
+PaymentTransaction.hasOne(CreditNote, {
+  foreignKey: "paymentTransactionId",
+  as: "creditNote",
+});
+CreditNote.belongsTo(PaymentTransaction, { foreignKey: "paymentTransactionId" });
+
 export {
   User,
   Order,
@@ -714,4 +738,6 @@ export {
   PurchaseOrderEdit,
   POProductEdit,
   ProductMasterAudit,
+  PaymentTransaction, 
+  CreditNote
 };

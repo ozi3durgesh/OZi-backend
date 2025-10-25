@@ -34,6 +34,12 @@ class DCPurchaseOrder extends Model<
   declare updatedAt: CreationOptional<Date>;
   declare isEdited: boolean | false;
   declare Products?: DCPOProduct[];
+  declare paymentType: string;
+  declare paymentStatus: string;
+  declare paymentDueDate: Date | null;
+  declare creditPeriodDays: number | null;
+
+
 }
 
 DCPurchaseOrder.init(
@@ -166,7 +172,31 @@ DCPurchaseOrder.init(
       allowNull: false,
       defaultValue: false
 
-    }
+    },
+    paymentType: {
+      type: DataTypes.ENUM("ADVANCE", "CREDIT", "SELL_OR_RETURN"),
+      allowNull: false,
+      defaultValue: "CREDIT",
+    },
+
+    // 🧾 Payment summary tracking
+    paymentStatus: {
+      type: DataTypes.ENUM(
+        "UNPAID",
+        "PARTIALLY_PAID",
+        "PAID",
+        "ADVANCE_PAID",
+        "EXCESS_ADVANCE",
+        "CREDIT_DUE",
+        "CREDIT_CLEARED",
+        "OVERDUE",
+        "PENDING_RECONCILIATION",
+        "RECONCILED"
+      ),
+      defaultValue: "UNPAID",
+    },
+    creditPeriodDays: { type: DataTypes.INTEGER, allowNull: true },
+    paymentDueDate: { type: DataTypes.DATE, allowNull: true },
   },
   {
     sequelize,
