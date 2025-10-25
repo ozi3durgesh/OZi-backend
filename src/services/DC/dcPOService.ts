@@ -290,7 +290,7 @@ export class DCPOService {
       
       await DCInventory1Service.updateOnPORaise(
         skuId,
-        product.catalogue_id.toString(),
+        data.dcId,
         product.quantity
       );
     }
@@ -627,6 +627,7 @@ export class DCPOService {
           
           await DCInventory1Service.updateOnPOApprove(
             skuId,
+            po.dcId,
             product.quantity
           );
         }
@@ -1055,6 +1056,7 @@ export class DCPOService {
       
       await DCInventory1Service.updateOnPOApprove(
         skuId,
+        po.dcId,
         product.quantity
       );
     }
@@ -1479,6 +1481,7 @@ await DCPOProduct.bulkCreate(safeUpdatedProducts, {
           
           await DCInventory1Service.updateOnPOApprove(
             skuId,
+            po.dcId,
             product.quantity
           );
         }

@@ -548,7 +548,7 @@ export class FCPutawayController {
           message: 'SKU scanned successfully',
           skuId: sku_id,
           grnId: grnLine.grn_id,
-          poId: (grnLine as any).FCGrn?.FCPO?.po_id || 'N/A',
+          poId: (grnLine as any).FCGrn?.po_id || 'N/A',
           availableQuantity: grnLine.qc_pass_qty,
         },
         error: null,
@@ -791,7 +791,7 @@ export class FCPutawayController {
         }
       } else {
         // Case 2: SKU not found in scanner_sku, suggest bin based on category
-        const productCategory = product.Category?.toLowerCase().trim();
+        const productCategory = product.category?.toLowerCase().trim();
   
         // Error Case 1: Product category is missing
         if (!productCategory) {
@@ -947,7 +947,7 @@ export class FCPutawayController {
             message: 'SKU scanned but bin location error occurred',
             skuId: sku_id,
             grnId: grnLine.grn_id,
-            poId: (grnLine as any).FCGrn?.FCPO?.po_id || 'N/A',
+            poId: (grnLine as any).FCGrn?.po_id || 'N/A',
             availableQuantity: grnLine.qc_pass_qty,
             scannedProductDetail: convertProductDetailKeys(product.dataValues),
             vendorName: 'N/A', // FCPurchaseOrder doesn't have vendor_name field
@@ -969,7 +969,7 @@ export class FCPutawayController {
           foundBy: foundBy,
           skuScannedId: resolvedSku, // This is what gets stored in scanned_sku table
           grnId: grnLine.grn_id,
-          poId: (grnLine as any).FCGrn?.FCPO?.po_id || 'N/A',
+          poId: (grnLine as any).FCGrn?.po_id || 'N/A',
           availableQuantity: grnLine.qc_pass_qty,
           scannedProductDetail: convertProductDetailKeys(product.dataValues),
           vendorName: 'N/A', // FCPurchaseOrder doesn't have vendor_name field

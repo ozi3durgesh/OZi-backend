@@ -1,6 +1,7 @@
 // Inventory operation constants
 export const INVENTORY_OPERATIONS = {
   PO: 'po',
+  PO_APPROVE: 'po_approve',
   GRN: 'grn', 
   PUTAWAY: 'putaway',
   PICKLIST: 'picklist',

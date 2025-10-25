@@ -26,6 +26,9 @@ export const runMigrations = async (): Promise<void> => {
     // Add sku_matrix_on_catalogue_id column to fc_po_products table
     await addSkuMatrixColumnToFCPOProducts();
     
+    // Update inventory table with new columns
+    await updateInventoryTable();
+    
     console.log('✅ Database migrations completed successfully');
   } catch (error) {
     console.error('❌ Migration failed:', error);
@@ -306,6 +309,57 @@ const addSkuMatrixColumnToFCPOProducts = async (): Promise<void> => {
     }
   } catch (error) {
     console.error('❌ Error adding sku_matrix_on_catalogue_id column to fc_po_products table:', error);
+    throw error;
+  }
+};
+
+const updateInventoryTable = async (): Promise<void> => {
+  try {
+    console.log('📋 Updating inventory table with new columns...');
+    
+    // Check if sale_available_quantity column exists
+    const saleAvailableColumn = await sequelize.query(
+      "SHOW COLUMNS FROM inventory LIKE 'sale_available_quantity'",
+      { type: QueryTypes.SELECT }
+    );
+    
+    // Check if dc_id column exists
+    const dcIdColumn = await sequelize.query(
+      "SHOW COLUMNS FROM inventory LIKE 'dc_id'",
+      { type: QueryTypes.SELECT }
+    );
+    
+    if (saleAvailableColumn.length === 0) {
+      console.log('🔄 Adding sale_available_quantity column to inventory table...');
+      
+      // Add sale_available_quantity column after fc_putaway_quantity
+      await sequelize.query(`
+        ALTER TABLE inventory 
+        ADD COLUMN sale_available_quantity INT NOT NULL DEFAULT 0 AFTER fc_putaway_quantity
+      `);
+      
+      console.log('✅ sale_available_quantity column added to inventory table successfully');
+    } else {
+      console.log('ℹ️ sale_available_quantity column already exists in inventory table');
+    }
+    
+    if (dcIdColumn.length === 0) {
+      console.log('🔄 Adding dc_id column to inventory table...');
+      
+      // Add dc_id column after fc_id
+      await sequelize.query(`
+        ALTER TABLE inventory 
+        ADD COLUMN dc_id INT NULL AFTER fc_id,
+        ADD INDEX idx_dc_id (dc_id)
+      `);
+      
+      console.log('✅ dc_id column added to inventory table successfully');
+    } else {
+      console.log('ℹ️ dc_id column already exists in inventory table');
+    }
+    
+  } catch (error) {
+    console.error('❌ Error updating inventory table:', error);
     throw error;
   }
 };

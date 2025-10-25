@@ -513,10 +513,35 @@ export class AuthController {
         return ResponseHandler.error(res, 'User not found', 401);
       }
 
+       // Fetch user's FC assignments
+      const userFCs = await UserFulfillmentCenter.findAll({
+        where: { 
+          user_id: user.id,
+          is_active: true 
+        },
+        include: [
+          {
+            model: FulfillmentCenter,
+            as: 'FulfillmentCenter',
+            include: [
+              {
+                model: DistributionCenter,
+                as: 'DistributionCenter',
+              }
+            ]
+          }
+        ]
+      });
+
+      const availableFcIds = userFCs.map(ufc => ufc.fc_id);
+
       // Allow deactivated users to refresh tokens so they can reactivate themselves
       // The authentication middleware will handle access control for deactivated users
+      const defaultFC = userFCs.find(ufc => ufc.is_default) || userFCs[0]; // Fallback to first FC if no default
 
-      const newAccessToken = await JwtUtils.generateAccessToken(user);
+      const newAccessToken = await JwtUtils.generateAccessToken(user, defaultFC?.fc_id, availableFcIds);
+
+      // const newAccessToken = await JwtUtils.generateAccessToken(user);
       const newRefreshToken = await JwtUtils.generateRefreshToken(user);
 
       return ResponseHandler.success(res, {

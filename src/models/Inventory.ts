@@ -4,14 +4,17 @@ import sequelize from '../config/database';
 interface InventoryAttributes {
   id: number;
   sku: string;
-  po_quantity: number;
-  grn_quantity: number;
-  putaway_quantity: number;
-  picklist_quantity: number;
-  return_try_and_buy_quantity: number;
-  return_other_quantity: number;
-  total_available_quantity: number;
+  fc_po_raise_quantity: number;
+  fc_po_approve_quantity: number;
+  fc_grn_quantity: number;
+  fc_putaway_quantity: number;
+  sale_available_quantity: number;
+  fc_picklist_quantity: number;
+  fc_return_try_and_buy_quantity: number;
+  fc_return_other_quantity: number;
+  fc_total_available_quantity: number;
   fc_id?: number;
+  dc_id?: number;
   created_at: Date;
   updated_at: Date;
 }
@@ -21,26 +24,28 @@ interface InventoryCreationAttributes extends Optional<InventoryAttributes, 'id'
 class Inventory extends Model<InventoryAttributes, InventoryCreationAttributes> implements InventoryAttributes {
   public id!: number;
   public sku!: string;
-  public po_quantity!: number;
-  public grn_quantity!: number;
-  public putaway_quantity!: number;
-  public picklist_quantity!: number;
-  public return_try_and_buy_quantity!: number;
-  public return_other_quantity!: number;
-  public total_available_quantity!: number;
+  public fc_po_raise_quantity!: number;
+  public fc_po_approve_quantity!: number;
+  public fc_grn_quantity!: number;
+  public fc_putaway_quantity!: number;
+  public sale_available_quantity!: number;
+  public fc_picklist_quantity!: number;
+  public fc_return_try_and_buy_quantity!: number;
+  public fc_return_other_quantity!: number;
+  public fc_total_available_quantity!: number;
   public fc_id?: number;
+  public dc_id?: number;
   public created_at!: Date;
   public updated_at!: Date;
 
   // Virtual field for available quantity (putaway - picklist)
   public get availableQuantity(): number {
-    return this.putaway_quantity - this.picklist_quantity;
+    return this.fc_putaway_quantity - this.fc_picklist_quantity;
   }
 
   // Virtual field for total inventory
   public get totalInventory(): number {
-    return this.po_quantity + this.grn_quantity + this.putaway_quantity + 
-           this.return_try_and_buy_quantity + this.return_other_quantity;
+    return this.fc_putaway_quantity + this.fc_return_try_and_buy_quantity + this.fc_return_other_quantity;
   }
 }
 
@@ -54,13 +59,12 @@ Inventory.init(
     sku: {
       type: DataTypes.STRING(50),
       allowNull: false,
-      unique: true,
       validate: {
         notEmpty: true,
         len: [1, 50],
       },
     },
-    po_quantity: {
+    fc_po_raise_quantity: {
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 0,
@@ -68,7 +72,7 @@ Inventory.init(
         min: 0,
       },
     },
-    grn_quantity: {
+    fc_po_approve_quantity: {
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 0,
@@ -76,7 +80,7 @@ Inventory.init(
         min: 0,
       },
     },
-    putaway_quantity: {
+    fc_grn_quantity: {
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 0,
@@ -84,7 +88,7 @@ Inventory.init(
         min: 0,
       },
     },
-    picklist_quantity: {
+    fc_putaway_quantity: {
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 0,
@@ -92,7 +96,7 @@ Inventory.init(
         min: 0,
       },
     },
-    return_try_and_buy_quantity: {
+    sale_available_quantity: {
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 0,
@@ -100,7 +104,7 @@ Inventory.init(
         min: 0,
       },
     },
-    return_other_quantity: {
+    fc_picklist_quantity: {
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 0,
@@ -108,7 +112,23 @@ Inventory.init(
         min: 0,
       },
     },
-    total_available_quantity: {
+    fc_return_try_and_buy_quantity: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+      validate: {
+        min: 0,
+      },
+    },
+    fc_return_other_quantity: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+      validate: {
+        min: 0,
+      },
+    },
+    fc_total_available_quantity: {
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 0,
@@ -119,6 +139,16 @@ Inventory.init(
       allowNull: true,
       references: {
         model: 'fulfillment_centers',
+        key: 'id'
+      },
+      onUpdate: 'CASCADE',
+      onDelete: 'SET NULL'
+    },
+    dc_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'DistributionCenters',
         key: 'id'
       },
       onUpdate: 'CASCADE',
@@ -144,29 +174,30 @@ Inventory.init(
     indexes: [
       {
         unique: true,
-        fields: ['sku'],
+        fields: ['fc_id', 'sku'],
+        name: 'inventory_fc_id_sku_unique'
       },
       {
-        fields: ['sku', 'po_quantity'],
+        fields: ['sku', 'fc_po_raise_quantity'],
       },
       {
-        fields: ['sku', 'putaway_quantity'],
+        fields: ['sku', 'fc_putaway_quantity'],
       },
       {
-        fields: ['sku', 'picklist_quantity'],
+        fields: ['sku', 'fc_picklist_quantity'],
       },
       {
-        fields: ['total_available_quantity'],
+        fields: ['fc_total_available_quantity'],
       },
     ],
     hooks: {
       beforeUpdate: (instance: Inventory) => {
-        // Automatically calculate total_available_quantity
-        instance.total_available_quantity = instance.putaway_quantity - instance.picklist_quantity;
+        // Automatically calculate fc_total_available_quantity
+        instance.fc_total_available_quantity = instance.fc_putaway_quantity - instance.fc_picklist_quantity;
       },
       beforeCreate: (instance: Inventory) => {
-        // Automatically calculate total_available_quantity
-        instance.total_available_quantity = instance.putaway_quantity - instance.picklist_quantity;
+        // Automatically calculate fc_total_available_quantity
+        instance.fc_total_available_quantity = instance.fc_putaway_quantity - instance.fc_picklist_quantity;
       },
     },
   }

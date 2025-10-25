@@ -870,7 +870,9 @@ export class DCSkuSplittingService {
 
         // Always update DC Inventory 1 for GRN done with QC passed quantity only
         // Only count QC passed quantities, not rejected ones
-        await DCInventory1Service.updateOnGRNDone(line.skuId, line.qcPassQty, transaction);
+        // Note: We need to get the dcId from the PO, but for now using default dcId = 1
+        // TODO: Pass dcId from the PO context
+        await DCInventory1Service.updateOnGRNDone(line.skuId, 1, line.qcPassQty, transaction);
       }
 
       await transaction.commit();

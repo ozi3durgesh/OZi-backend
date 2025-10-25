@@ -26,17 +26,17 @@ export class DCInventory1Controller {
   }
 
   /**
-   * Get DC Inventory 1 record by SKU ID
+   * Get DC Inventory 1 record by SKU ID and DC ID
    */
-  static async getBySkuId(req: AuthRequest, res: Response): Promise<Response> {
+  static async getBySkuIdAndDcId(req: AuthRequest, res: Response): Promise<Response> {
     try {
-      const { skuId } = req.params;
+      const { skuId, dcId } = req.params;
 
-      if (!skuId) {
-        return ResponseHandler.error(res, 'SKU ID is required', 400);
+      if (!skuId || !dcId) {
+        return ResponseHandler.error(res, 'SKU ID and DC ID are required', 400);
       }
 
-      const record = await DCInventory1Service.getBySkuId(skuId);
+      const record = await DCInventory1Service.getBySkuIdAndDcId(skuId, parseInt(dcId));
 
       if (!record) {
         return ResponseHandler.error(res, 'DC Inventory 1 record not found', 404);
@@ -53,29 +53,26 @@ export class DCInventory1Controller {
   }
 
   /**
-   * Get DC Inventory 1 record by catalogue ID
+   * Get DC Inventory 1 records by DC ID
    */
-  static async getByCatalogueId(req: AuthRequest, res: Response): Promise<Response> {
+  static async getByDcId(req: AuthRequest, res: Response): Promise<Response> {
     try {
-      const { catalogueId } = req.params;
+      const { dcId } = req.params;
 
-      if (!catalogueId) {
-        return ResponseHandler.error(res, 'Catalogue ID is required', 400);
+      if (!dcId) {
+        return ResponseHandler.error(res, 'DC ID is required', 400);
       }
 
-      const record = await DCInventory1Service.getByCatalogueId(catalogueId);
-
-      if (!record) {
-        return ResponseHandler.error(res, 'DC Inventory 1 record not found', 404);
-      }
+      const records = await DCInventory1Service.getByDcId(parseInt(dcId));
 
       return ResponseHandler.success(res, {
-        message: 'DC Inventory 1 record retrieved successfully',
-        data: record
+        message: 'DC Inventory 1 records retrieved successfully',
+        data: records,
+        count: records.length
       });
     } catch (error: any) {
-      console.error('Get DC Inventory 1 record error:', error);
-      return ResponseHandler.error(res, error.message || 'Failed to retrieve DC Inventory 1 record', 500);
+      console.error('Get DC Inventory 1 records error:', error);
+      return ResponseHandler.error(res, error.message || 'Failed to retrieve DC Inventory 1 records', 500);
     }
   }
 
