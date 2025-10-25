@@ -10,7 +10,7 @@ class PaymentController {
         purchaseOrderId: Number(req.body.purchaseOrderId),
         amount: Number(req.body.amount),
         paymentMode: req.body.paymentMode,
-        receiptUrl,
+        receiptUrl ,
         utrNumber: req.body.utrNumber,
         remarks: req.body.remarks,
         createdBy: req.user?.id || null,
