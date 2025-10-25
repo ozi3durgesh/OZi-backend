@@ -214,6 +214,20 @@ export class FCPOService {
 
           if (inventoryResult.success) {
             console.log(`✅ FC Inventory updated for SKU ${skuId}: +${product.total_quantity} PO raised`);
+            
+            // Update DC inventory total_available_quantity when FC PO is raised
+            try {
+              const { DCInventory1Service } = await import('../DCInventory1Service.js');
+              await DCInventory1Service.updateOnFCPORaise(
+                skuId,
+                data.dcId,
+                product.total_quantity,
+                transaction
+              );
+              console.log(`✅ DC Inventory total_available_quantity updated for SKU ${skuId} in DC ${data.dcId}`);
+            } catch (dcInventoryError: any) {
+              console.error(`❌ Error updating DC Inventory for SKU ${skuId}:`, dcInventoryError.message);
+            }
           } else {
             console.error(`❌ FC Inventory update failed for SKU ${skuId}: ${inventoryResult.message}`);
           }

@@ -8,11 +8,13 @@ interface InventoryAttributes {
   fc_po_approve_quantity: number;
   fc_grn_quantity: number;
   fc_putaway_quantity: number;
+  sale_available_quantity: number;
   fc_picklist_quantity: number;
   fc_return_try_and_buy_quantity: number;
   fc_return_other_quantity: number;
   fc_total_available_quantity: number;
   fc_id?: number;
+  dc_id?: number;
   created_at: Date;
   updated_at: Date;
 }
@@ -26,11 +28,13 @@ class Inventory extends Model<InventoryAttributes, InventoryCreationAttributes> 
   public fc_po_approve_quantity!: number;
   public fc_grn_quantity!: number;
   public fc_putaway_quantity!: number;
+  public sale_available_quantity!: number;
   public fc_picklist_quantity!: number;
   public fc_return_try_and_buy_quantity!: number;
   public fc_return_other_quantity!: number;
   public fc_total_available_quantity!: number;
   public fc_id?: number;
+  public dc_id?: number;
   public created_at!: Date;
   public updated_at!: Date;
 
@@ -92,6 +96,14 @@ Inventory.init(
         min: 0,
       },
     },
+    sale_available_quantity: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+      validate: {
+        min: 0,
+      },
+    },
     fc_picklist_quantity: {
       type: DataTypes.INTEGER,
       allowNull: false,
@@ -127,6 +139,16 @@ Inventory.init(
       allowNull: true,
       references: {
         model: 'fulfillment_centers',
+        key: 'id'
+      },
+      onUpdate: 'CASCADE',
+      onDelete: 'SET NULL'
+    },
+    dc_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'DistributionCenters',
         key: 'id'
       },
       onUpdate: 'CASCADE',

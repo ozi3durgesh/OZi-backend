@@ -1,5 +1,6 @@
 import DCInventory1 from '../models/DCInventory1';
-import { Transaction } from 'sequelize';
+import { Transaction, QueryTypes } from 'sequelize';
+import sequelize from '../config/database';
 
 export class DCInventory1Service {
   /**
@@ -23,6 +24,7 @@ export class DCInventory1Service {
           po_raise_quantity: quantity,
           po_approve_quantity: 0,
           grn_done: 0,
+          total_available_quantity: 0,
         },
         transaction,
       });
@@ -105,16 +107,76 @@ export class DCInventory1Service {
         return;
       }
 
+      // Update grn_done
+      const newGrnDone = record.grn_done + quantity;
+      
+      // Calculate total_available_quantity = grn_done - fc_po_raise_quantity (for matching dc_id)
+      // Get fc_po_raise_quantity from inventory table for the same dc_id and sku
+      const inventoryRecord = await sequelize.query(`
+        SELECT fc_po_raise_quantity 
+        FROM inventory 
+        WHERE dc_id = :dcId AND sku = :skuId
+        LIMIT 1
+      `, {
+        replacements: { dcId, skuId },
+        type: QueryTypes.SELECT,
+        transaction
+      });
+
+      const fcPoRaiseQuantity = inventoryRecord.length > 0 ? (inventoryRecord[0] as any).fc_po_raise_quantity : 0;
+      const totalAvailableQuantity = newGrnDone - fcPoRaiseQuantity;
+
       await record.update(
         {
-          grn_done: record.grn_done + quantity,
+          grn_done: newGrnDone,
+          total_available_quantity: totalAvailableQuantity,
         },
         { transaction }
       );
 
-      console.log(`✅ DC Inventory updated for SKU ${skuId} in DC ${dcId}: +${quantity} GRN done`);
+      console.log(`✅ DC Inventory updated for SKU ${skuId} in DC ${dcId}: +${quantity} GRN done, total_available_quantity: ${totalAvailableQuantity}`);
     } catch (error) {
       console.error('❌ Error updating DC Inventory on GRN done:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update DC inventory record when FC PO is raised (reduces total_available_quantity)
+   */
+  static async updateOnFCPORaise(
+    skuId: string,
+    dcId: number,
+    fcPoRaiseQuantity: number,
+    transaction?: Transaction
+  ): Promise<void> {
+    try {
+      const record = await DCInventory1.findOne({
+        where: { 
+          sku_id: skuId,
+          dc_id: dcId
+        },
+        transaction,
+      });
+
+      if (!record) {
+        console.warn(`⚠️ No DC Inventory record found for SKU ${skuId} in DC ${dcId}`);
+        return;
+      }
+
+      // Recalculate total_available_quantity = grn_done - fc_po_raise_quantity
+      const totalAvailableQuantity = record.grn_done - fcPoRaiseQuantity;
+
+      await record.update(
+        {
+          total_available_quantity: totalAvailableQuantity,
+        },
+        { transaction }
+      );
+
+      console.log(`✅ DC Inventory updated for SKU ${skuId} in DC ${dcId}: total_available_quantity recalculated to ${totalAvailableQuantity} (grn_done: ${record.grn_done} - fc_po_raise: ${fcPoRaiseQuantity})`);
+    } catch (error) {
+      console.error('❌ Error updating DC Inventory on FC PO raise:', error);
       throw error;
     }
   }

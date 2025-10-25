@@ -56,6 +56,7 @@ class InventoryService {
             fc_po_approve_quantity: 0,
             fc_grn_quantity: operation === INVENTORY_OPERATIONS.GRN ? quantity : 0,
             fc_putaway_quantity: putawayQty,
+            sale_available_quantity: 0,
             fc_picklist_quantity: picklistQty,
             fc_return_try_and_buy_quantity: operation === INVENTORY_OPERATIONS.RETURN_TRY_AND_BUY ? quantity : 0,
             fc_return_other_quantity: operation === INVENTORY_OPERATIONS.RETURN_OTHER ? quantity : 0,

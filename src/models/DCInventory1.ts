@@ -16,6 +16,7 @@ class DCInventory1 extends Model<
   declare po_raise_quantity: number;
   declare po_approve_quantity: number;
   declare grn_done: number;
+  declare total_available_quantity: number;
   declare created_at: CreationOptional<Date>;
   declare updated_at: CreationOptional<Date>;
 }
@@ -62,6 +63,12 @@ DCInventory1.init(
         min: 0,
       },
     },
+    total_available_quantity: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+      comment: 'Calculated as: grn_done - inventory.fc_po_raise_quantity for matching dc_id'
+    },
     created_at: {
       type: DataTypes.DATE,
       allowNull: false,
@@ -87,6 +94,7 @@ DCInventory1.init(
       { fields: ['po_raise_quantity'] },
       { fields: ['po_approve_quantity'] },
       { fields: ['grn_done'] },
+      { fields: ['total_available_quantity'] },
     ],
   }
 );
