@@ -29,12 +29,12 @@ router.post('/retry/:orderId',
   EasyEcomWebhookController.retryFailedOrder
 );
 
-// PHP Integration endpoints
+// PHP Integration endpoints - NO AUTHENTICATION REQUIRED
 router.post('/php-integration', 
   EasyEcomWebhookController.phpIntegration
 );
 
-// Direct logging endpoint for PHP
+// Direct logging endpoint for PHP - NO AUTHENTICATION REQUIRED
 router.post('/log-order', 
   EasyEcomWebhookController.logOrderDirectly
 );

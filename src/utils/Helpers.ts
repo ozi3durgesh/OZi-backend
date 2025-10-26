@@ -152,12 +152,17 @@ export class Helpers {
           discount_on_item: cartItem.discount_on_item || null,
           discount_type: ORDER_CONSTANTS.DEFAULTS.DISCOUNT_TYPE,
           quantity: parseInt(cartItem.quantity.toString()) || ORDER_CONSTANTS.DEFAULTS.QUANTITY,
+          is_return: cartItem.is_return || 0,
+          return_item_status: cartItem.return_item_status || null,
+          return_item_date: cartItem.return_item_date || null,
           tax_amount: cartItem.tax_amount || ORDER_CONSTANTS.DEFAULTS.TAX_AMOUNT,
           variant: cartItem.variant || null,
-          created_at: currentTimestamp,
-          updated_at: currentTimestamp,
+          created_at: new Date(),
+          updated_at: new Date(),
           item_campaign_id: cartItem.item_campaign_id || null,
+          is_gift: cartItem.is_gift || 0,
           total_add_on_price: cartItem.total_add_on_price || ORDER_CONSTANTS.DEFAULTS.TOTAL_ADD_ON_PRICE,
+          fc_id: cartItem.fc_id || null
         };
 
         orderDetailsData.push(orderDetailData);
@@ -295,97 +300,23 @@ export class Helpers {
         cart_items: order.cart?.length || 0
       });
       
-      // Step 1: Generate dynamic order_id using the same formula as place order controller
-      console.log(`🆔 Step 1: Generating dynamic order_id for order ID: ${order.id}`);
-      
-      let generatedOrderId: string;
-      try {
-        generatedOrderId = await generateSimpleOrderId();
-        console.log(`✅ Generated order_id: ${generatedOrderId} for order ID: ${order.id}`);
-      } catch (orderIdError: any) {
-        console.error(`❌ Failed to generate order_id for order ${order.id}:`, orderIdError.message);
-        throw new Error(`Order ID generation failed: ${orderIdError.message}`);
-      }
-      
-      // Step 2: Prepare complete order data with generated order_id
-      console.log(`💾 Step 2: Preparing complete order data for storage`);
+      // Step 1: Prepare complete order data (no dynamic order_id generation)
+      console.log(`💾 Step 1: Preparing complete order data for storage`);
       
       let completeOrderData: any = { ...order };
-      completeOrderData.order_id = generatedOrderId; // Use generated order_id
       
       console.log(`🛒 Order data prepared:`, {
         orderId: order.id,
-        generatedOrderId: generatedOrderId,
         cartItems: completeOrderData.cart?.length || 0,
-        totalValue: completeOrderData.cart?.reduce((sum: number, item: any) => sum + (item.amount * item.quantity), 0) || 0
+        totalValue: completeOrderData.cart?.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0) || 0
       });
       
-      // Step 3: Store complete order data into Node.js orders table
-      console.log(`💾 Step 3: Storing complete order data into Node.js orders table`);
+      // Step 2: Store complete order data into Node.js orders table
+      console.log(`💾 Step 2: Storing complete order data into Node.js orders table`);
       
       try {
-        // Check if user exists in Node.js database, if not create a placeholder or use default
-        let nodeUserId = completeOrderData.user_id;
-        
-        try {
-          // Check if user exists in Node.js Users table
-          const [userCheck] = await sequelize.query(`
-            SELECT id FROM Users WHERE id = :userId LIMIT 1
-          `, {
-            replacements: { userId: completeOrderData.user_id },
-            type: QueryTypes.SELECT
-          });
-          
-          if (!userCheck) {
-            console.warn(`⚠️ User ${completeOrderData.user_id} not found in Node.js Users table, using default user or creating placeholder`);
-            
-            // Option 1: Use a default user ID (if you have one)
-            // nodeUserId = 1; // Replace with your default user ID
-            
-            // Option 2: Create a placeholder user entry
-            try {
-              const [newUser] = await sequelize.query(`
-                INSERT INTO Users (id, email, password, roleId, isActive, availabilityStatus, createdAt, updatedAt)
-                VALUES (:userId, :email, :password, :roleId, :isActive, :availabilityStatus, :createdAt, :updatedAt)
-                ON DUPLICATE KEY UPDATE id = id
-              `, {
-                replacements: {
-                  userId: completeOrderData.user_id,
-                  email: `user_${completeOrderData.user_id}@placeholder.com`,
-                  password: 'placeholder_password',
-                  roleId: 1, // Default role ID
-                  isActive: 1,
-                  availabilityStatus: 'available',
-                  createdAt: new Date(),
-                  updatedAt: new Date()
-                },
-                type: QueryTypes.INSERT
-              });
-              
-              console.log(`✅ Created placeholder user ${completeOrderData.user_id} in Node.js database`);
-              nodeUserId = completeOrderData.user_id; // Keep original user ID
-            } catch (userCreateError: any) {
-              console.error(`❌ Failed to create placeholder user:`, userCreateError.message);
-              // Fallback to default user ID
-              nodeUserId = 1; // Use default user ID
-              console.warn(`⚠️ Using default user ID: ${nodeUserId}`);
-            }
-          } else {
-            console.log(`✅ User ${completeOrderData.user_id} exists in Node.js Users table`);
-          }
-        } catch (userCheckError: any) {
-          console.error(`❌ Error checking user existence:`, userCheckError.message);
-          // Fallback to default user ID
-          nodeUserId = 1;
-          console.warn(`⚠️ Using default user ID: ${nodeUserId}`);
-        }
-        
-        // Update the user_id in the order data
-        completeOrderData.user_id = nodeUserId;
-        console.log(`👤 Using user_id: ${nodeUserId} for order ${order.id}`);
-        
         // Check if order already exists
-      const existingOrder = await Order.findByPk(order.id);
+        const existingOrder = await Order.findByPk(order.id);
         
         if (existingOrder) {
           // Update existing order with complete data
@@ -399,12 +330,12 @@ export class Helpers {
           console.log(`✅ Successfully created order ${order.id} with complete data`);
         }
 
-        // Step 3.1: Create order details from cart items
-        console.log(`📝 Step 3.1: Creating order details from cart items`);
+        // Step 2.1: Create order details from cart items
+        console.log(`📝 Step 2.1: Creating order details from cart items`);
         
         if (completeOrderData.cart && Array.isArray(completeOrderData.cart) && completeOrderData.cart.length > 0) {
           try {
-            // Convert cart items to the expected format
+            // Convert cart items to the expected format for new order_details schema
             const cartItems: CartItem[] = completeOrderData.cart.map((item: any) => ({
               item_id: item.item_id || item.id || 1, // Fallback to 1 if no item_id
               quantity: item.quantity || ORDER_CONSTANTS.DEFAULTS.QUANTITY,
@@ -416,8 +347,12 @@ export class Helpers {
               variant: item.variant || null,
               item_campaign_id: item.item_campaign_id || null,
               total_add_on_price: item.total_add_on_price || ORDER_CONSTANTS.DEFAULTS.TOTAL_ADD_ON_PRICE,
-              food_details: item.food_details || null,
-              item_details: item.item_details || null
+              item_details: item.item_details || null,
+              is_return: item.is_return || 0,
+              return_item_status: item.return_item_status || null,
+              return_item_date: item.return_item_date || null,
+              is_gift: item.is_gift || 0,
+              fc_id: item.fc_id || null
             }));
 
             await this.createOrderDetails(order.id, cartItems);
@@ -434,37 +369,36 @@ export class Helpers {
         throw new Error(`Database operation failed: ${dbError.message}`);
       }
       
-      // Step 4: Log to ecom_logs
-      console.log(`📝 Step 4: Logging to ecom_logs`);
+      // Step 3: Log to ecom_logs
+      console.log(`📝 Step 3: Logging to ecom_logs`);
       
       const orderJson = JSON.stringify(completeOrderData);
 
       try {
-    await EcomLog.create({
-      order_id: order.id,
-      action: 'createOrder',
+        await EcomLog.create({
+          order_id: order.id,
+          action: 'createOrder',
           payload: orderJson,
           response: JSON.stringify({ 
             status: 'success',
             message: 'Order processed successfully with complete data from PHP',
-            cartItems: completeOrderData.cart?.length || 0,
-            generated_order_id: generatedOrderId
+            cartItems: completeOrderData.cart?.length || 0
           }),
-      status: 'success'
-    });
+          status: 'success'
+        });
         console.log(`✅ Logged to ecom_logs for order ${order.id}`);
-    } catch (logError: any) {
-      console.warn(`⚠️ Could not log to ecom_logs for order ${order.id}:`, logError.message);
+      } catch (logError: any) {
+        console.warn(`⚠️ Could not log to ecom_logs for order ${order.id}:`, logError.message);
       }
 
-      // Step 5: Generate picklist for the order using generated order_id
-      console.log(`📦 Step 5: Generating picklist for order ${order.id} with order_id: ${generatedOrderId}`);
+      // Step 4: Generate picklist for the order using order.id as order_id
+      console.log(`📦 Step 4: Generating picklist for order ${order.id}`);
       
       let waveId: number | null = null;
-      if (generatedOrderId && order.id) {
+      if (order.id) {
         try {
-          const picklistResult = await this.generatePicklist(generatedOrderId, order.id);
-          console.log(`✅ Successfully generated picklist for order ${generatedOrderId}`);
+          const picklistResult = await this.generatePicklist(order.id.toString(), order.id);
+          console.log(`✅ Successfully generated picklist for order ${order.id}`);
           console.log(`📊 Picklist result structure:`, JSON.stringify(picklistResult, null, 2));
           
           // Extract waveId from picklist result
@@ -476,15 +410,15 @@ export class Helpers {
             console.warn(`⚠️ Result:`, picklistResult);
           }
           
-          console.log(`🎯 Final wave ID for order ${generatedOrderId}: ${waveId}`);
+          console.log(`🎯 Final wave ID for order ${order.id}: ${waveId}`);
         } catch (picklistError: any) {
-          console.error(`❌ Failed to generate picklist for order ${generatedOrderId}:`, picklistError.message);
+          console.error(`❌ Failed to generate picklist for order ${order.id}:`, picklistError.message);
         }
       }
       
-      // Step 6: Auto-assign picklist to available picker using round-robin
+      // Step 5: Auto-assign picklist to available picker using round-robin
       if (waveId) {
-        console.log(`👤 Step 6: Auto-assigning wave ${waveId} to available picker`);
+        console.log(`👤 Step 5: Auto-assigning wave ${waveId} to available picker`);
         console.log(`📡 Making API call to: http://13.232.150.239/api/picklist/assign`);
         console.log(`📋 Assignment payload:`, JSON.stringify({
           waveId: waveId,
@@ -511,7 +445,7 @@ export class Helpers {
             const assignResult: any = await assignResponse.json();
             console.log(`✅ Successfully assigned wave ${waveId} to picker:`, JSON.stringify(assignResult, null, 2));
             
-             // 🔥 Emit event to all connected clients
+            // 🔥 Emit event to all connected clients
             const assignment = assignResult?.data?.assignment || null;
             const assignedPickerId = assignment?.pickerId;
 
@@ -519,7 +453,6 @@ export class Helpers {
             if (assignedPickerId) {
               socketManager.emitToPicker(Number(assignedPickerId), 'waveAssigned', {
                 orderId: order.id,
-                generatedOrderId,
                 waveId,
                 assignment,
               });
@@ -583,7 +516,6 @@ export class Helpers {
               // fallback: emit globally if no picker id available
               socketManager.emit('waveAssigned', {
                 orderId: order.id,
-                generatedOrderId,
                 waveId,
                 assignment,
               });
@@ -621,7 +553,6 @@ export class Helpers {
         success: true,
         message: 'Order processed successfully',
         order_id: order.id,
-        generated_order_id: generatedOrderId,
         cart_items: completeOrderData.cart?.length || 0,
         picklist_generated: true
       };

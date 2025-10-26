@@ -167,6 +167,11 @@ export interface CartItem {
   item_campaign_id?: number | null;
   total_add_on_price?: number;
   item_details?: string | null;
+  is_return?: number;
+  return_item_status?: string | null;
+  return_item_date?: Date | null;
+  is_gift?: number;
+  fc_id?: number | null;
 }
 
 // Interface for order detail creation
@@ -180,10 +185,15 @@ export interface OrderDetailData {
   discount_on_item?: number | null;
   discount_type?: string;
   quantity?: number;
+  is_return?: number;
+  return_item_status?: string | null;
+  return_item_date?: Date | null;
   tax_amount?: number;
   variant?: string | null;
-  created_at?: number;
-  updated_at?: number;
+  created_at?: Date;
+  updated_at?: Date;
   item_campaign_id?: number | null;
+  is_gift?: number;
   total_add_on_price?: number;
+  fc_id?: number | null;
 }

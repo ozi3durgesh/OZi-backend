@@ -808,37 +808,25 @@ export class OrderController {
       }
 
       // Create order directly
-      const orderId = await generateSimpleOrderId();
       const order = await Order.create({
-        order_id: orderId,
         user_id: finalUserId,
         store_id: orderData.store_id,
         fc_id: fcId, // Add FC context to order
         order_amount: finalOrderAmount,
-        tax_amount: taxAmount,
+        total_tax_amount: taxAmount,
         payment_method: orderData.payment_method,
         delivery_address: orderData.address,
-        cart: orderData.cart,
         coupon_code: orderData.coupon_code,
-        partial_payment: orderData.partial_payment ? 1 : 0,
-        is_buy_now: orderData.is_buy_now ? 1 : 0,
-        create_new_user: orderData.create_new_user ? 1 : 0,
-        password: orderData.password,
         order_type: orderData.order_type,
-        latitude: orderData.latitude,
-        longitude: orderData.longitude,
-        contact_person_name: orderData.contact_person_name,
-        contact_person_number: orderData.contact_person_number,
         coupon_discount_amount: couponDiscountAmount,
         coupon_discount_title: orderData.coupon_discount_title,
-        discount_amount: discountAmount,
-        created_at: Math.floor(Date.now() / 1000),
-        updated_at: Math.floor(Date.now() / 1000),
+        created_at: new Date(),
+        updated_at: new Date(),
       });
 
       const transactionResult = {
         success: true,
-        orderId: order.getDataValue('order_id'),
+        orderId: order.getDataValue('id'),
         internalId: order.getDataValue('id'),
         order: order
       };

@@ -61,19 +61,19 @@ export class PickingController {
 
       // Validate orders exist and are eligible for picking
       const orders = await Order.findAll({
-        where: { order_id: uniqueOrderIds },
+        where: { id: uniqueOrderIds },
         attributes: ['id', 'order_id', 'order_amount', 'created_at', 'cart']
       });
 
       if (orders.length !== uniqueOrderIds.length) {
-        return ResponseHandler.error(res, `Some order IDs not found: ${uniqueOrderIds.filter(id => !orders.find(order => order.get({ plain: true }).order_id === id)).join(', ')}`, 404);
+        return ResponseHandler.error(res, `Some order IDs not found: ${uniqueOrderIds.filter(id => !orders.find(order => order.get({ plain: true }).id === id)).join(', ')}`, 404);
       }
 
       // Create one wave per order (one-order-per-wave restriction)
       const waves: any[] = [];
       for (const order of orders) {
         const orderData = order.get({ plain: true });
-        const waveNumber = `W${Date.now()}-${orderData.order_id}`;
+        const waveNumber = `W${Date.now()}-${orderData.id}`;
         
         // Calculate SLA deadline (24 hours from now for demo)
         const slaDeadline = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -336,7 +336,7 @@ export class PickingController {
           totalItems: wave.totalItems,
           estimatedDuration: wave.estimatedDuration,
           slaDeadline: wave.slaDeadline,
-          orderId: orders[index].get({ plain: true }).order_id // Include the order_id for each wave
+          orderId: orders[index].get({ plain: true }).id // Include the order id for each wave
         }))
       }, 201);
 
@@ -1808,7 +1808,7 @@ export class PickingController {
       }
 
       const orderData = order.get({ plain: true });
-      const waveNumber = `W${Date.now()}-${orderData.order_id}`;
+      const waveNumber = `W${Date.now()}-${orderData.id}`;
       
       // Calculate SLA deadline (24 hours from now)
       const slaDeadline = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -2101,7 +2101,7 @@ export class PickingController {
       const orderIdFromWave = wave.waveNumber.split('-')[1]; // Extract order_id from wave number
       
       const order = await Order.findOne({
-        where: { order_id: orderIdFromWave },
+        where: { id: orderIdFromWave },
         attributes: ['id', 'order_id', 'cart']
       });
 
@@ -2114,7 +2114,7 @@ export class PickingController {
       }
 
       const orderData = order.get({ plain: true });
-      console.log(`Creating picklist items for wave ${waveId}, order: ${orderData.order_id}`);
+      console.log(`Creating picklist items for wave ${waveId}, order: ${orderData.id}`);
 
       // Create picklist items for this order
       let actualTotalItems = 0;
