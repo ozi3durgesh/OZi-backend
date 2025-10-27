@@ -5,6 +5,7 @@ import { PackingController } from '../controllers/packingController';
 import PickingWave from '../models/PickingWave';
 import Order from '../models/Order';
 import DeliveryMan from '../models/DeliveryMan';
+import Rider from '../models/Rider';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
@@ -213,16 +214,17 @@ router.post("/:waveId/pack-and-seal", upload.single("photo"), async (req, res) =
       });
     }
 
+    // Get delivery partner from delivery_men table
     let deliveryPartner: DeliveryMan | null = null;
+    
     if (order.delivery_man_id) {
       deliveryPartner = await DeliveryMan.findByPk(order.delivery_man_id);
     }
-
+    
+    // Update wave status and photo, but don't touch riderId
     await wave.update({
       status: "PACKED",
       photoPath: photo.location,
-      riderId: deliveryPartner?.id ?? undefined, 
-      riderAssignedAt: deliveryPartner ? new Date() : undefined,
     });
 
     // socketManager.emit("delivery_assigned", {
@@ -251,7 +253,7 @@ router.post("/:waveId/pack-and-seal", upload.single("photo"), async (req, res) =
           mimetype: photo.mimetype,
           size: photo.size,
         },
-        deliveryPartner: formatDeliveryPartner(deliveryPartner),
+        deliveryPartner: deliveryPartner ? formatDeliveryPartner(deliveryPartner) : null,
       },
     });
   } catch (error) {
@@ -286,16 +288,11 @@ router.get("/:waveId/refresh", async (req, res) => {
       });
     }
 
+    // Get delivery partner from delivery_men table
     let deliveryPartner: DeliveryMan | null = null;
+    
     if (order.delivery_man_id) {
       deliveryPartner = await DeliveryMan.findByPk(order.delivery_man_id);
-
-      if (deliveryPartner && !wave.riderId) {
-        await wave.update({
-          riderId: deliveryPartner.id,
-          riderAssignedAt: new Date(),
-        });
-      }
     }
 
     return res.status(200).json({
@@ -304,9 +301,9 @@ router.get("/:waveId/refresh", async (req, res) => {
       data: {
         waveId: wave.id,
         status: wave.status,
-        riderId: wave.riderId,
-        riderAssignedAt: wave.riderAssignedAt,
-        deliveryPartner: formatDeliveryPartner(deliveryPartner),
+        riderId: null, // Not using riderId anymore
+        riderAssignedAt: null,
+        deliveryPartner: deliveryPartner ? formatDeliveryPartner(deliveryPartner) : null,
       },
       message: deliveryPartner
         ? "Delivery partner assigned"

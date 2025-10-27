@@ -4,6 +4,7 @@ import { PickingWave, PicklistItem, PickingException, User, Order, ScannerBin, S
 import { ResponseHandler } from '../middleware/responseHandler';
 import { OrderAttributes } from '../types';
 import Product from '../models/productModel';
+import OrderDetail from '../models/OrderDetail';
 import { Sequelize, Op } from 'sequelize';
 import DirectInventoryService from '../services/DirectInventoryService';
 import { INVENTORY_OPERATIONS } from '../config/inventoryConstants';
@@ -61,19 +62,19 @@ export class PickingController {
 
       // Validate orders exist and are eligible for picking
       const orders = await Order.findAll({
-        where: { order_id: uniqueOrderIds },
+        where: { id: uniqueOrderIds },
         attributes: ['id', 'order_id', 'order_amount', 'created_at', 'cart']
       });
 
       if (orders.length !== uniqueOrderIds.length) {
-        return ResponseHandler.error(res, `Some order IDs not found: ${uniqueOrderIds.filter(id => !orders.find(order => order.get({ plain: true }).order_id === id)).join(', ')}`, 404);
+        return ResponseHandler.error(res, `Some order IDs not found: ${uniqueOrderIds.filter(id => !orders.find(order => order.get({ plain: true }).id === id)).join(', ')}`, 404);
       }
 
       // Create one wave per order (one-order-per-wave restriction)
       const waves: any[] = [];
       for (const order of orders) {
         const orderData = order.get({ plain: true });
-        const waveNumber = `W${Date.now()}-${orderData.order_id}`;
+        const waveNumber = `W${Date.now()}-${orderData.id}`;
         
         // Calculate SLA deadline (24 hours from now for demo)
         const slaDeadline = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -122,7 +123,7 @@ export class PickingController {
                 // First, ensure the SKU exists in product_master table
                 const skuString = item.sku.toString();
                 let productExists = await Product.findOne({
-                  where: { sku: skuString }
+                  where: { sku_id: skuString }
                 });
 
                 if (!productExists) {
@@ -155,7 +156,7 @@ export class PickingController {
                           mrp: orderMRP,
                           updated_at: new Date()
                         },
-                        { where: { sku: skuString } }
+                        { where: { sku_id: skuString } }
                       );
                       console.log(`✅ Updated MRP for SKU ${skuString} to ${orderMRP}`);
                     } catch (updateError: any) {
@@ -187,7 +188,7 @@ export class PickingController {
                     
                     // iii. Category-based fallback: Get SKU category from product_master
                     const product = await Product.findOne({
-                      where: { [PICKING_CONSTANTS.COLUMNS.SKU]: skuString },
+                      where: { sku_id: skuString },
                       attributes: [PICKING_CONSTANTS.COLUMNS.CATEGORY]
                     });
 
@@ -219,7 +220,7 @@ export class PickingController {
                   
                   // iii. Category-based fallback: Get SKU category from product_master
                   const product = await Product.findOne({
-                    where: { sku: skuString },
+                    where: { sku_id: skuString },
                     attributes: ['Category']
                   });
 
@@ -272,7 +273,7 @@ export class PickingController {
                   
                   // Ensure product exists before creating picklist item
                   let productExists = await Product.findOne({
-                    where: { sku: skuString }
+                    where: { sku_id: skuString }
                   });
 
                   if (!productExists) {
@@ -336,7 +337,7 @@ export class PickingController {
           totalItems: wave.totalItems,
           estimatedDuration: wave.estimatedDuration,
           slaDeadline: wave.slaDeadline,
-          orderId: orders[index].get({ plain: true }).order_id // Include the order_id for each wave
+          orderId: orders[index].get({ plain: true }).id // Include the order id for each wave
         }))
       }, 201);
 
@@ -598,6 +599,58 @@ export class PickingController {
       });
 
       console.log(`✅ Successfully assigned wave ${waveId} to picker ${picker.email}`);
+
+      // 🔥 Emit Socket.IO event to assigned picker
+      socketManager.emitToPicker(Number(targetPickerId), 'waveAssigned', {
+        orderId: wave.orderId,
+        waveId: wave.id,
+        waveNumber: wave.waveNumber,
+        assignment: {
+          waveId: wave.id,
+          waveNumber: wave.waveNumber,
+          pickerId: targetPickerId,
+          pickerEmail: picker.email,
+          assignedAt: wave.assignedAt,
+          priority: wave.priority
+        }
+      });
+      console.log(`📨 Emitted waveAssigned to picker_${targetPickerId}`);
+
+      // 👉 Send Push Notification via SNS
+      console.log(`🔍 Looking up picker ${targetPickerId} for push notification...`);
+      const pickerWithDevices = await User.findByPk(targetPickerId, {
+        include: [{ model: UserDevice, as: "devices" }],
+      });
+
+      if (pickerWithDevices && (pickerWithDevices as any).devices && (pickerWithDevices as any).devices.length > 0) {
+        const devices = (pickerWithDevices as any).devices;
+        console.log(`📱 Found ${devices.length} device(s) for picker ${targetPickerId}`);
+
+        for (const device of devices) {
+          console.log(`📤 Sending push notification to device ${device.id} (${device.platform})`);
+          
+          try {
+            await sendPushNotification(
+              device.snsEndpointArn,
+              "📦 New Wave Assigned",
+              `Wave #${wave.waveNumber} has been assigned to you.`,
+              { 
+                route: "/waves",
+                waveId: wave.id.toString(),
+                waveNumber: wave.waveNumber,
+                orderId: wave.orderId?.toString() || "",
+                priority: wave.priority,
+                assignedAt: wave.assignedAt?.toString() || ""
+              }
+            );
+            console.log(`✅ Push notification sent to device ${device.id}`);
+          } catch (pushError: any) {
+            console.error(`❌ Failed to send push notification to device ${device.id}:`, pushError.message);
+          }
+        }
+      } else {
+        console.log(`⚠️ No devices registered for picker ${targetPickerId}`);
+      }
 
       return ResponseHandler.success(res, {
         message: 'Wave assigned successfully',
@@ -1149,11 +1202,11 @@ export class PickingController {
       
       // First, try to find by SKU directly
       let product = await Product.findOne({
-        where: { sku: skuID }
+        where: { sku_id: skuID }
       });
       
       if (product) {
-        resolvedSku = product.sku;
+        resolvedSku = product.sku_id;
         foundBy = 'sku';
       } else {
         // If not found by SKU, try to find by EAN_UPC
@@ -1162,7 +1215,7 @@ export class PickingController {
         });
         
         if (product) {
-          resolvedSku = product.sku;
+          resolvedSku = product.sku_id;
           foundBy = 'ean';
         } else {
           // Neither SKU nor EAN found
@@ -1684,33 +1737,33 @@ export class PickingController {
     });
     console.log(`Total picklist items found for wave ${waveId}: ${totalItemsForWave}`);
 
-    // Extend PicklistItem type to include productInfo
+    // Extend PicklistItem type to include product
     interface PicklistItemWithProduct extends PicklistItem {
-      productInfo?: Product;
+      product?: Product;
     }
 
-    // Fetch picklist items with included Product info
+    // Fetch picklist items (without product join due to collation mismatch)
     const picklistItems = await PicklistItem.findAndCountAll({
-  where: whereClause,
-  order: [['scanSequence', 'ASC']],
-  limit: parseInt(limit.toString()),
-  offset,
-  include: [
-    {
-      model: Product,
-      as: 'productInfo',
-      attributes: ['ImageURL', 'EAN_UPC', 'MRP'],
-      required: false, // Left join
-    }
-  ],
-  logging: console.log,  // Enable SQL query logging
-}) as { count: number; rows: PicklistItemWithProduct[] };
+      where: whereClause,
+      order: [['scanSequence', 'ASC']],
+      limit: parseInt(limit.toString()),
+      offset,
+    });
+    
+    // Fetch products separately to avoid collation error
+    const skus = picklistItems.rows.map(item => item.sku);
+    const products = await Product.findAll({
+      where: { sku_id: skus },
+      attributes: ['sku_id', 'image_url', 'ean_upc', 'mrp']
+    });
+    
+    const productMap = new Map(products.map(p => [p.sku_id, p]));
 
     // Debug logging
   /*  picklistItems.rows.forEach(item => {
   console.log(`- ID: ${item.id}, SKU: ${item.sku}, Qty: ${item.quantity}`);
-  if (item.productInfo) {
-    console.log(`   Product -> ImageURL: ${item.productInfo.ImageURL}, EAN: ${item.productInfo.EAN_UPC}, MRP: ${item.productInfo.MRP}`);
+  if (item.product) {
+    console.log(`   Product -> image_url: ${item.product.image_url}, ean: ${item.product.ean_upc}, mrp: ${item.product.mrp}`);
   } else {
     console.log('   Product -> Not found');
   }
@@ -1737,9 +1790,9 @@ export class PickingController {
     expiryDate: item.expiryDate,
     pickedQuantity: item.pickedQuantity,
     partialReason: item.partialReason,
-    imageUrl: item.productInfo?.image_url || null,  // Safely access productInfo
-    ean: item.productInfo?.ean_upc || null,
-    mrp: item.productInfo?.mrp || null,
+    imageUrl: productMap.get(item.sku)?.image_url || null,
+    ean: productMap.get(item.sku)?.ean_upc || null,
+    mrp: productMap.get(item.sku)?.mrp || null,
   })),
   pagination: {
     page: parseInt(page.toString()),
@@ -1808,15 +1861,22 @@ export class PickingController {
       }
 
       const orderData = order.get({ plain: true });
-      const waveNumber = `W${Date.now()}-${orderData.order_id}`;
+      const waveNumber = `W${Date.now()}-${orderData.id}`;
+      
+      // Fetch order details to get cart items
+      const orderDetails = await OrderDetail.findAll({
+        where: { order_id: orderId }
+      });
+      
+      console.log(`📦 Found ${orderDetails.length} order details for order ${orderId}`);
       
       // Calculate SLA deadline (24 hours from now)
       const slaDeadline = new Date(Date.now() + 24 * 60 * 60 * 1000);
       
-      // Calculate total items for this single order
+      // Calculate total items from order_details
       let totalItems = 0;
-      if (orderData.cart && Array.isArray(orderData.cart)) {
-        totalItems = orderData.cart.reduce((sum: number, item: any) => {
+      if (orderDetails && orderDetails.length > 0) {
+        totalItems = orderDetails.reduce((sum: number, item: any) => {
           return sum + (item.quantity || 1);
         }, 0);
       }
@@ -1842,18 +1902,35 @@ export class PickingController {
       let actualTotalItems = 0;
       let createdItems = 0;
       
-      if (orderData.cart && Array.isArray(orderData.cart)) {
-        for (let i = 0; i < orderData.cart.length; i++) {
-          const item = orderData.cart[i];
+      if (orderDetails && orderDetails.length > 0) {
+        for (let i = 0; i < orderDetails.length; i++) {
+          const orderDetail = orderDetails[i].get({ plain: true });
           
+          // Extract SKU from item_details (stored as JSON string)
+          // Fallback to item_id if no SKU is found
+          let item: { sku: any; quantity: number } = { sku: orderDetail.item_id, quantity: orderDetail.quantity };
+          try {
+            if (orderDetail.item_details) {
+              const itemDetails = typeof orderDetail.item_details === 'string' 
+                ? JSON.parse(orderDetail.item_details) 
+                : orderDetail.item_details;
+              // Try to get SKU from item_details, fallback to item_id
+              item.sku = itemDetails.sku || itemDetails.id || orderDetail.item_id;
+              item.quantity = orderDetail.quantity;
+            }
+          } catch (e) {
+            console.warn(`Failed to parse item_details for order detail ${orderDetail.id}:`, e);
+          }
+          
+          // Now create picklist item if we have either a SKU or item_id
           if (item && item.sku !== undefined && item.sku !== null) {
-            const quantity = item.quantity || (item.amount ? 1 : 1);
+            const quantity = item.quantity || 1;
             
             try {
               // First, ensure the SKU exists in product_master table
               const skuString = item.sku.toString();
               let productExists = await Product.findOne({
-                where: { sku: skuString }
+                where: { sku_id: skuString }
               });
 
               if (!productExists) {
@@ -1886,7 +1963,7 @@ export class PickingController {
                         mrp: orderMRP,
                         updated_at: new Date()
                       },
-                      { where: { sku: skuString } }
+                      { where: { sku_id: skuString } }
                     );
                     console.log(`✅ Updated MRP for SKU ${skuString} to ${orderMRP}`);
                   } catch (updateError: any) {
@@ -1917,7 +1994,7 @@ export class PickingController {
                   
                   // iii. Category-based fallback: Get SKU category from product_master
                   const product = await Product.findOne({
-                    where: { sku: skuString },
+                    where: { sku_id: skuString },
                     attributes: ['Category']
                   });
 
@@ -1950,7 +2027,7 @@ export class PickingController {
                 
                 // iii. Category-based fallback: Get SKU category from product_master
                 const product = await Product.findOne({
-                  where: { sku: skuString },
+                  where: { sku_id: skuString },
                   attributes: ['Category']
                 });
 
@@ -2004,7 +2081,7 @@ export class PickingController {
                   
                   // Ensure product exists before creating picklist item
                   let productExists = await Product.findOne({
-                    where: { sku: skuString }
+                    where: { sku_id: skuString }
                   });
 
                   if (!productExists) {
@@ -2101,7 +2178,7 @@ export class PickingController {
       const orderIdFromWave = wave.waveNumber.split('-')[1]; // Extract order_id from wave number
       
       const order = await Order.findOne({
-        where: { order_id: orderIdFromWave },
+        where: { id: orderIdFromWave },
         attributes: ['id', 'order_id', 'cart']
       });
 
@@ -2114,7 +2191,7 @@ export class PickingController {
       }
 
       const orderData = order.get({ plain: true });
-      console.log(`Creating picklist items for wave ${waveId}, order: ${orderData.order_id}`);
+      console.log(`Creating picklist items for wave ${waveId}, order: ${orderData.id}`);
 
       // Create picklist items for this order
       let actualTotalItems = 0;
@@ -2154,8 +2231,8 @@ export class PickingController {
                   
                   // iii. Category-based fallback: Get SKU category from product_master
                   const product = await Product.findOne({
-                    where: { sku: item.sku.toString() },
-                    attributes: ['Category']
+                    where: { sku_id: item.sku.toString() },
+                    attributes: ['category']
                   });
 
                   if (product && product.category) {
@@ -2187,8 +2264,8 @@ export class PickingController {
                 
                 // iii. Category-based fallback: Get SKU category from product_master
                 const product = await Product.findOne({
-                  where: { sku: item.sku.toString() },
-                  attributes: ['Category']
+                  where: { sku_id: item.sku.toString() },
+                  attributes: ['category']
                 });
 
                 if (product && product.category) {

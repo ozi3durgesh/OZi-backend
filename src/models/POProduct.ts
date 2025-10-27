@@ -93,12 +93,12 @@ POProduct.belongsTo(PurchaseOrder, {
 
 POProduct.belongsTo(Product, {
   foreignKey: 'sku_id',
-  targetKey: 'sku',
+  targetKey: 'sku_id',
   as: 'productInfo',
 });
 Product.hasMany(POProduct, {
   foreignKey: 'sku_id',
-  sourceKey: 'sku',
+  sourceKey: 'sku_id',
   as: 'poProducts',
 });
 

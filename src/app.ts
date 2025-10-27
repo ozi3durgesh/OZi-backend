@@ -98,6 +98,9 @@ app.use('/api/fc/skus', fcSKURoutes);
 // DC-specific FC-PO routes (Distribution Center context)
 app.use('/api/dc/fc-pos', dcFCPORoutes);
 
+// Ecommerce integration routes - MUST COME BEFORE routes that apply auth to all /api
+app.use('/api/ecommerce', easyEcomWebhookRoutes);
+
 app.use('/api', vendorRoutes);
 app.use('/api', productRoutes);
 app.use('/api/purchase-orders', purchaOrderRoutes);
@@ -113,9 +116,6 @@ app.use('/api/delivery-man', deliveryManRoutes);
 
 // PHP Production Compatible Routes
 app.use('/api/v1/customer/order', orderRoutes);
-
-// Ecommerce integration routes
-app.use('/api/ecommerce', easyEcomWebhookRoutes);
 
 // PDF upload routes
 app.use('/api/upload', pdfUploadRoutes);

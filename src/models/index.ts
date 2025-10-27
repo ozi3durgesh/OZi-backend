@@ -205,17 +205,18 @@ ScannerSku.belongsTo(ScannerBin, {
 });
 
 // associations
-// PicklistItem.ts - Updated for new ProductMaster structure
-PicklistItem.belongsTo(ProductMaster, {
-  foreignKey: 'sku',
-  targetKey: 'sku_id',
-  as: 'productInfo',
-});
-ProductMaster.hasMany(PicklistItem, {
-  foreignKey: 'sku',
-  sourceKey: 'sku_id',
-  as: 'picklistItems',
-});
+// PicklistItem.ts - Association moved to PicklistItem.ts itself
+// Commenting out duplicate ProductMaster association (using Product instead)
+// PicklistItem.belongsTo(ProductMaster, {
+//   foreignKey: 'sku',
+//   targetKey: 'sku_id',
+//   as: 'productInfo',
+// });
+// ProductMaster.hasMany(PicklistItem, {
+//   foreignKey: 'sku',
+//   sourceKey: 'sku_id',
+//   as: 'picklistItems',
+// });
 
 POProduct.belongsTo(ProductMaster, { foreignKey: 'sku_id', targetKey: 'sku_id', as: 'sku' });
 ProductMaster.hasMany(POProduct, { foreignKey: 'sku_id', sourceKey: 'sku_id', as: 'products' });

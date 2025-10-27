@@ -179,7 +179,7 @@ export class DeliveryManController {
           },
           order: {
             id: order.id,
-            order_id: order.order_id,
+            order_id: order.id,
             delivery_man_id: order.delivery_man_id,
             order_status: order.order_status,
           },

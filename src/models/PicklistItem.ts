@@ -181,11 +181,15 @@ PicklistItem.init(
   }
 );
 
-// 🔗 Association: PicklistItem → Product (via sku)
+// 🔗 Association: PicklistItem → Product (via sku_id)
+// Note: Cast to match collations (utf8mb4_0900_ai_ci vs utf8mb4_unicode_ci)
 PicklistItem.belongsTo(Product, {
   foreignKey: 'sku', // PicklistItem.sku
-  targetKey: 'sku',  // Product.sku
+  targetKey: 'sku_id',  // Product.sku_id
   as: 'product',
+  scope: {
+    // This is handled at SQL level with CAST to avoid collation mismatch
+  }
 });
 
 

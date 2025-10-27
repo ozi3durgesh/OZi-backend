@@ -34,7 +34,7 @@ export class ReturnRequestItemController {
       // Verify original order exists
       console.log(`🔍 Looking for original order: ${returnData.original_order_id}`);
       const originalOrder = await Order.findOne({ 
-        where: { order_id: returnData.original_order_id } 
+        where: { id: returnData.original_order_id } 
       });
       
       if (!originalOrder) {
@@ -44,7 +44,7 @@ export class ReturnRequestItemController {
       
       console.log('✅ Original order found:', {
         id: originalOrder.id,
-        order_id: originalOrder.order_id,
+        order_id: originalOrder.id,
         user_id: originalOrder.user_id
       });
       
@@ -119,7 +119,7 @@ export class ReturnRequestItemController {
         console.log(`🔄 Updating Order table with return_item_id: ${returnOrderId} for order_id: ${returnData.original_order_id}`);
         const orderUpdateResult = await Order.update(
           { return_item_id: returnOrderId } as any,
-          { where: { order_id: returnData.original_order_id } }
+          { where: { id: returnData.original_order_id } }
         );
         console.log(`✅ Order update result:`, orderUpdateResult);
         } catch (orderError) {
@@ -1384,11 +1384,11 @@ export class ReturnRequestItemController {
       
       // First, try to find by SKU directly
       let product = await Product.findOne({
-        where: { sku: sku_id }
+        where: { sku_id: sku_id }
       });
       
       if (product) {
-        resolvedSku = product.sku;
+        resolvedSku = product.sku_id;
         foundBy = 'sku';
       } else {
         // If not found by SKU, try to find by EAN_UPC
@@ -1397,7 +1397,7 @@ export class ReturnRequestItemController {
         });
         
         if (product) {
-          resolvedSku = product.sku;
+          resolvedSku = product.sku_id;
           foundBy = 'ean';
         } else {
           // Neither SKU nor EAN found

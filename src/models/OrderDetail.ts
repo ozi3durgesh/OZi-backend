@@ -13,13 +13,17 @@ interface OrderDetailAttributes {
   discount_on_item: number | null;
   discount_type: string;
   quantity: number;
+  is_return: number;
+  return_item_status: string | null;
+  return_item_date: Date | null;
   tax_amount: number;
   variant: string | null;
-  created_at: number;
-  updated_at: number;
+  created_at: Date | null;
+  updated_at: Date | null;
   item_campaign_id: number | null;
+  is_gift: number;
   total_add_on_price: number;
-  return_item_id: string | null;
+  fc_id: number | null;
 }
 
 interface OrderDetailCreationAttributes {
@@ -32,13 +36,17 @@ interface OrderDetailCreationAttributes {
   discount_on_item?: number | null;
   discount_type?: string;
   quantity?: number;
+  is_return?: number;
+  return_item_status?: string | null;
+  return_item_date?: Date | null;
   tax_amount?: number;
   variant?: string | null;
-  created_at?: number;
-  updated_at?: number;
+  created_at?: Date | null;
+  updated_at?: Date | null;
   item_campaign_id?: number | null;
+  is_gift?: number;
   total_add_on_price?: number;
-  return_item_id?: string | null;
+  fc_id?: number | null;
 }
 
 class OrderDetail extends Model<OrderDetailAttributes, OrderDetailCreationAttributes> {
@@ -52,33 +60,41 @@ class OrderDetail extends Model<OrderDetailAttributes, OrderDetailCreationAttrib
   declare discount_on_item: number | null;
   declare discount_type: string;
   declare quantity: number;
+  declare is_return: number;
+  declare return_item_status: string | null;
+  declare return_item_date: Date | null;
   declare tax_amount: number;
   declare variant: string | null;
-  declare created_at: number;
-  declare updated_at: number;
+  declare created_at: Date | null;
+  declare updated_at: Date | null;
   declare item_campaign_id: number | null;
+  declare is_gift: number;
   declare total_add_on_price: number;
-  declare return_item_id: string | null;
+  declare fc_id: number | null;
 }
 
 OrderDetail.init({
-  id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
-  item_id: { type: DataTypes.INTEGER, allowNull: true },
-  order_id: { type: DataTypes.INTEGER, allowNull: false, references: { model: Order, key: 'id' } },
+  id: { type: DataTypes.BIGINT.UNSIGNED, autoIncrement: true, primaryKey: true },
+  item_id: { type: DataTypes.BIGINT.UNSIGNED, allowNull: true },
+  order_id: { type: DataTypes.INTEGER, allowNull: true },
   price: { type: DataTypes.DECIMAL(24, 2), allowNull: false, defaultValue: 0.00 },
   item_details: { type: DataTypes.TEXT, allowNull: true },
-  variation: { type: DataTypes.STRING(255), allowNull: true },
+  variation: { type: DataTypes.TEXT, allowNull: true },
   add_ons: { type: DataTypes.TEXT, allowNull: true },
   discount_on_item: { type: DataTypes.DECIMAL(24, 2), allowNull: true },
   discount_type: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'amount' },
   quantity: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
+  is_return: { type: DataTypes.TINYINT, allowNull: false, defaultValue: 0 },
+  return_item_status: { type: DataTypes.ENUM('pending_for_pickup','returned','return_failed','refund_processed'), allowNull: true },
+  return_item_date: { type: DataTypes.DATE, allowNull: true },
   tax_amount: { type: DataTypes.DECIMAL(24, 2), allowNull: false, defaultValue: 1.00 },
   variant: { type: DataTypes.STRING(255), allowNull: true },
-  created_at: { type: DataTypes.BIGINT, allowNull: false },
-  updated_at: { type: DataTypes.BIGINT, allowNull: false },
-  item_campaign_id: { type: DataTypes.INTEGER, allowNull: true },
+  created_at: { type: DataTypes.DATE, allowNull: true },
+  updated_at: { type: DataTypes.DATE, allowNull: true },
+  item_campaign_id: { type: DataTypes.BIGINT.UNSIGNED, allowNull: true },
+  is_gift: { type: DataTypes.TINYINT, allowNull: false, defaultValue: 0 },
   total_add_on_price: { type: DataTypes.DECIMAL(24, 2), allowNull: false, defaultValue: 0.00 },
-  return_item_id: { type: DataTypes.STRING(50), allowNull: true, comment: 'Return order ID for tracking returns' },
+  fc_id: { type: DataTypes.INTEGER, allowNull: true }
 }, {
   sequelize,
   tableName: 'order_details',

@@ -473,11 +473,11 @@ User.hasMany(ReturnRequestItem, { foreignKey: 'created_by', as: 'createdReturnRe
 ReturnRequestItem.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
 
 // Order associations
-Order.hasMany(ReturnRequestItem, { foreignKey: 'original_order_id', sourceKey: 'order_id', as: 'returnRequestItems' });
-ReturnRequestItem.belongsTo(Order, { foreignKey: 'original_order_id', targetKey: 'order_id', as: 'originalOrder' });
+Order.hasMany(ReturnRequestItem, { foreignKey: 'original_order_id', sourceKey: 'id', as: 'returnRequestItems' });
+ReturnRequestItem.belongsTo(Order, { foreignKey: 'original_order_id', targetKey: 'id', as: 'originalOrder' });
 
 // Product associations
-Product.hasMany(ReturnRequestItem, { foreignKey: 'item_id', sourceKey: 'sku', as: 'returnRequestItems' });
-ReturnRequestItem.belongsTo(Product, { foreignKey: 'item_id', targetKey: 'sku', as: 'product' });
+Product.hasMany(ReturnRequestItem, { foreignKey: 'item_id', sourceKey: 'sku_id', as: 'returnRequestItems' });
+ReturnRequestItem.belongsTo(Product, { foreignKey: 'item_id', targetKey: 'sku_id', as: 'product' });
 
 export default ReturnRequestItem;
