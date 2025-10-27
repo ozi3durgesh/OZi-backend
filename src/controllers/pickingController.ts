@@ -599,6 +599,58 @@ export class PickingController {
 
       console.log(`✅ Successfully assigned wave ${waveId} to picker ${picker.email}`);
 
+      // 🔥 Emit Socket.IO event to assigned picker
+      socketManager.emitToPicker(Number(targetPickerId), 'waveAssigned', {
+        orderId: wave.orderId,
+        waveId: wave.id,
+        waveNumber: wave.waveNumber,
+        assignment: {
+          waveId: wave.id,
+          waveNumber: wave.waveNumber,
+          pickerId: targetPickerId,
+          pickerEmail: picker.email,
+          assignedAt: wave.assignedAt,
+          priority: wave.priority
+        }
+      });
+      console.log(`📨 Emitted waveAssigned to picker_${targetPickerId}`);
+
+      // 👉 Send Push Notification via SNS
+      console.log(`🔍 Looking up picker ${targetPickerId} for push notification...`);
+      const pickerWithDevices = await User.findByPk(targetPickerId, {
+        include: [{ model: UserDevice, as: "devices" }],
+      });
+
+      if (pickerWithDevices && (pickerWithDevices as any).devices && (pickerWithDevices as any).devices.length > 0) {
+        const devices = (pickerWithDevices as any).devices;
+        console.log(`📱 Found ${devices.length} device(s) for picker ${targetPickerId}`);
+
+        for (const device of devices) {
+          console.log(`📤 Sending push notification to device ${device.id} (${device.platform})`);
+          
+          try {
+            await sendPushNotification(
+              device.arn,
+              "📦 New Wave Assigned",
+              `Wave #${wave.waveNumber} has been assigned to you.`,
+              { 
+                route: "/waves",
+                waveId: wave.id.toString(),
+                waveNumber: wave.waveNumber,
+                orderId: wave.orderId?.toString() || "",
+                priority: wave.priority,
+                assignedAt: wave.assignedAt?.toString() || ""
+              }
+            );
+            console.log(`✅ Push notification sent to device ${device.id}`);
+          } catch (pushError: any) {
+            console.error(`❌ Failed to send push notification to device ${device.id}:`, pushError.message);
+          }
+        }
+      } else {
+        console.log(`⚠️ No devices registered for picker ${targetPickerId}`);
+      }
+
       return ResponseHandler.success(res, {
         message: 'Wave assigned successfully',
         assignment: {
