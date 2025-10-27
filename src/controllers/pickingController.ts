@@ -123,7 +123,7 @@ export class PickingController {
                 // First, ensure the SKU exists in product_master table
                 const skuString = item.sku.toString();
                 let productExists = await Product.findOne({
-                  where: { sku: skuString }
+                  where: { sku_id: skuString }
                 });
 
                 if (!productExists) {
@@ -156,7 +156,7 @@ export class PickingController {
                           mrp: orderMRP,
                           updated_at: new Date()
                         },
-                        { where: { sku: skuString } }
+                        { where: { sku_id: skuString } }
                       );
                       console.log(`✅ Updated MRP for SKU ${skuString} to ${orderMRP}`);
                     } catch (updateError: any) {
@@ -188,7 +188,7 @@ export class PickingController {
                     
                     // iii. Category-based fallback: Get SKU category from product_master
                     const product = await Product.findOne({
-                      where: { [PICKING_CONSTANTS.COLUMNS.SKU]: skuString },
+                      where: { sku_id: skuString },
                       attributes: [PICKING_CONSTANTS.COLUMNS.CATEGORY]
                     });
 
@@ -220,7 +220,7 @@ export class PickingController {
                   
                   // iii. Category-based fallback: Get SKU category from product_master
                   const product = await Product.findOne({
-                    where: { sku: skuString },
+                    where: { sku_id: skuString },
                     attributes: ['Category']
                   });
 
@@ -273,7 +273,7 @@ export class PickingController {
                   
                   // Ensure product exists before creating picklist item
                   let productExists = await Product.findOne({
-                    where: { sku: skuString }
+                    where: { sku_id: skuString }
                   });
 
                   if (!productExists) {
@@ -1202,11 +1202,11 @@ export class PickingController {
       
       // First, try to find by SKU directly
       let product = await Product.findOne({
-        where: { sku: skuID }
+        where: { sku_id: skuID }
       });
       
       if (product) {
-        resolvedSku = product.sku;
+        resolvedSku = product.sku_id;
         foundBy = 'sku';
       } else {
         // If not found by SKU, try to find by EAN_UPC
@@ -1215,7 +1215,7 @@ export class PickingController {
         });
         
         if (product) {
-          resolvedSku = product.sku;
+          resolvedSku = product.sku_id;
           foundBy = 'ean';
         } else {
           // Neither SKU nor EAN found
@@ -1742,22 +1742,22 @@ export class PickingController {
       product?: Product;
     }
 
-    // Fetch picklist items with included Product info
+    // Fetch picklist items (without product join due to collation mismatch)
     const picklistItems = await PicklistItem.findAndCountAll({
-  where: whereClause,
-  order: [['scanSequence', 'ASC']],
-  limit: parseInt(limit.toString()),
-  offset,
-  include: [
-    {
-      model: Product,
-      as: 'product',
-      attributes: ['image_url', 'ean_upc', 'mrp'],
-      required: false, // Left join
-    }
-  ],
-  logging: console.log,  // Enable SQL query logging
-}) as { count: number; rows: PicklistItemWithProduct[] };
+      where: whereClause,
+      order: [['scanSequence', 'ASC']],
+      limit: parseInt(limit.toString()),
+      offset,
+    });
+    
+    // Fetch products separately to avoid collation error
+    const skus = picklistItems.rows.map(item => item.sku);
+    const products = await Product.findAll({
+      where: { sku_id: skus },
+      attributes: ['sku_id', 'image_url', 'ean_upc', 'mrp']
+    });
+    
+    const productMap = new Map(products.map(p => [p.sku_id, p]));
 
     // Debug logging
   /*  picklistItems.rows.forEach(item => {
@@ -1790,9 +1790,9 @@ export class PickingController {
     expiryDate: item.expiryDate,
     pickedQuantity: item.pickedQuantity,
     partialReason: item.partialReason,
-    imageUrl: item.product?.image_url || null,  // Safely access product
-    ean: item.product?.ean_upc || null,
-    mrp: item.product?.mrp || null,
+    imageUrl: productMap.get(item.sku)?.image_url || null,
+    ean: productMap.get(item.sku)?.ean_upc || null,
+    mrp: productMap.get(item.sku)?.mrp || null,
   })),
   pagination: {
     page: parseInt(page.toString()),
@@ -1907,19 +1907,22 @@ export class PickingController {
           const orderDetail = orderDetails[i].get({ plain: true });
           
           // Extract SKU from item_details (stored as JSON string)
-          let item: { sku: any; quantity: number } = { sku: null, quantity: orderDetail.quantity };
+          // Fallback to item_id if no SKU is found
+          let item: { sku: any; quantity: number } = { sku: orderDetail.item_id, quantity: orderDetail.quantity };
           try {
             if (orderDetail.item_details) {
               const itemDetails = typeof orderDetail.item_details === 'string' 
                 ? JSON.parse(orderDetail.item_details) 
                 : orderDetail.item_details;
-              item.sku = itemDetails.sku || itemDetails.id;
+              // Try to get SKU from item_details, fallback to item_id
+              item.sku = itemDetails.sku || itemDetails.id || orderDetail.item_id;
               item.quantity = orderDetail.quantity;
             }
           } catch (e) {
             console.warn(`Failed to parse item_details for order detail ${orderDetail.id}:`, e);
           }
           
+          // Now create picklist item if we have either a SKU or item_id
           if (item && item.sku !== undefined && item.sku !== null) {
             const quantity = item.quantity || 1;
             
@@ -1927,7 +1930,7 @@ export class PickingController {
               // First, ensure the SKU exists in product_master table
               const skuString = item.sku.toString();
               let productExists = await Product.findOne({
-                where: { sku: skuString }
+                where: { sku_id: skuString }
               });
 
               if (!productExists) {
@@ -1960,7 +1963,7 @@ export class PickingController {
                         mrp: orderMRP,
                         updated_at: new Date()
                       },
-                      { where: { sku: skuString } }
+                      { where: { sku_id: skuString } }
                     );
                     console.log(`✅ Updated MRP for SKU ${skuString} to ${orderMRP}`);
                   } catch (updateError: any) {
@@ -1991,7 +1994,7 @@ export class PickingController {
                   
                   // iii. Category-based fallback: Get SKU category from product_master
                   const product = await Product.findOne({
-                    where: { sku: skuString },
+                    where: { sku_id: skuString },
                     attributes: ['Category']
                   });
 
@@ -2024,7 +2027,7 @@ export class PickingController {
                 
                 // iii. Category-based fallback: Get SKU category from product_master
                 const product = await Product.findOne({
-                  where: { sku: skuString },
+                  where: { sku_id: skuString },
                   attributes: ['Category']
                 });
 
@@ -2078,7 +2081,7 @@ export class PickingController {
                   
                   // Ensure product exists before creating picklist item
                   let productExists = await Product.findOne({
-                    where: { sku: skuString }
+                    where: { sku_id: skuString }
                   });
 
                   if (!productExists) {
@@ -2228,8 +2231,8 @@ export class PickingController {
                   
                   // iii. Category-based fallback: Get SKU category from product_master
                   const product = await Product.findOne({
-                    where: { sku: item.sku.toString() },
-                    attributes: ['Category']
+                    where: { sku_id: item.sku.toString() },
+                    attributes: ['category']
                   });
 
                   if (product && product.category) {
@@ -2261,8 +2264,8 @@ export class PickingController {
                 
                 // iii. Category-based fallback: Get SKU category from product_master
                 const product = await Product.findOne({
-                  where: { sku: item.sku.toString() },
-                  attributes: ['Category']
+                  where: { sku_id: item.sku.toString() },
+                  attributes: ['category']
                 });
 
                 if (product && product.category) {

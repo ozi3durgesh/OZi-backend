@@ -1384,11 +1384,11 @@ export class ReturnRequestItemController {
       
       // First, try to find by SKU directly
       let product = await Product.findOne({
-        where: { sku: sku_id }
+        where: { sku_id: sku_id }
       });
       
       if (product) {
-        resolvedSku = product.sku;
+        resolvedSku = product.sku_id;
         foundBy = 'sku';
       } else {
         // If not found by SKU, try to find by EAN_UPC
@@ -1397,7 +1397,7 @@ export class ReturnRequestItemController {
         });
         
         if (product) {
-          resolvedSku = product.sku;
+          resolvedSku = product.sku_id;
           foundBy = 'ean';
         } else {
           // Neither SKU nor EAN found
