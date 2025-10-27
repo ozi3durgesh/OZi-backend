@@ -438,11 +438,11 @@ export class ProductBulkValidationService {
 
     // Fetch existing products
     const existingProducts = await Product.findAll({
-      where: { sku: { [Op.in]: skus } }
+      where: { sku_id: { [Op.in]: skus } }
     });
 
     const existingSKUMap = new Map(
-      existingProducts.map(p => [p.sku, p])
+      existingProducts.map(p => [p.sku_id, p])
     );
 
     for (let i = 0; i < records.length; i++) {

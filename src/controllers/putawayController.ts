@@ -203,7 +203,7 @@ export class FCPutawayController {
           const productDetails = await Promise.all(
             skuArray.map(async (skuId) => {
               const product = await Product.findOne({
-                where: { sku: skuId }
+                where: { sku_id: skuId }
               });
               
               const qcDetails = grnData.skuQcDetails.get(skuId) || {
@@ -449,7 +449,7 @@ export class FCPutawayController {
 
       // Find product in product_master table
       const product = await Product.findOne({
-        where: { sku: sku_id },
+        where: { sku_id: sku_id },
       });
 
       if (!product) {
@@ -562,7 +562,7 @@ export class FCPutawayController {
       
       // First, try to find by SKU directly
       product = await Product.findOne({
-        where: { sku: sku_id }
+        where: { sku_id: sku_id }
       });
       
       if (product) {
@@ -955,7 +955,7 @@ export class FCPutawayController {
 
       // Get product details
       const product = await Product.findOne({
-        where: { sku: sku_id },
+        where: { sku_id: sku_id },
       });
 
       if (!product) {
