@@ -630,7 +630,7 @@ export class PickingController {
           
           try {
             await sendPushNotification(
-              device.arn,
+              device.snsEndpointArn,
               "📦 New Wave Assigned",
               `Wave #${wave.waveNumber} has been assigned to you.`,
               { 
@@ -1736,9 +1736,9 @@ export class PickingController {
     });
     console.log(`Total picklist items found for wave ${waveId}: ${totalItemsForWave}`);
 
-    // Extend PicklistItem type to include productInfo
+    // Extend PicklistItem type to include product
     interface PicklistItemWithProduct extends PicklistItem {
-      productInfo?: Product;
+      product?: Product;
     }
 
     // Fetch picklist items with included Product info
@@ -1750,8 +1750,8 @@ export class PickingController {
   include: [
     {
       model: Product,
-      as: 'productInfo',
-      attributes: ['ImageURL', 'EAN_UPC', 'MRP'],
+      as: 'product',
+      attributes: ['image_url', 'ean_upc', 'mrp'],
       required: false, // Left join
     }
   ],
@@ -1789,9 +1789,9 @@ export class PickingController {
     expiryDate: item.expiryDate,
     pickedQuantity: item.pickedQuantity,
     partialReason: item.partialReason,
-    imageUrl: item.productInfo?.image_url || null,  // Safely access productInfo
-    ean: item.productInfo?.ean_upc || null,
-    mrp: item.productInfo?.mrp || null,
+    imageUrl: item.product?.image_url || null,  // Safely access product
+    ean: item.product?.ean_upc || null,
+    mrp: item.product?.mrp || null,
   })),
   pagination: {
     page: parseInt(page.toString()),
