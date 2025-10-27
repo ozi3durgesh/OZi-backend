@@ -214,17 +214,31 @@ router.post("/:waveId/pack-and-seal", upload.single("photo"), async (req, res) =
       });
     }
 
-    let deliveryPartner: DeliveryMan | null = null;
-    if (order.delivery_man_id) {
-      deliveryPartner = await DeliveryMan.findByPk(order.delivery_man_id);
+    // Find rider - try to get existing or find from order
+    let rider: any = null;
+    
+    // First try to get existing rider from wave
+    if (wave.riderId) {
+      rider = await Rider.findByPk(wave.riderId);
     }
-
-    await wave.update({
+    
+    // If no rider and order has delivery_man_id, try to find matching rider
+    if (!rider && order.delivery_man_id) {
+      rider = await Rider.findOne({ where: { id: order.delivery_man_id } });
+    }
+    
+    // Only update riderId if we found a valid rider and wave doesn't already have one
+    const updateData: any = {
       status: "PACKED",
       photoPath: photo.location,
-      riderId: deliveryPartner?.id ?? undefined, 
-      riderAssignedAt: deliveryPartner ? new Date() : undefined,
-    });
+    };
+    
+    if (rider && !wave.riderId) {
+      updateData.riderId = rider.id;
+      updateData.riderAssignedAt = new Date();
+    }
+
+    await wave.update(updateData);
 
     // socketManager.emit("delivery_assigned", {
     //   waveId: wave.id,
@@ -252,7 +266,14 @@ router.post("/:waveId/pack-and-seal", upload.single("photo"), async (req, res) =
           mimetype: photo.mimetype,
           size: photo.size,
         },
-        deliveryPartner: formatDeliveryPartner(deliveryPartner),
+        deliveryPartner: rider ? {
+          id: rider.id,
+          name: rider.name || rider.riderCode,
+          phone: rider.phone,
+          email: rider.email,
+          vehicleType: rider.vehicleType,
+          vehicleNumber: rider.vehicleNumber
+        } : null,
       },
     });
   } catch (error) {
