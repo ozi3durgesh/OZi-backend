@@ -214,25 +214,22 @@ router.post("/:waveId/pack-and-seal", upload.single("photo"), async (req, res) =
       });
     }
 
-    // Find rider - try to get existing or find from order
+    // Find rider - only get existing rider from wave
     let rider: any = null;
     
-    // First try to get existing rider from wave
     if (wave.riderId) {
       rider = await Rider.findByPk(wave.riderId);
     }
     
-    // If no rider and order has delivery_man_id, try to find matching rider
-    if (!rider && order.delivery_man_id) {
-      rider = await Rider.findOne({ where: { id: order.delivery_man_id } });
-    }
+    // Don't try to set riderId from delivery_man_id - they're different tables
+    // The foreign key constraint requires riderId to exist in riders table
     
-    // Only update riderId if we found a valid rider and wave doesn't already have one
     const updateData: any = {
       status: "PACKED",
       photoPath: photo.location,
     };
     
+    // Don't update riderId unless we found a valid one and wave doesn't already have it
     if (rider && !wave.riderId) {
       updateData.riderId = rider.id;
       updateData.riderAssignedAt = new Date();
@@ -308,26 +305,18 @@ router.get("/:waveId/refresh", async (req, res) => {
       });
     }
 
-    // Try to find rider - first check if riderId exists in wave, then check delivery_man_id
+    // Try to find rider - first check if riderId exists in wave
     let rider: any = null;
     
-    // First try to get existing rider from wave
     if (wave.riderId) {
       rider = await Rider.findByPk(wave.riderId);
     }
     
-    // If no rider and order has delivery_man_id, try to find matching rider
-    if (!rider && order.delivery_man_id) {
-      // Check if delivery_man_id corresponds to a rider
-      rider = await Rider.findOne({ where: { id: order.delivery_man_id } });
-    }
+    // Don't try to map from delivery_man_id because delivery_men and riders are different tables
+    // The foreign key constraint requires riderId to exist in riders table
     
-    // Only update if we found a valid rider and wave doesn't already have one
-    if (rider && !wave.riderId) {
-      await wave.update({
-        riderId: rider.id,
-        riderAssignedAt: new Date(),
-      });
+    if (!rider) {
+      console.log(`No rider found for wave ${waveId}`);
     }
 
     return res.status(200).json({
