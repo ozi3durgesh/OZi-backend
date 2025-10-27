@@ -4,6 +4,7 @@ import { PickingWave, PicklistItem, PickingException, User, Order, ScannerBin, S
 import { ResponseHandler } from '../middleware/responseHandler';
 import { OrderAttributes } from '../types';
 import Product from '../models/productModel';
+import OrderDetail from '../models/OrderDetail';
 import { Sequelize, Op } from 'sequelize';
 import DirectInventoryService from '../services/DirectInventoryService';
 import { INVENTORY_OPERATIONS } from '../config/inventoryConstants';
@@ -1761,8 +1762,8 @@ export class PickingController {
     // Debug logging
   /*  picklistItems.rows.forEach(item => {
   console.log(`- ID: ${item.id}, SKU: ${item.sku}, Qty: ${item.quantity}`);
-  if (item.productInfo) {
-    console.log(`   Product -> ImageURL: ${item.productInfo.ImageURL}, EAN: ${item.productInfo.EAN_UPC}, MRP: ${item.productInfo.MRP}`);
+  if (item.product) {
+    console.log(`   Product -> image_url: ${item.product.image_url}, ean: ${item.product.ean_upc}, mrp: ${item.product.mrp}`);
   } else {
     console.log('   Product -> Not found');
   }
@@ -1862,13 +1863,20 @@ export class PickingController {
       const orderData = order.get({ plain: true });
       const waveNumber = `W${Date.now()}-${orderData.id}`;
       
+      // Fetch order details to get cart items
+      const orderDetails = await OrderDetail.findAll({
+        where: { order_id: orderId }
+      });
+      
+      console.log(`📦 Found ${orderDetails.length} order details for order ${orderId}`);
+      
       // Calculate SLA deadline (24 hours from now)
       const slaDeadline = new Date(Date.now() + 24 * 60 * 60 * 1000);
       
-      // Calculate total items for this single order
+      // Calculate total items from order_details
       let totalItems = 0;
-      if (orderData.cart && Array.isArray(orderData.cart)) {
-        totalItems = orderData.cart.reduce((sum: number, item: any) => {
+      if (orderDetails && orderDetails.length > 0) {
+        totalItems = orderDetails.reduce((sum: number, item: any) => {
           return sum + (item.quantity || 1);
         }, 0);
       }
@@ -1894,12 +1902,26 @@ export class PickingController {
       let actualTotalItems = 0;
       let createdItems = 0;
       
-      if (orderData.cart && Array.isArray(orderData.cart)) {
-        for (let i = 0; i < orderData.cart.length; i++) {
-          const item = orderData.cart[i];
+      if (orderDetails && orderDetails.length > 0) {
+        for (let i = 0; i < orderDetails.length; i++) {
+          const orderDetail = orderDetails[i].get({ plain: true });
+          
+          // Extract SKU from item_details (stored as JSON string)
+          let item: { sku: any; quantity: number } = { sku: null, quantity: orderDetail.quantity };
+          try {
+            if (orderDetail.item_details) {
+              const itemDetails = typeof orderDetail.item_details === 'string' 
+                ? JSON.parse(orderDetail.item_details) 
+                : orderDetail.item_details;
+              item.sku = itemDetails.sku || itemDetails.id;
+              item.quantity = orderDetail.quantity;
+            }
+          } catch (e) {
+            console.warn(`Failed to parse item_details for order detail ${orderDetail.id}:`, e);
+          }
           
           if (item && item.sku !== undefined && item.sku !== null) {
-            const quantity = item.quantity || (item.amount ? 1 : 1);
+            const quantity = item.quantity || 1;
             
             try {
               // First, ensure the SKU exists in product_master table
