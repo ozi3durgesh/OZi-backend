@@ -214,28 +214,18 @@ router.post("/:waveId/pack-and-seal", upload.single("photo"), async (req, res) =
       });
     }
 
-    // Find rider - only get existing rider from wave
-    let rider: any = null;
+    // Get delivery partner from delivery_men table
+    let deliveryPartner: DeliveryMan | null = null;
     
-    if (wave.riderId) {
-      rider = await Rider.findByPk(wave.riderId);
+    if (order.delivery_man_id) {
+      deliveryPartner = await DeliveryMan.findByPk(order.delivery_man_id);
     }
     
-    // Don't try to set riderId from delivery_man_id - they're different tables
-    // The foreign key constraint requires riderId to exist in riders table
-    
-    const updateData: any = {
+    // Update wave status and photo, but don't touch riderId
+    await wave.update({
       status: "PACKED",
       photoPath: photo.location,
-    };
-    
-    // Don't update riderId unless we found a valid one and wave doesn't already have it
-    if (rider && !wave.riderId) {
-      updateData.riderId = rider.id;
-      updateData.riderAssignedAt = new Date();
-    }
-
-    await wave.update(updateData);
+    });
 
     // socketManager.emit("delivery_assigned", {
     //   waveId: wave.id,
@@ -263,14 +253,7 @@ router.post("/:waveId/pack-and-seal", upload.single("photo"), async (req, res) =
           mimetype: photo.mimetype,
           size: photo.size,
         },
-        deliveryPartner: rider ? {
-          id: rider.id,
-          name: rider.name || rider.riderCode,
-          phone: rider.phone,
-          email: rider.email,
-          vehicleType: rider.vehicleType,
-          vehicleNumber: rider.vehicleNumber
-        } : null,
+        deliveryPartner: deliveryPartner ? formatDeliveryPartner(deliveryPartner) : null,
       },
     });
   } catch (error) {
@@ -305,18 +288,11 @@ router.get("/:waveId/refresh", async (req, res) => {
       });
     }
 
-    // Try to find rider - first check if riderId exists in wave
-    let rider: any = null;
+    // Get delivery partner from delivery_men table
+    let deliveryPartner: DeliveryMan | null = null;
     
-    if (wave.riderId) {
-      rider = await Rider.findByPk(wave.riderId);
-    }
-    
-    // Don't try to map from delivery_man_id because delivery_men and riders are different tables
-    // The foreign key constraint requires riderId to exist in riders table
-    
-    if (!rider) {
-      console.log(`No rider found for wave ${waveId}`);
+    if (order.delivery_man_id) {
+      deliveryPartner = await DeliveryMan.findByPk(order.delivery_man_id);
     }
 
     return res.status(200).json({
@@ -325,18 +301,11 @@ router.get("/:waveId/refresh", async (req, res) => {
       data: {
         waveId: wave.id,
         status: wave.status,
-        riderId: wave.riderId,
-        riderAssignedAt: wave.riderAssignedAt,
-        deliveryPartner: rider ? {
-          id: rider.id,
-          name: rider.name || rider.riderCode,
-          phone: rider.phone,
-          email: rider.email,
-          vehicleType: rider.vehicleType,
-          vehicleNumber: rider.vehicleNumber
-        } : null,
+        riderId: null, // Not using riderId anymore
+        riderAssignedAt: null,
+        deliveryPartner: deliveryPartner ? formatDeliveryPartner(deliveryPartner) : null,
       },
-      message: rider
+      message: deliveryPartner
         ? "Delivery partner assigned"
         : "No delivery partner assigned yet",
     });
