@@ -13,7 +13,7 @@ import { ResponseHandler } from '../middleware/responseHandler';
 import ReturnRejectGrn from '../models/ReturnRejectGrn';
 import { InventoryService } from '../services/InventoryService';
 import { INVENTORY_OPERATIONS } from '../config/inventoryConstants';
-
+import { ProductMaster } from '../models';
 interface AuthRequest extends Request {
   user?: any;
 }
@@ -30,7 +30,7 @@ export class ReturnRequestItemController {
       // Generate unique return order ID with timestamp to avoid duplicates
       const timestamp = Date.now();
       const returnOrderId = `${returnData.original_order_id}${RETURN_CONSTANTS.RETURN_ORDER_ID.SUFFIX}`;
-      
+      const currentFc = parseInt(req.user.currentFcId)      
       // Verify original order exists
       console.log(`🔍 Looking for original order: ${returnData.original_order_id}`);
       const originalOrder = await Order.findOne({ 
@@ -58,6 +58,7 @@ export class ReturnRequestItemController {
       
       for (const itemData of returnData.items) {
         const returnRequestItem = await ReturnRequestItem.create({
+          fc_id : currentFc,
           return_order_id: returnOrderId,
           original_order_id: returnData.original_order_id,
           customer_id: returnData.customer_id,
@@ -684,22 +685,27 @@ export class ReturnRequestItemController {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
       const offset = (page - 1) * limit;
+      const currentFc = parseInt(req.user.currentFcId)
 
       // Find return request items with status 'received' that are ready for GRN
       const { count, rows } = await ReturnRequestItem.findAndCountAll({
         where: { 
           status: RETURN_CONSTANTS.STATUSES.RECEIVED,
+          fc_id :  currentFc,
           grn_status: { [require('sequelize').Op.or]: [null, 'pending'] }
         },
         include: [
-          { model: Order, as: 'originalOrder', attributes: ['id', 'order_id', 'user_id', 'order_amount', 'created_at'] },
-          { model: Product, as: 'product', attributes: ['SKU', 'ProductName', 'Category', 'Brand', 'MRP', 'COST', 'EAN_UPC', 'ImageURL'] }
+          { model: Order, as: 'originalOrder', attributes: ['id', 'user_id', 'order_amount', 'created_at'] },
+          { model: ProductMaster, as: 'product', attributes: ['sku_id', 'name', 'Category', 'brand_id', 'MRP', 'EAN_UPC', 'image_url'] }
         ],
         order: [['created_at', 'DESC']],
         limit,
         offset,
         distinct: true
       });
+
+      console.log("count, rows---------", count, rows);
+      
 
       // Group by return_order_id to get unique return orders
       const returnOrdersMap = new Map();
@@ -1288,11 +1294,12 @@ export class ReturnRequestItemController {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
       const offset = (page - 1) * limit;
-
+      const currentFc = req.user.currentFc;
       // Find return request items with completed GRN that are ready for putaway
       const { count, rows } = await ReturnRequestItem.findAndCountAll({
         where: { 
           grn_status: 'completed',
+          fc_id: currentFc,
           putaway_status: { [require('sequelize').Op.or]: [null, 'pending'] },
           received_quantity: { [require('sequelize').Op.gt]: 0 }
         },
@@ -1383,21 +1390,21 @@ export class ReturnRequestItemController {
       let foundBy: 'sku' | 'ean';
       
       // First, try to find by SKU directly
-      let product = await Product.findOne({
-        where: { sku: sku_id }
+      let product = await ProductMaster.findOne({
+        where: { sku_id: sku_id }
       });
       
       if (product) {
-        resolvedSku = product.sku;
+        resolvedSku = product.sku_id;
         foundBy = 'sku';
       } else {
         // If not found by SKU, try to find by EAN_UPC
-        product = await Product.findOne({
+        product = await ProductMaster.findOne({
           where: { ean_upc: sku_id }
         });
         
         if (product) {
-          resolvedSku = product.sku;
+          resolvedSku = product.sku_id;
           foundBy = 'ean';
         } else {
           // Neither SKU nor EAN found

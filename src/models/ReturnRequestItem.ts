@@ -4,6 +4,7 @@ import User from './User';
 import Order from './Order';
 import Product from './productModel';
 import { RETURN_CONSTANTS, ReturnStatus, ReturnReason, ReturnType, QCStatus, TimelineEvent } from '../config/returnConstants';
+import ProductMaster from './NewProductMaster';
 
 interface ReturnRequestItemAttributes {
   id: number;
@@ -71,6 +72,8 @@ interface ReturnRequestItemAttributes {
   updated_at: number;
   created_by: number;
   is_active: number;
+
+  fc_id: number;
 }
 
 interface ReturnRequestItemCreationAttributes {
@@ -127,6 +130,8 @@ interface ReturnRequestItemCreationAttributes {
   updated_at?: number;
   created_by?: number;
   is_active?: number;
+
+  fc_id?: number;
 }
 
 class ReturnRequestItem extends Model<ReturnRequestItemAttributes, ReturnRequestItemCreationAttributes> {
@@ -195,6 +200,8 @@ class ReturnRequestItem extends Model<ReturnRequestItemAttributes, ReturnRequest
   declare updated_at: number;
   declare created_by: number;
   declare is_active: number;
+
+  declare fc_id : number;
 }
 
 ReturnRequestItem.init({
@@ -446,7 +453,16 @@ ReturnRequestItem.init({
     type: DataTypes.TINYINT, 
     allowNull: false, 
     defaultValue: RETURN_CONSTANTS.DEFAULTS.IS_ACTIVE 
-  }
+  },
+
+  fc_id: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'FulfillmentCenters',
+      key: 'id',
+    },
+  },
 }, {
   sequelize,
   tableName: 'return_request_items',
@@ -477,7 +493,7 @@ Order.hasMany(ReturnRequestItem, { foreignKey: 'original_order_id', sourceKey: '
 ReturnRequestItem.belongsTo(Order, { foreignKey: 'original_order_id', targetKey: 'id', as: 'originalOrder' });
 
 // Product associations
-Product.hasMany(ReturnRequestItem, { foreignKey: 'item_id', sourceKey: 'sku', as: 'returnRequestItems' });
-ReturnRequestItem.belongsTo(Product, { foreignKey: 'item_id', targetKey: 'sku', as: 'product' });
+ProductMaster.hasMany(ReturnRequestItem, { foreignKey: 'item_id', sourceKey: 'sku_id', as: 'returnRequestItems' });
+ReturnRequestItem.belongsTo(ProductMaster, { foreignKey: 'item_id', targetKey: 'sku_id', as: 'product' });
 
 export default ReturnRequestItem;
