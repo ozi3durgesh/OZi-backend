@@ -1127,7 +1127,8 @@ export const dispatchWave = async (req: Request, res: Response) => {
     wave.status = "COMPLETED"; // mark as completed
     wave.handoverAt = new Date();
     wave.handoverBy = staffId;
-    wave.riderId = rider.id;
+    // Don't set riderId - it references riders table, not delivery_men
+    // wave.riderId = rider.id; // Commented out - foreign key constraint issue
     wave.dispatchNotes = dispatchNotes || null;
     if (photoUrl) {
       wave.handoverPhoto = photoUrl; // store S3 URL instead of local path
