@@ -155,9 +155,7 @@ export async function processPayment({
                     po.paymentDueDate = due;
                 }
 
-                if (po.paymentDueDate && remaining > 0 && new Date(po.paymentDueDate) < new Date()) {
-                    newStatus = "OVERDUE";
-                }
+
                 break;
 
             case "SELL_OR_RETURN":

@@ -189,7 +189,6 @@ DCPurchaseOrder.init(
         "EXCESS_ADVANCE",
         "CREDIT_DUE",
         "CREDIT_CLEARED",
-        "OVERDUE",
         "PENDING_RECONCILIATION",
         "RECONCILED"
       ),
