@@ -43,6 +43,7 @@ import fcPOStatusRoutes from './routes/fcPOStatusRoutes';
 import pdfUploadRoutes from './routes/pdfUploadRoutes';
 import brandRoutes from './routes/brandRoutes';
 import productMasterRoutes from './routes/productMasterRoutes';
+import PaymentRoutes from './routes/PaymentRoutes'
 
 const app = express();
 
@@ -124,6 +125,9 @@ app.use('/api/brands', brandRoutes);
 
 // New Product Master routes
 app.use('/api', productMasterRoutes);
+
+//payment servise routes
+app.use('/api/payments', PaymentRoutes)
 
 
 // Health check
