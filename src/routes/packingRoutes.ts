@@ -5,6 +5,7 @@ import { PackingController } from '../controllers/packingController';
 import PickingWave from '../models/PickingWave';
 import Order from '../models/Order';
 import DeliveryMan from '../models/DeliveryMan';
+import Rider from '../models/Rider';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
@@ -286,16 +287,26 @@ router.get("/:waveId/refresh", async (req, res) => {
       });
     }
 
-    let deliveryPartner: DeliveryMan | null = null;
-    if (order.delivery_man_id) {
-      deliveryPartner = await DeliveryMan.findByPk(order.delivery_man_id);
-
-      if (deliveryPartner && !wave.riderId) {
-        await wave.update({
-          riderId: deliveryPartner.id,
-          riderAssignedAt: new Date(),
-        });
-      }
+    // Try to find rider - first check if riderId exists in wave, then check delivery_man_id
+    let rider: any = null;
+    
+    // First try to get existing rider from wave
+    if (wave.riderId) {
+      rider = await Rider.findByPk(wave.riderId);
+    }
+    
+    // If no rider and order has delivery_man_id, try to find matching rider
+    if (!rider && order.delivery_man_id) {
+      // Check if delivery_man_id corresponds to a rider
+      rider = await Rider.findOne({ where: { id: order.delivery_man_id } });
+    }
+    
+    // Only update if we found a valid rider and wave doesn't already have one
+    if (rider && !wave.riderId) {
+      await wave.update({
+        riderId: rider.id,
+        riderAssignedAt: new Date(),
+      });
     }
 
     return res.status(200).json({
@@ -306,9 +317,16 @@ router.get("/:waveId/refresh", async (req, res) => {
         status: wave.status,
         riderId: wave.riderId,
         riderAssignedAt: wave.riderAssignedAt,
-        deliveryPartner: formatDeliveryPartner(deliveryPartner),
+        deliveryPartner: rider ? {
+          id: rider.id,
+          name: rider.name || rider.riderCode,
+          phone: rider.phone,
+          email: rider.email,
+          vehicleType: rider.vehicleType,
+          vehicleNumber: rider.vehicleNumber
+        } : null,
       },
-      message: deliveryPartner
+      message: rider
         ? "Delivery partner assigned"
         : "No delivery partner assigned yet",
     });
