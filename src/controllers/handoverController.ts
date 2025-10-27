@@ -1005,14 +1005,17 @@ export const dispatchWave = async (req: Request, res: Response) => {
       if (quantity > 0) {
         try {
           // First check current inventory to ensure we don't go negative
-          const currentInventory = await DirectInventoryService.getInventorySummary(sku);
+          let currentInventory = await DirectInventoryService.getInventorySummary(sku);
           
           if (!currentInventory) {
-            await transaction.rollback();
-            return res.status(400).json({
+            // Skip inventory validation if record doesn't exist
+            console.log(`Inventory record not found for SKU ${sku}, skipping inventory update`);
+            inventoryUpdateResults.push({
+              sku: sku,
               success: false,
-              message: `Inventory record not found for SKU ${sku}`,
+              message: `Inventory record not found for SKU ${sku}`
             });
+            continue; // Skip to next SKU
           }
 
           // Check if we have enough putaway quantity to dispatch
