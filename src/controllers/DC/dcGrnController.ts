@@ -690,7 +690,7 @@ export class DCGrnController {
 
       // Validate status filter if provided
       const validPOStatuses = ['DRAFT', 'PENDING_CATEGORY_HEAD', 'PENDING_ADMIN', 'PENDING_CREATOR_REVIEW', 'APPROVED', 'REJECTED', 'CANCELLED'];
-      const validGRNStatuses = ['partial', 'completed', 'closed', 'pending-qc', 'variance-review', 'rtv-initiated', 'pending', 'rejected'];
+      const validGRNStatuses = ['partial', 'completed', 'closed', 'pending-qc', 'variance-review', 'rtv-initiated', 'pending', 'rejected', 'approved'];
       
       if (statusFilter) {
         const isPOStatus = validPOStatuses.includes(statusFilter.toUpperCase());
@@ -711,10 +711,10 @@ export class DCGrnController {
         const isPOStatus = validPOStatuses.includes(statusFilter.toUpperCase());
         const isGRNStatus = validGRNStatuses.includes(statusFilter.toLowerCase());
         
-        if (isPOStatus) {
-          // Filter by PO status
+        if (isPOStatus && statusFilter.toUpperCase() !== 'APPROVED') {
+          // Filter by PO status (except APPROVED which should be treated as GRN status)
           whereClause.status = statusFilter.toUpperCase();
-        } else if (isGRNStatus) {
+        } else if (isGRNStatus || statusFilter.toLowerCase() === 'approved') {
           // Filter by GRN status - keep PO filter as default but add GRN filter
           whereClause.status = ['APPROVED', 'REJECTED', 'PENDING_CATEGORY_HEAD'];
           grnWhereClause.status = statusFilter.toLowerCase();
@@ -730,7 +730,7 @@ export class DCGrnController {
       let purchaseOrders: any[];
       
       if (Object.keys(grnWhereClause).length > 0) {
-        // When filtering by GRN status, we need to get all POs first, then filter by GRN status
+        // When filtering by GRN status, get all POs first, then filter by calculated GRN status
         const allPOs = await DCPurchaseOrder.findAll({
           where: whereClause,
           include: [
@@ -752,8 +752,6 @@ export class DCGrnController {
             {
               model: DCGrn,
               as: 'DCGrns',
-              where: grnWhereClause,
-              required: true,
               include: [
                 {
                   model: DCGrnLine,
@@ -770,8 +768,57 @@ export class DCGrnController {
           order: [['createdAt', 'DESC']]
         });
         
-        count = allPOs.length;
-        purchaseOrders = allPOs.slice(offset, offset + limit);
+        // Filter by calculated GRN status after processing
+        const filteredPOs = allPOs.filter((po: any) => {
+          const hasGrn = po.DCGrns && po.DCGrns.length > 0;
+          
+          // If no GRN exists, check if the PO status matches the GRN status filter
+          if (!hasGrn) {
+            // For rejected status, check if PO is rejected
+            if (grnWhereClause.status === 'rejected' && po.status === 'REJECTED') {
+              return true;
+            }
+            return false;
+          }
+          
+          const grnData = po.DCGrns[0];
+          const processedLines = po.Products?.map((product: any) => {
+            let skuMatrix: any[] = [];
+            try {
+              if (product.sku_matrix_on_catelogue_id) {
+                skuMatrix = typeof product.sku_matrix_on_catelogue_id === 'string' 
+                  ? JSON.parse(product.sku_matrix_on_catelogue_id)
+                  : product.sku_matrix_on_catelogue_id;
+              }
+            } catch (error) {
+              skuMatrix = [];
+            }
+            const actualSku = skuMatrix.length > 0 ? skuMatrix[0].sku : product.catalogue_id;
+            const grnLine = grnData?.Lines?.find((line: any) => line.sku_id === actualSku);
+            
+            if (grnLine) {
+              return DCGrnController.calculateLineStatus(
+                grnLine.ordered_qty,
+                grnLine.rejected_qty,
+                grnLine.qc_pass_qty
+              );
+            } else {
+              return DCGrnController.calculateLineStatus(
+                product.quantity,
+                0,
+                0
+              );
+            }
+          }) || [];
+          
+          const calculatedGrnStatus = DCGrnController.calculateGrnStatus(processedLines);
+          // Treat "approved" as equivalent to "completed"
+          const statusToMatch = grnWhereClause.status === 'approved' ? 'completed' : grnWhereClause.status;
+          return calculatedGrnStatus === statusToMatch;
+        });
+        
+        count = filteredPOs.length;
+        purchaseOrders = filteredPOs.slice(offset, offset + limit);
       } else {
         // Normal case - filter by PO status
         const result = await DCPurchaseOrder.findAndCountAll({
@@ -919,12 +966,24 @@ export class DCGrnController {
 
         // Calculate overall GRN status based on line statuses
         const lineStatuses = processedLines.map((line: any) => line.line_status);
-        const calculatedGrnStatus = hasGrn ? DCGrnController.calculateGrnStatus(lineStatuses) : po.status.toLowerCase();
+        let calculatedGrnStatus;
+        
+        if (hasGrn) {
+          calculatedGrnStatus = DCGrnController.calculateGrnStatus(lineStatuses);
+        } else {
+          // For POs without GRNs, use PO status
+          calculatedGrnStatus = po.status.toLowerCase();
+        }
+        
+        // If user queried for "approved" and calculated status is "completed", show "approved"
+        const displayStatus = (statusFilter?.toLowerCase() === 'approved' && calculatedGrnStatus === 'completed') 
+          ? 'approved' 
+          : calculatedGrnStatus;
         
         return {
           id: hasGrn ? grnData.id : po.id,
           po_id: po.id,
-          status: calculatedGrnStatus,
+          status: displayStatus,
           closeReason: hasGrn ? grnData.closeReason : (po.status === 'REJECTED' ? po.rejectionReason : null),
           created_by: hasGrn ? grnData.created_by : (po.CreatedBy?.id || null),
           created_at: hasGrn ? grnData.created_at : po.createdAt,
