@@ -661,10 +661,10 @@ ProductMaster.hasMany(ProductMasterAudit, {
 
 // One PO → many payments
 DCPurchaseOrder.hasMany(PaymentTransaction, {
-  foreignKey: "purchaseOrderId",
+  foreignKey: "dcPurchaseOrderId",
   as: "payments",
 });
-PaymentTransaction.belongsTo(DCPurchaseOrder, { foreignKey: "purchaseOrderId" });
+PaymentTransaction.belongsTo(DCPurchaseOrder, { foreignKey: "dcPurchaseOrderId" });
 
 // One PO → many credit notes
 DCPurchaseOrder.hasMany(CreditNote, {

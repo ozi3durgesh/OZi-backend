@@ -9,4 +9,6 @@ router.use(authenticate);
 // POST /api/payments/process
 router.post("/process",  PaymentController.submitPayment);
 
+router.get("/:purchaseOrderId", PaymentController.listPaymentsByPO);
+
 export default router;
