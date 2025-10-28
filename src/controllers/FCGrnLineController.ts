@@ -72,6 +72,7 @@ export class FCGrnLineController {
             held_qty: line.heldQty ?? 0,
             rtv_qty: line.rtvQty ?? 0,
             line_status: line.lineStatus ?? 'PENDING',
+            putaway_status: 'pending',
           },
           { transaction: t }
         );
