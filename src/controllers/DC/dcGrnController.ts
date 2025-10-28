@@ -689,61 +689,133 @@ export class DCGrnController {
       }
 
       // Validate status filter if provided
-      const validStatuses = ['DRAFT', 'PENDING_CATEGORY_HEAD', 'PENDING_ADMIN', 'PENDING_CREATOR_REVIEW', 'APPROVED', 'REJECTED', 'CANCELLED'];
-      if (statusFilter && !validStatuses.includes(statusFilter.toUpperCase())) {
-        return ResponseHandler.error(res, `Invalid status. Valid statuses: ${validStatuses.join(', ')}`, 400);
+      const validPOStatuses = ['DRAFT', 'PENDING_CATEGORY_HEAD', 'PENDING_ADMIN', 'PENDING_CREATOR_REVIEW', 'APPROVED', 'REJECTED', 'CANCELLED'];
+      const validGRNStatuses = ['partial', 'completed', 'closed', 'pending-qc', 'variance-review', 'rtv-initiated', 'pending', 'rejected'];
+      
+      if (statusFilter) {
+        const isPOStatus = validPOStatuses.includes(statusFilter.toUpperCase());
+        const isGRNStatus = validGRNStatuses.includes(statusFilter.toLowerCase());
+        
+        if (!isPOStatus && !isGRNStatus) {
+          return ResponseHandler.error(res, `Invalid status. Valid PO statuses: ${validPOStatuses.join(', ')}. Valid GRN statuses: ${validGRNStatuses.join(', ')}`, 400);
+        }
       }
 
       const offset = (page - 1) * limit;
 
       // Build where clause based on status filter
       let whereClause: any = {};
+      let grnWhereClause: any = {};
+      
       if (statusFilter) {
-        whereClause.status = statusFilter.toUpperCase();
+        const isPOStatus = validPOStatuses.includes(statusFilter.toUpperCase());
+        const isGRNStatus = validGRNStatuses.includes(statusFilter.toLowerCase());
+        
+        if (isPOStatus) {
+          // Filter by PO status
+          whereClause.status = statusFilter.toUpperCase();
+        } else if (isGRNStatus) {
+          // Filter by GRN status - keep PO filter as default but add GRN filter
+          whereClause.status = ['APPROVED', 'REJECTED', 'PENDING_CATEGORY_HEAD'];
+          grnWhereClause.status = statusFilter.toLowerCase();
+        }
       } else {
         // Default behavior: Get DC Purchase Orders with APPROVED, REJECTED, or PENDING_CATEGORY_HEAD status
         // PENDING_CATEGORY_HEAD means the PO was approved but then edited
         whereClause.status = ['APPROVED', 'REJECTED', 'PENDING_CATEGORY_HEAD'];
       }
 
-      const { count, rows: purchaseOrders } = await DCPurchaseOrder.findAndCountAll({
-        where: whereClause,
-        include: [
-          {
-            model: User,
-            as: 'CreatedBy',
-            attributes: ['id', 'email', 'name']
-          },
-          {
-            model: DCPOProduct,
-            as: 'Products',
-            attributes: [
-              'id', 'catalogue_id', 'productName', 'quantity', 'unitPrice', 
-              'totalAmount', 'mrp', 'cost', 'description', 'hsn', 'ean_upc',
-              'weight', 'length', 'height', 'width', 'gst', 'cess', 'image_url',
-              'brand_id', 'category_id', 'sku_matrix_on_catelogue_id'
-            ]
-          },
-          {
-            model: DCGrn,
-            as: 'DCGrns',
-            include: [
-              {
-                model: DCGrnLine,
-                as: 'Lines',
-                attributes: [
-                  'id', 'sku_id', 'ordered_qty', 'received_qty', 'pending_qty',
-                  'rejected_qty', 'qc_pass_qty', 'qc_fail_qty', 'rtv_qty', 'held_qty',
-                  'line_status', 'variance_reason', 'remarks'
-                ]
-              }
-            ]
-          }
-        ],
-        order: [['createdAt', 'DESC']],
-        limit,
-        offset
-      });
+      // If filtering by GRN status, we need to handle counting differently
+      let count: number;
+      let purchaseOrders: any[];
+      
+      if (Object.keys(grnWhereClause).length > 0) {
+        // When filtering by GRN status, we need to get all POs first, then filter by GRN status
+        const allPOs = await DCPurchaseOrder.findAll({
+          where: whereClause,
+          include: [
+            {
+              model: User,
+              as: 'CreatedBy',
+              attributes: ['id', 'email', 'name']
+            },
+            {
+              model: DCPOProduct,
+              as: 'Products',
+              attributes: [
+                'id', 'catalogue_id', 'productName', 'quantity', 'unitPrice', 
+                'totalAmount', 'mrp', 'cost', 'description', 'hsn', 'ean_upc',
+                'weight', 'length', 'height', 'width', 'gst', 'cess', 'image_url',
+                'brand_id', 'category_id', 'sku_matrix_on_catelogue_id'
+              ]
+            },
+            {
+              model: DCGrn,
+              as: 'DCGrns',
+              where: grnWhereClause,
+              required: true,
+              include: [
+                {
+                  model: DCGrnLine,
+                  as: 'Lines',
+                  attributes: [
+                    'id', 'sku_id', 'ordered_qty', 'received_qty', 'pending_qty',
+                    'rejected_qty', 'qc_pass_qty', 'qc_fail_qty', 'rtv_qty', 'held_qty',
+                    'line_status', 'variance_reason', 'remarks'
+                  ]
+                }
+              ]
+            }
+          ],
+          order: [['createdAt', 'DESC']]
+        });
+        
+        count = allPOs.length;
+        purchaseOrders = allPOs.slice(offset, offset + limit);
+      } else {
+        // Normal case - filter by PO status
+        const result = await DCPurchaseOrder.findAndCountAll({
+          where: whereClause,
+          include: [
+            {
+              model: User,
+              as: 'CreatedBy',
+              attributes: ['id', 'email', 'name']
+            },
+            {
+              model: DCPOProduct,
+              as: 'Products',
+              attributes: [
+                'id', 'catalogue_id', 'productName', 'quantity', 'unitPrice', 
+                'totalAmount', 'mrp', 'cost', 'description', 'hsn', 'ean_upc',
+                'weight', 'length', 'height', 'width', 'gst', 'cess', 'image_url',
+                'brand_id', 'category_id', 'sku_matrix_on_catelogue_id'
+              ]
+            },
+            {
+              model: DCGrn,
+              as: 'DCGrns',
+              include: [
+                {
+                  model: DCGrnLine,
+                  as: 'Lines',
+                  attributes: [
+                    'id', 'sku_id', 'ordered_qty', 'received_qty', 'pending_qty',
+                    'rejected_qty', 'qc_pass_qty', 'qc_fail_qty', 'rtv_qty', 'held_qty',
+                    'line_status', 'variance_reason', 'remarks'
+                  ]
+                }
+              ]
+            }
+          ],
+          order: [['createdAt', 'DESC']],
+          limit,
+          offset
+        });
+        
+        count = result.count;
+        purchaseOrders = result.rows;
+      }
 
       // Transform the data to match the expected GRN format
       const grnList = purchaseOrders.map((po: any) => {
