@@ -678,6 +678,7 @@ export class DCGrnController {
     try {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
+      const statusFilter = req.query.status as string;
 
       // Validate pagination parameters
       if (page < 1) {
@@ -687,14 +688,26 @@ export class DCGrnController {
         return ResponseHandler.error(res, 'Limit must be between 1 and 100', 400);
       }
 
+      // Validate status filter if provided
+      const validStatuses = ['DRAFT', 'PENDING_CATEGORY_HEAD', 'PENDING_ADMIN', 'PENDING_CREATOR_REVIEW', 'APPROVED', 'REJECTED', 'CANCELLED'];
+      if (statusFilter && !validStatuses.includes(statusFilter.toUpperCase())) {
+        return ResponseHandler.error(res, `Invalid status. Valid statuses: ${validStatuses.join(', ')}`, 400);
+      }
+
       const offset = (page - 1) * limit;
 
-      // Get DC Purchase Orders with APPROVED, REJECTED, or PENDING_CATEGORY_HEAD status
-      // PENDING_CATEGORY_HEAD means the PO was approved but then edited
+      // Build where clause based on status filter
+      let whereClause: any = {};
+      if (statusFilter) {
+        whereClause.status = statusFilter.toUpperCase();
+      } else {
+        // Default behavior: Get DC Purchase Orders with APPROVED, REJECTED, or PENDING_CATEGORY_HEAD status
+        // PENDING_CATEGORY_HEAD means the PO was approved but then edited
+        whereClause.status = ['APPROVED', 'REJECTED', 'PENDING_CATEGORY_HEAD'];
+      }
+
       const { count, rows: purchaseOrders } = await DCPurchaseOrder.findAndCountAll({
-        where: {
-          status: ['APPROVED', 'REJECTED', 'PENDING_CATEGORY_HEAD']
-        },
+        where: whereClause,
         include: [
           {
             model: User,
