@@ -479,6 +479,19 @@ export class ProductMasterService {
     if (filters.color) whereClause.color = filters.color;
     if (filters.age_size) whereClause.age_size = filters.age_size;
     
+    // Apply search filter
+    if (filters.search) {
+      whereClause[Op.or] = [
+        { sku_id: { [Op.like]: `%${filters.search}%` } },
+        { name: { [Op.like]: `%${filters.search}%` } },
+        { catelogue_id: { [Op.like]: `%${filters.search}%` } },
+        { product_id: { [Op.like]: `%${filters.search}%` } },
+        { category: { [Op.like]: `%${filters.search}%` } },
+        { ean_upc: { [Op.like]: `%${filters.search}%` } },
+        { hsn: { [Op.like]: `%${filters.search}%` } }
+      ];
+    }
+    
     const { count, rows } = await ProductMaster.findAndCountAll({
       where: whereClause,
       limit,

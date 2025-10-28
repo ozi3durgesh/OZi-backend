@@ -332,6 +332,7 @@ export class ProductMasterController {
       if (req.query.brand_id) filters.brand_id = parseInt(req.query.brand_id as string);
       if (req.query.color) filters.color = req.query.color as string;
       if (req.query.age_size) filters.age_size = req.query.age_size as string;
+      if (req.query.search) filters.search = req.query.search as string;
 
       const result = await this.productMasterService.getAllProducts(page, limit, filters);
 
