@@ -301,7 +301,7 @@ export class DCPOService {
         {
           model: VendorDC,
           as: 'Vendor',
-          attributes: ['id', 'vendorId', 'tradeName', 'pocName', 'pocEmail'],
+          attributes: ['id', 'vendorId', 'tradeName', 'pocName', 'pocEmail', 'marginOn'],
         },
         {
           model: DistributionCenter,
@@ -678,7 +678,7 @@ export class DCPOService {
         {
           model: VendorDC,
           as: 'Vendor',
-          attributes: ['id', 'vendorId', 'tradeName', 'pocName'],
+          attributes: ['id', 'vendorId', 'tradeName', 'pocName', 'marginOn'],
         },
         {
           model: DistributionCenter,
@@ -728,12 +728,12 @@ export class DCPOService {
    * Get DC Purchase Order by ID
    */
   static async getDCPOById(id: number) {
-    return await DCPurchaseOrder.findByPk(id, {
+    const po = await DCPurchaseOrder.findByPk(id, {
       include: [
         {
           model: VendorDC,
           as: 'Vendor',
-          attributes: ['id', 'vendorId', 'tradeName', 'pocName', 'pocEmail', 'businessAddress'],
+          attributes: ['id', 'vendorId', 'tradeName', 'pocName', 'pocEmail', 'businessAddress', 'marginOn'],
         },
         {
           model: DistributionCenter,
@@ -796,6 +796,26 @@ export class DCPOService {
         },
       ],
     });
+
+    if (!po) {
+      return null;
+    }
+
+    // Transform the data to add sp field to SkuMatrix
+    const poData = po.toJSON();
+    
+    if (poData.Products) {
+      poData.Products.forEach((product: any) => {
+        if (product.SkuMatrix) {
+          product.SkuMatrix.forEach((sku: any) => {
+            // Map selling_price to sp field
+            sku.sp = sku.selling_price;
+          });
+        }
+      });
+    }
+
+    return poData;
   }
 
   /**

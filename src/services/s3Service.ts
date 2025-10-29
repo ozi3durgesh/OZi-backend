@@ -19,7 +19,7 @@ export class S3Service {
   static readonly upload = multer({ 
     storage: multer.memoryStorage(),
     limits: {
-      fileSize: 10 * 1024 * 1024, // 10MB limit
+      fileSize: 70 * 1024 * 1024, // 70MB limit
     },
     fileFilter: (req, file, cb) => {
       // Accept only image files

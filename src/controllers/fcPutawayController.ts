@@ -86,7 +86,7 @@ export class FCPutawayController {
           },
         ],
         where: {
-          line_status: statusFilter 
+          putaway_status: statusFilter 
             ? statusFilter 
             : {
                 [Op.in]: ['pending', 'partial', 'completed'],
@@ -169,16 +169,16 @@ export class FCPutawayController {
         tracker.totalRejected += qcRejectedQty;
         
         // Only add to quantity for pending or partial items
-        if (grnLine.line_status === 'pending' || grnLine.line_status === 'partial') {
+        if (grnLine.putaway_status === 'pending' || grnLine.putaway_status === 'partial') {
           grnData.quantity += grnLine.qc_pass_qty; // Use qc_pass_qty for remaining quantity
         }
         
-        // Track status types
-        if (grnLine.line_status === 'partial') {
+        // Track status types based on putaway_status
+        if (grnLine.putaway_status === 'partial') {
           grnData.hasPartial = true;
-        } else if (grnLine.line_status === 'completed') {
+        } else if (grnLine.putaway_status === 'completed') {
           grnData.hasCompleted = true;
-        } else if (grnLine.line_status === 'pending') {
+        } else if (grnLine.putaway_status === 'pending') {
           grnData.hasPending = true;
         }
       });
@@ -1232,7 +1232,7 @@ export class FCPutawayController {
         await grnLine.update(
           { 
             qc_pass_qty: newRemainingQty,
-            line_status: putawayStatus
+            putaway_status: putawayStatus
           },
           { transaction }
         );
@@ -1393,7 +1393,7 @@ export class FCPutawayController {
             updated_grn_line: {
               qc_pass_qty: newRemainingQty,
               remaining_qty: newRemainingQty, // Remaining quantity for this SKU
-              line_status: putawayStatus
+              putaway_status: putawayStatus
             },
             updated_bin_location: {
               bin_code: bin_location,

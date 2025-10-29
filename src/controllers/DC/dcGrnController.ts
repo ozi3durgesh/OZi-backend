@@ -678,6 +678,7 @@ export class DCGrnController {
     try {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
+      const statusFilter = req.query.status as string;
 
       // Validate pagination parameters
       if (page < 1) {
@@ -687,50 +688,181 @@ export class DCGrnController {
         return ResponseHandler.error(res, 'Limit must be between 1 and 100', 400);
       }
 
+      // Validate status filter if provided
+      const validPOStatuses = ['DRAFT', 'PENDING_CATEGORY_HEAD', 'PENDING_ADMIN', 'PENDING_CREATOR_REVIEW', 'APPROVED', 'REJECTED', 'CANCELLED'];
+      const validGRNStatuses = ['partial', 'completed', 'closed', 'pending-qc', 'variance-review', 'rtv-initiated', 'pending', 'rejected', 'approved'];
+      
+      if (statusFilter) {
+        const isPOStatus = validPOStatuses.includes(statusFilter.toUpperCase());
+        const isGRNStatus = validGRNStatuses.includes(statusFilter.toLowerCase());
+        
+        if (!isPOStatus && !isGRNStatus) {
+          return ResponseHandler.error(res, `Invalid status. Valid PO statuses: ${validPOStatuses.join(', ')}. Valid GRN statuses: ${validGRNStatuses.join(', ')}`, 400);
+        }
+      }
+
       const offset = (page - 1) * limit;
 
-      // Get DC Purchase Orders with APPROVED, REJECTED, or PENDING_CATEGORY_HEAD status
-      // PENDING_CATEGORY_HEAD means the PO was approved but then edited
-      const { count, rows: purchaseOrders } = await DCPurchaseOrder.findAndCountAll({
-        where: {
-          status: ['APPROVED', 'REJECTED', 'PENDING_CATEGORY_HEAD']
-        },
-        include: [
-          {
-            model: User,
-            as: 'CreatedBy',
-            attributes: ['id', 'email', 'name']
-          },
-          {
-            model: DCPOProduct,
-            as: 'Products',
-            attributes: [
-              'id', 'catalogue_id', 'productName', 'quantity', 'unitPrice', 
-              'totalAmount', 'mrp', 'cost', 'description', 'hsn', 'ean_upc',
-              'weight', 'length', 'height', 'width', 'gst', 'cess', 'image_url',
-              'brand_id', 'category_id', 'sku_matrix_on_catelogue_id'
-            ]
-          },
-          {
-            model: DCGrn,
-            as: 'DCGrns',
-            include: [
-              {
-                model: DCGrnLine,
-                as: 'Lines',
-                attributes: [
-                  'id', 'sku_id', 'ordered_qty', 'received_qty', 'pending_qty',
-                  'rejected_qty', 'qc_pass_qty', 'qc_fail_qty', 'rtv_qty', 'held_qty',
-                  'line_status', 'variance_reason', 'remarks'
-                ]
-              }
-            ]
+      // Build where clause based on status filter
+      let whereClause: any = {};
+      let grnWhereClause: any = {};
+      
+      if (statusFilter) {
+        const isPOStatus = validPOStatuses.includes(statusFilter.toUpperCase());
+        const isGRNStatus = validGRNStatuses.includes(statusFilter.toLowerCase());
+        
+        if (isPOStatus && statusFilter.toUpperCase() !== 'APPROVED') {
+          // Filter by PO status (except APPROVED which should be treated as GRN status)
+          whereClause.status = statusFilter.toUpperCase();
+        } else if (isGRNStatus || statusFilter.toLowerCase() === 'approved') {
+          // Filter by GRN status - keep PO filter as default but add GRN filter
+          whereClause.status = ['APPROVED', 'REJECTED', 'PENDING_CATEGORY_HEAD'];
+          grnWhereClause.status = statusFilter.toLowerCase();
+        }
+      } else {
+        // Default behavior: Get DC Purchase Orders with APPROVED, REJECTED, or PENDING_CATEGORY_HEAD status
+        // PENDING_CATEGORY_HEAD means the PO was approved but then edited
+        whereClause.status = ['APPROVED', 'REJECTED', 'PENDING_CATEGORY_HEAD'];
+      }
+
+      // If filtering by GRN status, we need to handle counting differently
+      let count: number;
+      let purchaseOrders: any[];
+      
+      if (Object.keys(grnWhereClause).length > 0) {
+        // When filtering by GRN status, get all POs first, then filter by calculated GRN status
+        const allPOs = await DCPurchaseOrder.findAll({
+          where: whereClause,
+          include: [
+            {
+              model: User,
+              as: 'CreatedBy',
+              attributes: ['id', 'email', 'name']
+            },
+            {
+              model: DCPOProduct,
+              as: 'Products',
+              attributes: [
+                'id', 'catalogue_id', 'productName', 'quantity', 'unitPrice', 
+                'totalAmount', 'mrp', 'cost', 'description', 'hsn', 'ean_upc',
+                'weight', 'length', 'height', 'width', 'gst', 'cess', 'image_url',
+                'brand_id', 'category_id', 'sku_matrix_on_catelogue_id'
+              ]
+            },
+            {
+              model: DCGrn,
+              as: 'DCGrns',
+              include: [
+                {
+                  model: DCGrnLine,
+                  as: 'Lines',
+                  attributes: [
+                    'id', 'sku_id', 'ordered_qty', 'received_qty', 'pending_qty',
+                    'rejected_qty', 'qc_pass_qty', 'qc_fail_qty', 'rtv_qty', 'held_qty',
+                    'line_status', 'variance_reason', 'remarks'
+                  ]
+                }
+              ]
+            }
+          ],
+          order: [['createdAt', 'DESC']]
+        });
+        
+        // Filter by calculated GRN status after processing
+        const filteredPOs = allPOs.filter((po: any) => {
+          const hasGrn = po.DCGrns && po.DCGrns.length > 0;
+          
+          // If no GRN exists, check if the PO status matches the GRN status filter
+          if (!hasGrn) {
+            // For rejected status, check if PO is rejected
+            if (grnWhereClause.status === 'rejected' && po.status === 'REJECTED') {
+              return true;
+            }
+            return false;
           }
-        ],
-        order: [['createdAt', 'DESC']],
-        limit,
-        offset
-      });
+          
+          const grnData = po.DCGrns[0];
+          const processedLines = po.Products?.map((product: any) => {
+            let skuMatrix: any[] = [];
+            try {
+              if (product.sku_matrix_on_catelogue_id) {
+                skuMatrix = typeof product.sku_matrix_on_catelogue_id === 'string' 
+                  ? JSON.parse(product.sku_matrix_on_catelogue_id)
+                  : product.sku_matrix_on_catelogue_id;
+              }
+            } catch (error) {
+              skuMatrix = [];
+            }
+            const actualSku = skuMatrix.length > 0 ? skuMatrix[0].sku : product.catalogue_id;
+            const grnLine = grnData?.Lines?.find((line: any) => line.sku_id === actualSku);
+            
+            if (grnLine) {
+              return DCGrnController.calculateLineStatus(
+                grnLine.ordered_qty,
+                grnLine.rejected_qty,
+                grnLine.qc_pass_qty
+              );
+            } else {
+              return DCGrnController.calculateLineStatus(
+                product.quantity,
+                0,
+                0
+              );
+            }
+          }) || [];
+          
+          const calculatedGrnStatus = DCGrnController.calculateGrnStatus(processedLines);
+          // Treat "approved" as equivalent to "completed"
+          const statusToMatch = grnWhereClause.status === 'approved' ? 'completed' : grnWhereClause.status;
+          return calculatedGrnStatus === statusToMatch;
+        });
+        
+        count = filteredPOs.length;
+        purchaseOrders = filteredPOs.slice(offset, offset + limit);
+      } else {
+        // Normal case - filter by PO status
+        const result = await DCPurchaseOrder.findAndCountAll({
+          where: whereClause,
+          include: [
+            {
+              model: User,
+              as: 'CreatedBy',
+              attributes: ['id', 'email', 'name']
+            },
+            {
+              model: DCPOProduct,
+              as: 'Products',
+              attributes: [
+                'id', 'catalogue_id', 'productName', 'quantity', 'unitPrice', 
+                'totalAmount', 'mrp', 'cost', 'description', 'hsn', 'ean_upc',
+                'weight', 'length', 'height', 'width', 'gst', 'cess', 'image_url',
+                'brand_id', 'category_id', 'sku_matrix_on_catelogue_id'
+              ]
+            },
+            {
+              model: DCGrn,
+              as: 'DCGrns',
+              include: [
+                {
+                  model: DCGrnLine,
+                  as: 'Lines',
+                  attributes: [
+                    'id', 'sku_id', 'ordered_qty', 'received_qty', 'pending_qty',
+                    'rejected_qty', 'qc_pass_qty', 'qc_fail_qty', 'rtv_qty', 'held_qty',
+                    'line_status', 'variance_reason', 'remarks'
+                  ]
+                }
+              ]
+            }
+          ],
+          order: [['createdAt', 'DESC']],
+          limit,
+          offset
+        });
+        
+        count = result.count;
+        purchaseOrders = result.rows;
+      }
 
       // Transform the data to match the expected GRN format
       const grnList = purchaseOrders.map((po: any) => {
@@ -834,12 +966,24 @@ export class DCGrnController {
 
         // Calculate overall GRN status based on line statuses
         const lineStatuses = processedLines.map((line: any) => line.line_status);
-        const calculatedGrnStatus = hasGrn ? DCGrnController.calculateGrnStatus(lineStatuses) : po.status.toLowerCase();
+        let calculatedGrnStatus;
+        
+        if (hasGrn) {
+          calculatedGrnStatus = DCGrnController.calculateGrnStatus(lineStatuses);
+        } else {
+          // For POs without GRNs, use PO status
+          calculatedGrnStatus = po.status.toLowerCase();
+        }
+        
+        // If user queried for "approved" and calculated status is "completed", show "approved"
+        const displayStatus = (statusFilter?.toLowerCase() === 'approved' && calculatedGrnStatus === 'completed') 
+          ? 'approved' 
+          : calculatedGrnStatus;
         
         return {
           id: hasGrn ? grnData.id : po.id,
           po_id: po.id,
-          status: calculatedGrnStatus,
+          status: displayStatus,
           closeReason: hasGrn ? grnData.closeReason : (po.status === 'REJECTED' ? po.rejectionReason : null),
           created_by: hasGrn ? grnData.created_by : (po.CreatedBy?.id || null),
           created_at: hasGrn ? grnData.created_at : po.createdAt,

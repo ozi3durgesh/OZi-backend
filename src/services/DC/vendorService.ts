@@ -363,7 +363,7 @@ export class VendorDCService {
       }
     }
 
-    // Handle array inputs for pocEmail and brandName if provided
+    // Handle array inputs for pocEmail, brandName, pocName, and pocNumber if provided
     if (updateData.pocEmail) {
       const pocEmailArray = Array.isArray(updateData.pocEmail) ? updateData.pocEmail : [updateData.pocEmail];
       updateData.pocEmail = pocEmailArray.filter(email => email).join(',');
@@ -372,6 +372,16 @@ export class VendorDCService {
     if (updateData.brandName) {
       const brandNameArray = Array.isArray(updateData.brandName) ? updateData.brandName : [updateData.brandName];
       updateData.brandName = brandNameArray.filter(name => name).join(',');
+    }
+
+    if (updateData.pocName) {
+      const pocNameArray = Array.isArray(updateData.pocName) ? updateData.pocName : [updateData.pocName];
+      updateData.pocName = pocNameArray.filter(name => name).join(',');
+    }
+
+    if (updateData.pocNumber) {
+      const pocNumberArray = Array.isArray(updateData.pocNumber) ? updateData.pocNumber : [updateData.pocNumber];
+      updateData.pocNumber = pocNumberArray.filter(number => number).join(',');
     }
 
     // Check if POC email is being updated

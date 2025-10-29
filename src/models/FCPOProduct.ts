@@ -2,10 +2,10 @@ import { DataTypes, Model, InferAttributes, InferCreationAttributes, CreationOpt
 import sequelize from '../config/database';
 
 interface FCPOProductAttributes {
-  id: number;
+  id: CreationOptional<number>;
   fcPOId: number;
   productId: number;
-  catalogueId: number;
+  catalogueId: string;
   productName: string;
   description?: string;
   quantity: number;
@@ -22,10 +22,10 @@ class FCPOProduct extends Model<
   InferAttributes<FCPOProduct>,
   InferCreationAttributes<FCPOProduct>
 > {
-  declare id: number;
+  declare id: CreationOptional<number>;
   declare fcPOId: number;
   declare productId: number;
-  declare catalogueId: number;
+  declare catalogueId: string;
   declare productName: string;
   declare description?: string;
   declare quantity: number;
