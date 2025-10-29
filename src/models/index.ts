@@ -41,7 +41,6 @@ import UserFulfillmentCenter from './UserFulfillmentCenter';
 import VendorDC from './VendorDC';
 import Brand from './Brand';
 import DCPurchaseOrder from './DCPurchaseOrder';
-import DCPOProduct from './DCPOProduct';
 import DCPOApproval from './DCPOApproval';
 import DCPOSkuMatrix from './DCPOSkuMatrix';
 import DCGrn from './DCGrn.model';
@@ -404,37 +403,20 @@ DCPurchaseOrder.belongsTo(User, {
   as: 'RejectedBy',
 });
 
-DCPurchaseOrder.hasMany(DCPOProduct, {
-  foreignKey: 'dcPOId',
-  as: 'Products',
-});
-
 DCPurchaseOrder.hasMany(DCPOApproval, {
   foreignKey: 'dcPOId',
   as: 'Approvals',
 });
 
-// DCPOProduct associations
-DCPOProduct.belongsTo(DCPurchaseOrder, {
+// DCPOSkuMatrix associations - directly linked to DCPurchaseOrder
+DCPurchaseOrder.hasMany(DCPOSkuMatrix, {
   foreignKey: 'dcPOId',
-  as: 'PurchaseOrder',
-});
-
-DCPOProduct.belongsTo(ProductMaster, {
-  foreignKey: 'productId',
-  targetKey: 'id',
-  as: 'Product',
-});
-
-// DCPOSkuMatrix associations
-DCPOSkuMatrix.belongsTo(DCPOProduct, {
-  foreignKey: 'dcPOProductId',
-  as: 'DCPOProduct',
-});
-
-DCPOProduct.hasMany(DCPOSkuMatrix, {
-  foreignKey: 'dcPOProductId',
   as: 'SkuMatrix',
+});
+
+DCPOSkuMatrix.belongsTo(DCPurchaseOrder, {
+  foreignKey: 'dcPOId',
+  as: 'DCPurchaseOrder',
 });
 
 // DCPOApproval associations
@@ -469,11 +451,7 @@ User.hasMany(DCPOApproval, {
   as: 'Approvals',
 });
 
-ProductMaster.hasMany(DCPOProduct, {
-  foreignKey: 'productId',
-  sourceKey: 'id',
-  as: 'POProducts',
-});
+// DCPOProduct removed - using DCPOSkuMatrix instead
 
 // DC-GRN associations
 DCGrn.belongsTo(DCPurchaseOrder, { foreignKey: 'dc_po_id', as: 'DCPO' });
@@ -699,7 +677,6 @@ export {
   VendorDC,
   Brand,
   DCPurchaseOrder,
-  DCPOProduct,
   DCPOApproval,
   DCPOSkuMatrix,
   DCGrn,

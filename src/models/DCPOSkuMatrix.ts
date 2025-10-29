@@ -12,7 +12,8 @@ class DCPOSkuMatrix extends Model<
   InferCreationAttributes<DCPOSkuMatrix>
 > {
   declare id: CreationOptional<number>;
-  declare dcPOProductId: number;
+  declare dcPOId: number;
+  declare dcPOProductId: number | null;
   declare quantity: number;
   declare catalogue_id: string;
   declare category: string | null;
@@ -49,9 +50,17 @@ DCPOSkuMatrix.init(
       autoIncrement: true,
       primaryKey: true,
     },
-    dcPOProductId: {
+    dcPOId: {
       type: DataTypes.INTEGER,
       allowNull: false,
+      references: {
+        model: 'dc_purchase_orders',
+        key: 'id',
+      },
+    },
+    dcPOProductId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
       references: {
         model: 'dc_po_products',
         key: 'id',

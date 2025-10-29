@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { ResponseHandler } from '../../middleware/responseHandler';
 import { DCSkuSplittingService } from '../../services/DC/dcSkuSplittingService';
 import DCSkuSplitted from '../../models/DCSkuSplitted';
-import DCPOProduct from '../../models/DCPOProduct';
+import DCPOSkuMatrix from '../../models/DCPOSkuMatrix';
 import ParentProductMasterDC from '../../models/ParentProductMasterDC';
 
 interface AuthRequest extends Request {
@@ -270,33 +270,42 @@ export class DCSkuSplittingController {
         return ResponseHandler.error(res, 'PO ID and Catalogue ID are required', 400);
       }
 
-      // Get product details to find category_id
-      const product = await DCPOProduct.findOne({
+      // Get SKU matrix entry to find category_id
+      const skuMatrixEntry = await DCPOSkuMatrix.findOne({
         where: { 
           dcPOId: parseInt(poId),
           catalogue_id: catalogueId 
-        },
-        include: [
-          {
-            model: ParentProductMasterDC,
-            as: 'Product',
-            attributes: ['category_id']
-          }
-        ]
+        }
       });
 
-      if (!product) {
+      if (!skuMatrixEntry) {
         return ResponseHandler.error(res, 'Product not found for the given PO and catalogue ID', 404);
       }
 
-      const categoryId = product.category_id || 0;
+      // Get category_id from SKU matrix entry or ParentProductMasterDC
+      let categoryId: number | null = null;
+      if (skuMatrixEntry.category) {
+        categoryId = parseInt(skuMatrixEntry.category.toString());
+      } else {
+        // Fallback: try to get from ParentProductMasterDC if catalogue_id exists
+        const parentProduct = await ParentProductMasterDC.findOne({
+          where: { catalogue_id: catalogueId }
+        });
+        if (parentProduct) {
+          categoryId = parentProduct.category_id;
+        }
+      }
+
+      if (!categoryId) {
+        return ResponseHandler.error(res, 'Category ID not found for this product', 404);
+      }
 
       return ResponseHandler.success(res, {
         message: 'Product category retrieved successfully',
         data: {
           catalogue_id: catalogueId,
           category_id: categoryId,
-          product_name: product.productName
+          product_name: skuMatrixEntry.product_name || 'Unknown'
         }
       });
 

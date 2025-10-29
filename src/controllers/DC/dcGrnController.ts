@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { ResponseHandler } from '../../middleware/responseHandler';
-import { DCGrn, DCGrnLine, DCGrnBatch, DCGrnPhoto, DCPurchaseOrder, User, DistributionCenter, DCPOProduct, ProductMaster, DCSkuSplitted } from '../../models';
+import { DCGrn, DCGrnLine, DCGrnBatch, DCGrnPhoto, DCPurchaseOrder, User, DistributionCenter, DCPOSkuMatrix, ProductMaster, DCSkuSplitted } from '../../models';
 import { Transaction } from 'sequelize';
 import sequelize from '../../config/database';
 
@@ -87,19 +87,12 @@ export class DCGrnController {
     try {
       const { dcPoId } = req.params;
 
-      // Get DC PO with products
+      // Get DC PO with SKU matrix
       const dcPO = await DCPurchaseOrder.findByPk(dcPoId, {
         include: [
           {
-            model: DCPOProduct,
-            as: 'Products',
-            include: [
-              {
-                model: ProductMaster,
-                as: 'Product',
-                attributes: ['id', 'catalogue_id', 'name', 'description', 'mrp', 'ean_upc']
-              }
-            ]
+            model: DCPOSkuMatrix,
+            as: 'SkuMatrix',
           },
           {
             model: User,
@@ -126,20 +119,33 @@ export class DCGrnController {
         return ResponseHandler.error(res, 'GRN already exists for this DC Purchase Order', 400);
       }
 
-      // Format products for GRN creation
-      const productsForGRN = (dcPO as any).Products?.map((product: any) => ({
-        product_id: product.id,
-        sku_id: product.catalogue_id,
-        product_name: product.productName,
-        ordered_qty: product.quantity,
-        unit_price: product.unitPrice,
-        total_amount: product.totalAmount,
-        mrp: product.mrp,
-        cost: product.unitPrice, // Use unitPrice as cost since cost column is removed
-        description: product.description,
-        notes: product.notes,
-        product_details: product.Product
-      })) || [];
+      // Group SKU matrix by catalogue_id and format for GRN creation
+      const skuMatrix = (dcPO as any).SkuMatrix || [];
+      const groupedByCatalogue: any = {};
+      
+      skuMatrix.forEach((sku: any) => {
+        const catId = sku.catalogue_id;
+        if (!groupedByCatalogue[catId]) {
+          groupedByCatalogue[catId] = {
+            product_id: sku.id,
+            sku_id: catId,
+            product_name: sku.product_name || 'Unknown',
+            ordered_qty: 0,
+            unit_price: parseFloat(sku.rlp || sku.selling_price || '0'),
+            total_amount: 0,
+            mrp: parseFloat(sku.mrp || '0'),
+            cost: parseFloat(sku.rlp || sku.selling_price || '0'),
+            description: sku.description,
+            notes: null,
+            product_details: null
+          };
+        }
+        const qty = parseInt(sku.quantity?.toString() || '0');
+        groupedByCatalogue[catId].ordered_qty += qty;
+        groupedByCatalogue[catId].total_amount += qty * parseFloat(sku.rlp || sku.selling_price || '0');
+      });
+
+      const productsForGRN = Object.values(groupedByCatalogue);
 
       return ResponseHandler.success(res, {
         message: 'DC PO products retrieved successfully for GRN creation',
@@ -156,7 +162,7 @@ export class DCGrnController {
           products: productsForGRN,
           summary: {
             totalProducts: productsForGRN.length,
-            totalQuantity: productsForGRN.reduce((sum, p) => sum + p.ordered_qty, 0),
+            totalQuantity: productsForGRN.reduce((sum: number, p: any) => sum + p.ordered_qty, 0),
             totalAmount: dcPO.totalAmount
           }
         }
@@ -740,8 +746,8 @@ export class DCGrnController {
               attributes: ['id', 'email', 'name']
             },
             {
-              model: DCPOProduct,
-              as: 'Products',
+              model: DCPOSkuMatrix,
+              as: 'SkuMatrix',
               attributes: [
                 'id', 'catalogue_id', 'productName', 'quantity', 'unitPrice', 
                 'totalAmount', 'mrp', 'cost', 'description', 'hsn', 'ean_upc',
@@ -782,18 +788,8 @@ export class DCGrnController {
           }
           
           const grnData = po.DCGrns[0];
-          const processedLines = po.Products?.map((product: any) => {
-            let skuMatrix: any[] = [];
-            try {
-              if (product.sku_matrix_on_catelogue_id) {
-                skuMatrix = typeof product.sku_matrix_on_catelogue_id === 'string' 
-                  ? JSON.parse(product.sku_matrix_on_catelogue_id)
-                  : product.sku_matrix_on_catelogue_id;
-              }
-            } catch (error) {
-              skuMatrix = [];
-            }
-            const actualSku = skuMatrix.length > 0 ? skuMatrix[0].sku : product.catalogue_id;
+          const processedLines = (po.SkuMatrix || []).map((sku: any) => {
+            const actualSku = sku.sku || sku.catalogue_id;
             const grnLine = grnData?.Lines?.find((line: any) => line.sku_id === actualSku);
             
             if (grnLine) {
@@ -804,12 +800,12 @@ export class DCGrnController {
               );
             } else {
               return DCGrnController.calculateLineStatus(
-                product.quantity,
+                parseInt(sku.quantity?.toString() || '0'),
                 0,
                 0
               );
             }
-          }) || [];
+          });
           
           const calculatedGrnStatus = DCGrnController.calculateGrnStatus(processedLines);
           // Treat "approved" as equivalent to "completed"
@@ -830,8 +826,8 @@ export class DCGrnController {
               attributes: ['id', 'email', 'name']
             },
             {
-              model: DCPOProduct,
-              as: 'Products',
+              model: DCPOSkuMatrix,
+              as: 'SkuMatrix',
               attributes: [
                 'id', 'catalogue_id', 'productName', 'quantity', 'unitPrice', 
                 'totalAmount', 'mrp', 'cost', 'description', 'hsn', 'ean_upc',
