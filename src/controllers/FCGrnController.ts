@@ -4,7 +4,7 @@ import sequelize from '../config/database';
 import { QueryTypes } from 'sequelize';
 import FCGrnLine from '../models/FCGrnLine';
 import FCGrnBatch from '../models/FCGrnBatch';
-import { User, FCPurchaseOrder, FCPOProduct, ProductMaster, PurchaseOrder } from '../models';
+import { User, FCPurchaseOrder, FCPOSkuMatrix, ProductMaster, PurchaseOrder } from '../models';
 import FCGrn from '../models/FCGrn.model';
 import FCGrnPhoto from '../models/FCGrnPhoto';
 import {
@@ -99,7 +99,7 @@ export class FCGrnController {
       });
     }
   }
-  async createFullFCFCGrn(req: AuthRequest, res: Response) {
+  async createFullFCFCGrn(req: AuthRequest, res: Response): Promise<void> {
     const input: CreateFullGRNInput = req.body;
     const userId = req.user?.id;
 
@@ -242,46 +242,35 @@ export class FCGrnController {
           foundBy = 'ean';
         }
 
-        // First, get all FC PO products for this PO
-        const fcPOProducts = await FCPOProduct.findAll({
-          where: { fcPOId: input.poId },
+        // Find the SKU matrix entry that matches the resolved SKU
+        const skuMatrixEntry = await FCPOSkuMatrix.findOne({
+          where: { 
+            fcPOId: input.poId,
+            sku: resolvedSku
+          },
           transaction: t,
         });
 
-        // Find the product that contains the SKU in its SKU matrix
-        let fcPOProduct: any = null;
-        for (const product of fcPOProducts) {
-          try {
-            const skuMatrix = product.skuMatrixOnCatalogueId 
-              ? (typeof product.skuMatrixOnCatalogueId === 'string' 
-                  ? JSON.parse(product.skuMatrixOnCatalogueId)
-                  : product.skuMatrixOnCatalogueId)
-              : [];
-            
-            if (Array.isArray(skuMatrix) && skuMatrix.some((item: any) => item.sku === resolvedSku)) {
-              fcPOProduct = product;
-              break;
-            }
-          } catch (error) {
-            console.error('Error parsing SKU matrix:', error);
-          }
+        // If no SKU matrix entry found, we can't proceed (all SKUs should be in the matrix)
+        if (!skuMatrixEntry) {
+          await t.rollback();
+          res.status(400).json({
+            statusCode: 400,
+            success: false,
+            error: `SKU ${resolvedSku} not found in FC PO ${input.poId}`,
+          });
+          return;
         }
 
-        // If no FC PO Product found, create a dummy one
-        if (!fcPOProduct) {
-          fcPOProduct = await FCPOProduct.create({
-            fcPOId: input.poId,
-            productId: 1, // Default product ID
-            catalogueId: `CAT_${resolvedSku}`,
-            productName: `Product ${resolvedSku}`,
-            quantity: line.orderedQty,
-            unitPrice: 0,
-            totalAmount: 0,
-            skuMatrixOnCatalogueId: JSON.stringify([{ sku: resolvedSku, qty: line.orderedQty }]),
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          }, { transaction: t });
-        }
+        // Use the SKU matrix entry as the product reference
+        const fcPOProduct: any = {
+          id: skuMatrixEntry.id,
+          fcPOId: skuMatrixEntry.fcPOId,
+          catalogueId: skuMatrixEntry.catalogueId,
+          productName: skuMatrixEntry.productName,
+          quantity: skuMatrixEntry.quantity,
+          sku: skuMatrixEntry.sku,
+        };
 
         // Skip grnStatus check for dummy products
         // if (fcPOProduct.get('grnStatus') === 'completed') {
@@ -627,6 +616,7 @@ const createdGrn = await FCGrn.findByPk(fcGrn.id, {
         },
         error: null,
       });
+      return;
     } catch (err: any) {
       await t.rollback();
       console.error('Error creating FCGrn:', err);
@@ -636,6 +626,7 @@ const createdGrn = await FCGrn.findByPk(fcGrn.id, {
         data: err.message,
         error: 'Internal server error',
       });
+      return;
     }
   }
 
@@ -906,13 +897,13 @@ const createdGrn = await FCGrn.findByPk(fcGrn.id, {
             attributes: ['id', 'email', 'name']
           },
           {
-            model: FCPOProduct,
-            as: 'Products',
+            model: FCPOSkuMatrix,
+            as: 'SkuMatrix',
             attributes: [
-              'id', 'catalogueId', 'productName', 'quantity', 'unitPrice', 
-              'totalAmount', 'mrp', 'description', 'hsn', 'ean_upc',
-              'weight', 'length', 'height', 'width', 'gst', 'cess', 'image_url',
-              'brand_id', 'category_id', 'skuMatrixOnCatalogueId'
+              'id', 'fcPOId', 'catalogueId', 'sku', 'productName', 'quantity', 'rlp', 
+              'totalAmount', 'mrp', 'hsn', 'eanUpc',
+              'weight', 'length', 'height', 'width', 'gst', 'cess',
+              'brand', 'sellingPrice', 'rlpWithoutTax', 'gstType', 'status'
             ]
           },
           {
@@ -936,28 +927,74 @@ const createdGrn = await FCGrn.findByPk(fcGrn.id, {
         offset
       });
 
+      // Transform SkuMatrix to Products format for all POs
+      const purchaseOrdersWithProducts = purchaseOrders.map((po: any) => {
+        const poData = po.toJSON ? po.toJSON() : po;
+        // Import and use FCPOService transformation - but avoid circular dependency
+        // Use inline transformation similar to DC PO
+        if (poData.SkuMatrix && poData.SkuMatrix.length > 0) {
+          const grouped = poData.SkuMatrix.reduce((acc: any, sku: any) => {
+            const catalogueId = sku.catalogueId || sku.catalogue_id;
+            if (!acc[catalogueId]) {
+              acc[catalogueId] = {
+                catalogue_id: catalogueId,
+                skuMatrix: [],
+                totalQuantity: 0,
+                totalAmount: 0,
+              };
+            }
+            acc[catalogueId].skuMatrix.push(sku);
+            acc[catalogueId].totalQuantity += parseInt(sku.quantity || 0);
+            const price = parseFloat(sku.rlp || sku.rlpWithoutTax || sku.sellingPrice || sku.selling_price || 0);
+            acc[catalogueId].totalAmount += price * parseInt(sku.quantity || 0);
+            return acc;
+          }, {});
+
+          poData.Products = Object.values(grouped).map((group: any) => {
+            const firstSku = group.skuMatrix[0];
+            const unitPrice = group.totalQuantity > 0 ? group.totalAmount / group.totalQuantity : 0;
+            return {
+              id: firstSku.id,
+              fcPOId: firstSku.fcPOId,
+              productId: 1,
+              catalogue_id: group.catalogue_id,
+              catalogueId: group.catalogue_id,
+              productName: firstSku.productName || firstSku.product_name || 'Unknown Product',
+              quantity: group.totalQuantity,
+              unitPrice: unitPrice,
+              totalAmount: group.totalAmount,
+              mrp: firstSku.mrp ? parseFloat(firstSku.mrp.toString()) : null,
+              cost: unitPrice,
+              description: firstSku.description || null,
+              notes: null,
+              hsn: firstSku.hsn || null,
+              ean_upc: firstSku.eanUpc || firstSku.ean_upc || null,
+              sku_matrix_on_catelogue_id: group.skuMatrix,
+            };
+          });
+        } else {
+          poData.Products = [];
+        }
+        return poData;
+      });
+
       // Transform the data to match the expected GRN format
-      const grnList = await Promise.all(purchaseOrders.map(async (po: any) => {
+      const grnList = await Promise.all(purchaseOrdersWithProducts.map(async (po: any) => {
         // Check if GRN exists for this PO
         const hasGrn = po.FCGrns && po.FCGrns.length > 0;
         const grnData = hasGrn ? po.FCGrns[0] : null;
         
         const lines = await Promise.all((po.Products || []).map(async (product: any) => {
-          // Parse SKU matrix to get actual SKUs
+          // Use SKU matrix from product if available (already transformed)
           let skuMatrix: any[] = [];
-          try {
-            if (product.skuMatrixOnCatalogueId) {
-              skuMatrix = typeof product.skuMatrixOnCatalogueId === 'string' 
-                ? JSON.parse(product.skuMatrixOnCatalogueId)
-                : product.skuMatrixOnCatalogueId;
-            }
-          } catch (error) {
-            console.error('Error parsing SKU matrix:', error);
-            skuMatrix = [];
+          if (product.sku_matrix_on_catelogue_id) {
+            skuMatrix = Array.isArray(product.sku_matrix_on_catelogue_id) 
+              ? product.sku_matrix_on_catelogue_id 
+              : [];
           }
 
           // Get the first SKU from the matrix (or fallback to catalogueId)
-          const actualSku = skuMatrix.length > 0 ? skuMatrix[0].sku : product.catalogueId;
+          const actualSku = skuMatrix.length > 0 ? skuMatrix[0].sku : (product.catalogueId || product.catalogue_id);
           
           // Find corresponding GRN line for this product using the actual SKU
           const grnLine = grnData?.Line?.find((line: any) => line.sku_id === actualSku);

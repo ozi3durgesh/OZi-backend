@@ -32,6 +32,9 @@ export const runMigrations = async (): Promise<void> => {
     // Migrate dc_po_sku_matrix to add dcPOId column (drop dc_po_products table)
     await migrateDCPOSkuMatrixToDropProducts();
     
+    // Migrate fc_po_sku_matrix to add fcPOId column (drop fc_po_products table)
+    await migrateFCPOSkuMatrixToDropProducts();
+    
     console.log('✅ Database migrations completed successfully');
   } catch (error) {
     console.error('❌ Migration failed:', error);
@@ -524,6 +527,133 @@ export const migrateDCPOSkuMatrixToDropProducts = async (): Promise<void> => {
     }
   } catch (error) {
     console.error('❌ Error migrating dc_po_sku_matrix:', error);
+    // Don't throw - allow server to start even if migration fails
+      console.warn('⚠️ Server will continue, but migration should be run manually');
+  }
+};
+
+export const migrateFCPOSkuMatrixToDropProducts = async (): Promise<void> => {
+  try {
+    console.log('📋 Migrating fc_po_sku_matrix to drop fc_po_products dependency...');
+    
+    // Check if fcPOId column already exists (it might be there from fc_po_sku_matrix creation)
+    // Actually, fc_po_sku_matrix already has fcPOId, but we need to ensure it references fc_purchase_orders directly
+    // The issue is that fc_po_sku_matrix currently references fc_po_products via fcPOProductId
+    // We need to keep fcPOId but make fcPOProductId nullable and remove the foreign key
+    
+    // First, check if we need to migrate data (populate fcPOId from fc_po_products if missing)
+    const poProductsTable = await sequelize.query(`
+      SELECT TABLE_NAME 
+      FROM INFORMATION_SCHEMA.TABLES 
+      WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME = 'fc_po_products'
+    `, { type: QueryTypes.SELECT }) as any[];
+
+    if (poProductsTable && poProductsTable.length > 0) {
+      // Update fcPOId from fc_po_products for any entries that might have NULL fcPOId
+      console.log('🔄 Populating fcPOId from fc_po_products...');
+      try {
+        await sequelize.query(`
+          UPDATE fc_po_sku_matrix sku
+          INNER JOIN fc_po_products prod ON sku.fcPOProductId = prod.id
+          SET sku.fcPOId = prod.fcPOId
+          WHERE sku.fcPOId IS NULL OR sku.fcPOId = 0
+        `);
+      } catch (updateError: any) {
+        console.warn('⚠️ Could not populate fcPOId (may already be populated):', updateError.message);
+      }
+    }
+
+    // Drop foreign key constraint on fcPOProductId if it exists
+    try {
+      const constraints = await sequelize.query(`
+        SELECT CONSTRAINT_NAME 
+        FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+        WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = 'fc_po_sku_matrix' 
+        AND COLUMN_NAME = 'fc_po_product_id'
+        AND REFERENCED_TABLE_NAME IS NOT NULL
+      `, { type: QueryTypes.SELECT }) as any[];
+
+      if (constraints && constraints.length > 0) {
+        for (const constraint of constraints) {
+          try {
+            await sequelize.query(`
+              ALTER TABLE fc_po_sku_matrix 
+              DROP FOREIGN KEY ${constraint.CONSTRAINT_NAME}
+            `);
+            console.log(`✅ Dropped foreign key constraint: ${constraint.CONSTRAINT_NAME}`);
+          } catch (dropError: any) {
+            console.warn(`⚠️ Could not drop foreign key ${constraint.CONSTRAINT_NAME}:`, dropError.message);
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ Error checking for foreign keys:', (error as Error).message);
+    }
+
+    // Make fcPOProductId nullable
+    try {
+      await sequelize.query(`
+        ALTER TABLE fc_po_sku_matrix 
+        MODIFY COLUMN fc_po_product_id INT NULL
+      `);
+      console.log('✅ Made fc_po_product_id nullable');
+    } catch (error: any) {
+      if (error.message.includes('Duplicate') || error.message.includes('already exists')) {
+        console.log('ℹ️ fc_po_product_id is already nullable');
+      } else {
+        console.warn('⚠️ Could not modify fc_po_product_id column:', error.message);
+      }
+    }
+
+    // Ensure fcPOId has proper foreign key to fc_purchase_orders
+    try {
+      // Check if foreign key already exists
+      const existingFk = await sequelize.query(`
+        SELECT CONSTRAINT_NAME 
+        FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+        WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = 'fc_po_sku_matrix' 
+        AND COLUMN_NAME = 'fc_po_id'
+        AND REFERENCED_TABLE_NAME = 'fc_purchase_orders'
+      `, { type: QueryTypes.SELECT }) as any[];
+
+      if (!existingFk || existingFk.length === 0) {
+        await sequelize.query(`
+          ALTER TABLE fc_po_sku_matrix 
+          ADD CONSTRAINT fk_fc_po_sku_matrix_fc_po_id 
+          FOREIGN KEY (fc_po_id) REFERENCES fc_purchase_orders(id) 
+          ON DELETE CASCADE ON UPDATE CASCADE
+        `);
+        console.log('✅ Added foreign key constraint from fc_po_sku_matrix to fc_purchase_orders');
+      } else {
+        console.log('ℹ️ Foreign key constraint already exists');
+      }
+    } catch (fkError: any) {
+      if (fkError.message.includes('Duplicate') || fkError.message.includes('already exists')) {
+        console.log('ℹ️ Foreign key constraint already exists');
+      } else {
+        console.warn('⚠️ Could not add foreign key constraint:', fkError.message);
+      }
+    }
+
+    // Drop fc_po_products table if it exists
+    if (poProductsTable && poProductsTable.length > 0) {
+      console.log('🔄 Dropping fc_po_products table...');
+      try {
+        await sequelize.query(`DROP TABLE fc_po_products`);
+        console.log('✅ fc_po_products table dropped successfully');
+      } catch (dropError: any) {
+        console.warn('⚠️ Could not drop fc_po_products table (may have dependencies):', dropError.message);
+      }
+    } else {
+      console.log('ℹ️ fc_po_products table does not exist (already dropped)');
+    }
+
+    console.log('✅ fc_po_sku_matrix migration completed successfully');
+  } catch (error) {
+    console.error('❌ Error migrating fc_po_sku_matrix:', error);
     // Don't throw - allow server to start even if migration fails
     console.warn('⚠️ Server will continue, but migration should be run manually');
   }

@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { ResponseHandler } from '../../middleware/responseHandler';
-import { FCPurchaseOrder, FCPOProduct, FCGrn, FCGrnLine, DCPurchaseOrder, DCPOSkuMatrix, DCGrn, DCGrnLine, ProductMaster } from '../../models';
+import { FCPurchaseOrder, FCPOSkuMatrix, FCGrn, FCGrnLine, DCPurchaseOrder, DCPOSkuMatrix, DCGrn, DCGrnLine, ProductMaster } from '../../models';
 import { Op } from 'sequelize';
 
 interface AuthRequest extends Request {
@@ -282,8 +282,8 @@ export class FCSKUController {
         },
         include: [
           {
-            model: FCPOProduct,
-            as: 'Products',
+            model: FCPOSkuMatrix,
+            as: 'SkuMatrix',
             required: false,
             include: [
               {
@@ -470,8 +470,8 @@ export class FCSKUController {
         where: { catelogue_id: catalogueId },
         include: [
           {
-            model: FCPOProduct,
-            as: 'FCPOProducts',
+            model: FCPOSkuMatrix,
+            as: 'SkuMatrix',
             required: false,
             include: [
               {

@@ -1,6 +1,6 @@
 import { DataTypes, Model, InferAttributes, InferCreationAttributes, CreationOptional } from 'sequelize';
 import sequelize from '../config/database';
-import FCPOProduct from './FCPOProduct';
+import FCPOSkuMatrix from './FCPOSkuMatrix';
 import FCPOApproval from './FCPOApproval';
 import User from './User';
 import FulfillmentCenter from './FulfillmentCenter';
@@ -51,7 +51,7 @@ class FCPurchaseOrder extends Model<
   declare updatedAt: CreationOptional<Date>;
 
   // Association properties
-  declare Products?: FCPOProduct[];
+  declare SkuMatrix?: FCPOSkuMatrix[];
   declare Approvals?: FCPOApproval[];
   declare CreatedBy?: typeof User;
   declare UpdatedBy?: typeof User;

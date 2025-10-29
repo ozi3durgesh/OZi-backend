@@ -50,7 +50,7 @@ import DCGrnPhoto from './DCGrnPhoto';
 import DCSkuSplitted from './DCSkuSplitted';
 import DCInventory1 from './DCInventory1';
 import FCPurchaseOrder from './FCPurchaseOrder';
-import FCPOProduct from './FCPOProduct';
+import FCPOSkuMatrix from './FCPOSkuMatrix';
 import FCPOApproval from './FCPOApproval';
 import FCSkuSplitted from './FCSkuSplitted';
 import PurchaseOrderEdit from './PurchaseOrderEdits';
@@ -532,9 +532,9 @@ FCPurchaseOrder.belongsTo(User, {
   as: 'RejectedBy',
 });
 
-FCPurchaseOrder.hasMany(FCPOProduct, {
+FCPurchaseOrder.hasMany(FCPOSkuMatrix, {
   foreignKey: 'fcPOId',
-  as: 'Products',
+  as: 'SkuMatrix',
 });
 
 FCPurchaseOrder.hasMany(FCPOApproval, {
@@ -542,15 +542,10 @@ FCPurchaseOrder.hasMany(FCPOApproval, {
   as: 'Approvals',
 });
 
-// FCPOProduct associations
-FCPOProduct.belongsTo(FCPurchaseOrder, {
+// FCPOSkuMatrix associations
+FCPOSkuMatrix.belongsTo(FCPurchaseOrder, {
   foreignKey: 'fcPOId',
-  as: 'PurchaseOrder',
-});
-
-FCPOProduct.belongsTo(ProductMaster, {
-  foreignKey: 'productId',
-  as: 'Product',
+  as: 'FCPurchaseOrder',
 });
 
 // FCPOApproval associations
@@ -585,10 +580,6 @@ User.hasMany(FCPOApproval, {
   as: 'FCApprovals',
 });
 
-ProductMaster.hasMany(FCPOProduct, {
-  foreignKey: 'productId',
-  as: 'FCPOProducts',
-});
 
 // FCSkuSplitted associations
 FCSkuSplitted.belongsTo(FCPurchaseOrder, {
@@ -686,7 +677,7 @@ export {
   DCSkuSplitted,
   DCInventory1,
   FCPurchaseOrder,
-  FCPOProduct,
+  FCPOSkuMatrix,
   FCPOApproval,
   FCSkuSplitted,
   PurchaseOrderEdit,
