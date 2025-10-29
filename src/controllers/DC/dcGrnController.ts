@@ -899,9 +899,9 @@ export class DCGrnController {
                 grnLine.qc_pass_qty
               );
               
-              // Use actual GRN line data
+              // Use actual GRN line data with original product ID
               return {
-                id: grnLine.id,
+                id: product.id,
                 sku_id: grnLine.sku_id,
                 ordered_qty: grnLine.ordered_qty,
                 received_qty: grnLine.received_qty,
