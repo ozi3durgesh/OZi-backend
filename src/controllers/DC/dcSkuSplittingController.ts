@@ -359,6 +359,13 @@ export class DCSkuSplittingController {
 
       const { poId, lines, closeReason, status } = req.body;
 
+      // Log incoming request for debugging
+      console.log('DC GRN Create Flow - Request received:', {
+        poId,
+        linesCount: lines?.length,
+        status
+      });
+
       // Validation
       if (!poId || !Number.isInteger(poId) || poId <= 0) {
         return ResponseHandler.error(res, 'Valid PO ID is required', 400);

@@ -651,7 +651,7 @@ export class DCSkuSplittingService {
       remarks?: string;
       heldQty?: number;
       rtvQty?: number;
-      photos?: string;
+      photos?: string | string[];
       batches?: Array<{
         batchNo?: string | null;
         expiry?: string | null;
@@ -837,13 +837,36 @@ export class DCSkuSplittingService {
 
         // Create photos if provided
         if (line.photos) {
-          await DCGrnPhoto.create({
-            sku_id: line.skuId,
-            dc_grn_id: dcGrn.id,
-            dc_po_id: data.poId,
-            url: line.photos,
-            reason: 'sku-level-photo'
-          }, { transaction });
+          // Handle both array and comma-separated string
+          let photoUrls: string[] = [];
+          
+          if (Array.isArray(line.photos)) {
+            // If it's already an array, use it directly
+            photoUrls = line.photos.filter(url => url && typeof url === 'string' && url.trim() !== '');
+          } else if (typeof line.photos === 'string') {
+            // If it's a string, check if it contains commas (comma-separated) or is a single URL
+            if (line.photos.includes(',')) {
+              photoUrls = line.photos.split(',').map(url => url.trim()).filter(url => url !== '');
+            } else {
+              photoUrls = [line.photos.trim()];
+            }
+          }
+
+          // Create a separate photo record for each URL
+          let photosCreated = 0;
+          for (const photoUrl of photoUrls) {
+            if (photoUrl && photoUrl.trim() !== '') {
+              await DCGrnPhoto.create({
+                sku_id: line.skuId,
+                dc_grn_id: dcGrn.id,
+                dc_po_id: data.poId,
+                url: photoUrl.trim(),
+                reason: 'sku-level-photo'
+              }, { transaction });
+              photosCreated++;
+            }
+          }
+          console.log(`Created ${photosCreated} photo records for SKU ${line.skuId}`);
         }
 
         // Update SKU split status if it exists

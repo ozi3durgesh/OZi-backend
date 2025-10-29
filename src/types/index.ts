@@ -986,8 +986,8 @@ export interface CreateFullGRNInput {
     heldQty?: number;
     rtvQty?: number;
     lineStatus?: string;
-    // SKU-level photo (single base64 string)
-    photos?: string; // Single base64 encoded image
+    // SKU-level photos (array of URLs or comma-separated string)
+    photos?: string | string[]; // Array of photo URLs or comma-separated string
     batches?: {
       batchNo: string;
       expiry: Date;
