@@ -118,42 +118,87 @@ export class FCGrnController {
       // Check if FCPurchaseOrder exists, if not create a dummy one
       let fcPO = await FCPurchaseOrder.findByPk(input.poId, { transaction: t });
       if (!fcPO) {
-        fcPO = await FCPurchaseOrder.create({
-          id: input.poId,
-          poId: `DUMMY_PO_${input.poId}`,
-          status: 'APPROVED',
-          createdBy: userId,
-          fcId: req.user?.currentFcId || 1,
-          dcId: 1, // Default DC ID
-          totalAmount: 0,
-          priority: 'MEDIUM',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        }, { transaction: t });
+        try {
+          fcPO = await FCPurchaseOrder.create({
+            id: input.poId,
+            poId: `DUMMY_PO_${input.poId}`,
+            status: 'APPROVED',
+            createdBy: userId,
+            fcId: req.user?.currentFcId || 1,
+            dcId: 1, // Default DC ID
+            totalAmount: 0,
+            priority: 'MEDIUM',
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }, { transaction: t });
+        } catch (fcPOError: any) {
+          // If creation fails (e.g., duplicate key), try to find it again
+          if (fcPOError.name === 'SequelizeUniqueConstraintError') {
+            fcPO = await FCPurchaseOrder.findByPk(input.poId, { transaction: t });
+          }
+          if (!fcPO) {
+            await t.rollback();
+            console.error('Error creating FCPurchaseOrder:', fcPOError);
+            res.status(500).json({
+              statusCode: 500,
+              success: false,
+              data: null,
+              error: `Failed to create or find FC Purchase Order: ${fcPOError.message}`,
+            });
+            return;
+          }
+        }
       }
 
-      // Check if PurchaseOrder exists in purchase_orders table, if not create a dummy one
-      let po = await PurchaseOrder.findByPk(input.poId, { transaction: t });
-      if (!po) {
-        po = await PurchaseOrder.create({
-          id: input.poId,
-          po_id: `DUMMY_PO_${input.poId}`,
-          approval_status: 'approved',
-          fc_id: req.user?.currentFcId || 1,
-        }, { transaction: t });
+      // Note: FCGrn belongs to FCPurchaseOrder, not PurchaseOrder
+      // PurchaseOrder creation is not required for FC GRNs
+
+      // Ensure FCPurchaseOrder exists before creating FCGrn
+      if (!fcPO) {
+        await t.rollback();
+        res.status(404).json({
+          statusCode: 404,
+          success: false,
+          data: null,
+          error: `FC Purchase Order with id ${input.poId} not found and could not be created`,
+        });
+        return;
       }
 
-      const fcGrn = await FCGrn.create(
-        {
-          po_id: input.poId,
-          status: input.status || 'partial',
-          close_reason: input.close_reason || null,
-          created_by: userId,
-          created_at: new Date(),
-          updated_at: new Date(),
-        },
-        { transaction: t }
-      );
+      let fcGrn;
+      try {
+        fcGrn = await FCGrn.create(
+          {
+            po_id: input.poId,
+            status: input.status || 'partial',
+            close_reason: input.close_reason || null,
+            created_by: userId,
+            created_at: new Date(),
+            updated_at: new Date(),
+          },
+          { transaction: t }
+        );
+      } catch (grnError: any) {
+        await t.rollback();
+        console.error('Error creating FCGrn:', grnError);
+        // Check if it's a foreign key constraint error
+        if (grnError.name === 'SequelizeForeignKeyConstraintError' || grnError.message?.includes('foreign key')) {
+          res.status(404).json({
+            statusCode: 404,
+            success: false,
+            data: null,
+            error: `Purchase Order not found: FC Purchase Order with id ${input.poId} does not exist`,
+          });
+        } else {
+          res.status(500).json({
+            statusCode: 500,
+            success: false,
+            data: null,
+            error: `Failed to create FC GRN: ${grnError.message}`,
+          });
+        }
+        return;
+      }
 
       for (const line of input.lines) {
         // Validate that either skuId or ean is provided
