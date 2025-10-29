@@ -3,6 +3,7 @@ import { ResponseHandler } from '../../middleware/responseHandler';
 import { DCGrn, DCGrnLine, DCGrnBatch, DCGrnPhoto, DCPurchaseOrder, User, DistributionCenter, DCPOSkuMatrix, ProductMaster, DCSkuSplitted } from '../../models';
 import { Transaction } from 'sequelize';
 import sequelize from '../../config/database';
+import { DCPOService } from '../../services/DC/dcPOService';
 
 interface AuthRequest extends Request {
   user?: any;
@@ -749,10 +750,10 @@ export class DCGrnController {
               model: DCPOSkuMatrix,
               as: 'SkuMatrix',
               attributes: [
-                'id', 'catalogue_id', 'productName', 'quantity', 'unitPrice', 
-                'totalAmount', 'mrp', 'cost', 'description', 'hsn', 'ean_upc',
-                'weight', 'length', 'height', 'width', 'gst', 'cess', 'image_url',
-                'brand_id', 'category_id', 'sku_matrix_on_catelogue_id'
+                'id', 'dcPOId', 'quantity', 'catalogue_id', 'category', 'sku', 'product_name', 
+                'description', 'hsn', 'image_url', 'mrp', 'ean_upc', 'color', 'size', 
+                'brand', 'weight', 'length', 'height', 'width', 'inventory_threshold', 
+                'gst', 'cess', 'rlp', 'rlp_w_o_tax', 'gstType', 'selling_price', 'margin'
               ]
             },
             {
@@ -814,7 +815,17 @@ export class DCGrnController {
         });
         
         count = filteredPOs.length;
-        purchaseOrders = filteredPOs.slice(offset, offset + limit);
+        // Transform SkuMatrix to Products format for filtered POs
+        const filteredPOsWithProducts = filteredPOs.map((po: any) => {
+          const poData = po.toJSON ? po.toJSON() : po;
+          if (poData.SkuMatrix && poData.SkuMatrix.length > 0) {
+            poData.Products = DCPOService.transformSkuMatrixToProducts(poData.SkuMatrix);
+          } else {
+            poData.Products = [];
+          }
+          return poData;
+        });
+        purchaseOrders = filteredPOsWithProducts.slice(offset, offset + limit);
       } else {
         // Normal case - filter by PO status
         const result = await DCPurchaseOrder.findAndCountAll({
@@ -829,10 +840,10 @@ export class DCGrnController {
               model: DCPOSkuMatrix,
               as: 'SkuMatrix',
               attributes: [
-                'id', 'catalogue_id', 'productName', 'quantity', 'unitPrice', 
-                'totalAmount', 'mrp', 'cost', 'description', 'hsn', 'ean_upc',
-                'weight', 'length', 'height', 'width', 'gst', 'cess', 'image_url',
-                'brand_id', 'category_id', 'sku_matrix_on_catelogue_id'
+                'id', 'dcPOId', 'quantity', 'catalogue_id', 'category', 'sku', 'product_name', 
+                'description', 'hsn', 'image_url', 'mrp', 'ean_upc', 'color', 'size', 
+                'brand', 'weight', 'length', 'height', 'width', 'inventory_threshold', 
+                'gst', 'cess', 'rlp', 'rlp_w_o_tax', 'gstType', 'selling_price', 'margin'
               ]
             },
             {
@@ -860,8 +871,19 @@ export class DCGrnController {
         purchaseOrders = result.rows;
       }
 
+      // Transform SkuMatrix to Products format for all POs
+      const purchaseOrdersWithProducts = purchaseOrders.map((po: any) => {
+        const poData = po.toJSON ? po.toJSON() : po;
+        if (poData.SkuMatrix && poData.SkuMatrix.length > 0) {
+          poData.Products = DCPOService.transformSkuMatrixToProducts(poData.SkuMatrix);
+        } else {
+          poData.Products = [];
+        }
+        return poData;
+      });
+
       // Transform the data to match the expected GRN format
-      const grnList = purchaseOrders.map((po: any) => {
+      const grnList = purchaseOrdersWithProducts.map((po: any) => {
         // Check if GRN exists for this PO
         const hasGrn = po.DCGrns && po.DCGrns.length > 0;
         const grnData = hasGrn ? po.DCGrns[0] : null;
