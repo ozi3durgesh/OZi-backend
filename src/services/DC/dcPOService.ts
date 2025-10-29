@@ -58,6 +58,7 @@ interface CreateDCPOData {
       rlp_w_o_tax: string;
       gstType: string;
       selling_price?: string;
+      margin?: string;
     }>;
   }>;
   description?: string;
@@ -239,6 +240,7 @@ export class DCPOService {
               rlp_w_o_tax: sku.rlp_w_o_tax,
               gstType: sku.gstType,
               selling_price: sku.selling_price,
+              margin: sku.margin,
             }));
 
             await DCPOSkuMatrix.bulkCreate(skuMatrixEntries);
@@ -326,7 +328,7 @@ export class DCPOService {
             {
               model: DCPOSkuMatrix,
               as: 'SkuMatrix',
-              attributes: ['id', 'quantity', 'catalogue_id', 'category', 'sku', 'product_name', 'description', 'hsn', 'image_url', 'mrp', 'ean_upc', 'color', 'size', 'brand', 'weight', 'length', 'height', 'width', 'inventory_threshold', 'gst', 'cess', 'rlp', 'rlp_w_o_tax', 'gstType', 'selling_price'],
+              attributes: ['id', 'quantity', 'catalogue_id', 'category', 'sku', 'product_name', 'description', 'hsn', 'image_url', 'mrp', 'ean_upc', 'color', 'size', 'brand', 'weight', 'length', 'height', 'width', 'inventory_threshold', 'gst', 'cess', 'rlp', 'rlp_w_o_tax', 'gstType', 'selling_price', 'margin'],
             },
           ],
         },
@@ -395,7 +397,7 @@ export class DCPOService {
             {
               model: DCPOSkuMatrix,
               as: 'SkuMatrix',
-              attributes: ['id', 'quantity', 'catalogue_id', 'category', 'sku', 'product_name', 'description', 'hsn', 'image_url', 'mrp', 'ean_upc', 'color', 'size', 'brand', 'weight', 'length', 'height', 'width', 'inventory_threshold', 'gst', 'cess', 'rlp', 'rlp_w_o_tax', 'gstType', 'selling_price'],
+              attributes: ['id', 'quantity', 'catalogue_id', 'category', 'sku', 'product_name', 'description', 'hsn', 'image_url', 'mrp', 'ean_upc', 'color', 'size', 'brand', 'weight', 'length', 'height', 'width', 'inventory_threshold', 'gst', 'cess', 'rlp', 'rlp_w_o_tax', 'gstType', 'selling_price', 'margin'],
             },
           ],
         },
@@ -773,7 +775,7 @@ export class DCPOService {
             {
               model: DCPOSkuMatrix,
               as: 'SkuMatrix',
-              attributes: ['id', 'quantity', 'catalogue_id', 'category', 'sku', 'product_name', 'description', 'hsn', 'image_url', 'mrp', 'ean_upc', 'color', 'size', 'brand', 'weight', 'length', 'height', 'width', 'inventory_threshold', 'gst', 'cess', 'rlp', 'rlp_w_o_tax', 'gstType', 'selling_price'],
+              attributes: ['id', 'quantity', 'catalogue_id', 'category', 'sku', 'product_name', 'description', 'hsn', 'image_url', 'mrp', 'ean_upc', 'color', 'size', 'brand', 'weight', 'length', 'height', 'width', 'inventory_threshold', 'gst', 'cess', 'rlp', 'rlp_w_o_tax', 'gstType', 'selling_price', 'margin'],
             },
           ],
         },

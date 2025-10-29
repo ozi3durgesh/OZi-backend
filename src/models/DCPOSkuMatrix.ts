@@ -37,6 +37,7 @@ class DCPOSkuMatrix extends Model<
   declare rlp_w_o_tax: string | null;
   declare gstType: string | null;
   declare selling_price: string | null;
+  declare margin: string | null;
   declare createdAt: CreationOptional<Date>;
   declare updatedAt: CreationOptional<Date>;
 }
@@ -150,6 +151,10 @@ DCPOSkuMatrix.init(
       allowNull: true,
     },
     selling_price: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    margin: {
       type: DataTypes.STRING(50),
       allowNull: true,
     },
