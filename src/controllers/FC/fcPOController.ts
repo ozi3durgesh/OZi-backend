@@ -22,6 +22,7 @@ export class FCPOController {
       const {
         fcId,
         dcId,
+        dcPoId,
         products,
         description,
         notes,
@@ -105,6 +106,7 @@ export class FCPOController {
       const fcPO = await FCPOService.createFCPO({
         fcId,
         dcId,
+        dcPoId,
         products,
         description,
         notes,
@@ -218,6 +220,8 @@ export class FCPOController {
         status,
         fcId,
         dcId,
+        dcPoId,
+        sku,
         priority
       } = req.query;
 
@@ -226,6 +230,8 @@ export class FCPOController {
         status: status as string,
         fcId: fcId ? parseInt(fcId as string) : undefined,
         dcId: dcId ? parseInt(dcId as string) : undefined,
+        dcPoId: dcPoId ? parseInt(dcPoId as string) : undefined,
+        sku: sku as string,
         priority: priority as string,
       };
 
@@ -235,7 +241,7 @@ export class FCPOController {
         FC_PO_CONSTANTS.PAGINATION.MAX_LIMIT
       );
 
-      const result = await FCPOService.getFCPOs(filters, pageNum, limitNum);
+      const result = await FCPOService.getFCPOs(filters as any, pageNum, limitNum);
 
       return ResponseHandler.success(res, {
         message: FC_PO_CONSTANTS.SUCCESS.FETCHED,

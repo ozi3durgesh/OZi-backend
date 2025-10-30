@@ -80,6 +80,7 @@ export class FCPOService {
   static async createFCPO(data: {
     fcId: number;
     dcId: number;
+    dcPoId?: number;
     products: any[];
     description?: string;
     notes?: string;
@@ -112,6 +113,7 @@ export class FCPOService {
           poId: nextPoId,
           fcId: data.fcId,
           dcId: data.dcId,
+          dcPOId: data.dcPoId,
           totalAmount,
           status: 'PENDING_APPROVAL',
           priority: (data.priority as 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT') || 'MEDIUM',
@@ -537,6 +539,8 @@ export class FCPOService {
       status?: string;
       fcId?: number;
       dcId?: number;
+      dcPoId?: number;
+      sku?: string;
       priority?: string;
     },
     page: number,
@@ -617,12 +621,37 @@ export class FCPOService {
       return poData;
     });
 
-    return {
-      data: processedRows,
-      total: count,
-      page,
-      pages: Math.ceil(count / limit),
-    };
+    // Optional raised quantity summary when fcId & dcPoId are provided
+    if (filters.fcId && filters.dcPoId) {
+      const summary = await sequelize.query(
+        `SELECT m.sku AS sku, SUM(m.quantity) AS raisedQuantity
+         FROM fc_po_sku_matrix m
+         INNER JOIN fc_purchase_orders p ON p.id = m.fc_po_id
+         WHERE p.fc_id = :fcId AND p.dc_po_id = :dcPoId
+         GROUP BY m.sku`,
+        {
+          type: QueryTypes.SELECT,
+          replacements: { fcId: filters.fcId, dcPoId: filters.dcPoId },
+        }
+      );
+
+      const result: any = {
+        data: processedRows,
+        total: count,
+        page,
+        pages: Math.ceil(count / limit),
+        raisedBySku: summary,
+      };
+
+      if (filters.sku) {
+        const match = (summary as any[]).find((r) => r.sku === filters.sku);
+        result.raisedQuantity = match ? Number(match.raisedQuantity) : 0;
+      }
+
+      return result;
+    }
+
+    return { data: processedRows, total: count, page, pages: Math.ceil(count / limit) };
   }
 
   /**
