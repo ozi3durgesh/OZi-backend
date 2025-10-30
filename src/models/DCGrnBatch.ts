@@ -6,6 +6,7 @@ export interface DCGrnBatchAttributes {
   id: number;
   dc_grn_line_id: number;
   batch_no: string | null;
+  manufacture: Date | null;
   expiry_date: Date | null;
   qty: number;
   created_at: Date;
@@ -15,6 +16,7 @@ export interface DCGrnBatchAttributes {
 export interface DCGrnBatchCreationAttributes {
   dc_grn_line_id: number;
   batch_no: string | null;
+  manufacture?: Date | null;
   expiry_date: Date | null;
   qty: number;
 }
@@ -23,6 +25,7 @@ class DCGrnBatch extends Model<DCGrnBatchAttributes, DCGrnBatchCreationAttribute
   declare id: number;
   declare dc_grn_line_id: number;
   declare batch_no: string | null;
+  declare manufacture: Date | null;
   declare expiry_date: Date | null;
   declare qty: number;
   declare created_at: Date;
@@ -42,6 +45,10 @@ DCGrnBatch.init(
     },
     batch_no: {
       type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    manufacture: {
+      type: DataTypes.DATE,
       allowNull: true,
     },
     expiry_date: {

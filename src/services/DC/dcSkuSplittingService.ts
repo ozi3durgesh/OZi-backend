@@ -676,6 +676,7 @@ export class DCSkuSplittingService {
       photos?: string | string[];
       batches?: Array<{
         batchNo?: string | null;
+        manufacture?: string | null;
         expiry?: string | null;
         qty: number;
       }>;
@@ -830,6 +831,7 @@ export class DCSkuSplittingService {
             await DCGrnBatch.create({
               dc_grn_line_id: grnLine.id,
               batch_no: batch.batchNo && batch.batchNo.trim() !== '' ? batch.batchNo : `BATCH_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              manufacture: batch.manufacture && batch.manufacture.trim() !== '' ? new Date(batch.manufacture) : null,
               expiry_date: batch.expiry && batch.expiry.trim() !== '' ? new Date(batch.expiry) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // Default to 1 year from now
               qty: batch.qty
             }, { transaction });
