@@ -792,10 +792,13 @@ export class DCSkuSplittingService {
         if (grnLine) {
           // Update existing line - accumulate quantities
           const newReceivedQty = grnLine.received_qty + line.receivedQty;
-          const newRejectedQty = grnLine.rejected_qty + rejectedQty;
-          const newQcPassQty = grnLine.qc_pass_qty + qcPassQty;
+          // Reduce previously rejected by current qc_passQty first
+          const reduceFromRejected = Math.min(grnLine.rejected_qty || 0, qcPassQty || 0);
+          const adjustedExistingRejected = (grnLine.rejected_qty || 0) - reduceFromRejected;
+          const newRejectedQty = Math.max(0, adjustedExistingRejected + (rejectedQty || 0));
+          const newQcPassQty = (grnLine.qc_pass_qty || 0) + (qcPassQty || 0);
           const newPendingQty = line.orderedQty - newReceivedQty;
-          
+
           // Recalculate line status with accumulated quantities
           const newLineStatus = this.calculateLineStatus(line.orderedQty, newRejectedQty, newQcPassQty);
 
