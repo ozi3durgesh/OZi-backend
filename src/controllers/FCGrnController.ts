@@ -379,23 +379,38 @@ export class FCGrnController {
         // Create FCGrnPhoto records for provided photos
         if (line.photos && (Array.isArray(line.photos) ? line.photos.length > 0 : true)) {
           try {
-            // Normalize to array; support strings or objects
-            const items = Array.isArray(line.photos) ? line.photos : [line.photos];
-            for (const item of items) {
-              const url = typeof item === 'string' ? item : (item as any)?.url;
-              const reason = typeof item === 'string' ? 'sku-level-photo' : ((item as any)?.reason || 'sku-level-photo');
-              if (url && typeof url === 'string') {
-                await FCGrnPhoto.create(
-                  {
-                    sku_id: resolvedSku,
-                    grn_id: fcGrn.id,
-                    po_id: input.poId,
-                    url,
-                    reason,
-                  },
-                  { transaction: t }
-                );
+            // Normalize photos to an array of string URLs
+            const rawItems = Array.isArray(line.photos) ? line.photos : [line.photos];
+            const normalizedUrls: { url: string; reason?: string }[] = [];
+
+            for (const item of rawItems) {
+              if (typeof item === 'string') {
+                const parts = item
+                  .split(',')
+                  .map((s) => s.trim())
+                  .filter(Boolean);
+                for (const part of parts) normalizedUrls.push({ url: part, reason: 'sku-level-photo' });
+              } else if (item && typeof (item as any).url === 'string') {
+                const reason = (item as any).reason || 'sku-level-photo';
+                const parts = ((item as any).url as string)
+                  .split(',')
+                  .map((s) => s.trim())
+                  .filter(Boolean);
+                for (const part of parts) normalizedUrls.push({ url: part, reason });
               }
+            }
+
+            for (const { url, reason } of normalizedUrls) {
+              await FCGrnPhoto.create(
+                {
+                  sku_id: resolvedSku,
+                  grn_id: fcGrn.id,
+                  po_id: input.poId,
+                  url,
+                  reason,
+                },
+                { transaction: t }
+              );
             }
           } catch (photoError) {
             await t.rollback();
