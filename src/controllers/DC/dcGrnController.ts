@@ -791,24 +791,36 @@ export class DCGrnController {
             return false;
           }
           
-          const grnData = po.DCGrns[0];
+          // Aggregate all GRN lines across all GRNs for each SKU
           const processedLines = (po.SkuMatrix || []).map((sku: any) => {
             const actualSku = sku.sku || sku.catalogue_id;
-            const grnLine = grnData?.Lines?.find((line: any) => line.sku_id === actualSku);
-            
-            if (grnLine) {
+            const orderedQty = parseInt(sku.quantity?.toString() || '0');
+            const allLines = (po.DCGrns || [])
+              .flatMap((g: any) => (g.Lines || []))
+              .filter((line: any) => line.sku_id === actualSku);
+
+            if (allLines.length > 0) {
+              const totals = allLines.reduce((acc: any, l: any) => {
+                acc.ordered += l.ordered_qty || 0;
+                acc.received += l.received_qty || 0;
+                acc.qcPass += l.qc_pass_qty || 0;
+                acc.rejected += l.rejected_qty || 0;
+                return acc;
+              }, { ordered: 0, received: 0, qcPass: 0, rejected: 0 });
+
+              // Normalize to PO-ordered quantity and cap rejected so it shrinks as qcPass grows
+              const totalOrdered = orderedQty;
+              const totalQCPass = totals.qcPass;
+              const effectiveRejected = Math.max(0, Math.min(totals.rejected, totalOrdered - totalQCPass));
+
               return DCGrnController.calculateLineStatus(
-                grnLine.ordered_qty,
-                grnLine.rejected_qty,
-                grnLine.qc_pass_qty
-              );
-            } else {
-              return DCGrnController.calculateLineStatus(
-                parseInt(sku.quantity?.toString() || '0'),
-                0,
-                0
+                totalOrdered,
+                effectiveRejected,
+                totalQCPass
               );
             }
+
+            return DCGrnController.calculateLineStatus(orderedQty, 0, 0);
           });
           
           const calculatedGrnStatus = DCGrnController.calculateGrnStatus(processedLines);
@@ -889,7 +901,8 @@ export class DCGrnController {
       const grnList = purchaseOrdersWithProducts.map((po: any) => {
         // Check if GRN exists for this PO
         const hasGrn = po.DCGrns && po.DCGrns.length > 0;
-        const grnData = hasGrn ? po.DCGrns[0] : null;
+        const allGrns = hasGrn ? po.DCGrns : [];
+        const latestGrn = hasGrn ? [...allGrns].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] : null;
         
         // Process products to get line statuses per individual SKU (no grouping by catalogue)
         const processedLines = (po.Products || []).flatMap((product: any) => {
@@ -909,24 +922,35 @@ export class DCGrnController {
           // If no matrix, fall back to one line using catalogue_id
           if (!skuMatrix || skuMatrix.length === 0) {
             const fallbackSku = product.catalogue_id;
-            const grnLine = grnData?.Lines?.find((line: any) => line.sku_id === fallbackSku);
-            if (grnLine) {
-              const calculatedLineStatus = DCGrnController.calculateLineStatus(
-                grnLine.ordered_qty,
-                grnLine.rejected_qty,
-                grnLine.qc_pass_qty
-              );
+            const orderedQty = product.quantity || product.ordered_qty || 0;
+            const lines = allGrns.flatMap((g: any) => (g.Lines || [])).filter((l: any) => l.sku_id === fallbackSku);
+            if (lines.length > 0) {
+              const totals = lines.reduce((acc: any, l: any) => {
+                acc.received += l.received_qty || 0;
+                acc.qcPass += l.qc_pass_qty || 0;
+                acc.rejected += l.rejected_qty || 0;
+                acc.qcFail += l.qc_fail_qty || 0;
+                acc.rtv += l.rtv_qty || 0;
+                acc.held += l.held_qty || 0;
+                return acc;
+              }, { received: 0, qcPass: 0, rejected: 0, qcFail: 0, rtv: 0, held: 0 });
+
+              const totalOrdered = parseInt((product.quantity ?? 0).toString()) || 0;
+              const effectiveRejected = Math.max(0, Math.min(totals.rejected, totalOrdered - totals.qcPass));
+              const pendingQty = Math.max(0, totalOrdered - totals.received);
+              const calculatedLineStatus = DCGrnController.calculateLineStatus(totalOrdered, effectiveRejected, totals.qcPass);
+
               return [{
                 id: product.id,
-                sku_id: grnLine.sku_id,
-                ordered_qty: grnLine.ordered_qty,
-                received_qty: grnLine.received_qty,
-                pending_qty: grnLine.pending_qty,
-                rejected_qty: grnLine.rejected_qty,
-                qc_pass_qty: grnLine.qc_pass_qty,
-                qc_fail_qty: grnLine.qc_fail_qty,
-                rtv_qty: grnLine.rtv_qty,
-                held_qty: grnLine.held_qty,
+                sku_id: fallbackSku,
+                ordered_qty: totalOrdered,
+                received_qty: totals.received,
+                pending_qty: pendingQty,
+                rejected_qty: effectiveRejected,
+                qc_pass_qty: totals.qcPass,
+                qc_fail_qty: totals.qcFail,
+                rtv_qty: totals.rtv,
+                held_qty: totals.held,
                 line_status: calculatedLineStatus,
                 product_details: {
                   name: product.productName,
@@ -990,25 +1014,35 @@ export class DCGrnController {
           return skuMatrix.map((entry: any) => {
             const actualSku = entry.sku || product.catalogue_id;
             const entryOrderedQty = parseInt(entry.quantity?.toString() || '0');
-            const grnLine = grnData?.Lines?.find((line: any) => line.sku_id === actualSku);
+            const lines = allGrns.flatMap((g: any) => (g.Lines || [])).filter((l: any) => l.sku_id === actualSku);
 
-            if (grnLine) {
-              const calculatedLineStatus = DCGrnController.calculateLineStatus(
-                grnLine.ordered_qty,
-                grnLine.rejected_qty,
-                grnLine.qc_pass_qty
-              );
+            if (lines.length > 0) {
+              const totals = lines.reduce((acc: any, l: any) => {
+                acc.received += l.received_qty || 0;
+                acc.qcPass += l.qc_pass_qty || 0;
+                acc.rejected += l.rejected_qty || 0;
+                acc.qcFail += l.qc_fail_qty || 0;
+                acc.rtv += l.rtv_qty || 0;
+                acc.held += l.held_qty || 0;
+                return acc;
+              }, { received: 0, qcPass: 0, rejected: 0, qcFail: 0, rtv: 0, held: 0 });
+
+              const totalOrdered = entryOrderedQty;
+              const effectiveRejected = Math.max(0, Math.min(totals.rejected, totalOrdered - totals.qcPass));
+              const pendingQty = Math.max(0, totalOrdered - totals.received);
+              const calculatedLineStatus = DCGrnController.calculateLineStatus(totalOrdered, effectiveRejected, totals.qcPass);
+
               return {
                 id: entry.id || product.id,
-                sku_id: grnLine.sku_id,
-                ordered_qty: grnLine.ordered_qty,
-                received_qty: grnLine.received_qty,
-                pending_qty: grnLine.pending_qty,
-                rejected_qty: grnLine.rejected_qty,
-                qc_pass_qty: grnLine.qc_pass_qty,
-                qc_fail_qty: grnLine.qc_fail_qty,
-                rtv_qty: grnLine.rtv_qty,
-                held_qty: grnLine.held_qty,
+                sku_id: actualSku,
+                ordered_qty: totalOrdered,
+                received_qty: totals.received,
+                pending_qty: pendingQty,
+                rejected_qty: effectiveRejected,
+                qc_pass_qty: totals.qcPass,
+                qc_fail_qty: totals.qcFail,
+                rtv_qty: totals.rtv,
+                held_qty: totals.held,
                 line_status: calculatedLineStatus,
                 product_details: {
                   name: entry.product_name || product.productName,
@@ -1087,13 +1121,13 @@ export class DCGrnController {
           : calculatedGrnStatus;
         
         return {
-          id: hasGrn ? grnData.id : po.id,
+          id: hasGrn ? latestGrn.id : po.id,
           po_id: po.id,
           status: displayStatus,
-          closeReason: hasGrn ? grnData.closeReason : (po.status === 'REJECTED' ? po.rejectionReason : null),
-          created_by: hasGrn ? grnData.created_by : (po.CreatedBy?.id || null),
-          created_at: hasGrn ? grnData.created_at : po.createdAt,
-          updated_at: hasGrn ? grnData.updated_at : po.updatedAt,
+          closeReason: hasGrn ? latestGrn.closeReason : (po.status === 'REJECTED' ? po.rejectionReason : null),
+          created_by: hasGrn ? latestGrn.created_by : (po.CreatedBy?.id || null),
+          created_at: hasGrn ? latestGrn.created_at : po.createdAt,
+          updated_at: hasGrn ? latestGrn.updated_at : po.updatedAt,
           PO: {
             id: po.id,
             po_id: po.poId,
