@@ -76,6 +76,7 @@ export class FCGrnController {
         created_by: userId,
         created_at: new Date(),
         updated_at: new Date(),
+        fc_id: req.user?.currentFcId,
       });
 
       const createdFCGrn = await FCGrn.findByPk(fcGrn.id, {
@@ -175,6 +176,7 @@ export class FCGrnController {
             created_by: userId,
             created_at: new Date(),
             updated_at: new Date(),
+            fc_id: req.user?.currentFcId,
           },
           { transaction: t }
         );
@@ -240,12 +242,6 @@ export class FCGrnController {
           
           resolvedSku = product.sku_id;
           foundBy = 'ean';
-        }
-
-        // If nothing is received for this line, skip SKU validation and processing.
-        // This allows clients to send full PO lines while only processing received SKUs.
-        if ((line.receivedQty ?? 0) === 0) {
-          continue;
         }
 
         // Find the SKU matrix entry that matches the resolved SKU

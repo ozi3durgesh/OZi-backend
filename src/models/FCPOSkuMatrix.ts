@@ -79,13 +79,10 @@ FCPOSkuMatrix.init(
       },
     },
     fcPOProductId: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      field: 'fc_po_product_id',
-      references: {
-        model: 'fc_po_products',
-        key: 'id',
-      },
+    	type: DataTypes.INTEGER,
+    	allowNull: true,
+    	field: 'fc_po_product_id',
+    	// Reference dropped table removed intentionally; field retained for backward compatibility
     },
     catalogueId: {
       type: DataTypes.STRING(255),
