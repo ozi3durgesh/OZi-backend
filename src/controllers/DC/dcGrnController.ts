@@ -941,7 +941,14 @@ export class DCGrnController {
                   height: product.height,
                   width: product.width,
                   gst: product.gst,
-                  cess: product.cess
+                  cess: product.cess,
+                  hsn: product.hsn,
+                  catalogue_id: product.catalogue_id,
+                  category_id: product.category_id,
+                  brand_id: product.brand_id,
+                  inventory_threshold: product.inventory_threshold,
+                  created_at: product.createdAt,
+                  updated_at: product.updatedAt
                 }
               };
             } else {
@@ -976,7 +983,14 @@ export class DCGrnController {
                   height: product.height,
                   width: product.width,
                   gst: product.gst,
-                  cess: product.cess
+                  cess: product.cess,
+                  hsn: product.hsn,
+                  catalogue_id: product.catalogue_id,
+                  category_id: product.category_id,
+                  brand_id: product.brand_id,
+                  inventory_threshold: product.inventory_threshold,
+                  created_at: product.createdAt,
+                  updated_at: product.updatedAt
                 }
               };
             }
