@@ -14,7 +14,7 @@ export class FCSKUController {
    */
   static async getSKUsWithGRNStatus(req: AuthRequest, res: Response): Promise<Response> {
     try {
-      const { fcId, dcId, page = 1, limit = 20, search } = req.query;
+      const { fcId, dcId, page = 1, limit = 20, search, dcPoId } = req.query;
 
       if (!fcId) {
         return ResponseHandler.error(res, 'FC ID is required', 400);
@@ -23,6 +23,10 @@ export class FCSKUController {
       const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
 
       // Get all DC GRN lines with completed, partial, or rejected status
+      const dcPoWhere: any = { status: 'approved' };
+      if (dcPoId) {
+        dcPoWhere.id = Number(dcPoId);
+      }
       const dcGrnLines = await DCGrnLine.findAll({
         where: {
           line_status: {
@@ -39,9 +43,7 @@ export class FCSKUController {
                 model: DCPurchaseOrder,
                 as: 'DCPO',
                 required: true,
-                where: {
-                  status: 'approved'
-                }
+                where: dcPoWhere
               }
             ]
           }
@@ -170,7 +172,11 @@ export class FCSKUController {
       });
 
       // Combine and process data
-      const allData = [...Array.from(dcData.values()), ...Array.from(fcData.values())];
+      let allData = [...Array.from(dcData.values()), ...Array.from(fcData.values())];
+      // If dcPoId is provided, restrict to the specific DC PO only
+      if (dcPoId) {
+        allData = Array.from(dcData.values()).filter((entry: any) => entry.po.id === Number(dcPoId));
+      }
       
       const processedData = await Promise.all(allData.map(async (poData: any) => {
         const products: any[] = [];
