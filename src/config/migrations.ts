@@ -310,6 +310,16 @@ const createFCPOSkuMatrixTable = async (): Promise<void> => {
 const addSkuMatrixColumnToFCPOProducts = async (): Promise<void> => {
   try {
     console.log('📋 Adding sku_matrix_on_catalogue_id column to fc_po_products table...');
+    // If fc_po_products table doesn't exist, skip safely
+    const fcPoProductsTable = await sequelize.query(
+      "SHOW TABLES LIKE 'fc_po_products'",
+      { type: QueryTypes.SELECT }
+    ) as any[];
+
+    if (!fcPoProductsTable || (fcPoProductsTable as any).length === 0) {
+      console.log('ℹ️ fc_po_products table does not exist (already dropped) - skipping sku_matrix_on_catalogue_id migration');
+      return;
+    }
     
     // Check if sku_matrix_on_catalogue_id column exists
     const columns = await sequelize.query(
@@ -330,9 +340,14 @@ const addSkuMatrixColumnToFCPOProducts = async (): Promise<void> => {
     } else {
       console.log('ℹ️ sku_matrix_on_catalogue_id column already exists in fc_po_products table');
     }
-  } catch (error) {
+  } catch (error: any) {
+    // If the table truly doesn't exist or any non-critical error occurs, don't block server start
+    if (error?.code === 'ER_NO_SUCH_TABLE' || /doesn't exist/i.test(error?.message || '')) {
+      console.log('ℹ️ fc_po_products table does not exist - skipping sku_matrix_on_catalogue_id migration');
+      return;
+    }
     console.error('❌ Error adding sku_matrix_on_catalogue_id column to fc_po_products table:', error);
-    throw error;
+    console.warn('⚠️ Continuing without sku_matrix_on_catalogue_id migration');
   }
 };
 
