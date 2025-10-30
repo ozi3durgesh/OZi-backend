@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { ResponseHandler } from '../../middleware/responseHandler';
+import sequelize from '../../config/database';
 import { FCPurchaseOrder, FCPOSkuMatrix, FCGrn, FCGrnLine, DCPurchaseOrder, DCPOSkuMatrix, DCGrn, DCGrnLine, ProductMaster } from '../../models';
 import { Op } from 'sequelize';
 
@@ -76,6 +77,20 @@ export class FCSKUController {
           }
         ]
       });
+
+      // Precompute raised FC-PO quantity per SKU for this FC and optional DC PO
+      const fcIdNum = Number(fcId);
+      const dcPoIdNum = dcPoId ? Number(dcPoId) : null;
+      const raisedRows: any[] = await sequelize.query(
+        `SELECT m.sku AS sku, SUM(m.quantity) AS raisedQuantity
+         FROM fc_po_sku_matrix m
+         INNER JOIN fc_purchase_orders p ON p.id = m.fc_po_id
+         WHERE p.fc_id = :fcId
+           ${dcPoId ? 'AND p.dc_po_id = :dcPoId' : ''}
+         GROUP BY m.sku`,
+        { type: (sequelize as any).QueryTypes?.SELECT || require('sequelize').QueryTypes.SELECT, replacements: { fcId: fcIdNum, dcPoId: dcPoIdNum } }
+      );
+      const raisedBySku = new Map<string, number>(raisedRows.map((r: any) => [String(r.sku), Number(r.raisedQuantity || 0)]));
 
       // Process DC GRN lines
       const dcData = new Map();
@@ -237,7 +252,7 @@ export class FCSKUController {
                 poType: poData.po.poType,
                 totalOrderedQuantity: productData.ordered_qty,
                 totalReceivedQuantity: productData.received_qty,
-                availableQuantity: productData.qc_pass_qty,
+                availableQuantity: Math.max(0, (productData.qc_pass_qty || 0) - (raisedBySku.get(String(dcSku.sku)) || 0)),
                 grnStatus: productData.line_status.toUpperCase(),
                 grnDetails: productData.grnDetails,
                 poStatus: poData.po.status,
@@ -287,7 +302,7 @@ export class FCSKUController {
               poType: poData.po.poType,
               totalOrderedQuantity: productData.ordered_qty,
               totalReceivedQuantity: productData.received_qty,
-              availableQuantity: productData.qc_pass_qty, // Only QC pass quantity
+              availableQuantity: Math.max(0, (productData.qc_pass_qty || 0) - (raisedBySku.get(String(productMaster.sku_id)) || 0)),
               grnStatus: productData.line_status.toUpperCase(),
               grnDetails: productData.grnDetails,
               poStatus: poData.po.status,
