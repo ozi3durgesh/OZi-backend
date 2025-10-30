@@ -180,9 +180,76 @@ export class FCSKUController {
       
       const processedData = await Promise.all(allData.map(async (poData: any) => {
         const products: any[] = [];
+        let poLevelGstType: string | null = null;
+        if (poData.po.poType === 'DC') {
+          const anySku = await DCPOSkuMatrix.findOne({
+            where: { dcPOId: poData.po.id },
+            attributes: ['gstType']
+          });
+          poLevelGstType = anySku ? (anySku as any).gstType : null;
+        }
         
         for (const [skuId, productData] of poData.products) {
-          // Get product details from ProductMaster
+          // Prefer product details from DCPOSkuMatrix for DC POs; fallback to ProductMaster otherwise
+          if (poData.po.poType === 'DC') {
+            const dcSku = await DCPOSkuMatrix.findOne({
+              where: { dcPOId: poData.po.id, sku: skuId }
+            });
+
+            if (dcSku) {
+              products.push({
+                // id: dcSku.id,
+                // status: null,
+                catelogue_id: dcSku.catalogue_id,
+                // product_id: null,
+                sku_id: dcSku.sku,
+                color: dcSku.color,
+                age_size: dcSku.size,
+                name: dcSku.product_name,
+                category: dcSku.category,
+                description: dcSku.description,
+                image_url: dcSku.image_url,
+                mrp: dcSku.mrp,
+                // avg_cost_to_ozi: null,
+                ean_upc: dcSku.ean_upc,
+                brand_name: dcSku.brand,
+                weight: dcSku.weight,
+                length: dcSku.length,
+                height: dcSku.height,
+                width: dcSku.width,
+                inventory_threshold: dcSku.inventory_threshold,
+                gst: dcSku.gst,
+                cess: dcSku.cess,
+                hsn: dcSku.hsn,
+                // created_by: null,
+                created_at: dcSku.createdAt,
+                updated_at: dcSku.updatedAt,
+                // Extra DC PO SKU matrix fields for completeness
+                dcPOProductId: dcSku.dcPOProductId,
+                // quantity: dcSku.quantity,
+                rlp: dcSku.rlp,
+                rlp_w_o_tax: dcSku.rlp_w_o_tax,
+                // gstType: dcSku.gstType,
+                selling_price: dcSku.selling_price,
+                margin: dcSku.margin,
+                poId: poData.po.id,
+                poCode: poData.po.poCode,
+                poType: poData.po.poType,
+                totalOrderedQuantity: productData.ordered_qty,
+                totalReceivedQuantity: productData.received_qty,
+                availableQuantity: productData.qc_pass_qty,
+                grnStatus: productData.line_status.toUpperCase(),
+                grnDetails: productData.grnDetails,
+                poStatus: poData.po.status,
+                priority: poData.po.priority,
+                totalAmount: poData.po.totalAmount,
+                createdAt: poData.po.createdAt
+              });
+              continue;
+            }
+          }
+
+          // Fallback to ProductMaster
           const productMaster = await ProductMaster.findOne({
             where: { sku_id: skuId }
           });
@@ -232,7 +299,10 @@ export class FCSKUController {
         }
 
         return {
-          po: poData.po,
+          po: {
+            ...poData.po,
+            ...(poLevelGstType ? { gstType: poLevelGstType } : {})
+          },
           products: products
         };
       }));
