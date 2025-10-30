@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { ResponseHandler } from '../../middleware/responseHandler';
 import sequelize from '../../config/database';
 import { FCPurchaseOrder, FCPOSkuMatrix, FCGrn, FCGrnLine, DCPurchaseOrder, DCPOSkuMatrix, DCGrn, DCGrnLine, ProductMaster } from '../../models';
-import { Op } from 'sequelize';
+import { Op, QueryTypes } from 'sequelize';
 
 interface AuthRequest extends Request {
   user?: any;
@@ -86,9 +86,15 @@ export class FCSKUController {
          FROM fc_po_sku_matrix m
          INNER JOIN fc_purchase_orders p ON p.id = m.fc_po_id
          WHERE p.fc_id = :fcId
-           ${dcPoId ? 'AND p.dc_po_id = :dcPoId' : ''}
+           ${dcPoId ? `AND (
+             p.dc_po_id = :dcPoId
+             OR (p.dc_po_id IS NULL AND p.dc_id = :dcId AND EXISTS (
+               SELECT 1 FROM dc_po_sku_matrix d
+               WHERE d.dcPOId = :dcPoId AND d.sku = m.sku
+             ))
+           )` : ''}
          GROUP BY m.sku`,
-        { type: (sequelize as any).QueryTypes?.SELECT || require('sequelize').QueryTypes.SELECT, replacements: { fcId: fcIdNum, dcPoId: dcPoIdNum } }
+        { type: QueryTypes.SELECT, replacements: { fcId: fcIdNum, dcPoId: dcPoIdNum, dcId: Number(dcId) } }
       );
       const raisedBySku = new Map<string, number>(raisedRows.map((r: any) => [String(r.sku), Number(r.raisedQuantity || 0)]));
 
