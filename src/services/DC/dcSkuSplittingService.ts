@@ -743,8 +743,16 @@ export class DCSkuSplittingService {
         }
 
         const poLineQuantity = parseInt(poLine.quantity?.toString() || '0');
-        if (poLineQuantity !== line.orderedQty) {
-          throw new Error(`Ordered quantity for SKU ${line.skuId} (${line.orderedQty}) does not match PO line quantity (${poLineQuantity})`);
+        // Use PO line quantity as the source of truth. If client sends a different
+        // orderedQty, override instead of failing the request.
+        if (line.orderedQty !== poLineQuantity) {
+          line.orderedQty = poLineQuantity;
+        }
+        // Guard against receiving more than ordered in a single call
+        if (line.receivedQty > poLineQuantity) {
+          throw new Error(
+            `Received quantity for SKU ${line.skuId} (${line.receivedQty}) cannot exceed PO line quantity (${poLineQuantity})`
+          );
         }
       }
 
@@ -862,26 +870,41 @@ export class DCSkuSplittingService {
           console.log(`Created ${photosCreated} photo records for SKU ${line.skuId}`);
         }
 
-        // Update SKU split status if it exists
-        const skuSplit = await DCSkuSplitted.findOne({
-          where: {
-            po_id: data.poId,
-            sku: line.skuId,
-            ready_for_grn: 1
-          },
-          transaction
-        });
+        // Update SKU split status if splitting feature/table exists
+        try {
+          const skuSplit = await DCSkuSplitted.findOne({
+            where: {
+              po_id: data.poId,
+              sku: line.skuId,
+              ready_for_grn: 1
+            },
+            transaction
+          });
 
-        if (skuSplit) {
-          const newGrnDone = skuSplit.number_of_grn_done + line.receivedQty;
-          const readyForGrn = skuSplit.received_quantity > newGrnDone ? 1 : 0;
-          const grnCompleted = skuSplit.received_quantity === newGrnDone ? 1 : 0;
+          if (skuSplit) {
+            const newGrnDone = skuSplit.number_of_grn_done + line.receivedQty;
+            const readyForGrn = skuSplit.received_quantity > newGrnDone ? 1 : 0;
+            const grnCompleted = skuSplit.received_quantity === newGrnDone ? 1 : 0;
 
-          await skuSplit.update({
-            number_of_grn_done: newGrnDone,
-            ready_for_grn: readyForGrn,
-            grn_completed: grnCompleted
-          }, { transaction });
+            await skuSplit.update({
+              number_of_grn_done: newGrnDone,
+              ready_for_grn: readyForGrn,
+              grn_completed: grnCompleted
+            }, { transaction });
+          }
+        } catch (err: any) {
+          // If dc_sku_splitted table is not present, ignore and continue
+          const msg = err?.message || '';
+          const code = err?.original?.code || '';
+          if (
+            msg.includes("doesn't exist") ||
+            msg.includes('does not exist') ||
+            code === 'ER_NO_SUCH_TABLE'
+          ) {
+            console.warn('dc_sku_splitted table not found; skipping split-status update');
+          } else {
+            throw err;
+          }
         }
 
         // Always update DC Inventory 1 for GRN done with QC passed quantity only
