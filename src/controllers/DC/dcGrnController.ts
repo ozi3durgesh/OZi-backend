@@ -732,6 +732,9 @@ export class DCGrnController {
         whereClause.status = ['APPROVED', 'REJECTED', 'PENDING_CATEGORY_HEAD'];
       }
 
+      // Only include edited POs
+      whereClause.isEdited = true;
+
       // If filtering by GRN status, we need to handle counting differently
       let count: number;
       let purchaseOrders: any[];
@@ -888,37 +891,32 @@ export class DCGrnController {
         const hasGrn = po.DCGrns && po.DCGrns.length > 0;
         const grnData = hasGrn ? po.DCGrns[0] : null;
         
-        // Process products to get line statuses first
-        const processedLines = po.Products?.map((product: any) => {
-            // Parse SKU matrix to get actual SKUs
-            let skuMatrix: any[] = [];
-            try {
-              if (product.sku_matrix_on_catelogue_id) {
-                skuMatrix = typeof product.sku_matrix_on_catelogue_id === 'string' 
-                  ? JSON.parse(product.sku_matrix_on_catelogue_id)
-                  : product.sku_matrix_on_catelogue_id;
-              }
-            } catch (error) {
-              console.error('Error parsing SKU matrix:', error);
-              skuMatrix = [];
+        // Process products to get line statuses per individual SKU (no grouping by catalogue)
+        const processedLines = (po.Products || []).flatMap((product: any) => {
+          // Normalize sku matrix array
+          let skuMatrix: any[] = [];
+          try {
+            if (product.sku_matrix_on_catelogue_id) {
+              skuMatrix = Array.isArray(product.sku_matrix_on_catelogue_id)
+                ? product.sku_matrix_on_catelogue_id
+                : JSON.parse(product.sku_matrix_on_catelogue_id);
             }
+          } catch (error) {
+            console.error('Error parsing SKU matrix:', error);
+            skuMatrix = [];
+          }
 
-            // Get the first SKU from the matrix (or fallback to catalogue_id)
-            const actualSku = skuMatrix.length > 0 ? skuMatrix[0].sku : product.catalogue_id;
-            
-            // Find corresponding GRN line for this product using the actual SKU
-            const grnLine = grnData?.Lines?.find((line: any) => line.sku_id === actualSku);
-            
+          // If no matrix, fall back to one line using catalogue_id
+          if (!skuMatrix || skuMatrix.length === 0) {
+            const fallbackSku = product.catalogue_id;
+            const grnLine = grnData?.Lines?.find((line: any) => line.sku_id === fallbackSku);
             if (grnLine) {
-              // Calculate line status based on business logic
               const calculatedLineStatus = DCGrnController.calculateLineStatus(
                 grnLine.ordered_qty,
                 grnLine.rejected_qty,
                 grnLine.qc_pass_qty
               );
-              
-              // Use actual GRN line data with original product ID
-              return {
+              return [{
                 id: product.id,
                 sku_id: grnLine.sku_id,
                 ordered_qty: grnLine.ordered_qty,
@@ -950,51 +948,127 @@ export class DCGrnController {
                   created_at: product.createdAt,
                   updated_at: product.updatedAt
                 }
-              };
-            } else {
-              // Fall back to PO data if no GRN line exists
-              // Calculate line status for fallback case (all quantities are 0 except ordered_qty)
+              }];
+            }
+            const calculatedLineStatus = DCGrnController.calculateLineStatus(product.quantity, 0, 0);
+            return [{
+              id: product.id,
+              sku_id: fallbackSku,
+              ordered_qty: product.quantity,
+              received_qty: 0,
+              pending_qty: product.quantity,
+              rejected_qty: 0,
+              qc_pass_qty: 0,
+              qc_fail_qty: 0,
+              rtv_qty: 0,
+              held_qty: 0,
+              line_status: calculatedLineStatus,
+              product_details: {
+                name: product.productName,
+                description: product.description,
+                mrp: product.mrp,
+                ean_upc: product.ean_upc,
+                image_url: product.image_url,
+                weight: product.weight,
+                length: product.length,
+                height: product.height,
+                width: product.width,
+                gst: product.gst,
+                cess: product.cess,
+                hsn: product.hsn,
+                catalogue_id: product.catalogue_id,
+                category_id: product.category_id,
+                brand_id: product.brand_id,
+                inventory_threshold: product.inventory_threshold,
+                created_at: product.createdAt,
+                updated_at: product.updatedAt
+              }
+            }];
+          }
+
+          // Expand each SKU entry into its own line
+          return skuMatrix.map((entry: any) => {
+            const actualSku = entry.sku || product.catalogue_id;
+            const entryOrderedQty = parseInt(entry.quantity?.toString() || '0');
+            const grnLine = grnData?.Lines?.find((line: any) => line.sku_id === actualSku);
+
+            if (grnLine) {
               const calculatedLineStatus = DCGrnController.calculateLineStatus(
-                product.quantity, // ordered_qty
-                0, // rejected_qty
-                0  // qc_pass_qty
+                grnLine.ordered_qty,
+                grnLine.rejected_qty,
+                grnLine.qc_pass_qty
               );
-              
               return {
-                id: product.id,
-                sku_id: actualSku,
-                ordered_qty: product.quantity,
-                received_qty: 0,
-                pending_qty: product.quantity,
-                rejected_qty: 0,
-                qc_pass_qty: 0,
-                qc_fail_qty: 0,
-                rtv_qty: 0,
-                held_qty: 0,
+                id: entry.id || product.id,
+                sku_id: grnLine.sku_id,
+                ordered_qty: grnLine.ordered_qty,
+                received_qty: grnLine.received_qty,
+                pending_qty: grnLine.pending_qty,
+                rejected_qty: grnLine.rejected_qty,
+                qc_pass_qty: grnLine.qc_pass_qty,
+                qc_fail_qty: grnLine.qc_fail_qty,
+                rtv_qty: grnLine.rtv_qty,
+                held_qty: grnLine.held_qty,
                 line_status: calculatedLineStatus,
                 product_details: {
-                  name: product.productName,
-                  description: product.description,
-                  mrp: product.mrp,
-                  ean_upc: product.ean_upc,
-                  image_url: product.image_url,
-                  weight: product.weight,
-                  length: product.length,
-                  height: product.height,
-                  width: product.width,
-                  gst: product.gst,
-                  cess: product.cess,
-                  hsn: product.hsn,
-                  catalogue_id: product.catalogue_id,
-                  category_id: product.category_id,
-                  brand_id: product.brand_id,
-                  inventory_threshold: product.inventory_threshold,
-                  created_at: product.createdAt,
-                  updated_at: product.updatedAt
+                  name: entry.product_name || product.productName,
+                  description: entry.description ?? product.description,
+                  mrp: entry.mrp ? parseFloat(entry.mrp) : product.mrp,
+                  ean_upc: entry.ean_upc ?? product.ean_upc,
+                  image_url: entry.image_url ?? product.image_url,
+                  weight: entry.weight ?? product.weight,
+                  length: entry.length ?? product.length,
+                  height: entry.height ?? product.height,
+                  width: entry.width ?? product.width,
+                  gst: entry.gst ?? product.gst,
+                  cess: entry.cess ?? product.cess,
+                  hsn: entry.hsn ?? product.hsn,
+                  catalogue_id: entry.catalogue_id || product.catalogue_id,
+                  category_id: entry.category ?? product.category_id,
+                  brand_id: entry.brand ?? product.brand_id,
+                  inventory_threshold: entry.inventory_threshold ?? product.inventory_threshold,
+                  created_at: entry.createdAt || product.createdAt,
+                  updated_at: entry.updatedAt || product.updatedAt
                 }
               };
             }
-          }) || [];
+
+            const calculatedLineStatus = DCGrnController.calculateLineStatus(entryOrderedQty, 0, 0);
+            return {
+              id: entry.id || product.id,
+              sku_id: actualSku,
+              ordered_qty: entryOrderedQty,
+              received_qty: 0,
+              pending_qty: entryOrderedQty,
+              rejected_qty: 0,
+              qc_pass_qty: 0,
+              qc_fail_qty: 0,
+              rtv_qty: 0,
+              held_qty: 0,
+              line_status: calculatedLineStatus,
+              product_details: {
+                name: entry.product_name || product.productName,
+                description: entry.description ?? product.description,
+                mrp: entry.mrp ? parseFloat(entry.mrp) : product.mrp,
+                ean_upc: entry.ean_upc ?? product.ean_upc,
+                image_url: entry.image_url ?? product.image_url,
+                weight: entry.weight ?? product.weight,
+                length: entry.length ?? product.length,
+                height: entry.height ?? product.height,
+                width: entry.width ?? product.width,
+                gst: entry.gst ?? product.gst,
+                cess: entry.cess ?? product.cess,
+                hsn: entry.hsn ?? product.hsn,
+                catalogue_id: entry.catalogue_id || product.catalogue_id,
+                category_id: entry.category ?? product.category_id,
+                brand_id: entry.brand ?? product.brand_id,
+                inventory_threshold: entry.inventory_threshold ?? product.inventory_threshold,
+                created_at: entry.createdAt || product.createdAt,
+                updated_at: entry.updatedAt || product.updatedAt
+              }
+            };
+          });
+        });
 
         // Calculate overall GRN status based on line statuses
         const lineStatuses = processedLines.map((line: any) => line.line_status);
