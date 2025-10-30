@@ -49,48 +49,48 @@ export interface VendorDCAttributes {
 type VendorDCCreationAttributes = Optional<VendorDCAttributes, 'id' | 'vendorId' | 'createdAt' | 'updatedAt'>;
 
 class VendorDC extends Model<VendorDCAttributes, VendorDCCreationAttributes> implements VendorDCAttributes {
-  public id!: number;
-  public vendorId!: string;
-  public dcId!: number;
-  public tradeName!: string;
-  public businessAddress?: string;
-  public city?: string;
-  public state?: string;
-  public country!: string;
-  public pincode?: string;
-  public pocName?: string;
-  public pocNumber?: string;
-  public pocEmail?: string;
-  public gstNumber!: string;
-  public panNumber?: string;
-  public vendorType!: 'MANUFACTURER' | 'SUPPLIER' | 'DISTRIBUTOR' | 'WHOLESALER' | 'OTHER';
-  public brandName?: string;
-  public model?: string;
-  public vrf?: string;
-  public agreementDoc?: string;
-  public agreement?: string;
-  public panDocument?: string;
-  public gstCertificate?: string;
-  public cancelledCheque?: string;
-  public msmeCertificate?: string;
-  public bankAccountNumber?: string;
-  public ifscCode?: string;
-  public stockCorrection?: boolean;
-  public stockCorrectionPercentage?: string;
-  public creditTerms?: string;
-  public creditDays?: string;
-  public deliveryTAT?: string;
-  public margin?: string;
-  public marginOn?: string;
-  public createdBy!: number;
-  public updatedBy?: number;
-  public readonly createdAt!: Date;
-  public readonly updatedAt!: Date;
+  declare id: number;
+  declare vendorId: string;
+  declare dcId: number;
+  declare tradeName: string;
+  declare businessAddress?: string;
+  declare city?: string;
+  declare state?: string;
+  declare country: string;
+  declare pincode?: string;
+  declare pocName?: string;
+  declare pocNumber?: string;
+  declare pocEmail?: string;
+  declare gstNumber: string;
+  declare panNumber?: string;
+  declare vendorType: 'MANUFACTURER' | 'SUPPLIER' | 'DISTRIBUTOR' | 'WHOLESALER' | 'OTHER';
+  declare brandName?: string;
+  declare model?: string;
+  declare vrf?: string;
+  declare agreementDoc?: string;
+  declare agreement?: string;
+  declare panDocument?: string;
+  declare gstCertificate?: string;
+  declare cancelledCheque?: string;
+  declare msmeCertificate?: string;
+  declare bankAccountNumber?: string;
+  declare ifscCode?: string;
+  declare stockCorrection?: boolean;
+  declare stockCorrectionPercentage?: string;
+  declare creditTerms?: string;
+  declare creditDays?: string;
+  declare deliveryTAT?: string;
+  declare margin?: string;
+  declare marginOn?: string;
+  declare createdBy: number;
+  declare updatedBy?: number;
+  declare readonly createdAt: Date;
+  declare readonly updatedAt: Date;
   
   // Associations
-  public DistributionCenter?: any;
-  public CreatedByUser?: any;
-  public UpdatedByUser?: any;
+  declare DistributionCenter?: any;
+  declare CreatedByUser?: any;
+  declare UpdatedByUser?: any;
 }
 
 VendorDC.init(

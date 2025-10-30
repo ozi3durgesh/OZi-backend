@@ -329,11 +329,14 @@ export class FCGrnController {
         }
 
         // Validate S3 URL if provided
-        if (line.photos && line.photos.length > 0) {
-          // Handle both string and array formats
-          const photoUrls = Array.isArray(line.photos) ? line.photos : [line.photos];
-          for (const photoUrl of photoUrls) {
-            if (photoUrl && !FCGrnController.isValidS3Url(photoUrl)) {
+        if (line.photos && (Array.isArray(line.photos) ? line.photos.length > 0 : true)) {
+          // Normalize to array for validation and creation. Accept:
+          // - string | string[]
+          // - { url, reason? } | Array<{ url, reason? }>
+          const items = Array.isArray(line.photos) ? line.photos : [line.photos];
+          for (const item of items) {
+            const urlToValidate = typeof item === 'string' ? item : (item && typeof item === 'object' ? (item as any).url : undefined);
+            if (urlToValidate && !FCGrnController.isValidS3Url(urlToValidate)) {
               await t.rollback();
               res.status(400).json({
                 statusCode: 400,
@@ -371,21 +374,22 @@ export class FCGrnController {
           { transaction: t }
         );
 
-        // Create FCGrnPhoto record for the S3 URL
-        if (line.photos && line.photos.length > 0) {
+        // Create FCGrnPhoto records for provided photos
+        if (line.photos && (Array.isArray(line.photos) ? line.photos.length > 0 : true)) {
           try {
-            // Handle both string and array formats for photos
-            const photoUrls = Array.isArray(line.photos) ? line.photos : [line.photos];
-            
-            for (const photoUrl of photoUrls) {
-              if (photoUrl && typeof photoUrl === 'string') {
+            // Normalize to array; support strings or objects
+            const items = Array.isArray(line.photos) ? line.photos : [line.photos];
+            for (const item of items) {
+              const url = typeof item === 'string' ? item : (item as any)?.url;
+              const reason = typeof item === 'string' ? 'sku-level-photo' : ((item as any)?.reason || 'sku-level-photo');
+              if (url && typeof url === 'string') {
                 await FCGrnPhoto.create(
                   {
                     sku_id: resolvedSku,
                     grn_id: fcGrn.id,
                     po_id: input.poId,
-                    url: photoUrl,
-                    reason: 'sku-level-photo',
+                    url,
+                    reason,
                   },
                   { transaction: t }
                 );
