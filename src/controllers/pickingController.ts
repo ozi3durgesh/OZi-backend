@@ -918,6 +918,9 @@ export class PickingController {
         const waveData = wave.toJSON ? wave.toJSON() : wave;
         const order = (wave as any).Order;
         
+        // Remove the Order object from response
+        delete waveData.Order;
+        
         // Always fetch order to ensure we have the latest status
         let orderRecord: any = null;
         if (order) {
@@ -936,11 +939,12 @@ export class PickingController {
           };
           waveData.order_status = orderData.order_status;
           
-          // If failed-ordered, add a flag indicating picking is blocked
+          // If failed-ordered, change status to FAILED-ORDERED and add a flag indicating picking is blocked
           if (orderData.order_status === 'failed-ordered') {
+            waveData.status = 'FAILED-ORDERED'; // Change status to FAILED-ORDERED
             waveData.picking_blocked = true;
             waveData.blocked_reason = 'Inventory check failed - please refresh inventory';
-            waveData.status_info = `${waveData.status} (BLOCKED - ${orderData.order_status})`;
+            waveData.status_info = `FAILED-ORDERED (BLOCKED - ${orderData.order_status})`;
           } else {
             waveData.picking_blocked = false;
             waveData.status_info = waveData.status;
