@@ -14,13 +14,17 @@ import { DCSkuSplittingService } from './dcSkuSplittingService';
 import { DCInventory1Service } from '../DCInventory1Service';
 import  PurchaseOrderEdit  from '../../models/PurchaseOrderEdits'
 import  POEditHistory  from '../../models/POEditHistory';
-
+import {PaymentTransaction} from '../../models';
 interface DCPOFilters {
   search?: string;
   status?: string;
   dcId?: number;
   vendorId?: number;
   priority?: string;
+}
+
+interface PaymentSumResult {
+  totalPaid: number;
 }
 
 interface CreateDCPOData {
@@ -770,6 +774,15 @@ export class DCPOService {
       ],
     });
 
+    const totalPayment = await PaymentTransaction.findOne({
+      where: { dcPurchaseOrderId: id },
+      attributes: [
+        [sequelize.fn("SUM", sequelize.col("amount")), "totalPaid"],
+      ],
+      raw: true,
+    }) as unknown as { totalPaid: number | null };
+    const totalPaid = totalPayment?.totalPaid ? Number(totalPayment.totalPaid) : 0;
+    
     if (!po) {
       return null;
     }
@@ -788,6 +801,7 @@ export class DCPOService {
       });
       poData.Products = this.transformSkuMatrixToProducts(skuMatrixArray);
       poData.SkuMatrix = skuMatrixArray;
+      poData.totalPaid = totalPaid;
     } else {
       poData.Products = [];
       poData.SkuMatrix = [];

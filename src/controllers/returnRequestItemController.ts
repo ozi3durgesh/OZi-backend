@@ -732,7 +732,6 @@ export class ReturnRequestItemController {
         const returnOrder = returnOrdersMap.get(returnOrderId);
         returnOrder.Line.push({
           id: item.id,
-          item_id: item.item_id,
           sku_id: item.item_id,
           ordered_qty: item.quantity,
           received_qty: item.quantity, // default to ordered qty
