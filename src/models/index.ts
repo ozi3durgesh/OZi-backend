@@ -89,6 +89,9 @@ Permission.belongsToMany(Role, {
 PickingWave.belongsTo(User, { foreignKey: 'pickerId', as: 'Picker' });
 User.hasMany(PickingWave, { foreignKey: 'pickerId', as: 'PickingWaves' });
 
+PickingWave.belongsTo(Order, { foreignKey: 'orderId', as: 'Order' });
+Order.hasMany(PickingWave, { foreignKey: 'orderId', as: 'PickingWaves' });
+
 PickingWave.hasMany(PicklistItem, {
   foreignKey: 'waveId',
   as: 'PicklistItems',

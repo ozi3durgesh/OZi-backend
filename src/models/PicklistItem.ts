@@ -21,6 +21,7 @@ interface PicklistItemAttributes {
   pickedBy?: number;
   notes?: string;
   scannerId?: string;
+  fc_id?: number; // FC ID for picklist item
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -47,6 +48,7 @@ class PicklistItem
   declare pickedBy?: number;
   declare notes?: string;
   declare scannerId?: string;
+  declare fc_id?: number; // FC ID for picklist item
   declare createdAt: Date;
   declare updatedAt: Date;
 
@@ -150,6 +152,14 @@ PicklistItem.init(
     scannerId: {
       type: DataTypes.STRING(100),
       allowNull: true,
+    },
+    fc_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'fulfillment_centers',
+        key: 'id'
+      }
     },
     createdAt: {
       type: DataTypes.DATE,

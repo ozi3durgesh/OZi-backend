@@ -896,19 +896,37 @@ export class PickingController {
 
       const waves = await PickingWave.findAndCountAll({
         where: whereClause,
+        include: [{
+          model: Order,
+          as: 'Order',
+          attributes: ['id', 'order_status'],
+          required: false
+        }] as any,
         //order: [['priority', 'DESC'], ['slaDeadline', 'ASC']],
         order: [['id', 'DESC']],
         limit: parseInt(limit.toString()),
         offset
       });
 
+      // Check order status and exclude failed-ordered orders from being in start mode
+      const filteredWaves = waves.rows.filter((wave: any) => {
+        if (wave.orderId) {
+          // Get order separately if not included
+          const order = (wave as any).Order;
+          if (order && order.order_status === 'failed-ordered') {
+            return false; // Exclude failed-ordered orders
+          }
+        }
+        return true;
+      });
+
       return ResponseHandler.success(res, {
-        waves: waves.rows,
+        waves: filteredWaves,
         pagination: {
           page: parseInt(page.toString()),
           limit: parseInt(limit.toString()),
-          total: waves.count,
-          totalPages: Math.ceil(waves.count / parseInt(limit.toString()))
+          total: filteredWaves.length,
+          totalPages: Math.ceil(filteredWaves.length / parseInt(limit.toString()))
         }
       });
 
@@ -929,6 +947,7 @@ export class PickingController {
       const { page = 1, limit = 20 } = req.query;
       const pickerId = req.user!.id;
       const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
+      const fc_id = (req.user as any)?.currentFcId || null; // Get fc_id from auth token
 
       const wave = await PickingWave.findByPk(waveId);
 
@@ -944,11 +963,21 @@ export class PickingController {
         return ResponseHandler.error(res, 'Wave is not assigned to you', 403);
       }
 
-      // Update wave status
+      // Update wave status and fc_id
       await wave.update({
         status: 'PICKING',
-        startedAt: new Date()
+        startedAt: new Date(),
+        fc_id: fc_id || wave.fc_id // Set fc_id from auth token
       });
+
+      // Update fc_id for all picklist items in this wave
+      if (fc_id) {
+        await PicklistItem.update(
+          { fc_id: fc_id },
+          { where: { waveId: parseInt(waveId.toString()) } }
+        );
+        console.log(`✅ Updated fc_id to ${fc_id} for wave ${waveId} and all picklist items`);
+      }
 
       // Get picklist items with pagination
       const picklistItems = await PicklistItem.findAndCountAll({
@@ -1713,6 +1742,31 @@ export class PickingController {
     const wave = await PickingWave.findByPk(waveId);
     if (!wave) {
       return ResponseHandler.error(res, 'Wave not found', 404);
+    }
+
+    // Check if order has failed-ordered status
+    if (wave.orderId) {
+      const order = await Order.findByPk(wave.orderId);
+      if (order && order.order_status === 'failed-ordered') {
+        // Return items but with failed-ordered status
+        return ResponseHandler.success(res, {
+          wave: {
+            id: wave.id,
+            waveNumber: wave.waveNumber,
+            status: 'failed-ordered',
+            totalItems: wave.totalItems,
+            order_status: 'failed-ordered'
+          },
+          items: [],
+          message: 'Order status is failed-ordered. Please refresh inventory.',
+          pagination: {
+            page: parseInt(page.toString()),
+            limit: parseInt(limit.toString()),
+            total: 0,
+            totalPages: 0
+          }
+        });
+      }
     }
 
     // Check permissions

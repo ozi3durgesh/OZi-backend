@@ -25,6 +25,7 @@ interface PickingWaveAttributes {
   createdAt: Date;
   updatedAt: Date;
   orderId?: number; // Add the new orderId field
+  fc_id?: number; // FC ID for picking wave
   // New fields
   handoverAt?: Date;
   handoverBy?: number;
@@ -54,6 +55,7 @@ class PickingWave extends Model<PickingWaveAttributes> implements PickingWaveAtt
   declare createdAt: Date;
   declare updatedAt: Date;
   declare orderId?: number; // Add the new orderId field
+  declare fc_id?: number; // FC ID for picking wave
   // New fields
   declare handoverAt?: Date;
   declare handoverBy?: number;
@@ -94,6 +96,7 @@ PickingWave.init({
   createdAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   updatedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   orderId: { type: DataTypes.INTEGER, allowNull: true, references: { model: 'Orders', key: 'id' } }, // Reference to Orders table
+  fc_id: { type: DataTypes.INTEGER, allowNull: true, references: { model: 'fulfillment_centers', key: 'id' } }, // FC ID
   // New fields
   handoverAt: { type: DataTypes.DATE, allowNull: true },
   handoverBy: { type: DataTypes.INTEGER, allowNull: true },
