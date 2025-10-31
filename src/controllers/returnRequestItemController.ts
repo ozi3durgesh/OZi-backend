@@ -707,60 +707,59 @@ export class ReturnRequestItemController {
       console.log("count, rows---------", count, rows);
       
 
-      // Group by return_order_id to get unique return orders
       const returnOrdersMap = new Map();
-      
+
       rows.forEach((item: any) => {
         const returnOrderId = item.return_order_id;
-        
+
         if (!returnOrdersMap.has(returnOrderId)) {
           returnOrdersMap.set(returnOrderId, {
-            grn: {
-              id: `RET-${returnOrderId}`,
-              return_order_id: returnOrderId,
-              original_order_id: item.original_order_id,
-              customer_id: item.customer_id,
-              return_type: item.return_type,
-              status: item.status,
-              total_items_count: item.total_items_count || 0,
-              total_return_amount: item.total_return_amount || "0.00",
-              created_at: item.created_at,
-              updated_at: item.updated_at
-            },
-            lines: [],
-            originalOrder: (item as any).originalOrder
+            id: `RET-${returnOrderId}`,
+            return_order_id: returnOrderId,
+            original_order_id: item.original_order_id,
+            customer_id: item.customer_id,
+            return_type: item.return_type,
+            status: item.status,
+            total_items_count: item.total_items_count || 0,
+            total_return_amount: item.total_return_amount?.toString() || "0.00",
+            created_at: item.created_at,
+            updated_at: item.updated_at,
+            originalOrder: (item as any).originalOrder,
+            Line: [] // renamed from "lines" to match your expected structure
           });
         }
-        
+
         const returnOrder = returnOrdersMap.get(returnOrderId);
-        returnOrder.lines.push({
+        returnOrder.Line.push({
           id: item.id,
           item_id: item.item_id,
           sku_id: item.item_id,
           ordered_qty: item.quantity,
-          received_qty: item.quantity, // Default to ordered quantity
+          received_qty: item.quantity, // default to ordered qty
           pending_qty: 0,
           rejected_qty: 0,
           held_qty: 0,
           rtv_qty: 0,
-          line_status: 'pending',
-          product: (item as any).product,
+          line_status: "pending",
+          product: (item as any).product || null,
           item_details: item.item_details,
-          variation: item.variation,
+          variation: item.variation || null,
           price: item.price?.toString() || "0.00",
           is_try_and_buy: item.is_try_and_buy || 0
         });
       });
 
-      const returnOrders = Array.from(returnOrdersMap.values());
+      const grn = Array.from(returnOrdersMap.values());
 
       return ResponseHandler.success(res, {
-        returnOrders,
-        pagination: {
-          page,
-          limit,
-          total: count,
-          totalPages: Math.ceil(count / limit)
+        data: {
+          grn,
+          pagination: {
+            page,
+            limit,
+            total: count,
+            totalPages: Math.ceil(count / limit)
+          }
         }
       });
 
