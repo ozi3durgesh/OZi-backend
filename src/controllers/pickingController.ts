@@ -939,12 +939,12 @@ export class PickingController {
           };
           waveData.order_status = orderData.order_status;
           
-          // If failed-ordered, change status to FAILED-ORDERED and add a flag indicating picking is blocked
+          // If failed-ordered, change status to FAILED and add a flag indicating picking is blocked
           if (orderData.order_status === 'failed-ordered') {
-            waveData.status = 'FAILED-ORDERED'; // Change status to FAILED-ORDERED
+            waveData.status = 'FAILED'; // Change status to FAILED
             waveData.picking_blocked = true;
             waveData.blocked_reason = 'Inventory check failed - please refresh inventory';
-            waveData.status_info = `FAILED-ORDERED (BLOCKED - ${orderData.order_status})`;
+            waveData.status_info = `FAILED (BLOCKED - ${orderData.order_status})`;
           } else {
             waveData.picking_blocked = false;
             waveData.status_info = waveData.status;
