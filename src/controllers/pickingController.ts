@@ -904,7 +904,7 @@ export class PickingController {
         include: [{
           model: Order,
           as: 'Order',
-          attributes: ['id', 'order_status', 'order_id'],
+          attributes: ['id', 'order_status'],
           required: false
         }] as any,
         //order: [['priority', 'DESC'], ['slaDeadline', 'ASC']],
@@ -931,7 +931,7 @@ export class PickingController {
           const orderData = orderRecord.toJSON ? orderRecord.toJSON() : orderRecord;
           waveData.order = {
             id: orderData.id,
-            order_id: orderData.order_id || orderData.id,
+            order_id: orderData.id, // Use id as order_id since there's no separate order_id column
             order_status: orderData.order_status
           };
           waveData.order_status = orderData.order_status;
