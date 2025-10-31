@@ -308,7 +308,14 @@ export class EasyEcomWebhookController {
         }
       }
 
-      // Step 3: If inventory check failed, set status and return
+      // Step 3: Generate picklist and assign picker even if inventory check failed
+      // But mark order as failed-ordered so they can't start picking
+      console.log(`🔄 Proceeding with picklist generation regardless of inventory check result`);
+      
+      // Step 4: Generate picklist and assign picker (proceed with normal flow)
+      const result = await Helpers.Ecommorder(order);
+      
+      // Step 5: If inventory check failed, update order status and emit websocket
       if (inventoryCheckFailed) {
         console.error(`❌ Inventory check failed for order ${order.id}. Failed SKUs:`, failedSkus);
         
@@ -322,20 +329,38 @@ export class EasyEcomWebhookController {
           console.error(`❌ Failed to update order status:`, updateError);
         }
 
-        // Get wave ID if it exists
+        // Get wave ID from result or find it
         let waveId: number | null = null;
-        try {
-          const wave = await PickingWave.findOne({
-            where: { orderId: order.id }
-          });
-          if (wave) {
-            waveId = wave.id;
+        if (result && result.waveId) {
+          waveId = result.waveId;
+        } else {
+          try {
+            const wave = await PickingWave.findOne({
+              where: { orderId: order.id },
+              order: [['createdAt', 'DESC']]
+            });
+            if (wave) {
+              waveId = wave.id;
+            }
+          } catch (waveError: any) {
+            console.error(`❌ Failed to find wave:`, waveError);
           }
-        } catch (waveError: any) {
-          console.error(`❌ Failed to find wave:`, waveError);
         }
 
-        // Emit websocket event with failed-ordered status
+        // Get assigned picker ID if wave exists
+        let pickerId: number | null = null;
+        if (waveId) {
+          try {
+            const wave = await PickingWave.findByPk(waveId);
+            if (wave && wave.pickerId) {
+              pickerId = wave.pickerId;
+            }
+          } catch (pickerError: any) {
+            console.error(`❌ Failed to get picker ID:`, pickerError);
+          }
+        }
+
+        // Emit websocket event with failed-ordered status globally and to specific picker
         socketManager.emit('orderStatusUpdate', {
           orderId: order.id,
           status: 'failed-ordered',
@@ -344,27 +369,40 @@ export class EasyEcomWebhookController {
           failedSkus: failedSkus
         });
 
-        // Return error response (but don't change success structure)
+        // Also emit to specific picker if assigned
+        if (pickerId) {
+          socketManager.emitToPicker(pickerId, 'orderStatusUpdate', {
+            orderId: order.id,
+            status: 'failed-ordered',
+            waveId: waveId,
+            reason: 'Inventory check failed',
+            failedSkus: failedSkus
+          });
+          console.log(`📨 Emitted failed-ordered status to picker_${pickerId}`);
+        }
+
+        // Return response indicating inventory check failed but picklist generated
         ResponseHandler.success(res, {
-          message: 'Order processed but inventory check failed',
+          message: 'Order processed but inventory check failed. Picklist generated but picking is blocked.',
           order_id: order.id,
           status: 'failed-ordered',
+          wave_id: waveId,
+          picker_id: pickerId,
           reason: 'Inventory check failed',
           failed_skus: failedSkus,
-          inventory_check_passed: false
+          inventory_check_passed: false,
+          picklist_generated: true
         });
         return;
       }
 
       console.log(`✅ Inventory check passed for all SKUs in order ${order.id}`);
       
-      // Step 4: If inventory check passed, proceed with normal flow
-      const result = await Helpers.Ecommorder(order);
-      
+      // Step 4 already executed above, just return success response
       ResponseHandler.success(res, {
         message: 'Order processed successfully via PHP integration',
         order_id: order.id,
-        result,
+        result: result,
         inventory_check_passed: true
       });
       

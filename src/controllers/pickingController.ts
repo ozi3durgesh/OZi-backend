@@ -908,25 +908,45 @@ export class PickingController {
         offset
       });
 
-      // Check order status and exclude failed-ordered orders from being in start mode
-      const filteredWaves = waves.rows.filter((wave: any) => {
-        if (wave.orderId) {
-          // Get order separately if not included
-          const order = (wave as any).Order;
-          if (order && order.order_status === 'failed-ordered') {
-            return false; // Exclude failed-ordered orders
+      // Include all waves but add order_status information
+      const wavesWithStatus = await Promise.all(waves.rows.map(async (wave: any) => {
+        const waveData = wave.toJSON ? wave.toJSON() : wave;
+        const order = (wave as any).Order;
+        
+        // Add order_status to wave object
+        if (order) {
+          waveData.order_status = order.order_status;
+          // If failed-ordered, add a flag indicating picking is blocked
+          if (order.order_status === 'failed-ordered') {
+            waveData.picking_blocked = true;
+            waveData.blocked_reason = 'Inventory check failed - please refresh inventory';
+          } else {
+            waveData.picking_blocked = false;
+          }
+        } else if (wave.orderId) {
+          // If order not loaded, fetch it
+          const orderRecord = await Order.findByPk(wave.orderId);
+          if (orderRecord) {
+            waveData.order_status = orderRecord.order_status;
+            if (orderRecord.order_status === 'failed-ordered') {
+              waveData.picking_blocked = true;
+              waveData.blocked_reason = 'Inventory check failed - please refresh inventory';
+            } else {
+              waveData.picking_blocked = false;
+            }
           }
         }
-        return true;
-      });
+        
+        return waveData;
+      }));
 
       return ResponseHandler.success(res, {
-        waves: filteredWaves,
+        waves: wavesWithStatus,
         pagination: {
           page: parseInt(page.toString()),
           limit: parseInt(limit.toString()),
-          total: filteredWaves.length,
-          totalPages: Math.ceil(filteredWaves.length / parseInt(limit.toString()))
+          total: waves.count,
+          totalPages: Math.ceil(waves.count / parseInt(limit.toString()))
         }
       });
 
@@ -961,6 +981,14 @@ export class PickingController {
 
       if (wave.pickerId !== pickerId) {
         return ResponseHandler.error(res, 'Wave is not assigned to you', 403);
+      }
+
+      // Check if order has failed-ordered status - block picking start
+      if (wave.orderId) {
+        const order = await Order.findByPk(wave.orderId);
+        if (order && order.order_status === 'failed-ordered') {
+          return ResponseHandler.error(res, 'Cannot start picking: Order status is failed-ordered. Please refresh inventory first.', 400);
+        }
       }
 
       // Update wave status and fc_id
