@@ -53,4 +53,9 @@ router.get('/health',
   EasyEcomWebhookController.healthCheck
 );
 
+// Refresh order status API - recheck inventory for failed-ordered orders
+router.post('/refresh/:orderId', 
+  EasyEcomWebhookController.refreshOrderStatus
+);
+
 export default router;

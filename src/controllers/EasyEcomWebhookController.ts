@@ -4,6 +4,14 @@ import { Helpers } from '../utils/Helpers';
 import Order from '../models/Order';
 import EcomLog from '../models/EcomLog';
 import { OrderAttributes } from '../types';
+import DirectInventoryService from '../services/DirectInventoryService';
+import Inventory from '../models/Inventory';
+import PickingWave from '../models/PickingWave';
+import PicklistItem from '../models/PicklistItem';
+import OrderDetail from '../models/OrderDetail';
+import { socketManager } from '../utils/socketManager';
+import sequelize from '../config/database';
+import { QueryTypes } from 'sequelize';
 
 interface AuthRequest extends Request {
   user?: {
@@ -216,14 +224,186 @@ export class EasyEcomWebhookController {
         return;
       }
 
+      // Step 1: Extract SKUs with quantities and fc_id from order
+      console.log(`🔍 Extracting SKUs with quantities and fc_id from order ${order.id}`);
+      const skuData: Array<{ sku: string; quantity: number; fc_id: number }> = [];
       
-      // Call the same Ecommorder function that matches PHP 100%
+      // Extract from cart items
+      if (order.cart && Array.isArray(order.cart)) {
+        for (const item of order.cart) {
+          let sku: string | null = null;
+          let fc_id: number | null = null;
+          
+          // Try to get SKU from item_details
+          if (item.item_details) {
+            try {
+              const itemDetails = typeof item.item_details === 'string' 
+                ? JSON.parse(item.item_details) 
+                : item.item_details;
+              sku = itemDetails.sku || itemDetails.id || null;
+            } catch (e) {
+              console.warn(`Failed to parse item_details for cart item:`, e);
+            }
+          }
+          
+          // Get fc_id from cart item or order
+          fc_id = item.fc_id || order.fc_id || null;
+          
+          if (sku && fc_id && item.quantity) {
+            skuData.push({
+              sku: sku.toString(),
+              quantity: parseInt(item.quantity) || 1,
+              fc_id: parseInt(fc_id.toString())
+            });
+          }
+        }
+      }
+      
+      console.log(`📦 Extracted ${skuData.length} SKUs:`, skuData);
+
+      // Step 2: Check inventory availability (Case 1 & Case 2)
+      let inventoryCheckFailed = false;
+      const failedSkus: Array<{ sku: string; reason: string }> = [];
+      
+      for (const item of skuData) {
+        try {
+          // Check if SKU exists on fc_id (Case 1)
+          const inventory = await sequelize.query(
+            'SELECT * FROM inventory WHERE sku = ? AND fc_id = ?',
+            {
+              replacements: [item.sku, item.fc_id],
+              type: QueryTypes.SELECT
+            }
+          );
+
+          if (inventory.length === 0) {
+            inventoryCheckFailed = true;
+            failedSkus.push({
+              sku: item.sku,
+              reason: `SKU not found in inventory for fc_id ${item.fc_id}`
+            });
+            console.error(`❌ Case 1 failed: SKU ${item.sku} not found in inventory for fc_id ${item.fc_id}`);
+            continue;
+          }
+
+          const inv = inventory[0] as any;
+          const availableQuantity = (inv.sale_available_quantity || 0) - (inv.fc_picklist_quantity || 0);
+          
+          // Check if quantity is sufficient (Case 2)
+          if (availableQuantity < item.quantity) {
+            inventoryCheckFailed = true;
+            failedSkus.push({
+              sku: item.sku,
+              reason: `Insufficient quantity. Available: ${availableQuantity}, Required: ${item.quantity}`
+            });
+            console.error(`❌ Case 2 failed: SKU ${item.sku} has insufficient quantity. Available: ${availableQuantity}, Required: ${item.quantity}`);
+          }
+        } catch (error: any) {
+          console.error(`❌ Error checking inventory for SKU ${item.sku}:`, error);
+          inventoryCheckFailed = true;
+          failedSkus.push({
+            sku: item.sku,
+            reason: `Error checking inventory: ${error.message}`
+          });
+        }
+      }
+
+      // Step 3: Generate picklist and assign picker even if inventory check failed
+      // But mark order as failed-ordered so they can't start picking
+      console.log(`🔄 Proceeding with picklist generation regardless of inventory check result`);
+      
+      // Step 4: Generate picklist and assign picker (proceed with normal flow)
       const result = await Helpers.Ecommorder(order);
       
+      // Step 5: If inventory check failed, update order status and emit websocket
+      if (inventoryCheckFailed) {
+        console.error(`❌ Inventory check failed for order ${order.id}. Failed SKUs:`, failedSkus);
+        
+        // Update order status to failed-ordered
+        try {
+          const orderRecord = await Order.findByPk(order.id);
+          if (orderRecord) {
+            await orderRecord.update({ order_status: 'failed-ordered' });
+          }
+        } catch (updateError: any) {
+          console.error(`❌ Failed to update order status:`, updateError);
+        }
+
+        // Get wave ID from result or find it
+        let waveId: number | null = null;
+        if (result && result.waveId) {
+          waveId = result.waveId;
+        } else {
+          try {
+            const wave = await PickingWave.findOne({
+              where: { orderId: order.id },
+              order: [['createdAt', 'DESC']]
+            });
+            if (wave) {
+              waveId = wave.id;
+            }
+          } catch (waveError: any) {
+            console.error(`❌ Failed to find wave:`, waveError);
+          }
+        }
+
+        // Get assigned picker ID if wave exists
+        let pickerId: number | null = null;
+        if (waveId) {
+          try {
+            const wave = await PickingWave.findByPk(waveId);
+            if (wave && wave.pickerId) {
+              pickerId = wave.pickerId;
+            }
+          } catch (pickerError: any) {
+            console.error(`❌ Failed to get picker ID:`, pickerError);
+          }
+        }
+
+        // Emit websocket event with failed-ordered status globally and to specific picker
+        socketManager.emit('orderStatusUpdate', {
+          orderId: order.id,
+          status: 'failed-ordered',
+          waveId: waveId,
+          reason: 'Inventory check failed',
+          failedSkus: failedSkus
+        });
+
+        // Also emit to specific picker if assigned
+        if (pickerId) {
+          socketManager.emitToPicker(pickerId, 'orderStatusUpdate', {
+            orderId: order.id,
+            status: 'failed-ordered',
+            waveId: waveId,
+            reason: 'Inventory check failed',
+            failedSkus: failedSkus
+          });
+          console.log(`📨 Emitted failed-ordered status to picker_${pickerId}`);
+        }
+
+        // Return response indicating inventory check failed but picklist generated
+        ResponseHandler.success(res, {
+          message: 'Order processed but inventory check failed. Picklist generated but picking is blocked.',
+          order_id: order.id,
+          status: 'failed-ordered',
+          wave_id: waveId,
+          picker_id: pickerId,
+          reason: 'Inventory check failed',
+          failed_skus: failedSkus,
+          inventory_check_passed: false,
+          picklist_generated: true
+        });
+        return;
+      }
+
+      console.log(`✅ Inventory check passed for all SKUs in order ${order.id}`);
+      
+      // Step 4 already executed above, just return success response
       ResponseHandler.success(res, {
         message: 'Order processed successfully via PHP integration',
         order_id: order.id,
-        result
+        result: result,
+        inventory_check_passed: true
       });
       
     } catch (error: any) {
@@ -413,5 +593,200 @@ export class EasyEcomWebhookController {
       version: '1.0.0',
       status: 'healthy'
     });
+  }
+
+  /**
+   * Refresh API - recheck inventory for orders with failed-ordered status
+   * When inventory is updated, this will check again and update status to normal
+   * @param req - Express request object
+   * @param res - Express response object
+   */
+  public static async refreshOrderStatus(req: Request, res: Response): Promise<void> {
+    try {
+      const { orderId } = req.params;
+      
+      if (!orderId) {
+        ResponseHandler.error(res, 'Order ID is required', 400);
+        return;
+      }
+
+      console.log(`🔄 Refreshing order status for order ${orderId}`);
+
+      // Get order
+      const order = await Order.findByPk(parseInt(orderId.toString()));
+      if (!order) {
+        ResponseHandler.error(res, 'Order not found', 404);
+        return;
+      }
+
+      // Only refresh if status is failed-ordered
+      if (order.order_status !== 'failed-ordered') {
+        ResponseHandler.success(res, {
+          message: 'Order status is not failed-ordered, no refresh needed',
+          order_id: orderId,
+          current_status: order.order_status
+        });
+        return;
+      }
+
+      // Extract SKUs with quantities and fc_id from order
+      const orderData = order.get({ plain: true }) as any;
+      const skuData: Array<{ sku: string; quantity: number; fc_id: number }> = [];
+      
+      // Get order details to extract SKUs
+      const orderDetails = await OrderDetail.findAll({
+        where: { order_id: parseInt(orderId.toString()) }
+      });
+
+      for (const orderDetail of orderDetails) {
+        const detailData = orderDetail.get({ plain: true }) as any;
+        let sku: string | null = null;
+        let fc_id: number | null = null;
+        
+        // Try to get SKU from item_details
+        if (detailData.item_details) {
+          try {
+            const itemDetails = typeof detailData.item_details === 'string' 
+              ? JSON.parse(detailData.item_details) 
+              : detailData.item_details;
+            sku = itemDetails.sku || itemDetails.id || null;
+          } catch (e) {
+            console.warn(`Failed to parse item_details:`, e);
+          }
+        }
+        
+        // Get fc_id from order detail or order
+        fc_id = detailData.fc_id || orderData.fc_id || null;
+        
+        if (sku && fc_id && detailData.quantity) {
+          skuData.push({
+            sku: sku.toString(),
+            quantity: parseInt(detailData.quantity) || 1,
+            fc_id: parseInt(fc_id.toString())
+          });
+        }
+      }
+
+      // If no SKUs found in order details, try cart
+      if (skuData.length === 0 && orderData.cart && Array.isArray(orderData.cart)) {
+        for (const item of orderData.cart) {
+          let sku: string | null = null;
+          let fc_id: number | null = null;
+          
+          if (item.item_details) {
+            try {
+              const itemDetails = typeof item.item_details === 'string' 
+                ? JSON.parse(item.item_details) 
+                : item.item_details;
+              sku = itemDetails.sku || itemDetails.id || null;
+            } catch (e) {
+              console.warn(`Failed to parse item_details:`, e);
+            }
+          }
+          
+          fc_id = item.fc_id || orderData.fc_id || null;
+          
+          if (sku && fc_id && item.quantity) {
+            skuData.push({
+              sku: sku.toString(),
+              quantity: parseInt(item.quantity) || 1,
+              fc_id: parseInt(fc_id.toString())
+            });
+          }
+        }
+      }
+
+      console.log(`📦 Found ${skuData.length} SKUs to check`);
+
+      // Check inventory availability again
+      let inventoryCheckPassed = true;
+      const failedSkus: Array<{ sku: string; reason: string }> = [];
+      
+      for (const item of skuData) {
+        try {
+          const inventory = await sequelize.query(
+            'SELECT * FROM inventory WHERE sku = ? AND fc_id = ?',
+            {
+              replacements: [item.sku, item.fc_id],
+              type: QueryTypes.SELECT
+            }
+          );
+
+          if (inventory.length === 0) {
+            inventoryCheckPassed = false;
+            failedSkus.push({
+              sku: item.sku,
+              reason: `SKU not found in inventory for fc_id ${item.fc_id}`
+            });
+            continue;
+          }
+
+          const inv = inventory[0] as any;
+          const availableQuantity = (inv.sale_available_quantity || 0) - (inv.fc_picklist_quantity || 0);
+          
+          if (availableQuantity < item.quantity) {
+            inventoryCheckPassed = false;
+            failedSkus.push({
+              sku: item.sku,
+              reason: `Insufficient quantity. Available: ${availableQuantity}, Required: ${item.quantity}`
+            });
+          }
+        } catch (error: any) {
+          console.error(`❌ Error checking inventory for SKU ${item.sku}:`, error);
+          inventoryCheckPassed = false;
+          failedSkus.push({
+            sku: item.sku,
+            reason: `Error checking inventory: ${error.message}`
+          });
+        }
+      }
+
+      // If inventory check passed, update status to normal
+      if (inventoryCheckPassed) {
+        await order.update({ order_status: 'pending' });
+        
+        // Get wave ID if exists
+        let waveId: number | null = null;
+        const wave = await PickingWave.findOne({
+          where: { orderId: parseInt(orderId.toString()) }
+        });
+        if (wave) {
+          waveId = wave.id;
+        }
+
+        // Emit websocket event
+        socketManager.emit('orderStatusUpdate', {
+          orderId: parseInt(orderId.toString()),
+          status: 'pending',
+          waveId: waveId,
+          reason: 'Inventory check passed after refresh'
+        });
+
+        console.log(`✅ Order ${orderId} status updated to pending after inventory refresh`);
+
+        ResponseHandler.success(res, {
+          message: 'Order status refreshed successfully',
+          order_id: orderId,
+          previous_status: 'failed-ordered',
+          new_status: 'pending',
+          inventory_check_passed: true
+        });
+      } else {
+        // Still failed, keep failed-ordered status
+        console.log(`❌ Order ${orderId} still has inventory issues:`, failedSkus);
+
+        ResponseHandler.success(res, {
+          message: 'Order status refresh completed but inventory check still failed',
+          order_id: orderId,
+          status: 'failed-ordered',
+          failed_skus: failedSkus,
+          inventory_check_passed: false
+        });
+      }
+
+    } catch (error: any) {
+      console.error('❌ Refresh order status error:', error);
+      ResponseHandler.error(res, `Refresh failed: ${error.message}`, 500);
+    }
   }
 }

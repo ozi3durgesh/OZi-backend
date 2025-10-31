@@ -15,6 +15,11 @@ class SocketManager {
   // Emit globally
   public emit(event: string, data: any) {
     if (!this.io) return;
+    console.log(`📡 [WEBSOCKET] Emitting globally:`, {
+      event,
+      data: JSON.stringify(data, null, 2),
+      timestamp: new Date().toISOString()
+    });
     this.io.emit(event, data);
   }
 
@@ -28,6 +33,11 @@ class SocketManager {
   public emitToPicker(pickerId: number, event: string, data: any) {
     if (!this.io) return;
     const roomName = `picker_${pickerId}`;
+    console.log(`📡 [WEBSOCKET] Emitting to room ${roomName}:`, {
+      event,
+      data: JSON.stringify(data, null, 2),
+      timestamp: new Date().toISOString()
+    });
     this.io.to(roomName).emit(event, data);
   }
 }
