@@ -12,7 +12,8 @@ class DCPOSkuMatrix extends Model<
   InferCreationAttributes<DCPOSkuMatrix>
 > {
   declare id: CreationOptional<number>;
-  declare dcPOProductId: number;
+  declare dcPOId: number;
+  declare dcPOProductId: number | null;
   declare quantity: number;
   declare catalogue_id: string;
   declare category: string | null;
@@ -37,6 +38,7 @@ class DCPOSkuMatrix extends Model<
   declare rlp_w_o_tax: string | null;
   declare gstType: string | null;
   declare selling_price: string | null;
+  declare margin: string | null;
   declare createdAt: CreationOptional<Date>;
   declare updatedAt: CreationOptional<Date>;
 }
@@ -48,9 +50,17 @@ DCPOSkuMatrix.init(
       autoIncrement: true,
       primaryKey: true,
     },
-    dcPOProductId: {
+    dcPOId: {
       type: DataTypes.INTEGER,
       allowNull: false,
+      references: {
+        model: 'dc_purchase_orders',
+        key: 'id',
+      },
+    },
+    dcPOProductId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
       references: {
         model: 'dc_po_products',
         key: 'id',
@@ -150,6 +160,10 @@ DCPOSkuMatrix.init(
       allowNull: true,
     },
     selling_price: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    margin: {
       type: DataTypes.STRING(50),
       allowNull: true,
     },

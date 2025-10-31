@@ -6,7 +6,7 @@ import {
   CreationOptional,
 } from 'sequelize';
 import sequelize from '../config/database.js';
-import DCPOProduct from './DCPOProduct.js';
+import DCPOSkuMatrix from './DCPOSkuMatrix.js';
 class DCPurchaseOrder extends Model<
   InferAttributes<DCPurchaseOrder>,
   InferCreationAttributes<DCPurchaseOrder>
@@ -33,13 +33,13 @@ class DCPurchaseOrder extends Model<
   declare createdAt: CreationOptional<Date>;
   declare updatedAt: CreationOptional<Date>;
   declare isEdited: boolean | false;
-  declare Products?: DCPOProduct[];
   declare paymentType: string;
   declare paymentStatus: string;
   declare paymentDueDate: Date | null;
   declare creditPeriodDays: number | null;
 
 
+  declare SkuMatrix?: DCPOSkuMatrix[];
 }
 
 DCPurchaseOrder.init(

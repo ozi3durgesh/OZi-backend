@@ -1,6 +1,6 @@
 import { DataTypes, Model, InferAttributes, InferCreationAttributes, CreationOptional } from 'sequelize';
 import sequelize from '../config/database';
-import FCPOProduct from './FCPOProduct';
+import FCPOSkuMatrix from './FCPOSkuMatrix';
 import FCPOApproval from './FCPOApproval';
 import User from './User';
 import FulfillmentCenter from './FulfillmentCenter';
@@ -11,6 +11,7 @@ interface FCPurchaseOrderAttributes {
   poId: string;
   fcId: number;
   dcId: number;
+  dcPOId?: number;
   totalAmount: number;
   status: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
@@ -35,6 +36,7 @@ class FCPurchaseOrder extends Model<
   declare poId: string;
   declare fcId: number;
   declare dcId: number;
+  declare dcPOId?: number;
   declare totalAmount: number;
   declare status: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
   declare priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
@@ -51,7 +53,7 @@ class FCPurchaseOrder extends Model<
   declare updatedAt: CreationOptional<Date>;
 
   // Association properties
-  declare Products?: FCPOProduct[];
+  declare SkuMatrix?: FCPOSkuMatrix[];
   declare Approvals?: FCPOApproval[];
   declare CreatedBy?: typeof User;
   declare UpdatedBy?: typeof User;
@@ -91,6 +93,11 @@ FCPurchaseOrder.init(
         model: 'DistributionCenters',
         key: 'id',
       },
+    },
+    dcPOId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      field: 'dc_po_id',
     },
     totalAmount: {
       type: DataTypes.DECIMAL(12, 2),

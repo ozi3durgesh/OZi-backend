@@ -307,16 +307,24 @@ export class FCGrnLineController {
             }
             
             for (const photo of batch.photos) {
-              await FCGrnPhoto.create(
-                {
-                  sku_id: existingLine.sku_id,
-                  grn_id: existingLine.grn_id,
-                  po_id: grn.po_id,
-                  url: photo.url,
-                  reason: photo.reason ?? 'batch-photo',
-                },
-                { transaction: t }
-              );
+              if (photo && typeof photo.url === 'string') {
+                const parts = photo.url
+                  .split(',')
+                  .map((s) => s.trim())
+                  .filter(Boolean);
+                for (const part of parts) {
+                  await FCGrnPhoto.create(
+                    {
+                      sku_id: existingLine.sku_id,
+                      grn_id: existingLine.grn_id,
+                      po_id: grn.po_id,
+                      url: part,
+                      reason: photo.reason ?? 'batch-photo',
+                    },
+                    { transaction: t }
+                  );
+                }
+              }
             }
           }
         }

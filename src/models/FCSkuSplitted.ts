@@ -36,7 +36,7 @@ class FCSkuSplitted extends Model<
 > {
   declare id: number;
   declare fcPOId: number;
-  declare fcPOProductId: number;
+  declare fcPOProductId: number | null;
   declare catalogueId: string;
   declare sku: string;
   declare productName: string;
@@ -80,12 +80,9 @@ FCSkuSplitted.init(
     },
     fcPOProductId: {
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: true,
       field: 'fc_po_product_id',
-      references: {
-        model: 'fc_po_products',
-        key: 'id',
-      },
+      // Reference dropped table removed intentionally; field retained for backward compatibility
     },
     catalogueId: {
       type: DataTypes.STRING(255),

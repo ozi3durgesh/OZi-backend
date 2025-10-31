@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import { ResponseHandler } from '../../middleware/responseHandler';
-import { FCPurchaseOrder, FCPOProduct, FCGrn, FCGrnLine, DCPurchaseOrder, DCPOProduct, DCGrn, DCGrnLine, ProductMaster } from '../../models';
-import { Op } from 'sequelize';
+import sequelize from '../../config/database';
+import { FCPurchaseOrder, FCPOSkuMatrix, FCGrn, FCGrnLine, DCPurchaseOrder, DCPOSkuMatrix, DCGrn, DCGrnLine, ProductMaster } from '../../models';
+import { Op, QueryTypes } from 'sequelize';
 
 interface AuthRequest extends Request {
   user?: any;
@@ -14,7 +15,7 @@ export class FCSKUController {
    */
   static async getSKUsWithGRNStatus(req: AuthRequest, res: Response): Promise<Response> {
     try {
-      const { fcId, dcId, page = 1, limit = 20, search } = req.query;
+      const { fcId, dcId, page = 1, limit = 20, search, dcPoId } = req.query;
 
       if (!fcId) {
         return ResponseHandler.error(res, 'FC ID is required', 400);
@@ -23,6 +24,10 @@ export class FCSKUController {
       const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
 
       // Get all DC GRN lines with completed, partial, or rejected status
+      const dcPoWhere: any = { status: 'approved' };
+      if (dcPoId) {
+        dcPoWhere.id = Number(dcPoId);
+      }
       const dcGrnLines = await DCGrnLine.findAll({
         where: {
           line_status: {
@@ -39,9 +44,7 @@ export class FCSKUController {
                 model: DCPurchaseOrder,
                 as: 'DCPO',
                 required: true,
-                where: {
-                  status: 'approved'
-                }
+                where: dcPoWhere
               }
             ]
           }
@@ -74,6 +77,26 @@ export class FCSKUController {
           }
         ]
       });
+
+      // Precompute raised FC-PO quantity per SKU for this FC and optional DC PO
+      const fcIdNum = Number(fcId);
+      const dcPoIdNum = dcPoId ? Number(dcPoId) : null;
+      const raisedRows: any[] = await sequelize.query(
+        `SELECT m.sku AS sku, SUM(m.quantity) AS raisedQuantity
+         FROM fc_po_sku_matrix m
+         INNER JOIN fc_purchase_orders p ON p.id = m.fc_po_id
+         WHERE p.fc_id = :fcId
+           ${dcPoId ? `AND (
+             p.dc_po_id = :dcPoId
+             OR (p.dc_po_id IS NULL AND p.dc_id = :dcId AND EXISTS (
+               SELECT 1 FROM dc_po_sku_matrix d
+               WHERE d.dcPOId = :dcPoId AND d.sku = m.sku
+             ))
+           )` : ''}
+         GROUP BY m.sku`,
+        { type: QueryTypes.SELECT, replacements: { fcId: fcIdNum, dcPoId: dcPoIdNum, dcId: Number(dcId) } }
+      );
+      const raisedBySku = new Map<string, number>(raisedRows.map((r: any) => [String(r.sku), Number(r.raisedQuantity || 0)]));
 
       // Process DC GRN lines
       const dcData = new Map();
@@ -170,13 +193,84 @@ export class FCSKUController {
       });
 
       // Combine and process data
-      const allData = [...Array.from(dcData.values()), ...Array.from(fcData.values())];
+      let allData = [...Array.from(dcData.values()), ...Array.from(fcData.values())];
+      // If dcPoId is provided, restrict to the specific DC PO only
+      if (dcPoId) {
+        allData = Array.from(dcData.values()).filter((entry: any) => entry.po.id === Number(dcPoId));
+      }
       
       const processedData = await Promise.all(allData.map(async (poData: any) => {
         const products: any[] = [];
+        let poLevelGstType: string | null = null;
+        if (poData.po.poType === 'DC') {
+          const anySku = await DCPOSkuMatrix.findOne({
+            where: { dcPOId: poData.po.id },
+            attributes: ['gstType']
+          });
+          poLevelGstType = anySku ? (anySku as any).gstType : null;
+        }
         
         for (const [skuId, productData] of poData.products) {
-          // Get product details from ProductMaster
+          // Prefer product details from DCPOSkuMatrix for DC POs; fallback to ProductMaster otherwise
+          if (poData.po.poType === 'DC') {
+            const dcSku = await DCPOSkuMatrix.findOne({
+              where: { dcPOId: poData.po.id, sku: skuId }
+            });
+
+            if (dcSku) {
+              products.push({
+                // id: dcSku.id,
+                // status: null,
+                catelogue_id: dcSku.catalogue_id,
+                // product_id: null,
+                sku_id: dcSku.sku,
+                color: dcSku.color,
+                age_size: dcSku.size,
+                name: dcSku.product_name,
+                category: dcSku.category,
+                description: dcSku.description,
+                image_url: dcSku.image_url,
+                mrp: dcSku.mrp,
+                // avg_cost_to_ozi: null,
+                ean_upc: dcSku.ean_upc,
+                brand_name: dcSku.brand,
+                weight: dcSku.weight,
+                length: dcSku.length,
+                height: dcSku.height,
+                width: dcSku.width,
+                inventory_threshold: dcSku.inventory_threshold,
+                gst: dcSku.gst,
+                cess: dcSku.cess,
+                hsn: dcSku.hsn,
+                // created_by: null,
+                created_at: dcSku.createdAt,
+                updated_at: dcSku.updatedAt,
+                // Extra DC PO SKU matrix fields for completeness
+                dcPOProductId: dcSku.dcPOProductId,
+                // quantity: dcSku.quantity,
+                rlp: dcSku.rlp,
+                rlp_w_o_tax: dcSku.rlp_w_o_tax,
+                // gstType: dcSku.gstType,
+                selling_price: dcSku.selling_price,
+                margin: dcSku.margin,
+                poId: poData.po.id,
+                poCode: poData.po.poCode,
+                poType: poData.po.poType,
+                totalOrderedQuantity: productData.ordered_qty,
+                totalReceivedQuantity: productData.received_qty,
+                availableQuantity: Math.max(0, (productData.qc_pass_qty || 0) - (raisedBySku.get(String(dcSku.sku)) || 0)),
+                grnStatus: productData.line_status.toUpperCase(),
+                grnDetails: productData.grnDetails,
+                poStatus: poData.po.status,
+                priority: poData.po.priority,
+                totalAmount: poData.po.totalAmount,
+                createdAt: poData.po.createdAt
+              });
+              continue;
+            }
+          }
+
+          // Fallback to ProductMaster
           const productMaster = await ProductMaster.findOne({
             where: { sku_id: skuId }
           });
@@ -214,7 +308,7 @@ export class FCSKUController {
               poType: poData.po.poType,
               totalOrderedQuantity: productData.ordered_qty,
               totalReceivedQuantity: productData.received_qty,
-              availableQuantity: productData.qc_pass_qty, // Only QC pass quantity
+              availableQuantity: Math.max(0, (productData.qc_pass_qty || 0) - (raisedBySku.get(String(productMaster.sku_id)) || 0)),
               grnStatus: productData.line_status.toUpperCase(),
               grnDetails: productData.grnDetails,
               poStatus: poData.po.status,
@@ -226,7 +320,10 @@ export class FCSKUController {
         }
 
         return {
-          po: poData.po,
+          po: {
+            ...poData.po,
+            ...(poLevelGstType ? { gstType: poLevelGstType } : {})
+          },
           products: products
         };
       }));
@@ -282,8 +379,8 @@ export class FCSKUController {
         },
         include: [
           {
-            model: FCPOProduct,
-            as: 'Products',
+            model: FCPOSkuMatrix,
+            as: 'SkuMatrix',
             required: false,
             include: [
               {
@@ -470,8 +567,8 @@ export class FCSKUController {
         where: { catelogue_id: catalogueId },
         include: [
           {
-            model: FCPOProduct,
-            as: 'FCPOProducts',
+            model: FCPOSkuMatrix,
+            as: 'SkuMatrix',
             required: false,
             include: [
               {

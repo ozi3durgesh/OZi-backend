@@ -1,7 +1,7 @@
 import { Op } from 'sequelize';
 import DCSkuSplitted from '../../models/DCSkuSplitted';
 import DCPurchaseOrder from '../../models/DCPurchaseOrder';
-import DCPOProduct from '../../models/DCPOProduct';
+import DCPOSkuMatrix from '../../models/DCPOSkuMatrix';
 import ParentProductMasterDC from '../../models/ParentProductMasterDC';
 import DCGrn from '../../models/DCGrn.model';
 import DCGrnLine from '../../models/DCGrnLine';
@@ -134,26 +134,20 @@ export class DCSkuSplittingService {
    * Get SKU splitting status for a specific PO and catalogue_id
    */
   static async getSkuSplittingStatus(poId: number, catalogueId: string): Promise<SkuSplittingStatus> {
-    // Get the original product details
-    const product = await DCPOProduct.findOne({
+    // Get SKU matrix entries for this catalogue_id and sum quantities
+    const skuMatrixEntries = await DCPOSkuMatrix.findAll({
       where: { 
         dcPOId: poId,
         catalogue_id: catalogueId 
-      },
-      include: [
-        {
-          model: ParentProductMasterDC,
-          as: 'Product',
-          attributes: ['category_id']
-        }
-      ]
+      }
     });
 
-    if (!product) {
+    if (!skuMatrixEntries || skuMatrixEntries.length === 0) {
       throw new Error('Product not found for the given PO and catalogue ID');
     }
 
-    const receivedQuantity = product.quantity;
+    // Sum all quantities for this catalogue_id
+    const receivedQuantity = skuMatrixEntries.reduce((sum, entry) => sum + (parseInt(entry.quantity?.toString() || '0') || 0), 0);
 
     // Get all split SKUs for this PO and catalogue_id
     const splitSkus = await DCSkuSplitted.findAll({
@@ -203,23 +197,39 @@ export class DCSkuSplittingService {
       throw new Error('Purchase Order must be approved to create SKU splits');
     }
 
-    // Get product details
-    const product = await DCPOProduct.findOne({
+    // Get SKU matrix entries for this catalogue_id
+    const skuMatrixEntries = await DCPOSkuMatrix.findAll({
       where: { 
         dcPOId: poId,
         catalogue_id: catalogueId 
-      },
-      include: [
-        {
-          model: ParentProductMasterDC,
-          as: 'Product'
-        }
-      ]
+      }
     });
 
-    if (!product) {
+    if (!skuMatrixEntries || skuMatrixEntries.length === 0) {
       throw new Error('Product not found for the given PO and catalogue ID');
     }
+
+    // Use first entry for product details (they all have same catalogue_id)
+    const firstEntry = skuMatrixEntries[0];
+    const totalQuantity = skuMatrixEntries.reduce((sum, e) => sum + parseInt(e.quantity?.toString() || '0'), 0);
+    const product = {
+      quantity: totalQuantity,
+      productName: firstEntry.product_name || 'Unknown',
+      category_id: firstEntry.category ? parseInt(firstEntry.category.toString()) : 0,
+      description: firstEntry.description || '',
+      hsn: firstEntry.hsn || '',
+      image_url: firstEntry.image_url || '',
+      mrp: parseFloat(firstEntry.mrp?.toString() || '0'),
+      ean_upc: firstEntry.ean_upc || '',
+      brand_id: 0, // Will be updated if brand tracking is needed
+      weight: parseFloat(firstEntry.weight?.toString() || '0'),
+      length: parseFloat(firstEntry.length?.toString() || '0'),
+      height: parseFloat(firstEntry.height?.toString() || '0'),
+      width: parseFloat(firstEntry.width?.toString() || '0'),
+      inventory_threshold: parseFloat(firstEntry.inventory_threshold?.toString() || '0'),
+      gst: parseFloat(firstEntry.gst?.toString() || '0'),
+      cess: parseFloat(firstEntry.cess?.toString() || '0'),
+    };
 
     // Validate SKU format - SKU should start with catalogue_id (7 digits) + 5 more digits = 12 total
     if (!this.validateSkuFormatWithCatalogueId(sku, catalogueId)) {
@@ -353,17 +363,20 @@ export class DCSkuSplittingService {
    * Get SKU split details for a specific PO and catalogue_id
    */
   static async getSkuSplitDetails(poId: number, catalogueId: string): Promise<SkuSplitDetails> {
-    // Get the original product details
-    const product = await DCPOProduct.findOne({
+    // Get SKU matrix entries for this catalogue_id
+    const skuMatrixEntries = await DCPOSkuMatrix.findAll({
       where: { 
         dcPOId: poId,
         catalogue_id: catalogueId 
       }
     });
 
-    if (!product) {
+    if (!skuMatrixEntries || skuMatrixEntries.length === 0) {
       throw new Error('Product not found for the given PO and catalogue ID');
     }
+
+    // Sum quantities for this catalogue_id
+    const productQuantity = skuMatrixEntries.reduce((sum, e) => sum + parseInt(e.quantity?.toString() || '0'), 0);
 
     // Get all split SKUs for this PO and catalogue_id
     const splitSkus = await DCSkuSplitted.findAll({
@@ -375,7 +388,7 @@ export class DCSkuSplittingService {
     });
 
     const totalSplitQuantity = splitSkus.reduce((sum, sku) => sum + sku.sku_splitted_quantity, 0);
-    const remainingQuantity = product.quantity - totalSplitQuantity;
+    const remainingQuantity = productQuantity - totalSplitQuantity;
 
     // Use the splitting_of_product field from the database instead of calculating
     let splittingStatus: 'pending' | 'partial' | 'completed';
@@ -390,7 +403,7 @@ export class DCSkuSplittingService {
 
     return {
       catalogue_id: catalogueId,
-      received_quantity: product.quantity,
+      received_quantity: productQuantity,
       total_split_quantity: totalSplitQuantity,
       remaining_quantity: remainingQuantity,
       splitting_status: splittingStatus,
@@ -434,26 +447,33 @@ export class DCSkuSplittingService {
     received_quantity: number;
     splitting_status: SkuSplittingStatus;
   }>> {
-    // Get all products for this PO
-    const products = await DCPOProduct.findAll({
-      where: { dcPOId: poId },
-      include: [
-        {
-          model: ParentProductMasterDC,
-          as: 'Product',
-          attributes: ['name']
-        }
-      ]
+    // Get all SKU matrix entries for this PO and group by catalogue_id
+    const skuMatrixEntries = await DCPOSkuMatrix.findAll({
+      where: { dcPOId: poId }
     });
+
+    // Group by catalogue_id
+    const grouped = skuMatrixEntries.reduce((acc: any, entry: any) => {
+      const catId = entry.catalogue_id;
+      if (!acc[catId]) {
+        acc[catId] = {
+          catalogue_id: catId,
+          product_name: entry.product_name || 'Unknown',
+          quantity: 0
+        };
+      }
+      acc[catId].quantity += parseInt(entry.quantity?.toString() || '0');
+      return acc;
+    }, {});
 
     const results: any[] = [];
 
-    for (const product of products) {
+    for (const product of Object.values(grouped) as any[]) {
       const splittingStatus = await this.getSkuSplittingStatus(poId, product.catalogue_id);
       
       results.push({
         catalogue_id: product.catalogue_id,
-        product_name: product.productName,
+        product_name: product.product_name,
         received_quantity: product.quantity,
         splitting_status: splittingStatus
       });
@@ -547,22 +567,24 @@ export class DCSkuSplittingService {
     if (skuSplits.length === 0) return;
 
     // Get the original product quantity
-    const product = await DCPOProduct.findOne({
+    // Get SKU matrix entries for this catalogue_id
+    const skuMatrixEntries = await DCPOSkuMatrix.findAll({
       where: {
         dcPOId: poId,
         catalogue_id: catalogueId
       }
     });
 
-    if (!product) {
+    if (!skuMatrixEntries || skuMatrixEntries.length === 0) {
       console.log(`❌ Product not found for PO: ${poId}, Catalogue: ${catalogueId}`);
       return;
     }
 
+    const productQuantity = skuMatrixEntries.reduce((sum, e) => sum + parseInt(e.quantity?.toString() || '0'), 0);
     const totalSkuSplittedQuantity = skuSplits.reduce((sum, sku) => sum + sku.sku_splitted_quantity, 0);
-    const splittingStatus = totalSkuSplittedQuantity === product.quantity ? 'completely' : 'partially';
+    const splittingStatus = totalSkuSplittedQuantity === productQuantity ? 'completely' : 'partially';
     
-    console.log(`📈 Product quantity: ${product.quantity}, Total split quantity: ${totalSkuSplittedQuantity}, Status: ${splittingStatus}`);
+    console.log(`📈 Product quantity: ${productQuantity}, Total split quantity: ${totalSkuSplittedQuantity}, Status: ${splittingStatus}`);
 
     // Update all SKU splits for this PO and catalogue_id
     const [affectedRows] = await DCSkuSplitted.update(
@@ -651,9 +673,10 @@ export class DCSkuSplittingService {
       remarks?: string;
       heldQty?: number;
       rtvQty?: number;
-      photos?: string;
+      photos?: string | string[];
       batches?: Array<{
         batchNo?: string | null;
+        manufacture?: string | null;
         expiry?: string | null;
         qty: number;
       }>;
@@ -707,51 +730,30 @@ export class DCSkuSplittingService {
           }
         }
 
-        // Validate orderedQty matches the PO line
-        // First check if it's a catalogue_id in DCPOProduct
-        let poLine = await DCPOProduct.findOne({
+        // Validate orderedQty matches the PO line - check SKU matrix directly
+        const poLine = await DCPOSkuMatrix.findOne({
           where: {
             dcPOId: data.poId,
-            catalogue_id: line.skuId
+            sku: line.skuId
           },
           transaction
         });
-
-        // If not found, check if it's a generated SKU in the SKU matrix
-        if (!poLine) {
-          const poProducts = await DCPOProduct.findAll({
-            where: {
-              dcPOId: data.poId
-            },
-            transaction
-          });
-
-          // Check each product's SKU matrix for the SKU
-          for (const product of poProducts) {
-            if (product.sku_matrix_on_catelogue_id) {
-              try {
-                const skuMatrix = typeof product.sku_matrix_on_catelogue_id === 'string' 
-                  ? JSON.parse(product.sku_matrix_on_catelogue_id)
-                  : product.sku_matrix_on_catelogue_id;
-                
-                const matchingSku = skuMatrix.find((sku: any) => sku.sku === line.skuId);
-                if (matchingSku) {
-                  poLine = product;
-                  break;
-                }
-              } catch (error) {
-                console.error('Error parsing SKU matrix:', error);
-              }
-            }
-          }
-        }
 
         if (!poLine) {
           throw new Error(`SKU ${line.skuId} not found in DC Purchase Order ${data.poId}`);
         }
 
-        if (poLine.quantity !== line.orderedQty) {
-          throw new Error(`Ordered quantity for SKU ${line.skuId} (${line.orderedQty}) does not match PO line quantity (${poLine.quantity})`);
+        const poLineQuantity = parseInt(poLine.quantity?.toString() || '0');
+        // Use PO line quantity as the source of truth. If client sends a different
+        // orderedQty, override instead of failing the request.
+        if (line.orderedQty !== poLineQuantity) {
+          line.orderedQty = poLineQuantity;
+        }
+        // Guard against receiving more than ordered in a single call
+        if (line.receivedQty > poLineQuantity) {
+          throw new Error(
+            `Received quantity for SKU ${line.skuId} (${line.receivedQty}) cannot exceed PO line quantity (${poLineQuantity})`
+          );
         }
       }
 
@@ -790,10 +792,13 @@ export class DCSkuSplittingService {
         if (grnLine) {
           // Update existing line - accumulate quantities
           const newReceivedQty = grnLine.received_qty + line.receivedQty;
-          const newRejectedQty = grnLine.rejected_qty + rejectedQty;
-          const newQcPassQty = grnLine.qc_pass_qty + qcPassQty;
+          // Reduce previously rejected by current qc_passQty first
+          const reduceFromRejected = Math.min(grnLine.rejected_qty || 0, qcPassQty || 0);
+          const adjustedExistingRejected = (grnLine.rejected_qty || 0) - reduceFromRejected;
+          const newRejectedQty = Math.max(0, adjustedExistingRejected + (rejectedQty || 0));
+          const newQcPassQty = (grnLine.qc_pass_qty || 0) + (qcPassQty || 0);
           const newPendingQty = line.orderedQty - newReceivedQty;
-          
+
           // Recalculate line status with accumulated quantities
           const newLineStatus = this.calculateLineStatus(line.orderedQty, newRejectedQty, newQcPassQty);
 
@@ -829,6 +834,7 @@ export class DCSkuSplittingService {
             await DCGrnBatch.create({
               dc_grn_line_id: grnLine.id,
               batch_no: batch.batchNo && batch.batchNo.trim() !== '' ? batch.batchNo : `BATCH_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              manufacture: batch.manufacture && batch.manufacture.trim() !== '' ? new Date(batch.manufacture) : null,
               expiry_date: batch.expiry && batch.expiry.trim() !== '' ? new Date(batch.expiry) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // Default to 1 year from now
               qty: batch.qty
             }, { transaction });
@@ -837,35 +843,73 @@ export class DCSkuSplittingService {
 
         // Create photos if provided
         if (line.photos) {
-          await DCGrnPhoto.create({
-            sku_id: line.skuId,
-            dc_grn_id: dcGrn.id,
-            dc_po_id: data.poId,
-            url: line.photos,
-            reason: 'sku-level-photo'
-          }, { transaction });
+          // Handle both array and comma-separated string
+          let photoUrls: string[] = [];
+          
+          if (Array.isArray(line.photos)) {
+            // If it's already an array, use it directly
+            photoUrls = line.photos.filter(url => url && typeof url === 'string' && url.trim() !== '');
+          } else if (typeof line.photos === 'string') {
+            // If it's a string, check if it contains commas (comma-separated) or is a single URL
+            if (line.photos.includes(',')) {
+              photoUrls = line.photos.split(',').map(url => url.trim()).filter(url => url !== '');
+            } else {
+              photoUrls = [line.photos.trim()];
+            }
+          }
+
+          // Create a separate photo record for each URL
+          let photosCreated = 0;
+          for (const photoUrl of photoUrls) {
+            if (photoUrl && photoUrl.trim() !== '') {
+              await DCGrnPhoto.create({
+                sku_id: line.skuId,
+                dc_grn_id: dcGrn.id,
+                dc_po_id: data.poId,
+                url: photoUrl.trim(),
+                reason: 'sku-level-photo'
+              }, { transaction });
+              photosCreated++;
+            }
+          }
+          console.log(`Created ${photosCreated} photo records for SKU ${line.skuId}`);
         }
 
-        // Update SKU split status if it exists
-        const skuSplit = await DCSkuSplitted.findOne({
-          where: {
-            po_id: data.poId,
-            sku: line.skuId,
-            ready_for_grn: 1
-          },
-          transaction
-        });
+        // Update SKU split status if splitting feature/table exists
+        try {
+          const skuSplit = await DCSkuSplitted.findOne({
+            where: {
+              po_id: data.poId,
+              sku: line.skuId,
+              ready_for_grn: 1
+            },
+            transaction
+          });
 
-        if (skuSplit) {
-          const newGrnDone = skuSplit.number_of_grn_done + line.receivedQty;
-          const readyForGrn = skuSplit.received_quantity > newGrnDone ? 1 : 0;
-          const grnCompleted = skuSplit.received_quantity === newGrnDone ? 1 : 0;
+          if (skuSplit) {
+            const newGrnDone = skuSplit.number_of_grn_done + line.receivedQty;
+            const readyForGrn = skuSplit.received_quantity > newGrnDone ? 1 : 0;
+            const grnCompleted = skuSplit.received_quantity === newGrnDone ? 1 : 0;
 
-          await skuSplit.update({
-            number_of_grn_done: newGrnDone,
-            ready_for_grn: readyForGrn,
-            grn_completed: grnCompleted
-          }, { transaction });
+            await skuSplit.update({
+              number_of_grn_done: newGrnDone,
+              ready_for_grn: readyForGrn,
+              grn_completed: grnCompleted
+            }, { transaction });
+          }
+        } catch (err: any) {
+          // If dc_sku_splitted table is not present, ignore and continue
+          const msg = err?.message || '';
+          const code = err?.original?.code || '';
+          if (
+            msg.includes("doesn't exist") ||
+            msg.includes('does not exist') ||
+            code === 'ER_NO_SUCH_TABLE'
+          ) {
+            console.warn('dc_sku_splitted table not found; skipping split-status update');
+          } else {
+            throw err;
+          }
         }
 
         // Always update DC Inventory 1 for GRN done with QC passed quantity only

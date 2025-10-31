@@ -4,7 +4,7 @@ import sequelize from '../config/database';
 import { QueryTypes } from 'sequelize';
 import FCGrnLine from '../models/FCGrnLine';
 import FCGrnBatch from '../models/FCGrnBatch';
-import { User, FCPurchaseOrder, FCPOProduct, ProductMaster, PurchaseOrder } from '../models';
+import { User, FCPurchaseOrder, FCPOSkuMatrix, ProductMaster, PurchaseOrder } from '../models';
 import FCGrn from '../models/FCGrn.model';
 import FCGrnPhoto from '../models/FCGrnPhoto';
 import {
@@ -76,6 +76,7 @@ export class FCGrnController {
         created_by: userId,
         created_at: new Date(),
         updated_at: new Date(),
+        fc_id: req.user?.currentFcId,
       });
 
       const createdFCGrn = await FCGrn.findByPk(fcGrn.id, {
@@ -99,7 +100,7 @@ export class FCGrnController {
       });
     }
   }
-  async createFullFCFCGrn(req: AuthRequest, res: Response) {
+  async createFullFCFCGrn(req: AuthRequest, res: Response): Promise<void> {
     const input: CreateFullGRNInput = req.body;
     const userId = req.user?.id;
 
@@ -118,42 +119,88 @@ export class FCGrnController {
       // Check if FCPurchaseOrder exists, if not create a dummy one
       let fcPO = await FCPurchaseOrder.findByPk(input.poId, { transaction: t });
       if (!fcPO) {
-        fcPO = await FCPurchaseOrder.create({
-          id: input.poId,
-          poId: `DUMMY_PO_${input.poId}`,
-          status: 'APPROVED',
-          createdBy: userId,
-          fcId: req.user?.currentFcId || 1,
-          dcId: 1, // Default DC ID
-          totalAmount: 0,
-          priority: 'MEDIUM',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        }, { transaction: t });
+        try {
+          fcPO = await FCPurchaseOrder.create({
+            id: input.poId,
+            poId: `DUMMY_PO_${input.poId}`,
+            status: 'APPROVED',
+            createdBy: userId,
+            fcId: req.user?.currentFcId || 1,
+            dcId: 1, // Default DC ID
+            totalAmount: 0,
+            priority: 'MEDIUM',
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }, { transaction: t });
+        } catch (fcPOError: any) {
+          // If creation fails (e.g., duplicate key), try to find it again
+          if (fcPOError.name === 'SequelizeUniqueConstraintError') {
+            fcPO = await FCPurchaseOrder.findByPk(input.poId, { transaction: t });
+          }
+          if (!fcPO) {
+            await t.rollback();
+            console.error('Error creating FCPurchaseOrder:', fcPOError);
+            res.status(500).json({
+              statusCode: 500,
+              success: false,
+              data: null,
+              error: `Failed to create or find FC Purchase Order: ${fcPOError.message}`,
+            });
+            return;
+          }
+        }
       }
 
-      // Check if PurchaseOrder exists in purchase_orders table, if not create a dummy one
-      let po = await PurchaseOrder.findByPk(input.poId, { transaction: t });
-      if (!po) {
-        po = await PurchaseOrder.create({
-          id: input.poId,
-          po_id: `DUMMY_PO_${input.poId}`,
-          approval_status: 'approved',
-          fc_id: req.user?.currentFcId || 1,
-        }, { transaction: t });
+      // Note: FCGrn belongs to FCPurchaseOrder, not PurchaseOrder
+      // PurchaseOrder creation is not required for FC GRNs
+
+      // Ensure FCPurchaseOrder exists before creating FCGrn
+      if (!fcPO) {
+        await t.rollback();
+        res.status(404).json({
+          statusCode: 404,
+          success: false,
+          data: null,
+          error: `FC Purchase Order with id ${input.poId} not found and could not be created`,
+        });
+        return;
       }
 
-      const fcGrn = await FCGrn.create(
-        {
-          po_id: input.poId,
-          status: input.status || 'partial',
-          close_reason: input.close_reason || null,
-          created_by: userId,
-          created_at: new Date(),
-          updated_at: new Date(),
-        },
-        { transaction: t }
-      );
+      let fcGrn;
+      try {
+        fcGrn = await FCGrn.create(
+          {
+            po_id: input.poId,
+            status: input.status || 'partial',
+            close_reason: input.close_reason || null,
+            created_by: userId,
+            created_at: new Date(),
+            updated_at: new Date(),
+            fc_id: req.user?.currentFcId,
+          },
+          { transaction: t }
+        );
+      } catch (grnError: any) {
+        await t.rollback();
+        console.error('Error creating FCGrn:', grnError);
+        // Check if it's a foreign key constraint error
+        if (grnError.name === 'SequelizeForeignKeyConstraintError' || grnError.message?.includes('foreign key')) {
+          res.status(404).json({
+            statusCode: 404,
+            success: false,
+            data: null,
+            error: `Purchase Order not found: FC Purchase Order with id ${input.poId} does not exist`,
+          });
+        } else {
+          res.status(500).json({
+            statusCode: 500,
+            success: false,
+            data: null,
+            error: `Failed to create FC GRN: ${grnError.message}`,
+          });
+        }
+        return;
+      }
 
       for (const line of input.lines) {
         // Validate that either skuId or ean is provided
@@ -197,46 +244,35 @@ export class FCGrnController {
           foundBy = 'ean';
         }
 
-        // First, get all FC PO products for this PO
-        const fcPOProducts = await FCPOProduct.findAll({
-          where: { fcPOId: input.poId },
+        // Find the SKU matrix entry that matches the resolved SKU
+        const skuMatrixEntry = await FCPOSkuMatrix.findOne({
+          where: { 
+            fcPOId: input.poId,
+            sku: resolvedSku
+          },
           transaction: t,
         });
 
-        // Find the product that contains the SKU in its SKU matrix
-        let fcPOProduct: any = null;
-        for (const product of fcPOProducts) {
-          try {
-            const skuMatrix = product.skuMatrixOnCatalogueId 
-              ? (typeof product.skuMatrixOnCatalogueId === 'string' 
-                  ? JSON.parse(product.skuMatrixOnCatalogueId)
-                  : product.skuMatrixOnCatalogueId)
-              : [];
-            
-            if (Array.isArray(skuMatrix) && skuMatrix.some((item: any) => item.sku === resolvedSku)) {
-              fcPOProduct = product;
-              break;
-            }
-          } catch (error) {
-            console.error('Error parsing SKU matrix:', error);
-          }
+        // If no SKU matrix entry found, we can't proceed (all SKUs should be in the matrix)
+        if (!skuMatrixEntry) {
+          await t.rollback();
+          res.status(400).json({
+            statusCode: 400,
+            success: false,
+            error: `SKU ${resolvedSku} not found in FC PO ${input.poId}`,
+          });
+          return;
         }
 
-        // If no FC PO Product found, create a dummy one
-        if (!fcPOProduct) {
-          fcPOProduct = await FCPOProduct.create({
-            fcPOId: input.poId,
-            productId: 1, // Default product ID
-            catalogueId: `CAT_${resolvedSku}`,
-            productName: `Product ${resolvedSku}`,
-            quantity: line.orderedQty,
-            unitPrice: 0,
-            totalAmount: 0,
-            skuMatrixOnCatalogueId: JSON.stringify([{ sku: resolvedSku, qty: line.orderedQty }]),
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          }, { transaction: t });
-        }
+        // Use the SKU matrix entry as the product reference
+        const fcPOProduct: any = {
+          id: skuMatrixEntry.id,
+          fcPOId: skuMatrixEntry.fcPOId,
+          catalogueId: skuMatrixEntry.catalogueId,
+          productName: skuMatrixEntry.productName,
+          quantity: skuMatrixEntry.quantity,
+          sku: skuMatrixEntry.sku,
+        };
 
         // Skip grnStatus check for dummy products
         // if (fcPOProduct.get('grnStatus') === 'completed') {
@@ -295,11 +331,14 @@ export class FCGrnController {
         }
 
         // Validate S3 URL if provided
-        if (line.photos && line.photos.length > 0) {
-          // Handle both string and array formats
-          const photoUrls = Array.isArray(line.photos) ? line.photos : [line.photos];
-          for (const photoUrl of photoUrls) {
-            if (photoUrl && !FCGrnController.isValidS3Url(photoUrl)) {
+        if (line.photos && (Array.isArray(line.photos) ? line.photos.length > 0 : true)) {
+          // Normalize to array for validation and creation. Accept:
+          // - string | string[]
+          // - { url, reason? } | Array<{ url, reason? }>
+          const items = Array.isArray(line.photos) ? line.photos : [line.photos];
+          for (const item of items) {
+            const urlToValidate = typeof item === 'string' ? item : (item && typeof item === 'object' ? (item as any).url : undefined);
+            if (urlToValidate && !FCGrnController.isValidS3Url(urlToValidate)) {
               await t.rollback();
               res.status(400).json({
                 statusCode: 400,
@@ -337,25 +376,41 @@ export class FCGrnController {
           { transaction: t }
         );
 
-        // Create FCGrnPhoto record for the S3 URL
-        if (line.photos && line.photos.length > 0) {
+        // Create FCGrnPhoto records for provided photos
+        if (line.photos && (Array.isArray(line.photos) ? line.photos.length > 0 : true)) {
           try {
-            // Handle both string and array formats for photos
-            const photoUrls = Array.isArray(line.photos) ? line.photos : [line.photos];
-            
-            for (const photoUrl of photoUrls) {
-              if (photoUrl && typeof photoUrl === 'string') {
-                await FCGrnPhoto.create(
-                  {
-                    sku_id: resolvedSku,
-                    grn_id: fcGrn.id,
-                    po_id: input.poId,
-                    url: photoUrl,
-                    reason: 'sku-level-photo',
-                  },
-                  { transaction: t }
-                );
+            // Normalize photos to an array of string URLs
+            const rawItems = Array.isArray(line.photos) ? line.photos : [line.photos];
+            const normalizedUrls: { url: string; reason?: string }[] = [];
+
+            for (const item of rawItems) {
+              if (typeof item === 'string') {
+                const parts = item
+                  .split(',')
+                  .map((s) => s.trim())
+                  .filter(Boolean);
+                for (const part of parts) normalizedUrls.push({ url: part, reason: 'sku-level-photo' });
+              } else if (item && typeof (item as any).url === 'string') {
+                const reason = (item as any).reason || 'sku-level-photo';
+                const parts = ((item as any).url as string)
+                  .split(',')
+                  .map((s) => s.trim())
+                  .filter(Boolean);
+                for (const part of parts) normalizedUrls.push({ url: part, reason });
               }
+            }
+
+            for (const { url, reason } of normalizedUrls) {
+              await FCGrnPhoto.create(
+                {
+                  sku_id: resolvedSku,
+                  grn_id: fcGrn.id,
+                  po_id: input.poId,
+                  url,
+                  reason,
+                },
+                { transaction: t }
+              );
             }
           } catch (photoError) {
             await t.rollback();
@@ -582,6 +637,7 @@ const createdGrn = await FCGrn.findByPk(fcGrn.id, {
         },
         error: null,
       });
+      return;
     } catch (err: any) {
       await t.rollback();
       console.error('Error creating FCGrn:', err);
@@ -591,6 +647,7 @@ const createdGrn = await FCGrn.findByPk(fcGrn.id, {
         data: err.message,
         error: 'Internal server error',
       });
+      return;
     }
   }
 
@@ -861,13 +918,13 @@ const createdGrn = await FCGrn.findByPk(fcGrn.id, {
             attributes: ['id', 'email', 'name']
           },
           {
-            model: FCPOProduct,
-            as: 'Products',
+            model: FCPOSkuMatrix,
+            as: 'SkuMatrix',
             attributes: [
-              'id', 'catalogueId', 'productName', 'quantity', 'unitPrice', 
-              'totalAmount', 'mrp', 'description', 'hsn', 'ean_upc',
-              'weight', 'length', 'height', 'width', 'gst', 'cess', 'image_url',
-              'brand_id', 'category_id', 'skuMatrixOnCatalogueId'
+              'id', 'fcPOId', 'catalogueId', 'sku', 'productName', 'quantity', 'rlp', 
+              'totalAmount', 'mrp', 'hsn', 'eanUpc',
+              'weight', 'length', 'height', 'width', 'gst', 'cess',
+              'brand', 'sellingPrice', 'rlpWithoutTax', 'gstType', 'status'
             ]
           },
           {
@@ -891,28 +948,74 @@ const createdGrn = await FCGrn.findByPk(fcGrn.id, {
         offset
       });
 
+      // Transform SkuMatrix to Products format for all POs
+      const purchaseOrdersWithProducts = purchaseOrders.map((po: any) => {
+        const poData = po.toJSON ? po.toJSON() : po;
+        // Import and use FCPOService transformation - but avoid circular dependency
+        // Use inline transformation similar to DC PO
+        if (poData.SkuMatrix && poData.SkuMatrix.length > 0) {
+          const grouped = poData.SkuMatrix.reduce((acc: any, sku: any) => {
+            const catalogueId = sku.catalogueId || sku.catalogue_id;
+            if (!acc[catalogueId]) {
+              acc[catalogueId] = {
+                catalogue_id: catalogueId,
+                skuMatrix: [],
+                totalQuantity: 0,
+                totalAmount: 0,
+              };
+            }
+            acc[catalogueId].skuMatrix.push(sku);
+            acc[catalogueId].totalQuantity += parseInt(sku.quantity || 0);
+            const price = parseFloat(sku.rlp || sku.rlpWithoutTax || sku.sellingPrice || sku.selling_price || 0);
+            acc[catalogueId].totalAmount += price * parseInt(sku.quantity || 0);
+            return acc;
+          }, {});
+
+          poData.Products = Object.values(grouped).map((group: any) => {
+            const firstSku = group.skuMatrix[0];
+            const unitPrice = group.totalQuantity > 0 ? group.totalAmount / group.totalQuantity : 0;
+            return {
+              id: firstSku.id,
+              fcPOId: firstSku.fcPOId,
+              productId: 1,
+              catalogue_id: group.catalogue_id,
+              catalogueId: group.catalogue_id,
+              productName: firstSku.productName || firstSku.product_name || 'Unknown Product',
+              quantity: group.totalQuantity,
+              unitPrice: unitPrice,
+              totalAmount: group.totalAmount,
+              mrp: firstSku.mrp ? parseFloat(firstSku.mrp.toString()) : null,
+              cost: unitPrice,
+              description: firstSku.description || null,
+              notes: null,
+              hsn: firstSku.hsn || null,
+              ean_upc: firstSku.eanUpc || firstSku.ean_upc || null,
+              sku_matrix_on_catelogue_id: group.skuMatrix,
+            };
+          });
+        } else {
+          poData.Products = [];
+        }
+        return poData;
+      });
+
       // Transform the data to match the expected GRN format
-      const grnList = await Promise.all(purchaseOrders.map(async (po: any) => {
+      const grnList = await Promise.all(purchaseOrdersWithProducts.map(async (po: any) => {
         // Check if GRN exists for this PO
         const hasGrn = po.FCGrns && po.FCGrns.length > 0;
         const grnData = hasGrn ? po.FCGrns[0] : null;
         
         const lines = await Promise.all((po.Products || []).map(async (product: any) => {
-          // Parse SKU matrix to get actual SKUs
+          // Use SKU matrix from product if available (already transformed)
           let skuMatrix: any[] = [];
-          try {
-            if (product.skuMatrixOnCatalogueId) {
-              skuMatrix = typeof product.skuMatrixOnCatalogueId === 'string' 
-                ? JSON.parse(product.skuMatrixOnCatalogueId)
-                : product.skuMatrixOnCatalogueId;
-            }
-          } catch (error) {
-            console.error('Error parsing SKU matrix:', error);
-            skuMatrix = [];
+          if (product.sku_matrix_on_catelogue_id) {
+            skuMatrix = Array.isArray(product.sku_matrix_on_catelogue_id) 
+              ? product.sku_matrix_on_catelogue_id 
+              : [];
           }
 
           // Get the first SKU from the matrix (or fallback to catalogueId)
-          const actualSku = skuMatrix.length > 0 ? skuMatrix[0].sku : product.catalogueId;
+          const actualSku = skuMatrix.length > 0 ? skuMatrix[0].sku : (product.catalogueId || product.catalogue_id);
           
           // Find corresponding GRN line for this product using the actual SKU
           const grnLine = grnData?.Line?.find((line: any) => line.sku_id === actualSku);

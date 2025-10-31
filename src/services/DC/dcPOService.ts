@@ -3,7 +3,6 @@ import { Transaction } from 'sequelize';
 import sequelize from '../../config/database';
 import crypto from 'crypto';
 import DCPurchaseOrder, { DCPurchaseOrderCreationAttributes } from '../../models/DCPurchaseOrder';
-import DCPOProduct, { DCPOProductCreationAttributes } from '../../models/DCPOProduct';
 import DCPOApproval, { DCPOApprovalCreationAttributes } from '../../models/DCPOApproval';
 import DCPOSkuMatrix from '../../models/DCPOSkuMatrix';
 import VendorDC from '../../models/VendorDC';
@@ -58,6 +57,7 @@ interface CreateDCPOData {
       rlp_w_o_tax: string;
       gstType: string;
       selling_price?: string;
+      margin?: string;
     }>;
   }>;
   description?: string;
@@ -79,6 +79,67 @@ interface EditPOData {
 }
 
 export class DCPOService {
+
+  /**
+   * Helper function to transform SKU matrix entries grouped by catalogue_id into Products format
+   */
+  static transformSkuMatrixToProducts(skuMatrixEntries: any[]): any[] {
+    // Group by catalogue_id
+    const grouped = skuMatrixEntries.reduce((acc: any, sku: any) => {
+      const catalogueId = sku.catalogue_id;
+      if (!acc[catalogueId]) {
+        acc[catalogueId] = {
+          catalogue_id: catalogueId,
+          skuMatrix: [],
+          totalQuantity: 0,
+          totalAmount: 0,
+        };
+      }
+      acc[catalogueId].skuMatrix.push(sku);
+      acc[catalogueId].totalQuantity += parseInt(sku.quantity || 0);
+      const price = parseFloat(sku.rlp || sku.selling_price || 0);
+      acc[catalogueId].totalAmount += price * parseInt(sku.quantity || 0);
+      return acc;
+    }, {});
+
+    // Transform to Products format
+    return Object.values(grouped).map((group: any) => {
+      const firstSku = group.skuMatrix[0];
+      const unitPrice = group.totalQuantity > 0 ? group.totalAmount / group.totalQuantity : 0;
+      
+      return {
+        id: firstSku.id, // Use first SKU's ID as product ID
+        dcPOId: firstSku.dcPOId,
+        productId: 1, // Default product ID
+        catalogue_id: group.catalogue_id,
+        productName: firstSku.product_name || 'Unknown Product',
+        quantity: group.totalQuantity,
+        unitPrice: unitPrice,
+        totalAmount: group.totalAmount,
+        mrp: firstSku.mrp ? parseFloat(firstSku.mrp) : null,
+        cost: unitPrice, // Use unit price as cost
+        description: firstSku.description || null,
+        notes: null,
+        hsn: firstSku.hsn || null,
+        ean_upc: firstSku.ean_upc || null,
+        weight: firstSku.weight || null,
+        length: firstSku.length || null,
+        height: firstSku.height || null,
+        width: firstSku.width || null,
+        inventory_threshold: firstSku.inventory_threshold || null,
+        gst: firstSku.gst || null,
+        cess: firstSku.cess || null,
+        image_url: firstSku.image_url || null,
+        brand_id: null,
+        category_id: firstSku.category || firstSku.brand || null,
+        status: 1,
+        sku_matrix_on_catelogue_id: group.skuMatrix, // Return as array, not stringified JSON
+        SkuMatrix: group.skuMatrix,
+        createdAt: firstSku.createdAt,
+        updatedAt: firstSku.updatedAt,
+      };
+    });
+  }
 
   /**
    * Generate unique PO ID
@@ -182,96 +243,47 @@ export class DCPOService {
       creditPeriodDays: data.creditPeriodDays
     } as DCPurchaseOrderCreationAttributes);
 
-    // Create PO products and their SKU matrix - ignore any database errors
-    const poProducts: any[] = [];
+    // Create SKU matrix entries directly - ignore any database errors
     for (let i = 0; i < validatedProducts.length; i++) {
       const productData = validatedProducts[i];
-      try {
-        const poProduct = await DCPOProduct.create({
-          dcPOId: newPO.id,
-          productId: productData.productId,
-          catalogue_id: productData.catalogue_id.toString(),
-          productName: productData.productName,
-          quantity: productData.quantity,
-          unitPrice: productData.unitPrice,
-          totalAmount: productData.totalAmount,
-        mrp: typeof productData.mrp === 'string' ? parseFloat(productData.mrp) : productData.mrp,
-        cost: typeof productData.cost === 'string' ? parseFloat(productData.cost) : productData.cost,
-        description: productData.description,
-        notes: productData.notes,
-        hsn: productData.hsn,
-        ean_upc: productData.ean_upc,
-        weight: typeof productData.weight === 'string' ? parseFloat(productData.weight) : productData.weight,
-        length: typeof productData.length === 'string' ? parseFloat(productData.length) : productData.length,
-        height: typeof productData.height === 'string' ? parseFloat(productData.height) : productData.height,
-        width: typeof productData.width === 'string' ? parseFloat(productData.width) : productData.width,
-        inventory_threshold: typeof productData.inventory_threshold === 'string' ? parseInt(productData.inventory_threshold) : productData.inventory_threshold,
-        gst: typeof productData.gst === 'string' ? parseFloat(productData.gst) : productData.gst,
-        cess: typeof productData.cess === 'string' ? parseFloat(productData.cess) : productData.cess,
-          image_url: productData.image_url,
-          brand_id: productData.brand_id,
-          category_id: productData.category_id,
-          status: productData.status,
+      
+      // Create SKU matrix entries if provided
+      if (productData.skuMatrix && productData.skuMatrix.length > 0) {
+        try {
+          const skuMatrixEntries = productData.skuMatrix.map((sku: any) => ({
+            dcPOId: newPO.id,
+            dcPOProductId: null, // No longer needed, kept for backward compatibility
+            quantity: sku.quantity,
+            catalogue_id: sku.catalogue_id,
+            category: sku.category || sku.Category || null,
+            sku: sku.sku || sku.SKU,
+            product_name: sku.product_name || sku.ProductName,
+            description: sku.description || sku.Description || null,
+            hsn: sku.hsn || null,
+            image_url: sku.image_url || sku.ImageURL || null,
+            mrp: sku.mrp || sku.MRP || null,
+            ean_upc: sku.ean_upc || sku.EAN_UPC || null,
+            color: sku.color || sku.Color || null,
+            size: sku.size || sku.Size || null,
+            brand: sku.brand || sku.Brand || null,
+            weight: sku.weight || sku.Weight || null,
+            length: sku.length || sku.Length || null,
+            height: sku.height || sku.Height || null,
+            width: sku.width || sku.Width || null,
+            inventory_threshold: sku.inventory_threshold || sku.InventoryThreshold || null,
+            gst: sku.gst || null,
+            cess: sku.cess || sku.CESS || null,
+            rlp: sku.rlp || null,
+            rlp_w_o_tax: sku.rlp_w_o_tax || null,
+            gstType: sku.gstType || null,
+            selling_price: sku.selling_price || null,
+            margin: sku.margin || null,
+          }));
 
-        });
-
-
-        // Create SKU matrix entries if provided
-        if (productData.skuMatrix && productData.skuMatrix.length > 0) {
-          try {
-            const skuMatrixEntries = productData.skuMatrix.map((sku: any) => ({
-              dcPOProductId: poProduct.id,
-              quantity: sku.quantity,
-              catalogue_id: sku.catalogue_id,
-              category: sku.category || sku.Category,
-              sku: sku.sku || sku.SKU,
-              product_name: sku.product_name || sku.ProductName,
-              description: sku.description || sku.Description,
-              hsn: sku.hsn,
-              image_url: sku.image_url || sku.ImageURL,
-              mrp: sku.mrp || sku.MRP,
-              ean_upc: sku.ean_upc || sku.EAN_UPC,
-              color: sku.color || sku.Color,
-              size: sku.size || sku.Size,
-              brand: sku.brand || sku.Brand,
-              weight: sku.weight || sku.Weight,
-              length: sku.length || sku.Length,
-              height: sku.height || sku.Height,
-              width: sku.width || sku.Width,
-              inventory_threshold: sku.inventory_threshold || sku.InventoryThreshold,
-              gst: sku.gst,
-              cess: sku.cess || sku.CESS,
-              rlp: sku.rlp,
-              rlp_w_o_tax: sku.rlp_w_o_tax,
-              gstType: sku.gstType,
-              selling_price: sku.selling_price,
-            }));
-
-            await DCPOSkuMatrix.bulkCreate(skuMatrixEntries);
-            
-            // Update the DCPOProduct with the SKU matrix JSON data
-            await poProduct.update({
-              sku_matrix_on_catelogue_id: JSON.stringify(productData.skuMatrix)
-            });
-          } catch (skuError) {
-            console.log('SKU matrix creation failed, continuing...', skuError);
-          }
+          await DCPOSkuMatrix.bulkCreate(skuMatrixEntries);
+        } catch (skuError) {
+          console.log(`SKU matrix creation failed for product ${i}, continuing...`, skuError);
         }
-
-        poProducts.push(poProduct);
-      } catch (productError) {
-        console.log(`Product ${i} creation failed, continuing...`, productError);
-        // Create a dummy product to continue
-        poProducts.push({
-          id: i + 1,
-          dcPOId: newPO.id,
-          productId: productData.productId,
-          catalogue_id: productData.catalogue_id.toString(),
-          productName: productData.productName,
-          quantity: productData.quantity,
-          unitPrice: productData.unitPrice,
-          totalAmount: productData.totalAmount,
-        } as any);
       }
     }
 
@@ -314,27 +326,9 @@ export class DCPOService {
           attributes: ['id', 'email', 'name'],
         },
         {
-          model: DCPOProduct,
-          as: 'Products',
-          attributes: [
-            'id', 'dcPOId', 'productId', 'catalogue_id', 'productName', 'quantity', 
-            'unitPrice', 'totalAmount', 'mrp', 'cost', 'description', 'notes', 
-            'hsn', 'ean_upc', 'weight', 'length', 'height', 'width', 
-            'inventory_threshold', 'gst', 'cess', 'image_url', 'brand_id', 
-            'category_id', 'status', 'sku_matrix_on_catelogue_id', 'createdAt', 'updatedAt'
-          ],
-          include: [
-            {
-              model: ProductMaster,
-              as: 'Product',
-              attributes: ['id', 'catelogue_id', 'name', 'mrp'],
-            },
-            {
-              model: DCPOSkuMatrix,
-              as: 'SkuMatrix',
-              attributes: ['id', 'quantity', 'catalogue_id', 'category', 'sku', 'product_name', 'description', 'hsn', 'image_url', 'mrp', 'ean_upc', 'color', 'size', 'brand', 'weight', 'length', 'height', 'width', 'inventory_threshold', 'gst', 'cess', 'rlp', 'rlp_w_o_tax', 'gstType', 'selling_price'],
-            },
-          ],
+          model: DCPOSkuMatrix,
+          as: 'SkuMatrix',
+          attributes: ['id', 'dcPOId', 'quantity', 'catalogue_id', 'category', 'sku', 'product_name', 'description', 'hsn', 'image_url', 'mrp', 'ean_upc', 'color', 'size', 'brand', 'weight', 'length', 'height', 'width', 'inventory_threshold', 'gst', 'cess', 'rlp', 'rlp_w_o_tax', 'gstType', 'selling_price', 'margin', 'createdAt', 'updatedAt'],
         },
         {
           model: DCPOApproval,
@@ -350,7 +344,19 @@ export class DCPOService {
       ],
     });
 
-    return po;
+    // Transform SKU matrix to Products format for backward compatibility
+    if (!po) {
+      throw new Error('Purchase Order not found');
+    }
+    
+    const poData: any = po.toJSON();
+    if ((po as any).SkuMatrix && (po as any).SkuMatrix.length > 0) {
+      poData.Products = this.transformSkuMatrixToProducts((po as any).SkuMatrix.map((s: any) => s.toJSON ? s.toJSON() : s));
+    } else {
+      poData.Products = [];
+    }
+
+    return poData;
   }
 
   /**
@@ -383,27 +389,9 @@ export class DCPOService {
           as: 'DistributionCenter',
         },
         {
-          model: DCPOProduct,
-          as: 'Products',
-          attributes: [
-            'id', 'dcPOId', 'productId', 'catalogue_id', 'productName', 'quantity', 
-            'unitPrice', 'totalAmount', 'mrp', 'cost', 'description', 'notes', 
-            'hsn', 'ean_upc', 'weight', 'length', 'height', 'width', 
-            'inventory_threshold', 'gst', 'cess', 'image_url', 'brand_id', 
-            'category_id', 'status', 'sku_matrix_on_catelogue_id', 'createdAt', 'updatedAt'
-          ],
-          include: [
-            {
-              model: ProductMaster,
-              as: 'Product',
-              attributes: ['id', 'catelogue_id', 'name', 'mrp', 'hsn', 'brand_id'],
-            },
-            {
-              model: DCPOSkuMatrix,
-              as: 'SkuMatrix',
-              attributes: ['id', 'quantity', 'catalogue_id', 'category', 'sku', 'product_name', 'description', 'hsn', 'image_url', 'mrp', 'ean_upc', 'color', 'size', 'brand', 'weight', 'length', 'height', 'width', 'inventory_threshold', 'gst', 'cess', 'rlp', 'rlp_w_o_tax', 'gstType', 'selling_price'],
-            },
-          ],
+          model: DCPOSkuMatrix,
+          as: 'SkuMatrix',
+          attributes: ['id', 'dcPOId', 'quantity', 'catalogue_id', 'category', 'sku', 'product_name', 'description', 'hsn', 'image_url', 'mrp', 'ean_upc', 'color', 'size', 'brand', 'weight', 'length', 'height', 'width', 'inventory_threshold', 'gst', 'cess', 'rlp', 'rlp_w_o_tax', 'gstType', 'selling_price', 'margin', 'createdAt', 'updatedAt'],
         },
       ],
     });
@@ -427,9 +415,16 @@ export class DCPOService {
     });
 
     // Send approval email to category head
-    await this.sendApprovalEmail(po, 'category_head');
+    // Transform SKU matrix to Products format for email
+    const poData: any = po.toJSON();
+    if ((po as any).SkuMatrix && (po as any).SkuMatrix.length > 0) {
+      poData.Products = this.transformSkuMatrixToProducts((po as any).SkuMatrix.map((s: any) => s.toJSON ? s.toJSON() : s));
+    } else {
+      poData.Products = [];
+    }
+    await this.sendApprovalEmail(poData, 'category_head');
 
-    return po;
+    return poData;
   }
 
   /**
@@ -483,6 +478,15 @@ export class DCPOService {
     // Get recipient email
     const recipientEmail = DC_PO_CONSTANTS.EMAIL.APPROVAL_EMAILS[role];
     
+    // Transform SKU matrix to Products format if Products doesn't exist
+    let products = po.Products || [];
+    if (!products || products.length === 0) {
+      const skuMatrix = (po.SkuMatrix || []).map((s: any) => s.toJSON ? s.toJSON() : s);
+      if (skuMatrix.length > 0) {
+        products = this.transformSkuMatrixToProducts(skuMatrix);
+      }
+    }
+    
     // Send email using new EmailService
     const success = await EmailService.sendDCApprovalEmail(
       [recipientEmail],
@@ -491,7 +495,7 @@ export class DCPOService {
       po.DistributionCenter?.name || po.DistributionCenter?.dataValues?.name || 'N/A',
       po.totalAmount,
       po.priority,
-      po.Products ?? [],
+      products,
       approvalLink,
       role
     );
@@ -536,14 +540,8 @@ export class DCPOService {
           as: 'DistributionCenter',
         },
         {
-          model: DCPOProduct,
-          as: 'Products',
-          include: [
-            {
-              model: DCPOSkuMatrix,
-              as: 'SkuMatrix',
-            },
-          ],
+          model: DCPOSkuMatrix,
+          as: 'SkuMatrix',
         },
       ],
     });
@@ -601,30 +599,23 @@ export class DCPOService {
         });
 
         // Update DC Inventory 1 for PO approval
-        const products = await DCPOProduct.findAll({
+        const skuMatrixEntries = await DCPOSkuMatrix.findAll({
           where: { dcPOId: po.id },
-          attributes: ['catalogue_id', 'quantity', 'sku_matrix_on_catelogue_id']
+          attributes: ['catalogue_id', 'quantity', 'sku']
         });
 
-        for (const product of products) {
-          // Get the actual SKU from SKU matrix if available, otherwise use catalogue_id
-          let skuId = product.catalogue_id.toString().padStart(12, '0');
-          
-          if (product.sku_matrix_on_catelogue_id) {
-            try {
-              const skuMatrix = typeof product.sku_matrix_on_catelogue_id === 'string' 
-                ? JSON.parse(product.sku_matrix_on_catelogue_id)
-                : product.sku_matrix_on_catelogue_id;
-              
-              if (skuMatrix && skuMatrix.length > 0) {
-                // Use the first SKU from the matrix as the primary SKU
-                skuId = skuMatrix[0].sku;
-              }
-            } catch (error) {
-              console.error('Error parsing SKU matrix for PO approval:', error);
-            }
+        // Group by catalogue_id and sum quantities
+        const grouped = skuMatrixEntries.reduce((acc: any, entry: any) => {
+          const catId = entry.catalogue_id;
+          if (!acc[catId]) {
+            acc[catId] = { catalogue_id: catId, quantity: 0, sku: entry.sku };
           }
-          
+          acc[catId].quantity += parseInt(entry.quantity || 0);
+          return acc;
+        }, {});
+
+        for (const product of Object.values(grouped) as any[]) {
+          const skuId = product.sku || product.catalogue_id.toString().padStart(12, '0');
           await DCInventory1Service.updateOnPOApprove(
             skuId,
             po.dcId,
@@ -691,9 +682,9 @@ export class DCPOService {
           attributes: ['id', 'email', 'name'],
         },
         {
-          model: DCPOProduct,
-          as: 'Products',
-          attributes: ['id', 'catalogue_id', 'productName', 'quantity', 'unitPrice', 'totalAmount'],
+          model: DCPOSkuMatrix,
+          as: 'SkuMatrix',
+          attributes: ['id', 'catalogue_id', 'product_name', 'quantity', 'rlp', 'selling_price', 'sku', 'createdAt', 'updatedAt'],
         },
       ],
       limit,
@@ -761,27 +752,9 @@ export class DCPOService {
           attributes: ['id', 'email', 'name'],
         },
         {
-          model: DCPOProduct,
-          as: 'Products',
-          attributes: [
-            'id', 'dcPOId', 'productId', 'catalogue_id', 'productName', 'quantity', 
-            'unitPrice', 'totalAmount', 'mrp', 'cost', 'description', 'notes', 
-            'hsn', 'ean_upc', 'weight', 'length', 'height', 'width', 
-            'inventory_threshold', 'gst', 'cess', 'image_url', 'brand_id', 
-            'category_id', 'status', 'sku_matrix_on_catelogue_id', 'createdAt', 'updatedAt'
-          ],
-          include: [
-            {
-              model: ProductMaster,
-              as: 'Product',
-              attributes: ['id', 'catelogue_id', 'name', 'mrp', 'hsn', 'brand_id'],
-            },
-            {
-              model: DCPOSkuMatrix,
-              as: 'SkuMatrix',
-              attributes: ['id', 'quantity', 'catalogue_id', 'category', 'sku', 'product_name', 'description', 'hsn', 'image_url', 'mrp', 'ean_upc', 'color', 'size', 'brand', 'weight', 'length', 'height', 'width', 'inventory_threshold', 'gst', 'cess', 'rlp', 'rlp_w_o_tax', 'gstType', 'selling_price'],
-            },
-          ],
+          model: DCPOSkuMatrix,
+          as: 'SkuMatrix',
+          attributes: ['id', 'dcPOId', 'quantity', 'catalogue_id', 'category', 'sku', 'product_name', 'description', 'hsn', 'image_url', 'mrp', 'ean_upc', 'color', 'size', 'brand', 'weight', 'length', 'height', 'width', 'inventory_threshold', 'gst', 'cess', 'rlp', 'rlp_w_o_tax', 'gstType', 'selling_price', 'margin', 'createdAt', 'updatedAt'],
         },
         {
           model: DCPOApproval,
@@ -801,18 +774,23 @@ export class DCPOService {
       return null;
     }
 
-    // Transform the data to add sp field to SkuMatrix
-    const poData = po.toJSON();
+    // Transform SKU matrix to Products format and add sp field
+    if (!po) {
+      return null;
+    }
     
-    if (poData.Products) {
-      poData.Products.forEach((product: any) => {
-        if (product.SkuMatrix) {
-          product.SkuMatrix.forEach((sku: any) => {
-            // Map selling_price to sp field
-            sku.sp = sku.selling_price;
-          });
-        }
+    const poData: any = po.toJSON();
+    if ((po as any)?.SkuMatrix && (po as any).SkuMatrix.length > 0) {
+      const skuMatrixArray = (po as any).SkuMatrix.map((s: any) => {
+        const sku = s.toJSON ? s.toJSON() : s;
+        sku.sp = sku.selling_price;
+        return sku;
       });
+      poData.Products = this.transformSkuMatrixToProducts(skuMatrixArray);
+      poData.SkuMatrix = skuMatrixArray;
+    } else {
+      poData.Products = [];
+      poData.SkuMatrix = [];
     }
 
     return poData;
@@ -891,29 +869,13 @@ export class DCPOService {
           attributes: ['id', 'email', 'name'],
         },
         {
-          model: DCPOProduct,
-          as: 'Products',
-          include: [
-            {
-              model: ProductMaster,
-              as: 'Product',
-              attributes: [
-                'id', 'catelogue_id', 'name', 'description', 'category', 'brand_id', 
-                'mrp', 'hsn', 'ean_upc', 'weight', 'length', 'height', 'width', 
-                'inventory_threshold', 'gst', 'cess', 'image_url', 'status',
-                'created_at', 'updated_at'
-              ],
-            },
-            {
-              model: DCPOSkuMatrix,
-              as: 'SkuMatrix',
-              attributes: [
-                'id', 'quantity', 'catalogue_id', 'category', 'sku', 'product_name', 
-                'description', 'hsn', 'image_url', 'mrp', 'ean_upc', 'color', 'size', 
-                'brand', 'weight', 'length', 'height', 'width', 'inventory_threshold', 
-                'gst', 'cess', 'createdAt', 'updatedAt'
-              ],
-            },
+          model: DCPOSkuMatrix,
+          as: 'SkuMatrix',
+          attributes: [
+            'id', 'dcPOId', 'quantity', 'catalogue_id', 'category', 'sku', 'product_name', 
+            'description', 'hsn', 'image_url', 'mrp', 'ean_upc', 'color', 'size', 
+            'brand', 'weight', 'length', 'height', 'width', 'inventory_threshold', 
+            'gst', 'cess', 'rlp', 'rlp_w_o_tax', 'gstType', 'selling_price', 'margin', 'createdAt', 'updatedAt'
           ],
         },
         {
@@ -936,20 +898,24 @@ export class DCPOService {
       throw error;
     }
 
+    // Transform SKU matrix to Products format
+    const skuMatrixArray = (po.SkuMatrix || []).map((s: any) => s.toJSON ? s.toJSON() : s);
+    const products = this.transformSkuMatrixToProducts(skuMatrixArray);
+
     // Calculate summary statistics
     const productSummary = {
-      totalProducts: po.Products?.length || 0,
-      totalQuantity: po.Products?.reduce((sum: number, product: any) => sum + product.quantity, 0) || 0,
+      totalProducts: products.length || 0,
+      totalQuantity: products.reduce((sum: number, product: any) => sum + product.quantity, 0) || 0,
       totalAmount: po.totalAmount,
-      averageUnitPrice: po.Products?.length > 0 ? 
-        po.totalAmount / (po.Products.reduce((sum: number, product: any) => sum + product.quantity, 0)) : 0,
-      categories: [...new Set(po.Products?.map((p: any) => p.Product?.Category).filter(Boolean) || [])],
-      brands: [...new Set(po.Products?.map((p: any) => p.Product?.Brand).filter(Boolean) || [])],
+      averageUnitPrice: products.length > 0 ? 
+        po.totalAmount / (products.reduce((sum: number, product: any) => sum + product.quantity, 0)) : 0,
+      categories: [...new Set(products.map((p: any) => p.category_id).filter(Boolean) || [])],
+      brands: [...new Set(skuMatrixArray.map((s: any) => s.brand).filter(Boolean) || [])],
     };
 
     // Add calculated fields and SKU splitting status to each product
-    console.log('📦 Processing products:', po.Products?.length || 0);
-    const productsWithCalculations = await Promise.all((po.Products || []).map(async (product: any) => {
+    console.log('📦 Processing products:', products.length || 0);
+    const productsWithCalculations = await Promise.all((products || []).map(async (product: any) => {
       console.log('🔍 Product ID:', product.id, 'SKU Matrix count:', product.SkuMatrix?.length || 0);
       let skuSplittingStatus: any = null;
       
@@ -970,18 +936,15 @@ export class DCPOService {
       }
 
       return {
-        ...product.toJSON(),
-        Product: {
-          ...product.Product?.toJSON(),
-          // Add calculated fields
-          totalOrderedValue: product.quantity * product.unitPrice,
-          marginAmount: product.unitPrice - (product.cost || 0), // Use product.cost from DCPOProduct
-          marginPercentage: product.cost ? 
-            ((product.unitPrice - product.cost) / product.cost * 100) : 0,
-          savingsFromMRP: (product.Product?.mrp || 0) - product.unitPrice,
-          savingsPercentage: product.Product?.mrp ? 
-            ((product.Product.mrp - product.unitPrice) / product.Product.mrp * 100) : 0,
-        },
+        ...product,
+        // Add calculated fields
+        totalOrderedValue: product.quantity * product.unitPrice,
+        marginAmount: product.unitPrice - (product.cost || 0),
+        marginPercentage: product.cost ? 
+          ((product.unitPrice - product.cost) / product.cost * 100) : 0,
+        savingsFromMRP: (parseFloat(product.mrp || 0)) - product.unitPrice,
+        savingsPercentage: product.mrp ? 
+          ((parseFloat(product.mrp) - product.unitPrice) / parseFloat(product.mrp) * 100) : 0,
         // Add SKU Matrix information
         SkuMatrix: product.SkuMatrix || [],
         // Add SKU splitting information
@@ -1049,31 +1012,41 @@ export class DCPOService {
       approvedAt: new Date(),
     });
 
-    // Update DC Inventory 1 for PO approval
-    const products = await DCPOProduct.findAll({
-      where: { dcPOId: poId },
-      attributes: ['catalogue_id', 'quantity', 'sku_matrix_on_catelogue_id']
-    });
-
-    for (const product of products) {
-      // Get the actual SKU from SKU matrix if available, otherwise use catalogue_id
-      let skuId = product.catalogue_id.toString().padStart(12, '0');
-      
-      if (product.sku_matrix_on_catelogue_id) {
-        try {
-          const skuMatrix = typeof product.sku_matrix_on_catelogue_id === 'string' 
-            ? JSON.parse(product.sku_matrix_on_catelogue_id)
-            : product.sku_matrix_on_catelogue_id;
-          
-          if (skuMatrix && skuMatrix.length > 0) {
-            // Use the first SKU from the matrix as the primary SKU
-            skuId = skuMatrix[0].sku;
-          }
-        } catch (error) {
-          console.error('Error parsing SKU matrix for PO approval:', error);
+    // Update creator approval record to APPROVED
+    await DCPOApproval.update(
+      {
+        action: 'APPROVED',
+        approverId: data.updatedBy,
+        approvedAt: new Date(),
+        comments: 'PI uploaded and delivery date confirmed',
+      },
+      {
+        where: {
+          dcPOId: poId,
+          approverRole: 'creator',
+          action: 'PENDING'
         }
       }
-      
+    );
+
+    // Update DC Inventory 1 more PO approval
+    const skuMatrixEntries = await DCPOSkuMatrix.findAll({
+      where: { dcPOId: poId },
+      attributes: ['catalogue_id', 'quantity', 'sku']
+    });
+
+    // Group by catalogue_id and sum quantities
+    const grouped = skuMatrixEntries.reduce((acc: any, entry: any) => {
+      const catId = entry.catalogue_id;
+      if (!acc[catId]) {
+        acc[catId] = { catalogue_id: catId, quantity: 0, sku: entry.sku };
+      }
+      acc[catId].quantity += parseInt(entry.quantity || 0);
+      return acc;
+    }, {});
+
+    for (const product of Object.values(grouped) as any[]) {
+      const skuId = product.sku || product.catalogue_id.toString().padStart(12, '0');
       await DCInventory1Service.updateOnPOApprove(
         skuId,
         po.dcId,
@@ -1112,15 +1085,8 @@ export class DCPOService {
             attributes: ['id', 'name', 'email']
           },
           {
-            model: DCPOProduct,
-            as: 'Products',
-            include: [
-              {
-                model: ProductMaster,
-                as: 'Product',
-                attributes: ['id', 'catelogue_id', 'name', 'mrp', 'hsn', 'brand_id']
-              }
-            ]
+            model: DCPOSkuMatrix,
+            as: 'SkuMatrix',
           }
         ]
       });
@@ -1129,6 +1095,10 @@ export class DCPOService {
         console.error('PO not found for final notification email');
         return;
       }
+
+      // Transform SKU matrix to Products format for email
+      const skuMatrixArray = (po as any).SkuMatrix?.map((s: any) => s.toJSON ? s.toJSON() : s) || [];
+      const products = this.transformSkuMatrixToProducts(skuMatrixArray);
 
       // Get all stakeholder emails
       const stakeholderEmails = [
@@ -1148,7 +1118,7 @@ export class DCPOService {
         po.final_delivery_date,
         po.pi_notes,
         po.pi_file_url,
-        (po as any).Products ?? []
+        products
       );
 
       if (success) {
@@ -1163,185 +1133,356 @@ export class DCPOService {
   }
 
   static async editPO(poId: number, data: EditPOData, userId: number) {
-  const transaction = await sequelize.transaction();
+    const transaction = await sequelize.transaction();
 
-  try {
-    // 1️⃣ Fetch existing PO and products once
-    const existingPO = await DCPurchaseOrder.findByPk(poId, {
-  include: [{ model: DCPOProduct, as: 'Products' }],
-  transaction,
-});
+    try {
+      // 1️⃣ Fetch existing PO and SKU matrix entries
+      const existingPO = await DCPurchaseOrder.findByPk(poId, {
+        include: [{ model: DCPOSkuMatrix, as: 'SkuMatrix' }],
+        transaction,
+      });
 
-    if (!existingPO) throw new Error('DC Purchase Order not found');
-    if (existingPO.isEdited)
-      throw new Error('This PO has already been edited once.');
+      if (!existingPO) throw new Error('DC Purchase Order not found');
+      if (existingPO.isEdited)
+        throw new Error('This PO has already been edited once.');
 
-    const editLogs: any[] = [];
+      const editLogs: any[] = [];
 
-    // Convert products array to Map for quick access
-    const existingProductsMap: Map<string, DCPOProduct> = new Map(
-  (existingPO.Products ?? []).map((p: DCPOProduct) => [p.catalogue_id, p])
-);
+      // 2️⃣ Track PO header changes
+      const headerFields: any = {
+        vendorId: data.vendorId,
+        dcId: data.dcId,
+        priority: data.priority,
+        description: data.description || null,
+      };
 
+      // Track header field changes (including gstType if it exists in data but not in model)
+      for (const [field, newValue] of Object.entries(headerFields)) {
+        const oldValue = (existingPO as any)[field];
+        if (oldValue !== newValue && newValue !== undefined) {
+          editLogs.push({
+            po_id: poId,
+            product_id: null,
+            field,
+            old_value: oldValue?.toString() || null,
+            new_value: newValue?.toString() || null,
+            change_type: 'HEADER_EDITED',
+            changed_by: userId,
+            changed_at: new Date(),
+          });
+        }
+      }
 
-    const updatedProducts: any[] = [];
-    const newProducts: any[] = [];
+      // Track gstType if present in data (may not be a PO field but track it anyway)
+      if ((data as any).gstType !== undefined) {
+        const oldGstType = (existingPO as any).gstType;
+        const newGstType = (data as any).gstType;
+        if (oldGstType !== newGstType) {
+          editLogs.push({
+            po_id: poId,
+            product_id: null,
+            field: 'gstType',
+            old_value: oldGstType?.toString() || null,
+            new_value: newGstType?.toString() || null,
+            change_type: 'HEADER_EDITED',
+            changed_by: userId,
+            changed_at: new Date(),
+          });
+        }
+      }
 
-    // 2️⃣ Iterate through input products
-    if (data.products?.length) {
-      for (const product of data.products) {
-        for (const skuItem of product.sku_matrix_on_catelogue_id) {
-          const existingProduct = existingProductsMap.get(skuItem.catalogue_id);
+      // Update PO header fields
+      await existingPO.update(
+        {
+          ...headerFields,
+          updatedBy: userId,
+        },
+        { transaction }
+      );
 
-          if (existingProduct) {
-            // Compare field-wise differences
-            const productFields = [
-              'quantity',
-              'unitPrice',
-              'totalAmount',
-              'mrp',
-              'hsn',
-              'ean_upc',
-              'weight',
-              'length',
-              'height',
-              'width',
-            ];
+      // 3️⃣ Get all existing SKU matrix entries mapped by SKU code
+      const existingSkuEntries = await DCPOSkuMatrix.findAll({
+        where: { dcPOId: poId },
+        transaction,
+      });
 
-            let modified = false;
+      const existingSkuMap: Map<string, any> = new Map(
+        existingSkuEntries.map((sku: any) => {
+          const skuData = sku.toJSON ? sku.toJSON() : sku;
+          return [skuData.sku, skuData];
+        })
+      );
 
-            for (const field of productFields) {
-              const newValue = (skuItem as any)[field];
-              const oldValue = (existingProduct as any)[field];
+      // Track input SKUs to identify removed ones
+      const inputSkuCodes = new Set<string>();
 
-              // Compare only if defined and changed
-              if (
-                newValue !== undefined &&
-                newValue !== null &&
-                newValue !== oldValue
-              ) {
-                modified = true;
+      // 4️⃣ Process input products and SKUs
+      const skusToUpdate: any[] = [];
+      const skusToCreate: any[] = [];
+      const skusToDelete: number[] = [];
 
-                // Add to history log
+      if (data.products?.length) {
+        for (const product of data.products) {
+          if (!product.sku_matrix_on_catelogue_id?.length) continue;
+
+          for (const skuItem of product.sku_matrix_on_catelogue_id) {
+            const skuCode = skuItem.sku;
+            const newQuantity = parseInt(skuItem.quantity) || 0;
+
+            const existingSku = existingSkuMap.get(skuCode);
+
+            if (existingSku) {
+              // If quantity is 0, treat as removal
+              if (newQuantity === 0) {
+                // Mark for deletion
+                skusToDelete.push(existingSku.id);
+
+                // Track deletion in history
                 editLogs.push({
                   po_id: poId,
-                  product_id: existingProduct.id,
-                  field,
-                  old_value: oldValue,
-                  new_value: newValue,
+                  product_id: existingSku.id,
+                  field: 'sku_removed',
+                  old_value: JSON.stringify({
+                    sku: skuCode,
+                    catalogue_id: existingSku.catalogue_id,
+                    product_name: existingSku.product_name,
+                    quantity: existingSku.quantity,
+                    rlp: existingSku.rlp,
+                    mrp: existingSku.mrp,
+                  }),
+                  new_value: null,
                   change_type: 'PRODUCT_EDITED',
                   changed_by: userId,
                   changed_at: new Date(),
                 });
 
-                // Update in-memory for batch update
-                (existingProduct as any)[field] = newValue;
+                // Remove from inputSkuCodes so it's not processed as "removed" later
+                inputSkuCodes.delete(skuCode);
+                continue;
               }
+
+              // SKU exists with quantity > 0 - check for changes and update
+              inputSkuCodes.add(skuCode);
+
+              const fieldsToCompare = [
+                'quantity',
+                'product_name',
+                'hsn',
+                'ean_upc',
+                'brand',
+                'weight',
+                'length',
+                'height',
+                'width',
+                'gst',
+                'cess',
+                'rlp',
+                'rlp_w_o_tax',
+                'gstType',
+                'mrp',
+                'selling_price',
+              ];
+
+              let hasChanges = false;
+              const skuUpdateData: any = {
+                id: existingSku.id,
+              };
+
+              for (const field of fieldsToCompare) {
+                let newValue = (skuItem as any)[field];
+                let oldValue = existingSku[field];
+
+                // Normalize values for comparison
+                if (field === 'quantity') {
+                  newValue = parseInt(newValue) || 0;
+                  oldValue = parseInt(oldValue) || 0;
+                } else if (['weight', 'length', 'height', 'width'].includes(field)) {
+                  newValue = newValue !== null && newValue !== undefined ? parseFloat(newValue) : null;
+                  oldValue = oldValue !== null && oldValue !== undefined ? parseFloat(oldValue) : null;
+                } else if (['rlp', 'rlp_w_o_tax', 'mrp', 'selling_price'].includes(field)) {
+                  newValue = newValue !== null && newValue !== undefined ? newValue.toString() : null;
+                  oldValue = oldValue !== null && oldValue !== undefined ? oldValue.toString() : null;
+                } else {
+                  newValue = newValue !== null && newValue !== undefined ? newValue : null;
+                  oldValue = oldValue !== null && oldValue !== undefined ? oldValue : null;
+                }
+
+                if (newValue !== oldValue) {
+                  hasChanges = true;
+
+                  // Track change in history
+                  editLogs.push({
+                    po_id: poId,
+                    product_id: existingSku.id,
+                    field: `sku_${field}`,
+                    old_value: oldValue?.toString() || null,
+                    new_value: newValue?.toString() || null,
+                    change_type: 'PRODUCT_EDITED',
+                    changed_by: userId,
+                    changed_at: new Date(),
+                  });
+
+                  // Map field names for SKU matrix update
+                  if (field === 'product_name') {
+                    skuUpdateData.product_name = newValue;
+                  } else {
+                    skuUpdateData[field] = newValue;
+                  }
+                }
+              }
+
+              if (hasChanges) {
+                skusToUpdate.push(skuUpdateData);
+              }
+            } else {
+              // New SKU - only create if quantity > 0
+              if (newQuantity > 0) {
+                inputSkuCodes.add(skuCode);
+
+                const newSkuEntry = {
+                  dcPOId: poId,
+                  dcPOProductId: null,
+                  catalogue_id: skuItem.catalogue_id,
+                  sku: skuCode,
+                  product_name: skuItem.product_name || '',
+                  quantity: newQuantity,
+                  hsn: skuItem.hsn || null,
+                  ean_upc: skuItem.ean_upc || null,
+                  brand: skuItem.brand || null,
+                  weight: skuItem.weight !== null && skuItem.weight !== undefined ? parseFloat(skuItem.weight) : null,
+                  length: skuItem.length !== null && skuItem.length !== undefined ? parseFloat(skuItem.length) : null,
+                  height: skuItem.height !== null && skuItem.height !== undefined ? parseFloat(skuItem.height) : null,
+                  width: skuItem.width !== null && skuItem.width !== undefined ? parseFloat(skuItem.width) : null,
+                  gst: skuItem.gst !== null && skuItem.gst !== undefined ? skuItem.gst.toString() : null,
+                  cess: skuItem.cess !== null && skuItem.cess !== undefined ? skuItem.cess.toString() : null,
+                  rlp: skuItem.rlp !== null && skuItem.rlp !== undefined ? skuItem.rlp.toString() : null,
+                  rlp_w_o_tax: skuItem.rlp_w_o_tax !== null && skuItem.rlp_w_o_tax !== undefined ? skuItem.rlp_w_o_tax.toString() : null,
+                  gstType: skuItem.gstType || null,
+                  mrp: skuItem.mrp !== null && skuItem.mrp !== undefined ? skuItem.mrp.toString() : null,
+                  selling_price: skuItem.selling_price !== null && skuItem.selling_price !== undefined ? skuItem.selling_price.toString() : null,
+                };
+
+                skusToCreate.push(newSkuEntry);
+
+                // Track new SKU in history
+                editLogs.push({
+                  po_id: poId,
+                  product_id: null,
+                  field: 'sku',
+                  old_value: null,
+                  new_value: JSON.stringify({ sku: skuCode, catalogue_id: skuItem.catalogue_id, product_name: skuItem.product_name }),
+                  change_type: 'PRODUCT_ADDED',
+                  changed_by: userId,
+                  changed_at: new Date(),
+                });
+              }
+              // If new SKU with quantity 0, skip it (don't create)
             }
-
-            if (modified) updatedProducts.push(existingProduct);
-          } else {
-            // Product doesn’t exist → new addition
-            const newProduct = {
-              dcPOId: poId,
-              productId: parseInt(skuItem.catalogue_id),
-              catalogue_id: skuItem.catalogue_id,
-              productName: skuItem.product_name,
-              quantity: skuItem.quantity,
-              unitPrice: parseFloat(skuItem.selling_price),
-              totalAmount:
-                parseFloat(skuItem.selling_price) * parseFloat(skuItem.quantity),
-              mrp: parseFloat(skuItem.mrp),
-              hsn: skuItem.hsn,
-              ean_upc: skuItem.ean_upc,
-              weight: skuItem.weight,
-              length: skuItem.length,
-              height: skuItem.height,
-              width: skuItem.width,
-              sku_matrix_on_catelogue_id: JSON.stringify(
-                product.sku_matrix_on_catelogue_id
-              ),
-            };
-
-            newProducts.push(newProduct);
-
-            // Log product addition
-            editLogs.push({
-              po_id: poId,
-              field: 'product',
-              old_value: null,
-              new_value: JSON.stringify(newProduct),
-              change_type: 'PRODUCT_ADDED',
-              changed_by: userId,
-              changed_at: new Date(),
-            });
           }
         }
       }
+
+      // 5️⃣ Delete SKUs with quantity 0 first
+      if (skusToDelete.length > 0) {
+        await DCPOSkuMatrix.destroy({
+          where: {
+            id: { [Op.in]: skusToDelete },
+            dcPOId: poId,
+          },
+          transaction,
+        });
+      }
+
+      // 6️⃣ Update existing SKU matrix entries
+      for (const skuUpdate of skusToUpdate) {
+        const { id, ...updateFields } = skuUpdate;
+        await DCPOSkuMatrix.update(updateFields, {
+          where: { id, dcPOId: poId },
+          transaction,
+        });
+      }
+
+      // 7️⃣ Create new SKU matrix entries
+      if (skusToCreate.length > 0) {
+        await DCPOSkuMatrix.bulkCreate(skusToCreate, { transaction });
+      }
+
+      // 8️⃣ Handle completely removed SKUs (exists in DB but not in input at all)
+      const remainingSkusToDelete: number[] = [];
+      for (const [skuCode, existingSku] of existingSkuMap.entries()) {
+        if (!inputSkuCodes.has(skuCode)) {
+          // SKU was completely removed from input (not even with quantity 0)
+          remainingSkusToDelete.push(existingSku.id);
+
+          // Track removal in history
+          editLogs.push({
+            po_id: poId,
+            product_id: existingSku.id,
+            field: 'sku_removed',
+            old_value: JSON.stringify({
+              sku: skuCode,
+              catalogue_id: existingSku.catalogue_id,
+              product_name: existingSku.product_name,
+              quantity: existingSku.quantity,
+              rlp: existingSku.rlp,
+              mrp: existingSku.mrp,
+            }),
+            new_value: null,
+            change_type: 'PRODUCT_EDITED',
+            changed_by: userId,
+            changed_at: new Date(),
+          });
+        }
+      }
+
+      // Delete completely removed SKUs
+      if (remainingSkusToDelete.length > 0) {
+        await DCPOSkuMatrix.destroy({
+          where: {
+            id: { [Op.in]: remainingSkusToDelete },
+            dcPOId: poId,
+          },
+          transaction,
+        });
+      }
+
+      // 9️⃣ Save edit history
+      if (editLogs.length > 0) {
+        await POEditHistory.bulkCreate(editLogs, { transaction });
+      }
+
+      // 🔟 Update PO status and mark as edited
+      await existingPO.update(
+        {
+          isEdited: true,
+          status: 'PENDING_CATEGORY_HEAD',
+          updatedBy: userId,
+        },
+        { transaction }
+      );
+
+      // Recalculate total amount from SKU matrix
+      const allSkuEntries = await DCPOSkuMatrix.findAll({
+        where: { dcPOId: poId },
+        transaction,
+      });
+
+      let totalAmount = 0;
+      for (const sku of allSkuEntries) {
+        const price = parseFloat(sku.rlp || sku.selling_price || '0');
+        const qty = parseInt(sku.quantity?.toString() || '0');
+        totalAmount += price * qty;
+      }
+
+      await existingPO.update({ totalAmount }, { transaction });
+
+      await transaction.commit();
+      return { message: 'PO edited successfully', poId };
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
     }
-
-    // 3️⃣ Bulk update existing modified products
-    if (updatedProducts.length) {
-      // If DB supports it, use upsert-like pattern
-      const safeUpdatedProducts = updatedProducts.map((p: any) => ({
-  id: p.id,                     // primary key, used for update
-  dcPOId: p.dcPOId,             // required
-  productId: p.productId,       // required
-  catalogue_id: p.catalogue_id, // required
-  productName: p.productName,   // required
-  quantity: p.quantity,
-  unitPrice: p.unitPrice,
-  totalAmount: p.totalAmount,
-  mrp: p.mrp,
-  hsn: p.hsn,
-  ean_upc: p.ean_upc,
-  weight: p.weight,
-  length: p.length,
-  height: p.height,
-  width: p.width,
-  updatedAt: new Date(),
-}));
-
-await DCPOProduct.bulkCreate(safeUpdatedProducts, {
-  updateOnDuplicate: [
-    'quantity',
-    'unitPrice',
-    'totalAmount',
-    'mrp',
-    'hsn',
-    'ean_upc',
-    'weight',
-    'length',
-    'height',
-    'width',
-    'updatedAt',
-  ],
-  transaction,
-});
-    }
-
-    // 4️⃣ Bulk insert new products
-    if (newProducts.length) {
-      await DCPOProduct.bulkCreate(newProducts, { transaction });
-    }
-
-    // 5️⃣ Save edit history
-    if (editLogs.length) {
-      await POEditHistory.bulkCreate(editLogs, { transaction });
-    }
-
-    // 6️⃣ Mark PO as edited (only once)
-    existingPO.isEdited = true;
-    existingPO.status = 'PENDING_CATEGORY_HEAD'
-    await existingPO.save({ transaction });
-
-    await transaction.commit();
-    return { message: 'PO edited successfully (products only)', poId };
-  } catch (err) {
-    await transaction.rollback();
-    throw err;
   }
-}
 
 
   static async approvePO(poId: number, userId: number, isApproved:boolean) {
@@ -1398,14 +1539,8 @@ await DCPOProduct.bulkCreate(safeUpdatedProducts, {
             as: 'DistributionCenter',
           },
           {
-            model: DCPOProduct,
-            as: 'Products',
-            include: [
-              {
-                model: DCPOSkuMatrix,
-                as: 'SkuMatrix',
-              },
-            ],
+            model: DCPOSkuMatrix,
+            as: 'SkuMatrix',
           },
         ],
         transaction
@@ -1455,10 +1590,10 @@ await DCPOProduct.bulkCreate(safeUpdatedProducts, {
       await po.update(updateData, { transaction });
 
       // Update all pending approval records to reflect the direct action
+      // IMPORTANT: Preserve original approverRole - do not change it
       await DCPOApproval.update(
         {
           action,
-          approverRole,
           approverId: userId,
           comments,
           approvedAt: new Date(),
@@ -1474,31 +1609,24 @@ await DCPOProduct.bulkCreate(safeUpdatedProducts, {
 
       // If approved, update DC Inventory 1
       if (action === 'APPROVED') {
-        const products = await DCPOProduct.findAll({
+        const skuMatrixEntries = await DCPOSkuMatrix.findAll({
           where: { dcPOId: po.id },
-          attributes: ['catalogue_id', 'quantity', 'sku_matrix_on_catelogue_id'],
+          attributes: ['catalogue_id', 'quantity', 'sku'],
           transaction
         });
 
-        for (const product of products) {
-          // Get the actual SKU from SKU matrix if available, otherwise use catalogue_id
-          let skuId = product.catalogue_id.toString().padStart(12, '0');
-          
-          if (product.sku_matrix_on_catelogue_id) {
-            try {
-              const skuMatrix = typeof product.sku_matrix_on_catelogue_id === 'string' 
-                ? JSON.parse(product.sku_matrix_on_catelogue_id)
-                : product.sku_matrix_on_catelogue_id;
-              
-              if (skuMatrix && skuMatrix.length > 0) {
-                // Use the first SKU from the matrix as the primary SKU
-                skuId = skuMatrix[0].sku;
-              }
-            } catch (error) {
-              console.error('Error parsing SKU matrix for PO approval:', error);
-            }
+        // Group by catalogue_id and sum quantities
+        const grouped = skuMatrixEntries.reduce((acc: any, entry: any) => {
+          const catId = entry.catalogue_id;
+          if (!acc[catId]) {
+            acc[catId] = { catalogue_id: catId, quantity: 0, sku: entry.sku };
           }
-          
+          acc[catId].quantity += parseInt(entry.quantity || 0);
+          return acc;
+        }, {});
+
+        for (const product of Object.values(grouped) as any[]) {
+          const skuId = product.sku || product.catalogue_id.toString().padStart(12, '0');
           await DCInventory1Service.updateOnPOApprove(
             skuId,
             po.dcId,

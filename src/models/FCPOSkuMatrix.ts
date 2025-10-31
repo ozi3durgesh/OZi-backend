@@ -36,7 +36,7 @@ class FCPOSkuMatrix extends Model<
 > {
   declare id: number;
   declare fcPOId: number;
-  declare fcPOProductId: number;
+  declare fcPOProductId: number | null;
   declare catalogueId: string;
   declare sku: string;
   declare productName: string;
@@ -79,13 +79,10 @@ FCPOSkuMatrix.init(
       },
     },
     fcPOProductId: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      field: 'fc_po_product_id',
-      references: {
-        model: 'fc_po_products',
-        key: 'id',
-      },
+    	type: DataTypes.INTEGER,
+    	allowNull: true,
+    	field: 'fc_po_product_id',
+    	// Reference dropped table removed intentionally; field retained for backward compatibility
     },
     catalogueId: {
       type: DataTypes.STRING(255),

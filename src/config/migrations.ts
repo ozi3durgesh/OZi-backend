@@ -29,6 +29,12 @@ export const runMigrations = async (): Promise<void> => {
     // Update inventory table with new columns
     await updateInventoryTable();
     
+    // Migrate dc_po_sku_matrix to add dcPOId column (drop dc_po_products table)
+    await migrateDCPOSkuMatrixToDropProducts();
+    
+    // Migrate fc_po_sku_matrix to add fcPOId column (drop fc_po_products table)
+    await migrateFCPOSkuMatrixToDropProducts();
+    
     console.log('✅ Database migrations completed successfully');
   } catch (error) {
     console.error('❌ Migration failed:', error);
@@ -160,15 +166,26 @@ const updateVendorDCTable = async (): Promise<void> => {
 
 const addMarginColumnToDCPOProducts = async (): Promise<void> => {
   try {
+    // Check if dc_po_products table exists (it may have been dropped as part of migration)
+    const [tables] = await sequelize.query(
+      "SHOW TABLES LIKE 'dc_po_products'",
+      { type: QueryTypes.SELECT }
+    ) as any[];
+
+    if (!tables || tables.length === 0) {
+      console.log('ℹ️ dc_po_products table does not exist (already dropped or never created) - skipping margin column migration');
+      return;
+    }
+
     console.log('📋 Adding margin column to dc_po_products table...');
     
     // Check if margin column exists
     const columns = await sequelize.query(
       "SHOW COLUMNS FROM dc_po_products LIKE 'margin'",
       { type: QueryTypes.SELECT }
-    );
+    ) as any[];
     
-    if (columns.length === 0) {
+    if (!columns || columns.length === 0) {
       console.log('🔄 Adding margin column to dc_po_products table...');
       
       // Add margin column
@@ -181,9 +198,15 @@ const addMarginColumnToDCPOProducts = async (): Promise<void> => {
     } else {
       console.log('ℹ️ margin column already exists in dc_po_products table');
     }
-  } catch (error) {
+  } catch (error: any) {
+    // If table doesn't exist, just log and continue (don't throw)
+    if (error.code === 'ER_NO_SUCH_TABLE') {
+      console.log('ℹ️ dc_po_products table does not exist - skipping margin column migration');
+      return;
+    }
     console.error('❌ Error adding margin column to dc_po_products table:', error);
-    throw error;
+    // Don't throw - allow server to start even if this migration fails
+    console.warn('⚠️ Continuing without margin column migration');
   }
 };
 
@@ -287,6 +310,16 @@ const createFCPOSkuMatrixTable = async (): Promise<void> => {
 const addSkuMatrixColumnToFCPOProducts = async (): Promise<void> => {
   try {
     console.log('📋 Adding sku_matrix_on_catalogue_id column to fc_po_products table...');
+    // If fc_po_products table doesn't exist, skip safely
+    const fcPoProductsTable = await sequelize.query(
+      "SHOW TABLES LIKE 'fc_po_products'",
+      { type: QueryTypes.SELECT }
+    ) as any[];
+
+    if (!fcPoProductsTable || (fcPoProductsTable as any).length === 0) {
+      console.log('ℹ️ fc_po_products table does not exist (already dropped) - skipping sku_matrix_on_catalogue_id migration');
+      return;
+    }
     
     // Check if sku_matrix_on_catalogue_id column exists
     const columns = await sequelize.query(
@@ -307,9 +340,14 @@ const addSkuMatrixColumnToFCPOProducts = async (): Promise<void> => {
     } else {
       console.log('ℹ️ sku_matrix_on_catalogue_id column already exists in fc_po_products table');
     }
-  } catch (error) {
+  } catch (error: any) {
+    // If the table truly doesn't exist or any non-critical error occurs, don't block server start
+    if (error?.code === 'ER_NO_SUCH_TABLE' || /doesn't exist/i.test(error?.message || '')) {
+      console.log('ℹ️ fc_po_products table does not exist - skipping sku_matrix_on_catalogue_id migration');
+      return;
+    }
     console.error('❌ Error adding sku_matrix_on_catalogue_id column to fc_po_products table:', error);
-    throw error;
+    console.warn('⚠️ Continuing without sku_matrix_on_catalogue_id migration');
   }
 };
 
@@ -361,5 +399,277 @@ const updateInventoryTable = async (): Promise<void> => {
   } catch (error) {
     console.error('❌ Error updating inventory table:', error);
     throw error;
+  }
+};
+
+export const migrateDCPOSkuMatrixToDropProducts = async (): Promise<void> => {
+  try {
+    console.log('📋 Migrating dc_po_sku_matrix to drop dc_po_products dependency...');
+    
+    // Check if dcPOId column exists
+    const columns = await sequelize.query(`
+      SELECT COLUMN_NAME 
+      FROM INFORMATION_SCHEMA.COLUMNS 
+      WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME = 'dc_po_sku_matrix' 
+      AND COLUMN_NAME = 'dcPOId'
+    `, { type: QueryTypes.SELECT }) as any[];
+
+    // Add dcPOId column if it doesn't exist
+    if (!columns || columns.length === 0) {
+      console.log('🔄 Adding dcPOId column to dc_po_sku_matrix...');
+      
+      await sequelize.query(`
+        ALTER TABLE dc_po_sku_matrix 
+        ADD COLUMN dcPOId INT NULL AFTER id
+      `);
+
+      // Populate dcPOId from dc_po_products table if it exists
+      const poProductsTable = await sequelize.query(`
+        SELECT TABLE_NAME 
+        FROM INFORMATION_SCHEMA.TABLES 
+        WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = 'dc_po_products'
+      `, { type: QueryTypes.SELECT }) as any[];
+
+      if (poProductsTable && poProductsTable.length > 0) {
+        console.log('🔄 Populating dcPOId from dc_po_products...');
+        await sequelize.query(`
+          UPDATE dc_po_sku_matrix sku
+          INNER JOIN dc_po_products prod ON sku.dcPOProductId = prod.id
+          SET sku.dcPOId = prod.dcPOId
+          WHERE sku.dcPOId IS NULL
+        `);
+      }
+
+      // Make dcPOId NOT NULL after populating (if we have data)
+      const nonNullCount = await sequelize.query(`
+        SELECT COUNT(*) as count FROM dc_po_sku_matrix WHERE dcPOId IS NOT NULL
+      `, { type: QueryTypes.SELECT }) as any[];
+
+      if (nonNullCount && nonNullCount.length > 0 && nonNullCount[0]?.count > 0) {
+        await sequelize.query(`
+          ALTER TABLE dc_po_sku_matrix 
+          MODIFY COLUMN dcPOId INT NOT NULL
+        `);
+
+        // Add foreign key constraint
+        try {
+          await sequelize.query(`
+            ALTER TABLE dc_po_sku_matrix 
+            ADD CONSTRAINT fk_dc_po_sku_matrix_dc_po_id 
+            FOREIGN KEY (dcPOId) REFERENCES dc_purchase_orders(id) 
+            ON DELETE CASCADE ON UPDATE CASCADE
+          `);
+        } catch (fkError: any) {
+          // Constraint might already exist
+          if (!fkError.message.includes('Duplicate key')) {
+            console.warn('⚠️ Could not add foreign key constraint:', fkError.message);
+          }
+        }
+
+        // Add index
+        try {
+          await sequelize.query(`
+            CREATE INDEX idx_dc_po_sku_matrix_dc_po_id ON dc_po_sku_matrix(dcPOId)
+          `);
+        } catch (idxError: any) {
+          // Index might already exist
+          if (!idxError.message.includes('Duplicate key')) {
+            console.warn('⚠️ Could not add index:', idxError.message);
+          }
+        }
+      }
+
+      // Drop foreign key constraint on dcPOProductId if it exists
+      try {
+        const constraints = await sequelize.query(`
+          SELECT CONSTRAINT_NAME 
+          FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+          WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = 'dc_po_sku_matrix' 
+          AND COLUMN_NAME = 'dcPOProductId'
+          AND REFERENCED_TABLE_NAME IS NOT NULL
+        `, { type: QueryTypes.SELECT }) as any[];
+
+        if (constraints && constraints.length > 0) {
+          for (const constraint of constraints) {
+            try {
+              await sequelize.query(`
+                ALTER TABLE dc_po_sku_matrix 
+                DROP FOREIGN KEY ${constraint.CONSTRAINT_NAME}
+              `);
+            } catch (dropError) {
+              console.warn(`⚠️ Could not drop foreign key ${constraint.CONSTRAINT_NAME}:`, (dropError as Error).message);
+            }
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️ Error checking for foreign keys:', (error as Error).message);
+      }
+
+      // Make dcPOProductId nullable
+      try {
+        await sequelize.query(`
+          ALTER TABLE dc_po_sku_matrix 
+          MODIFY COLUMN dcPOProductId INT NULL
+        `);
+      } catch (error) {
+        console.warn('⚠️ Could not modify dcPOProductId column:', (error as Error).message);
+      }
+
+      // Drop dc_po_products table if it exists and is no longer needed
+      const dcPoProductsTable = await sequelize.query(`
+        SELECT TABLE_NAME 
+        FROM INFORMATION_SCHEMA.TABLES 
+        WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = 'dc_po_products'
+      `, { type: QueryTypes.SELECT }) as any[];
+
+      if (dcPoProductsTable && dcPoProductsTable.length > 0) {
+        console.log('🔄 Dropping dc_po_products table...');
+        try {
+          await sequelize.query(`DROP TABLE dc_po_products`);
+          console.log('✅ dc_po_products table dropped successfully');
+        } catch (dropError: any) {
+          console.warn('⚠️ Could not drop dc_po_products table (may have dependencies):', dropError.message);
+        }
+      }
+
+      console.log('✅ dc_po_sku_matrix migration completed successfully');
+    } else {
+      console.log('ℹ️ dcPOId column already exists in dc_po_sku_matrix');
+    }
+  } catch (error) {
+    console.error('❌ Error migrating dc_po_sku_matrix:', error);
+    // Don't throw - allow server to start even if migration fails
+      console.warn('⚠️ Server will continue, but migration should be run manually');
+  }
+};
+
+export const migrateFCPOSkuMatrixToDropProducts = async (): Promise<void> => {
+  try {
+    console.log('📋 Migrating fc_po_sku_matrix to drop fc_po_products dependency...');
+    
+    // Check if fcPOId column already exists (it might be there from fc_po_sku_matrix creation)
+    // Actually, fc_po_sku_matrix already has fcPOId, but we need to ensure it references fc_purchase_orders directly
+    // The issue is that fc_po_sku_matrix currently references fc_po_products via fcPOProductId
+    // We need to keep fcPOId but make fcPOProductId nullable and remove the foreign key
+    
+    // First, check if we need to migrate data (populate fcPOId from fc_po_products if missing)
+    const poProductsTable = await sequelize.query(`
+      SELECT TABLE_NAME 
+      FROM INFORMATION_SCHEMA.TABLES 
+      WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME = 'fc_po_products'
+    `, { type: QueryTypes.SELECT }) as any[];
+
+    if (poProductsTable && poProductsTable.length > 0) {
+      // Update fcPOId from fc_po_products for any entries that might have NULL fcPOId
+      console.log('🔄 Populating fcPOId from fc_po_products...');
+      try {
+        await sequelize.query(`
+          UPDATE fc_po_sku_matrix sku
+          INNER JOIN fc_po_products prod ON sku.fcPOProductId = prod.id
+          SET sku.fcPOId = prod.fcPOId
+          WHERE sku.fcPOId IS NULL OR sku.fcPOId = 0
+        `);
+      } catch (updateError: any) {
+        console.warn('⚠️ Could not populate fcPOId (may already be populated):', updateError.message);
+      }
+    }
+
+    // Drop foreign key constraint on fcPOProductId if it exists
+    try {
+      const constraints = await sequelize.query(`
+        SELECT CONSTRAINT_NAME 
+        FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+        WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = 'fc_po_sku_matrix' 
+        AND COLUMN_NAME = 'fc_po_product_id'
+        AND REFERENCED_TABLE_NAME IS NOT NULL
+      `, { type: QueryTypes.SELECT }) as any[];
+
+      if (constraints && constraints.length > 0) {
+        for (const constraint of constraints) {
+          try {
+            await sequelize.query(`
+              ALTER TABLE fc_po_sku_matrix 
+              DROP FOREIGN KEY ${constraint.CONSTRAINT_NAME}
+            `);
+            console.log(`✅ Dropped foreign key constraint: ${constraint.CONSTRAINT_NAME}`);
+          } catch (dropError: any) {
+            console.warn(`⚠️ Could not drop foreign key ${constraint.CONSTRAINT_NAME}:`, dropError.message);
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ Error checking for foreign keys:', (error as Error).message);
+    }
+
+    // Make fcPOProductId nullable
+    try {
+      await sequelize.query(`
+        ALTER TABLE fc_po_sku_matrix 
+        MODIFY COLUMN fc_po_product_id INT NULL
+      `);
+      console.log('✅ Made fc_po_product_id nullable');
+    } catch (error: any) {
+      if (error.message.includes('Duplicate') || error.message.includes('already exists')) {
+        console.log('ℹ️ fc_po_product_id is already nullable');
+      } else {
+        console.warn('⚠️ Could not modify fc_po_product_id column:', error.message);
+      }
+    }
+
+    // Ensure fcPOId has proper foreign key to fc_purchase_orders
+    try {
+      // Check if foreign key already exists
+      const existingFk = await sequelize.query(`
+        SELECT CONSTRAINT_NAME 
+        FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+        WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = 'fc_po_sku_matrix' 
+        AND COLUMN_NAME = 'fc_po_id'
+        AND REFERENCED_TABLE_NAME = 'fc_purchase_orders'
+      `, { type: QueryTypes.SELECT }) as any[];
+
+      if (!existingFk || existingFk.length === 0) {
+        await sequelize.query(`
+          ALTER TABLE fc_po_sku_matrix 
+          ADD CONSTRAINT fk_fc_po_sku_matrix_fc_po_id 
+          FOREIGN KEY (fc_po_id) REFERENCES fc_purchase_orders(id) 
+          ON DELETE CASCADE ON UPDATE CASCADE
+        `);
+        console.log('✅ Added foreign key constraint from fc_po_sku_matrix to fc_purchase_orders');
+      } else {
+        console.log('ℹ️ Foreign key constraint already exists');
+      }
+    } catch (fkError: any) {
+      if (fkError.message.includes('Duplicate') || fkError.message.includes('already exists')) {
+        console.log('ℹ️ Foreign key constraint already exists');
+      } else {
+        console.warn('⚠️ Could not add foreign key constraint:', fkError.message);
+      }
+    }
+
+    // Drop fc_po_products table if it exists
+    if (poProductsTable && poProductsTable.length > 0) {
+      console.log('🔄 Dropping fc_po_products table...');
+      try {
+        await sequelize.query(`DROP TABLE fc_po_products`);
+        console.log('✅ fc_po_products table dropped successfully');
+      } catch (dropError: any) {
+        console.warn('⚠️ Could not drop fc_po_products table (may have dependencies):', dropError.message);
+      }
+    } else {
+      console.log('ℹ️ fc_po_products table does not exist (already dropped)');
+    }
+
+    console.log('✅ fc_po_sku_matrix migration completed successfully');
+  } catch (error) {
+    console.error('❌ Error migrating fc_po_sku_matrix:', error);
+    // Don't throw - allow server to start even if migration fails
+    console.warn('⚠️ Server will continue, but migration should be run manually');
   }
 };

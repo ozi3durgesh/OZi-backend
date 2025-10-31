@@ -90,7 +90,21 @@ export class FCGrnPhotoController {
         });
       }
 
-      for (const url of photos) {
+      // Normalize photos input: allow string (comma-separated) or array of strings
+      const rawItems = Array.isArray(photos) ? photos : [photos];
+      const urls: string[] = [];
+      for (const it of rawItems) {
+        if (typeof it === 'string') {
+          urls.push(
+            ...it
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean)
+          );
+        }
+      }
+
+      for (const url of urls) {
         const photo = await FCGrnPhoto.create({
           sku_id: grnLine.sku_id,
           grn_id: grnLine.grn_id,

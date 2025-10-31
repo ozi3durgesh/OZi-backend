@@ -5,7 +5,6 @@ import { FCQueryBuilder, FCValidator, FCContextHelper } from '../middleware/fcFi
 import sequelize from '../config/database';
 import fs from 'fs';
 import path from 'path';
-import AWS from 'aws-sdk';
 import fetch from 'node-fetch';
 import { Op, QueryTypes } from 'sequelize';
 import csv from 'csv-parser';

@@ -1,7 +1,6 @@
 import { Transaction, QueryTypes } from 'sequelize';
 import sequelize from '../../config/database';
 import FCPurchaseOrder from '../../models/FCPurchaseOrder';
-import FCPOProduct from '../../models/FCPOProduct';
 import FCPOApproval from '../../models/FCPOApproval';
 import FCPOSkuMatrix from '../../models/FCPOSkuMatrix';
 import ProductMaster from '../../models/NewProductMaster';
@@ -15,11 +14,73 @@ import { INVENTORY_OPERATIONS } from '../../config/inventoryConstants';
 
 export class FCPOService {
   /**
+   * Helper function to transform SKU matrix entries grouped by catalogue_id into Products format
+   */
+  static transformSkuMatrixToProducts(skuMatrixEntries: any[]): any[] {
+    // Group by catalogue_id
+    const grouped = skuMatrixEntries.reduce((acc: any, sku: any) => {
+      const catalogueId = sku.catalogueId || sku.catalogue_id;
+      if (!acc[catalogueId]) {
+        acc[catalogueId] = {
+          catalogue_id: catalogueId,
+          skuMatrix: [],
+          totalQuantity: 0,
+          totalAmount: 0,
+        };
+      }
+      acc[catalogueId].skuMatrix.push(sku);
+      acc[catalogueId].totalQuantity += parseInt(sku.quantity || 0);
+      const price = parseFloat(sku.rlp || sku.rlpWithoutTax || sku.sellingPrice || sku.selling_price || 0);
+      acc[catalogueId].totalAmount += price * parseInt(sku.quantity || 0);
+      return acc;
+    }, {});
+
+    // Transform to Products format
+    return Object.values(grouped).map((group: any) => {
+      const firstSku = group.skuMatrix[0];
+      const unitPrice = group.totalQuantity > 0 ? group.totalAmount / group.totalQuantity : 0;
+      
+      return {
+        id: firstSku.id, // Use first SKU's ID as product ID
+        fcPOId: firstSku.fcPOId,
+        productId: 1, // Default product ID
+        catalogue_id: group.catalogue_id,
+        productName: firstSku.productName || firstSku.product_name || 'Unknown Product',
+        quantity: group.totalQuantity,
+        unitPrice: unitPrice,
+        totalAmount: group.totalAmount,
+        mrp: firstSku.mrp ? parseFloat(firstSku.mrp.toString()) : null,
+        cost: unitPrice, // Use unit price as cost
+        description: firstSku.description || null,
+        notes: null,
+        hsn: firstSku.hsn || null,
+        ean_upc: firstSku.eanUpc || firstSku.ean_upc || null,
+        weight: firstSku.weight || null,
+        length: firstSku.length || null,
+        height: firstSku.height || null,
+        width: firstSku.width || null,
+        inventory_threshold: null,
+        gst: firstSku.gst ? firstSku.gst.toString() : null,
+        cess: firstSku.cess ? firstSku.cess.toString() : null,
+        image_url: null,
+        brand_id: null,
+        category_id: firstSku.brand || null,
+        status: 1,
+        sku_matrix_on_catelogue_id: group.skuMatrix, // Return as array, not stringified JSON
+        SkuMatrix: group.skuMatrix,
+        createdAt: firstSku.createdAt,
+        updatedAt: firstSku.updatedAt,
+      };
+    });
+  }
+
+  /**
    * Create a new FC Purchase Order
    */
   static async createFCPO(data: {
     fcId: number;
     dcId: number;
+    dcPoId?: number;
     products: any[];
     description?: string;
     notes?: string;
@@ -52,6 +113,7 @@ export class FCPOService {
           poId: nextPoId,
           fcId: data.fcId,
           dcId: data.dcId,
+          dcPOId: data.dcPoId,
           totalAmount,
           status: 'PENDING_APPROVAL',
           priority: (data.priority as 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT') || 'MEDIUM',
@@ -62,8 +124,7 @@ export class FCPOService {
         { transaction }
       );
 
-      // Process products
-      const productRecords: any[] = [];
+      // Process products and create SKU matrix entries directly
       const skuMatrixRecords: any[] = [];
 
       for (const product of data.products) {
@@ -76,50 +137,13 @@ export class FCPOService {
         if (!parentProduct) {
           throw new Error(`Product with catalogue_id ${product.catelogue_id} not found`);
         }
-
-        // Create main product record
-        const productRecord = {
-          fcPOId: fcPO.id,
-          productId: parentProduct.id,
-          catalogueId: product.catelogue_id.toString(),
-          productName: product.product_name || parentProduct.name,
-          description: product.description || parentProduct.description,
-          quantity: product.total_quantity,
-          unitPrice: product.totalPrice / product.total_quantity, // Calculate unit price
-          totalAmount: product.totalPrice,
-          mrp: product.mrp || parentProduct.mrp,
-          cost: product.totalPrice / product.total_quantity, // Use unit price as cost
-          notes: product.notes || '',
-          hsn: product.hsn || parentProduct.hsn || '00000000',
-          eanUpc: product.ean_upc || parentProduct.ean_upc || '00000000000000',
-          weight: product.weight || parentProduct.weight || 0,
-          length: product.length || parentProduct.length || 0,
-          height: product.height || parentProduct.height || 0,
-          width: product.width || parentProduct.width || 0,
-          inventoryThreshold: 0,
-          gst: product.gst || parentProduct.gst || 0,
-          cess: product.cess || parentProduct.cess || 0,
-          imageUrl: product.image_url || parentProduct.image_url || '',
-          brandId: product.brand_id || parentProduct.brand_id || 1,
-          categoryId: product.category_id || parentProduct.category || 1,
-          status: 1,
-        };
-
-        productRecords.push(productRecord);
-      }
-
-      const createdProducts = await FCPOProduct.bulkCreate(productRecords, { transaction });
-      
-      // Process SKU matrix and store in fc_po_sku_matrix table
-      for (let i = 0; i < data.products.length; i++) {
-        const product = data.products[i];
-        const createdProduct = createdProducts[i];
         
+        // Process SKU matrix and store in fc_po_sku_matrix table directly
         if (product.sku_matrix_on_catelogue_id && Array.isArray(product.sku_matrix_on_catelogue_id)) {
           for (const skuItem of product.sku_matrix_on_catelogue_id) {
             const skuMatrixRecord = {
               fcPOId: fcPO.id,
-              fcPOProductId: createdProduct.id,
+              fcPOProductId: null, // No longer needed
               catalogueId: skuItem.catalogue_id || product.catelogue_id,
               sku: skuItem.sku,
               productName: skuItem.product_name,
@@ -138,42 +162,18 @@ export class FCPOService {
               rlpWithoutTax: parseFloat(skuItem.rlp_w_o_tax) || 0,
               gstType: skuItem.gstType as 'SGST+CGST' | 'IGST' | 'NONE' || 'NONE',
               quantity: skuItem.quantity || 0,
-              totalAmount: (parseFloat(skuItem.selling_price) || 0) * (skuItem.quantity || 0),
+              totalAmount: (parseFloat(skuItem.rlp || skuItem.selling_price) || 0) * (skuItem.quantity || 0),
               status: 'PENDING' as 'PENDING' | 'READY_FOR_GRN' | 'PROCESSED',
               createdBy: data.createdBy,
             };
             skuMatrixRecords.push(skuMatrixRecord);
           }
-          
-          // Update the FCPOProduct with the SKU matrix JSON data
-          await createdProduct.update({
-            skuMatrixOnCatalogueId: JSON.stringify(product.sku_matrix_on_catelogue_id)
-          }, { transaction });
         }
       }
 
-      // Create SKU matrix records using raw SQL to bypass Sequelize caching issues
+      // Create SKU matrix records
       if (skuMatrixRecords.length > 0) {
-        for (const record of skuMatrixRecords) {
-          await sequelize.query(
-            `INSERT INTO fc_po_sku_matrix (
-              fc_po_id, fc_po_product_id, catalogue_id, sku, product_name, hsn, mrp, ean_upc, 
-              brand, weight, length, height, width, gst, cess, selling_price, rlp, rlp_without_tax, 
-              gst_type, quantity, total_amount, status, created_by
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            {
-              replacements: [
-                record.fcPOId, record.fcPOProductId, record.catalogueId, record.sku, record.productName,
-                record.hsn, record.mrp, record.eanUpc, record.brand, record.weight, record.length,
-                record.height, record.width, record.gst, record.cess, record.sellingPrice, record.rlp,
-                record.rlpWithoutTax, record.gstType, record.quantity, record.totalAmount, record.status,
-                record.createdBy
-              ],
-              transaction,
-              type: QueryTypes.INSERT
-            }
-          );
-        }
+        await FCPOSkuMatrix.bulkCreate(skuMatrixRecords, { transaction });
       }
 
       // Create initial approval record for the creator
@@ -249,15 +249,8 @@ export class FCPOService {
         const result = await FCPurchaseOrder.findByPk(fcPO.id, {
         include: [
           {
-            model: FCPOProduct,
-            as: 'Products',
-            include: [
-              {
-                model: ProductMaster,
-                as: 'Product',
-                attributes: ['id', 'name', 'description', 'mrp'],
-              },
-            ],
+            model: FCPOSkuMatrix,
+            as: 'SkuMatrix',
           },
           {
             model: FCPOApproval,
@@ -292,22 +285,16 @@ export class FCPOService {
         throw new Error('Failed to retrieve created FC Purchase Order');
       }
       
-      // Fetch SKU matrix data separately
-      const skuMatrixData = await FCPOSkuMatrix.findAll({
-        where: { fcPOId: fcPO.id },
-        attributes: [
-          'id', 'fcPOProductId', 'catalogueId', 'sku', 'productName', 'hsn', 'mrp', 'eanUpc', 
-          'brand', 'weight', 'length', 'height', 'width', 'gst', 'cess',
-          'sellingPrice', 'rlp', 'rlpWithoutTax', 'gstType', 'quantity', 
-          'totalAmount', 'status', 'createdAt', 'updatedAt'
-        ],
-      });
+      // Transform SkuMatrix to Products format for backward compatibility
+      const poData: any = result.toJSON();
+      if (result.SkuMatrix && result.SkuMatrix.length > 0) {
+        poData.Products = this.transformSkuMatrixToProducts(result.SkuMatrix.map((s: any) => s.toJSON ? s.toJSON() : s));
+      } else {
+        poData.Products = [];
+      }
       
-        // Attach SKU matrix data to result
-        (result as any).SkuMatrix = skuMatrixData;
-        
-        return result;
-      } catch (fetchError) {
+      return poData;
+      } catch (fetchError: any) {
         // If fetch fails, return minimal data
         console.error('Failed to fetch complete PO data:', fetchError);
         return {
@@ -368,8 +355,8 @@ export class FCPOService {
       const result = await FCPurchaseOrder.findByPk(fcPO.id, {
         include: [
           {
-            model: FCPOProduct,
-            as: 'Products',
+            model: FCPOSkuMatrix,
+            as: 'SkuMatrix',
           },
           {
             model: FCPOApproval,
@@ -382,7 +369,15 @@ export class FCPOService {
         throw new Error('Failed to retrieve FC Purchase Order');
       }
       
-      return result;
+      // Transform SkuMatrix to Products format for backward compatibility
+      const poData: any = result.toJSON();
+      if (result.SkuMatrix && result.SkuMatrix.length > 0) {
+        poData.Products = this.transformSkuMatrixToProducts(result.SkuMatrix.map((s: any) => s.toJSON ? s.toJSON() : s));
+      } else {
+        poData.Products = [];
+      }
+      
+      return poData;
     } catch (error) {
       await transaction.rollback();
       throw error;
@@ -444,44 +439,43 @@ export class FCPOService {
       // Update inventory for FC PO approval
       if (action === 'APPROVED') {
         console.log('🔄 Updating inventory for FC PO approval...');
-        const products = await FCPOProduct.findAll({
+        const skuMatrixEntries = await FCPOSkuMatrix.findAll({
           where: { fcPOId: fcPO.id },
-          attributes: ['catalogueId', 'quantity', 'skuMatrixOnCatalogueId'],
+          attributes: ['catalogueId', 'quantity', 'sku'],
           transaction
         });
 
-        for (const product of products) {
+        // Group by catalogue_id to process each product group once
+        const groupedByCatalogue = skuMatrixEntries.reduce((acc: any, entry: any) => {
+          const catId = entry.catalogueId || entry.catalogue_id;
+          if (!acc[catId]) {
+            acc[catId] = [];
+          }
+          acc[catId].push(entry);
+          return acc;
+        }, {});
+
+        for (const [catalogueId, entries] of Object.entries(groupedByCatalogue)) {
           try {
-            // Get the actual SKU from SKU matrix if available, otherwise use catalogueId
-            let skuId = product.catalogueId.toString().padStart(12, '0');
+            // Get the actual SKU from first entry
+            const firstEntry = (entries as any[])[0];
+            const skuId = firstEntry.sku || catalogueId.toString().padStart(12, '0');
             
-            if (product.skuMatrixOnCatalogueId) {
-              try {
-                const skuMatrix = typeof product.skuMatrixOnCatalogueId === 'string' 
-                  ? JSON.parse(product.skuMatrixOnCatalogueId)
-                  : product.skuMatrixOnCatalogueId;
-                
-                if (skuMatrix && skuMatrix.length > 0) {
-                  // Use the first SKU from the matrix as the primary SKU
-                  skuId = skuMatrix[0].sku;
-                }
-              } catch (error) {
-                console.error('Error parsing SKU matrix for FC PO approval:', error);
-              }
-            }
+            // Sum quantities for this catalogue_id
+            const totalQuantity = (entries as any[]).reduce((sum, entry) => sum + (parseInt(entry.quantity) || 0), 0);
             
             // Try to update FC inventory (may fail due to foreign key constraints)
             try {
               const inventoryResult = await DirectInventoryService.updateInventory({
                 sku: skuId,
                 operation: INVENTORY_OPERATIONS.PO_APPROVE,
-                quantity: product.quantity,
+                quantity: totalQuantity,
                 referenceId: `FCPO-${fcPO.id}`,
                 operationDetails: {
                   fcPOId: fcPO.id,
                   fcId: fcPO.fcId,
                   dcId: fcPO.dcId,
-                  product_name: product.productName || 'Unknown',
+                  product_name: firstEntry.productName || firstEntry.product_name || 'Unknown',
                   operation: 'fc_po_approval',
                   approved_date: new Date().toISOString()
                 },
@@ -489,7 +483,7 @@ export class FCPOService {
               });
 
               if (inventoryResult.success) {
-                console.log(`✅ FC Inventory updated for SKU ${skuId}: +${product.quantity} PO approved`);
+                console.log(`✅ FC Inventory updated for SKU ${skuId}: +${totalQuantity} PO approved`);
               } else {
                 console.error(`❌ FC Inventory update failed for SKU ${skuId}: ${inventoryResult.message}`);
               }
@@ -497,7 +491,7 @@ export class FCPOService {
               console.error(`❌ FC Inventory update failed for SKU ${skuId}:`, fcInventoryError.message);
             }
           } catch (error: any) {
-            console.error(`❌ Error updating FC inventory for SKU ${product.catalogueId}:`, error.message);
+            console.error(`❌ Error updating FC inventory for catalogue ${catalogueId}:`, error.message);
           }
         }
       }
@@ -507,8 +501,8 @@ export class FCPOService {
       const result = await FCPurchaseOrder.findByPk(fcPO.id, {
         include: [
           {
-            model: FCPOProduct,
-            as: 'Products',
+            model: FCPOSkuMatrix,
+            as: 'SkuMatrix',
           },
           {
             model: FCPOApproval,
@@ -521,18 +515,15 @@ export class FCPOService {
         throw new Error('Failed to retrieve FC Purchase Order');
       }
 
-      // Parse skuMatrixOnCatalogueId JSON strings for each product
-      const processedResult = {
-        ...result.toJSON(),
-        Products: result.Products?.map((product: any) => ({
-          ...product.toJSON(),
-          skuMatrixOnCatalogueId: product.skuMatrixOnCatalogueId 
-            ? JSON.parse(product.skuMatrixOnCatalogueId) 
-            : null
-        }))
-      };
+      // Transform SkuMatrix to Products format for backward compatibility
+      const poData: any = result.toJSON();
+      if (result.SkuMatrix && result.SkuMatrix.length > 0) {
+        poData.Products = this.transformSkuMatrixToProducts(result.SkuMatrix.map((s: any) => s.toJSON ? s.toJSON() : s));
+      } else {
+        poData.Products = [];
+      }
       
-      return processedResult as any;
+      return poData;
     } catch (error) {
       await transaction.rollback();
       throw error;
@@ -548,6 +539,8 @@ export class FCPOService {
       status?: string;
       fcId?: number;
       dcId?: number;
+      dcPoId?: number;
+      sku?: string;
       priority?: string;
     },
     page: number,
@@ -583,8 +576,8 @@ export class FCPOService {
       where: whereClause,
       include: [
         {
-          model: FCPOProduct,
-          as: 'Products',
+          model: FCPOSkuMatrix,
+          as: 'SkuMatrix',
         },
         {
           model: User,
@@ -617,23 +610,48 @@ export class FCPOService {
       order: [['createdAt', 'DESC']],
     });
 
-    // Parse skuMatrixOnCatalogueId JSON strings for each product
-    const processedRows = rows.map(po => ({
-      ...po.toJSON(),
-      Products: po.Products?.map((product: any) => ({
-        ...product.toJSON(),
-        skuMatrixOnCatalogueId: product.skuMatrixOnCatalogueId 
-          ? JSON.parse(product.skuMatrixOnCatalogueId) 
-          : null
-      }))
-    }));
+    // Transform SkuMatrix to Products format for all POs
+    const processedRows = rows.map((po: any) => {
+      const poData = po.toJSON ? po.toJSON() : po;
+      if (po.SkuMatrix && po.SkuMatrix.length > 0) {
+        poData.Products = this.transformSkuMatrixToProducts(po.SkuMatrix.map((s: any) => s.toJSON ? s.toJSON() : s));
+      } else {
+        poData.Products = [];
+      }
+      return poData;
+    });
 
-    return {
-      data: processedRows,
-      total: count,
-      page,
-      pages: Math.ceil(count / limit),
-    };
+    // Optional raised quantity summary when fcId & dcPoId are provided
+    if (filters.fcId && filters.dcPoId) {
+      const summary = await sequelize.query(
+        `SELECT m.sku AS sku, SUM(m.quantity) AS raisedQuantity
+         FROM fc_po_sku_matrix m
+         INNER JOIN fc_purchase_orders p ON p.id = m.fc_po_id
+         WHERE p.fc_id = :fcId AND p.dc_po_id = :dcPoId
+         GROUP BY m.sku`,
+        {
+          type: QueryTypes.SELECT,
+          replacements: { fcId: filters.fcId, dcPoId: filters.dcPoId },
+        }
+      );
+
+      const result: any = {
+        data: processedRows,
+        total: count,
+        page,
+        pages: Math.ceil(count / limit),
+        raisedBySku: summary,
+      };
+
+      if (filters.sku) {
+        const match = (summary as any[]).find((r) => r.sku === filters.sku);
+        result.raisedQuantity = match ? Number(match.raisedQuantity) : 0;
+      }
+
+      return result;
+    }
+
+    return { data: processedRows, total: count, page, pages: Math.ceil(count / limit) };
   }
 
   /**
@@ -643,15 +661,8 @@ export class FCPOService {
     const fcPO = await FCPurchaseOrder.findByPk(fcPOId, {
       include: [
         {
-          model: FCPOProduct,
-          as: 'Products',
-          include: [
-            {
-              model: ProductMaster,
-              as: 'Product',
-              attributes: ['id', 'name', 'description', 'mrp'],
-            },
-          ],
+          model: FCPOSkuMatrix,
+          as: 'SkuMatrix',
         },
         {
           model: User,
@@ -696,18 +707,15 @@ export class FCPOService {
       return null;
     }
 
-    // Parse skuMatrixOnCatalogueId JSON strings for each product
-    const processedFCPO = {
-      ...fcPO.toJSON(),
-      Products: fcPO.Products?.map((product: any) => ({
-        ...product.toJSON(),
-        skuMatrixOnCatalogueId: product.skuMatrixOnCatalogueId 
-          ? JSON.parse(product.skuMatrixOnCatalogueId) 
-          : null
-      }))
-    };
+    // Transform SkuMatrix to Products format for backward compatibility
+    const poData: any = fcPO.toJSON();
+    if (fcPO.SkuMatrix && fcPO.SkuMatrix.length > 0) {
+      poData.Products = this.transformSkuMatrixToProducts(fcPO.SkuMatrix.map((s: any) => s.toJSON ? s.toJSON() : s));
+    } else {
+      poData.Products = [];
+    }
 
-    return processedFCPO as any;
+    return poData;
   }
 
   /**
@@ -736,33 +744,56 @@ export class FCPOService {
       fcPO.updatedBy = userId;
       await fcPO.save({ transaction });
 
-      // Update products if provided
+      // Update SKU matrix if provided
       if (updateData.products && Array.isArray(updateData.products)) {
-        // Delete existing products
-        await FCPOProduct.destroy({
+        // Delete existing SKU matrix entries
+        await FCPOSkuMatrix.destroy({
           where: { fcPOId: fcPO.id },
           transaction,
         });
 
-        // Create new products
-        const productRecords = updateData.products.map((product: any) => ({
-          fcPOId: fcPO.id,
-          productId: product.productId,
-          catalogueId: product.catalogueId,
-          productName: product.productName,
-          description: product.description,
-          quantity: product.quantity,
-          unitPrice: product.unitPrice,
-          totalAmount: product.totalAmount,
-          mrp: product.mrp,
-          notes: product.notes,
-        }));
+        // Create new SKU matrix entries from products
+        // Note: This is a simplified update - full refactoring needed for complex SKU matrix updates
+        const skuMatrixRecords: any[] = [];
+        for (const product of updateData.products) {
+          if (product.sku_matrix_on_catelogue_id && Array.isArray(product.sku_matrix_on_catelogue_id)) {
+            for (const skuItem of product.sku_matrix_on_catelogue_id) {
+              skuMatrixRecords.push({
+                fcPOId: fcPO.id,
+                fcPOProductId: null,
+                catalogueId: skuItem.catalogue_id || product.catelogue_id,
+                sku: skuItem.sku,
+                productName: skuItem.product_name,
+                hsn: skuItem.hsn,
+                mrp: parseFloat(skuItem.mrp) || 0,
+                eanUpc: skuItem.ean_upc,
+                brand: skuItem.brand,
+                weight: skuItem.weight || 0,
+                length: skuItem.length || 0,
+                height: skuItem.height || 0,
+                width: skuItem.width || 0,
+                gst: parseFloat(skuItem.gst) || 0,
+                cess: parseFloat(skuItem.cess) || 0,
+                sellingPrice: parseFloat(skuItem.selling_price) || 0,
+                rlp: parseFloat(skuItem.rlp) || 0,
+                rlpWithoutTax: parseFloat(skuItem.rlp_w_o_tax) || 0,
+                gstType: skuItem.gstType as 'SGST+CGST' | 'IGST' | 'NONE' || 'NONE',
+                quantity: skuItem.quantity || 0,
+                totalAmount: (parseFloat(skuItem.rlp || skuItem.selling_price) || 0) * (skuItem.quantity || 0),
+                status: 'PENDING' as 'PENDING' | 'READY_FOR_GRN' | 'PROCESSED',
+                createdBy: userId,
+              });
+            }
+          }
+        }
 
-        await FCPOProduct.bulkCreate(productRecords, { transaction });
+        if (skuMatrixRecords.length > 0) {
+          await FCPOSkuMatrix.bulkCreate(skuMatrixRecords, { transaction });
+        }
 
         // Recalculate total amount
         const totalAmount = updateData.products.reduce((sum: number, product: any) => {
-          return sum + (product.totalAmount || 0);
+          return sum + (product.totalAmount || product.totalPrice || 0);
         }, 0);
 
         fcPO.totalAmount = totalAmount;
@@ -774,8 +805,8 @@ export class FCPOService {
       const result = await FCPurchaseOrder.findByPk(fcPO.id, {
         include: [
           {
-            model: FCPOProduct,
-            as: 'Products',
+            model: FCPOSkuMatrix,
+            as: 'SkuMatrix',
           },
         ],
       });
@@ -784,7 +815,15 @@ export class FCPOService {
         throw new Error('Failed to retrieve FC Purchase Order');
       }
       
-      return result;
+      // Transform SkuMatrix to Products format
+      const poData: any = result.toJSON();
+      if (result.SkuMatrix && result.SkuMatrix.length > 0) {
+        poData.Products = this.transformSkuMatrixToProducts(result.SkuMatrix.map((s: any) => s.toJSON ? s.toJSON() : s));
+      } else {
+        poData.Products = [];
+      }
+      
+      return poData;
     } catch (error) {
       await transaction.rollback();
       throw error;
@@ -808,8 +847,8 @@ export class FCPOService {
         throw new Error('Only draft FC Purchase Orders can be deleted');
       }
 
-      // Delete related records
-      await FCPOProduct.destroy({
+      // Delete related SKU matrix records
+      await FCPOSkuMatrix.destroy({
         where: { fcPOId: fcPO.id },
         transaction,
       });
