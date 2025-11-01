@@ -441,7 +441,6 @@ export const approvePO = async (req: Request, res: Response) => {
         
         await sendApprovalEmail(po,'creator');
         return ResponseHandler.success(res,{PO:{message:'PO approved by Admin, sent to Creator for PI', po_id: po.po_id}},200);
-      }
     }
 
     return ResponseHandler.error(res,'Invalid action',400);
