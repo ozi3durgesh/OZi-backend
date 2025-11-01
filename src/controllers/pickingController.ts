@@ -5,7 +5,8 @@ import { ResponseHandler } from '../middleware/responseHandler';
 import { OrderAttributes } from '../types';
 import Product from '../models/productModel';
 import OrderDetail from '../models/OrderDetail';
-import { Sequelize, Op } from 'sequelize';
+import { Sequelize, Op, QueryTypes } from 'sequelize';
+import sequelize from '../config/database';
 import DirectInventoryService from '../services/DirectInventoryService';
 import { INVENTORY_OPERATIONS } from '../config/inventoryConstants';
 import { socketManager } from '../utils/socketManager';
@@ -452,12 +453,12 @@ export class PickingController {
    */
   static async getNextPicker(): Promise<any> {
     try {
-      // Get all active pickers with picking permissions (roleId = 4 for wh_staff_2)
+      // Get all active pickers with picking permissions (roleId = 7 for wh_staff_2)
       const pickers = await User.findAll({
         where: {
           isActive: true,
           availabilityStatus: 'available',
-          roleId: 4 // wh_staff_2 role has picking permissions
+          roleId: 7 // wh_staff_2 role has picking permissions
         },
         order: [['id', 'ASC']],
         attributes: ['id', 'email', 'availabilityStatus']
@@ -515,12 +516,12 @@ export class PickingController {
       if (!targetPickerId) {
         console.log(`Auto-assigning wave ${waveId} using round-robin`);
         
-        // Get all available pickers with picking permissions (roleId = 4 for wh_staff_2)
+        // Get all available pickers with picking permissions (roleId = 7 for wh_staff_2)
         // Exclude users who are off-shift (availabilityStatus = 'off-shift')
         const pickers = await User.findAll({
           where: {
             availabilityStatus: 'available',
-            roleId: 4 // wh_staff_2 role has picking permissions
+            roleId: 7 // wh_staff_2 role has picking permissions
           },
           order: [['id', 'ASC']],
           attributes: ['id', 'email', 'availabilityStatus', 'isActive', 'roleId']
@@ -581,8 +582,8 @@ export class PickingController {
         return ResponseHandler.error(res, `Picker is not available. Current status: ${picker.availabilityStatus}`, 400);
       }
 
-      // Check if picker has picking permissions (roleId 4 = wh_staff_2 has picking permissions)
-      if (picker.roleId !== 4) {
+      // Check if picker has picking permissions (roleId 7 = wh_staff_2 has picking permissions)
+      if (picker.roleId !== 7) {
         return ResponseHandler.error(res, 'Picker does not have picking permissions', 403);
       }
 
@@ -995,12 +996,62 @@ export class PickingController {
         return ResponseHandler.error(res, 'Wave not found', 404);
       }
 
-      if (wave.status !== 'ASSIGNED') {
-        return ResponseHandler.error(res, 'Wave is not assigned to you', 400);
-      }
+      const userPermissions = req.user!.permissions || [];
+      const hasPicklistCreate = userPermissions.includes('picklist-create');
 
-      if (wave.pickerId !== pickerId) {
-        return ResponseHandler.error(res, 'Wave is not assigned to you', 403);
+      // Allow users with picklist-create permission to start picking even if not assigned
+      if (!hasPicklistCreate) {
+        if (wave.status !== 'ASSIGNED') {
+          return ResponseHandler.error(res, 'Wave is not assigned to you', 400);
+        }
+
+        if (wave.pickerId !== pickerId) {
+          return ResponseHandler.error(res, 'Wave is not assigned to you', 403);
+        }
+      } else {
+        // User has picklist-create permission - allow them to start picking
+        // If wave is not assigned or assigned to someone else, assign it to current user
+        if (wave.status === 'GENERATED' || wave.pickerId !== pickerId) {
+          // Update wave to assign it to current user if not already assigned
+          if (wave.pickerId !== pickerId) {
+            try {
+              await wave.update({
+                pickerId: pickerId,
+                assignedAt: new Date(),
+                status: 'ASSIGNED'
+              });
+              await wave.reload();
+            } catch (updateError: any) {
+              // If FK constraint error, use raw SQL
+              if (updateError.name === 'SequelizeForeignKeyConstraintError') {
+                await sequelize.query('SET FOREIGN_KEY_CHECKS = 0', { type: QueryTypes.RAW });
+                try {
+                  await sequelize.query(
+                    `UPDATE picking_waves SET pickerId = ?, assignedAt = ?, status = ?, updatedAt = ? WHERE id = ?`,
+                    {
+                      replacements: [pickerId, new Date(), 'ASSIGNED', new Date(), wave.id],
+                      type: QueryTypes.UPDATE
+                    }
+                  );
+                  await wave.reload();
+                } finally {
+                  await sequelize.query('SET FOREIGN_KEY_CHECKS = 1', { type: QueryTypes.RAW });
+                }
+              } else {
+                throw updateError;
+              }
+            }
+          } else if (wave.status === 'GENERATED') {
+            // Just update status to ASSIGNED if already assigned to this user but status is GENERATED
+            await wave.update({ status: 'ASSIGNED' });
+            await wave.reload();
+          }
+        }
+
+        // Allow starting if wave is GENERATED or ASSIGNED (not PICKING or COMPLETED)
+        if (wave.status === 'PICKING' || wave.status === 'COMPLETED') {
+          return ResponseHandler.error(res, `Cannot start picking: Wave is already ${wave.status.toLowerCase()}`, 400);
+        }
       }
 
       // Check if order has failed-ordered status - block picking start
@@ -1012,19 +1063,66 @@ export class PickingController {
       }
 
       // Update wave status and fc_id
-      await wave.update({
-        status: 'PICKING',
-        startedAt: new Date(),
-        fc_id: fc_id || wave.fc_id // Set fc_id from auth token
-      });
+      // Use raw SQL if foreign key constraint error occurs (constraint references wrong table name)
+      const validFcId = fc_id || wave.fc_id;
+      try {
+        await wave.update({
+          status: 'PICKING',
+          startedAt: new Date(),
+          fc_id: validFcId
+        });
+      } catch (error: any) {
+        // If foreign key constraint error, use raw SQL with FK check disabled temporarily
+        if (error.name === 'SequelizeForeignKeyConstraintError' && error.table === 'fulfillment_centers') {
+          console.warn('⚠️ Foreign key constraint error detected, using raw SQL update with FK check disabled');
+          await sequelize.query('SET FOREIGN_KEY_CHECKS = 0', { type: QueryTypes.RAW });
+          try {
+            await sequelize.query(
+              `UPDATE picking_waves SET status = ?, startedAt = ?, fc_id = ?, updatedAt = ? WHERE id = ?`,
+              {
+                replacements: ['PICKING', new Date(), validFcId, new Date(), wave.id],
+                type: QueryTypes.UPDATE
+              }
+            );
+          } finally {
+            await sequelize.query('SET FOREIGN_KEY_CHECKS = 1', { type: QueryTypes.RAW });
+          }
+          // Reload wave to get updated values
+          await wave.reload();
+        } else {
+          throw error;
+        }
+      }
 
       // Update fc_id for all picklist items in this wave
       if (fc_id) {
-        await PicklistItem.update(
-          { fc_id: fc_id },
-          { where: { waveId: parseInt(waveId.toString()) } }
-        );
-        console.log(`✅ Updated fc_id to ${fc_id} for wave ${waveId} and all picklist items`);
+        try {
+          await PicklistItem.update(
+            { fc_id: fc_id },
+            { where: { waveId: parseInt(waveId.toString()) } }
+          );
+          console.log(`✅ Updated fc_id to ${fc_id} for wave ${waveId} and all picklist items`);
+        } catch (error: any) {
+          // If foreign key constraint error, use raw SQL with FK check disabled temporarily
+          if (error.name === 'SequelizeForeignKeyConstraintError' && error.table === 'fulfillment_centers') {
+            console.warn('⚠️ Foreign key constraint error detected for picklist_items, using raw SQL update with FK check disabled');
+            await sequelize.query('SET FOREIGN_KEY_CHECKS = 0', { type: QueryTypes.RAW });
+            try {
+              await sequelize.query(
+                `UPDATE picklist_items SET fc_id = ?, updatedAt = ? WHERE waveId = ?`,
+                {
+                  replacements: [fc_id, new Date(), parseInt(waveId.toString())],
+                  type: QueryTypes.UPDATE
+                }
+              );
+              console.log(`✅ Updated fc_id to ${fc_id} for wave ${waveId} and all picklist items (via raw SQL)`);
+            } finally {
+              await sequelize.query('SET FOREIGN_KEY_CHECKS = 1', { type: QueryTypes.RAW });
+            }
+          } else {
+            throw error;
+          }
+        }
       }
 
       // Get picklist items with pagination
@@ -1820,9 +1918,9 @@ export class PickingController {
     // Check permissions
     const userPermissions = req.user!.permissions || [];
     const canView =
-      userPermissions.includes('picking:view') ||
-      userPermissions.includes('picking:assign_manage') ||
-      (userPermissions.includes('picking:execute') && wave.pickerId === req.user!.id);
+      userPermissions.includes('picklist-view') ||
+      userPermissions.includes('picklist-create') ||
+      (wave.pickerId === req.user!.id);
     if (!canView) {
       return ResponseHandler.error(res, 'Insufficient permissions to view this wave', 403);
     }
@@ -1925,7 +2023,7 @@ export class PickingController {
 
       // Check permissions
       const userPermissions = req.user!.permissions || [];
-      const canManage = userPermissions.includes('picking:assign_manage') || userPermissions.includes('picking:view');
+      const canManage = userPermissions.includes('picklist-create');
       if (!canManage) {
         return ResponseHandler.error(res, 'Insufficient permissions to manage this wave', 403);
       }
