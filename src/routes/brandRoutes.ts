@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate } from '../middleware/auth';
+import { authenticate, hasPermission } from '../middleware/auth';
 import { 
   createBrand, 
   getBrands, 
@@ -14,10 +14,10 @@ const router = Router();
 router.use(authenticate);
 
 // Brand routes
-router.post('/', createBrand);
-router.get('/', getBrands);
-router.get('/:id', getBrandById);
-router.put('/:id', updateBrand);
-router.delete('/:id', deleteBrand);
+router.post('/', hasPermission('brands-create'), createBrand);
+router.get('/', hasPermission('brands-view'), getBrands);
+router.get('/:id', hasPermission('brands-view'), getBrandById);
+router.put('/:id', hasPermission('brands-create'), updateBrand);
+router.delete('/:id', hasPermission('brands-create'), deleteBrand);
 
 export default router;

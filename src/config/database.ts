@@ -303,21 +303,6 @@ export const connectDatabase = async (): Promise<void> => {
     
     console.log('Database synchronized successfully.');
     
-    // Import and use auto-initialization functions
-    const { isRBACInitialized, autoInitializeRBAC, createInitialAdmin } = await import('./autoInit.js');
-    
-    // Check if RBAC needs initialization
-    const rbacInitialized = await isRBACInitialized();
-    if (!rbacInitialized) {
-      console.log('🔧 RBAC system not initialized, auto-initializing...');
-      await autoInitializeRBAC();
-    } else {
-      console.log('✅ RBAC system already initialized');
-    }
-    
-    // Create initial admin user if specified
-    await createInitialAdmin();
-    
     // Setup inventory system if not already initialized
     try {
       console.log('ℹ️ Inventory system setup skipped (script removed)');

@@ -6,11 +6,11 @@ import { versionCheck } from '../middleware/versionCheck';
 
 const router = Router();
 
-// All permission routes require version check, authentication, and admin permissions
+// All permission routes require version check, authentication, and permissions
 router.use(versionCheck);
-router.use(authenticate, hasPermission('users_roles:manage'));
+router.use(authenticate);
 
-router.post('/', PermissionController.createPermission);
-router.get('/', PermissionController.listPermissions);
+router.post('/', hasPermission('permissions-create'), PermissionController.createPermission);
+router.get('/', hasPermission('permissions-view'), PermissionController.listPermissions);
 
 export default router;

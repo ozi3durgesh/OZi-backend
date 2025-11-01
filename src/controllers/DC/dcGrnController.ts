@@ -904,6 +904,56 @@ export class DCGrnController {
         const allGrns = hasGrn ? po.DCGrns : [];
         const latestGrn = hasGrn ? [...allGrns].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] : null;
         
+        // Build a map of sku -> DCPOSkuMatrix for this PO
+        const skuMatrixMap = new Map<string, any>();
+        if (po.SkuMatrix && Array.isArray(po.SkuMatrix)) {
+          po.SkuMatrix.forEach((skuMatrix: any) => {
+            const sku = skuMatrix.sku || skuMatrix.catalogue_id;
+            if (sku) {
+              skuMatrixMap.set(sku, skuMatrix);
+            }
+          });
+        }
+        
+        // Helper function to get product_details from DCPOSkuMatrix
+        const getProductDetails = (sku: string) => {
+          const skuMatrix = skuMatrixMap.get(sku);
+          if (!skuMatrix) {
+            return null;
+          }
+          
+          return {
+            dcPOId: skuMatrix.dcPOId,
+            quantity: skuMatrix.quantity,
+            catalogue_id: skuMatrix.catalogue_id,
+            category_id: skuMatrix.category,
+            sku: skuMatrix.sku,
+            name: skuMatrix.product_name,
+            description: skuMatrix.description,
+            hsn: skuMatrix.hsn,
+            image_url: skuMatrix.image_url,
+            mrp: skuMatrix.mrp ? parseFloat(skuMatrix.mrp) : null,
+            ean_upc: skuMatrix.ean_upc,
+            color: skuMatrix.color,
+            size: skuMatrix.size,
+            brand_id: skuMatrix.brand,
+            weight: skuMatrix.weight,
+            length: skuMatrix.length,
+            height: skuMatrix.height,
+            width: skuMatrix.width,
+            inventory_threshold: skuMatrix.inventory_threshold,
+            gst: skuMatrix.gst,
+            cess: skuMatrix.cess,
+            createdAt: skuMatrix.createdAt,
+            updatedAt: skuMatrix.updatedAt,
+            rlp: skuMatrix.rlp,
+            rlp_w_o_tax: skuMatrix.rlp_w_o_tax,
+            gstType: skuMatrix.gstType,
+            selling_price: skuMatrix.selling_price,
+            margin: skuMatrix.margin
+          };
+        };
+        
         // Process products to get line statuses per individual SKU (no grouping by catalogue)
         const processedLines = (po.Products || []).flatMap((product: any) => {
           // Normalize sku matrix array
@@ -924,6 +974,8 @@ export class DCGrnController {
             const fallbackSku = product.catalogue_id;
             const orderedQty = product.quantity || product.ordered_qty || 0;
             const lines = allGrns.flatMap((g: any) => (g.Lines || [])).filter((l: any) => l.sku_id === fallbackSku);
+            const productDetails = getProductDetails(fallbackSku);
+            
             if (lines.length > 0) {
               const totals = lines.reduce((acc: any, l: any) => {
                 acc.received += l.received_qty || 0;
@@ -952,7 +1004,7 @@ export class DCGrnController {
                 rtv_qty: totals.rtv,
                 held_qty: totals.held,
                 line_status: calculatedLineStatus,
-                product_details: {
+                product_details: productDetails || {
                   name: product.productName,
                   description: product.description,
                   mrp: product.mrp,
@@ -987,7 +1039,7 @@ export class DCGrnController {
               rtv_qty: 0,
               held_qty: 0,
               line_status: calculatedLineStatus,
-              product_details: {
+              product_details: productDetails || {
                 name: product.productName,
                 description: product.description,
                 mrp: product.mrp,
@@ -1015,6 +1067,7 @@ export class DCGrnController {
             const actualSku = entry.sku || product.catalogue_id;
             const entryOrderedQty = parseInt(entry.quantity?.toString() || '0');
             const lines = allGrns.flatMap((g: any) => (g.Lines || [])).filter((l: any) => l.sku_id === actualSku);
+            const productDetails = getProductDetails(actualSku);
 
             if (lines.length > 0) {
               const totals = lines.reduce((acc: any, l: any) => {
@@ -1044,7 +1097,7 @@ export class DCGrnController {
                 rtv_qty: totals.rtv,
                 held_qty: totals.held,
                 line_status: calculatedLineStatus,
-                product_details: {
+                product_details: productDetails || {
                   name: entry.product_name || product.productName,
                   description: entry.description ?? product.description,
                   mrp: entry.mrp ? parseFloat(entry.mrp) : product.mrp,
@@ -1080,7 +1133,7 @@ export class DCGrnController {
               rtv_qty: 0,
               held_qty: 0,
               line_status: calculatedLineStatus,
-              product_details: {
+              product_details: productDetails || {
                 name: entry.product_name || product.productName,
                 description: entry.description ?? product.description,
                 mrp: entry.mrp ? parseFloat(entry.mrp) : product.mrp,

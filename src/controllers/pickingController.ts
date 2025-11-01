@@ -894,7 +894,12 @@ export class PickingController {
         console.log(`👑 Admin user ${user.id} with role: ${userRole?.name} can see all waves`);
       }
 
-      const waves = await PickingWave.findAndCountAll({
+      // Get total count first (for accurate pagination)
+      const totalWaves = await PickingWave.count({
+        where: whereClause
+      });
+
+      const waves = await PickingWave.findAll({
         where: whereClause,
         include: [{
           model: Order,
@@ -909,32 +914,47 @@ export class PickingController {
       });
 
       // Include all waves but add order_status information
-      const wavesWithStatus = await Promise.all(waves.rows.map(async (wave: any) => {
+      const wavesWithStatus = await Promise.all(waves.map(async (wave: any) => {
         const waveData = wave.toJSON ? wave.toJSON() : wave;
         const order = (wave as any).Order;
         
-        // Add order_status to wave object
+        // Remove the Order object from response
+        delete waveData.Order;
+        
+        // Always fetch order to ensure we have the latest status
+        let orderRecord: any = null;
         if (order) {
-          waveData.order_status = order.order_status;
-          // If failed-ordered, add a flag indicating picking is blocked
-          if (order.order_status === 'failed-ordered') {
+          orderRecord = order;
+        } else if (wave.orderId) {
+          orderRecord = await Order.findByPk(wave.orderId);
+        }
+        
+        // Add order_status to wave object
+        if (orderRecord) {
+          const orderData = orderRecord.toJSON ? orderRecord.toJSON() : orderRecord;
+          waveData.order = {
+            id: orderData.id,
+            order_id: orderData.id, // Use id as order_id since there's no separate order_id column
+            order_status: orderData.order_status
+          };
+          waveData.order_status = orderData.order_status;
+          
+          // If failed-ordered, change status to FAILED and add a flag indicating picking is blocked
+          if (orderData.order_status === 'failed-ordered') {
+            waveData.status = 'FAILED'; // Change status to FAILED
             waveData.picking_blocked = true;
             waveData.blocked_reason = 'Inventory check failed - please refresh inventory';
+            waveData.status_info = `FAILED (BLOCKED - ${orderData.order_status})`;
           } else {
             waveData.picking_blocked = false;
+            waveData.status_info = waveData.status;
           }
-        } else if (wave.orderId) {
-          // If order not loaded, fetch it
-          const orderRecord = await Order.findByPk(wave.orderId);
-          if (orderRecord) {
-            waveData.order_status = orderRecord.order_status;
-            if (orderRecord.order_status === 'failed-ordered') {
-              waveData.picking_blocked = true;
-              waveData.blocked_reason = 'Inventory check failed - please refresh inventory';
-            } else {
-              waveData.picking_blocked = false;
-            }
-          }
+        } else {
+          // No order found, set defaults
+          waveData.order = null;
+          waveData.order_status = null;
+          waveData.picking_blocked = false;
+          waveData.status_info = waveData.status;
         }
         
         return waveData;
@@ -945,8 +965,8 @@ export class PickingController {
         pagination: {
           page: parseInt(page.toString()),
           limit: parseInt(limit.toString()),
-          total: waves.count,
-          totalPages: Math.ceil(waves.count / parseInt(limit.toString()))
+          total: totalWaves,
+          totalPages: Math.ceil(totalWaves / parseInt(limit.toString()))
         }
       });
 

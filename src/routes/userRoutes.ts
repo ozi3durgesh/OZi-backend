@@ -11,31 +11,32 @@ router.use(versionCheck);
 router.use(authenticate);
 
 router.post('/', 
-  hasPermission('users_roles:manage'), 
+  hasPermission('users-create'), 
   UserController.createUser
 );
 
 router.get('/', 
-  hasPermission('users_roles:manage'), 
+  hasPermission('users-view'), 
   UserController.listUsers
 );
 
 router.put('/:userId/status', 
+  hasPermission('users-edit'), 
   UserController.updateUserStatus
 );
 
 router.put('/:userId/role', 
-  hasPermission('users_roles:manage'), 
+  hasPermission('users-edit'), 
   UserController.changeUserRole
 );
 
 router.delete('/:userId', 
-  hasPermission('users_roles:manage'), 
+  hasPermission('users-delete'), 
   UserController.deactivateUser
 );
 
 router.put('/:userId/toggle-status', 
-  hasPermission('users_roles:manage'), 
+  hasPermission('users-edit'), 
   UserController.toggleUserStatus
 );
 

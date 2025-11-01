@@ -16,7 +16,7 @@ router.post('/generate',
 
 router.get('/assign', 
   authenticate, 
-  hasPermission('picking:assign_manage'), 
+  hasPermission('picklist-view'), 
   PickingController.assignWaves
 );
 
@@ -27,39 +27,39 @@ router.post('/assign',
 
 router.post('/reassign', 
   authenticate, 
-  hasPermission('picking:assign_manage'), 
+  hasPermission('picklist-create'), 
   PickingController.reassignWaveToPicker
 );
 
 router.get('/available', 
   authenticate, 
-  hasPermission('picking:view'), 
+  hasPermission('picklist-view'), 
   PickingController.getAvailableWaves
 );
 
 // Picker Operations
 router.post('/:waveId/start', 
   authenticate, 
-  hasPermission('picking:execute'), 
+  hasPermission('picklist-create'), 
   checkAvailability, 
   PickingController.startPicking
 );
 
 router.get('/:waveId/items', 
   authenticate, 
-  hasPermission('picking:view'), 
+  hasPermission('picklist-view'), 
   PickingController.getPicklistItems
 );
 
 router.post('/:waveId/items/create', 
   authenticate, 
-  hasPermission('picking:assign_manage'), 
+  hasPermission('picklist-create'), 
   PickingController.createPicklistItems
 );
 
 router.post('/:waveId/scan', 
   authenticate, 
-  hasPermission('picking:execute'), 
+  hasPermission('picklist-create'), 
   checkAvailability, 
   PickingController.scanItem
 );
@@ -67,28 +67,28 @@ router.post('/:waveId/scan',
 // New scanning routes for bin location and SKU validation
 router.post('/:waveId/scan/binLocation', 
   authenticate, 
-  hasPermission('picking:execute'), 
+  hasPermission('picklist-create'), 
   checkAvailability, 
   PickingController.scanBinLocation
 );
 
 router.post('/:waveId/scan/sku', 
   authenticate, 
-  hasPermission('picking:execute'), 
+  hasPermission('picklist-create'), 
   checkAvailability, 
   PickingController.scanSku
 );
 
 router.post('/:waveId/partial', 
   authenticate, 
-  hasPermission('picking:execute'), 
+  hasPermission('picklist-create'), 
   checkAvailability, 
   PickingController.reportPartialPick
 );
 
 router.post('/:waveId/complete', 
   authenticate, 
-  hasPermission('picking:execute'), 
+  hasPermission('picklist-create'), 
   checkAvailability, 
   PickingController.completePicking
 );
@@ -96,13 +96,13 @@ router.post('/:waveId/complete',
 // Monitoring
 router.get('/sla-status', 
   authenticate, 
-  hasPermission('picking:view'), 
+  hasPermission('picklist-view'), 
   PickingController.getSlaStatus
 );
 
 router.get('/expiry-alerts', 
   authenticate, 
-  hasPermission('picking:view'), 
+  hasPermission('picklist-view'), 
   PickingController.getExpiryAlerts
 );
 
