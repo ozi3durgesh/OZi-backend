@@ -44,6 +44,7 @@ import pdfUploadRoutes from './routes/pdfUploadRoutes';
 import brandRoutes from './routes/brandRoutes';
 import productMasterRoutes from './routes/productMasterRoutes';
 import PaymentRoutes from './routes/PaymentRoutes'
+import { userTimelineMiddleware } from './middleware/userTimeline';
 
 const app = express();
 
@@ -55,6 +56,9 @@ app.use(cors());
 // Body parsing middleware
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// User timeline logging middleware (must be after body parsing, before routes)
+app.use(userTimelineMiddleware);
 
 // ✅ Serve uploads folder so EC2 can access files
 const uploadDir = path.join(process.cwd(), 'uploads');
