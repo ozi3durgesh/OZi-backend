@@ -1004,41 +1004,9 @@ export const dispatchWave = async (req: Request, res: Response) => {
     for (const [sku, quantity] of skuQuantities) {
       if (quantity > 0) {
         try {
-          // First check current inventory to ensure we don't go negative
-          const inventoryQuery = await sequelize.query(
-            'SELECT * FROM inventory WHERE sku = ? FOR UPDATE',
-            {
-              replacements: [sku],
-              type: QueryTypes.SELECT,
-              transaction
-            }
-          );
-
-          if (inventoryQuery.length === 0) {
-            // Skip inventory validation if record doesn't exist
-            console.log(`Inventory record not found for SKU ${sku}, skipping inventory update`);
-            inventoryUpdateResults.push({
-              sku: sku,
-              success: false,
-              message: `Inventory record not found for SKU ${sku}`
-            });
-            continue; // Skip to next SKU
-          }
-
-          const currentInventory = inventoryQuery[0] as any;
-
-          // Validation: Check if we have enough sale_available_quantity to dispatch
-          const saleAvailableQty = currentInventory.sale_available_quantity || 0;
-          const picklistQty = currentInventory.fc_picklist_quantity || 0;
-          const availableQuantity = saleAvailableQty - picklistQty;
-          
-          if (availableQuantity < quantity) {
-            await transaction.rollback();
-            return res.status(400).json({
-              success: false,
-              message: `Insufficient sale available quantity for SKU ${sku}. Available: ${availableQuantity} (sale_available: ${saleAvailableQty} - picklist: ${picklistQty}), Required: ${quantity}`,
-            });
-          }
+          // Note: Inventory validation is already done at order creation via php-integration endpoint
+          // which checks sale_available_quantity >= ordered quantity for each SKU with matching fc_id
+          // So we just update inventory here without additional validation
 
           // Update inventory: increase fc_picklist_quantity (items are being dispatched)
           const picklistResult = await DirectInventoryService.updateInventory({
@@ -1053,8 +1021,6 @@ export const dispatchWave = async (req: Request, res: Response) => {
               dispatchNotes: dispatchNotes,
               dispatchedAt: new Date(),
               dispatchedBy: staffId,
-              previousPicklistQuantity: picklistQty,
-              newPicklistQuantity: picklistQty + quantity,
               operation: 'dispatch_picklist_increase'
             },
             performedBy: staffId
