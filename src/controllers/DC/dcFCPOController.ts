@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { FCPOService } from '../../services/FC/fcPOService';
 import { ResponseHandler } from '../../middleware/responseHandler';
 import { FC_PO_CONSTANTS } from '../../constants/fcPOConstants';
+import { log } from 'node:console';
 
 interface AuthRequest extends Request {
   user?: any;
@@ -207,6 +208,8 @@ export class DCFCPOController {
       }
 
       const dcId = req.user?.currentDcId || req.query.dcId;
+      console.log(dcId);
+      
       if (!dcId || isNaN(parseInt(dcId as string))) {
         return ResponseHandler.error(res, 'Valid DC ID is required', 400);
       }

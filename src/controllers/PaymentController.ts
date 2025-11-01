@@ -1,4 +1,4 @@
-import { processPayment, getCreditDueInfo, getPaymentsByPurchaseOrderId } from "../services/PaymentProcessingService";
+import { processPayment, getCreditDueInfo, getPaymentsByPurchaseOrderId, createManualCreditNote, approveCreditNote } from "../services/PaymentProcessingService";
 
 class PaymentController {
   async submitPayment(req, res) {
@@ -49,8 +49,37 @@ class PaymentController {
     }
   }
 
-}
+  async createCreditNoteManually(req, res) {
+    try {
+      const creditNote = await createManualCreditNote(req.body);
+      return res.status(201).json({
+        message: "Credit Note created successfully (Pending approval)",
+        data: creditNote,
+      });
+    } catch (error: any) {
+      console.error("Error creating Credit Note:", error);
+      return res.status(400).json({ message: error.message });
+    }
+  };
 
+  async approveCreditNote(req, res) {
+    try {
+      const { id } = req.params;
+      const { approvedBy } = req.body;
+
+      const creditNote = await approveCreditNote(Number(id), approvedBy);
+
+      return res.status(200).json({
+        message: "Credit Note approved successfully",
+        data: creditNote,
+      });
+    } catch (error: any) {
+      console.error("Error approving Credit Note:", error);
+      return res.status(400).json({ message: error.message });
+    }
+
+  }
+}
 
 
 export default new PaymentController();

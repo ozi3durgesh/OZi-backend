@@ -11,4 +11,7 @@ router.post("/process",  PaymentController.submitPayment);
 
 router.get("/:purchaseOrderId", PaymentController.listPaymentsByPO);
 
+router.post("/credit-note", PaymentController.createCreditNoteManually);
+router.put("/credit-note/:id/approve", PaymentController.approveCreditNote);
+
 export default router;

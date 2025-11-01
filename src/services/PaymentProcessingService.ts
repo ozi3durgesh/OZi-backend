@@ -4,7 +4,7 @@ import DCPurchaseOrder from "../models/DCPurchaseOrder.js";
 import PaymentTransaction from "../models/PaymentTransaction.js";
 import CreditNote from "../models/CreditNote.js";
 import { Transaction } from "sequelize";
-
+import DCGrn from "../models/DCGrn.model.js";
 
 
 interface CreditInfo {
@@ -18,6 +18,16 @@ interface CreditInfo {
     paymentDueDate: Date | null;
     remainingDays: number | null;
     paymentStatus: string;
+}
+
+
+interface CreateCreditNoteInput {
+  grnId?: number;
+  dcPurchaseOrderId?: number;
+  vendorId: number;
+  creditAmount: number;
+  reason: string;
+  createdBy: number;
 }
 
 export interface PaymentTransactionSummary {
@@ -248,3 +258,59 @@ export async function getPaymentsByPurchaseOrderId(dcPurchaseOrderId: number) {
         payments: paymentList,
     };
 }
+
+export async function createManualCreditNote(data: CreateCreditNoteInput) {
+    const { grnId, dcPurchaseOrderId, vendorId, creditAmount, reason, createdBy } = data;
+
+    if (!vendorId || !creditAmount || !reason || !createdBy) {
+      throw new Error("Missing required fields: vendorId, creditAmount, reason, createdBy");
+    }
+
+    // 🔹 Determine linked PO if GRN provided
+    let linkedPOId = dcPurchaseOrderId || null;
+    if (grnId) {
+      const grn = await DCGrn.findByPk(grnId);
+      if (!grn) throw new Error("GRN not found");
+      linkedPOId = grn.dc_po_id;
+    }
+
+    // 🔹 Validate PO if directly passed
+    if (linkedPOId) {
+      const po = await DCPurchaseOrder.findByPk(linkedPOId);
+      if (!po) throw new Error("DC Purchase Order not found");
+    }
+
+    // 🔹 Generate unique CN number
+    const creditNoteNumber = `CN-${linkedPOId ?? "MANUAL"}-${Date.now()}`;
+
+    // 🔹 Create CN entry
+    const creditNote = await CreditNote.create({
+      vendorId,
+      dcPurchaseOrderId: linkedPOId,
+      grnId: grnId ?? null,
+      paymentTransactionId: null,
+      creditNoteNumber,
+      creditAmount,
+      reason,
+      status: "PENDING",
+      createdBy,
+    });
+
+    return creditNote;
+  }
+
+  export async function approveCreditNote(id: number, approvedBy: number) {
+    const creditNote = await CreditNote.findByPk(id);
+    if (!creditNote) throw new Error("Credit Note not found");
+
+    if (creditNote.status !== "PENDING") {
+      throw new Error(`Credit Note is already ${creditNote.status}`);
+    }
+
+    await creditNote.update({
+      status: "APPROVED",
+      approvedBy,
+    });
+
+    return creditNote;
+  }

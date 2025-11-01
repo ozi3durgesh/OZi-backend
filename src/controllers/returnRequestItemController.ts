@@ -903,7 +903,7 @@ export class ReturnRequestItemController {
   static async createReturnGRN(req: AuthRequest, res: Response): Promise<Response> {
     try {
       const { returnOrderId } = req.params;
-      const { poId, status, lines, closeReason } = req.body;
+      const { status, lines, closeReason } = req.body;
 
       if (!lines || !Array.isArray(lines) || lines.length === 0) {
         return ResponseHandler.error(res, 'Lines array is required', 400);
@@ -1193,7 +1193,6 @@ export class ReturnRequestItemController {
         
         const responseData = {
           id: grnId,
-          po_id: poId || null,
           status: status || 'partial',
           closeReason: closeReason || null,
           created_by: req.user?.id || 1,
