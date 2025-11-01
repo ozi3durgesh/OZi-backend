@@ -995,6 +995,15 @@ export class PickingController {
         return ResponseHandler.error(res, 'Wave not found', 404);
       }
 
+      // Check permissions
+      const userPermissions = req.user!.permissions || [];
+      const canStart =
+        userPermissions.includes('picklist-create') ||
+        (wave.pickerId === pickerId);
+      if (!canStart) {
+        return ResponseHandler.error(res, 'Insufficient permissions to start this wave', 403);
+      }
+
       if (wave.status !== 'ASSIGNED') {
         return ResponseHandler.error(res, 'Wave is not assigned to you', 400);
       }
