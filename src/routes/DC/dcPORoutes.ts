@@ -62,10 +62,10 @@ router.get('/approval/:token', DCPOController.getApprovalDetails);
 router.post('/approval/:token', DCPOController.processApproval);
 
 router.put('/purchase-orders/:id/edit', hasPermission('dc_po_approve-edit'), DCPOController.editPO);
-router.put('/purchase-orders/:id/approve', hasPermission('dc_po_approve'), DCPOController.approvePO);
+router.put('/purchase-orders/:id/approve', hasPermission('dc_po_approve-approve'), DCPOController.approvePO);
 
 // Direct approval/rejection without hierarchy
-router.post('/purchase-orders/:id/direct-approve', hasPermission('dc_po_approve'), DCPOController.directApproval);
+router.post('/purchase-orders/:id/direct-approve', hasPermission('dc_po_approve-approve'), DCPOController.directApproval);
 
 // SKU Splitting routes
 router.use('/', dcSkuSplittingRoutes);
