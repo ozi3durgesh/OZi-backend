@@ -379,10 +379,10 @@ export const approvePO = async (req: Request, res: Response) => {
         return ResponseHandler.success(res,{PO:{message:'PO approved by Category Head, sent to Admin', po_id: po.po_id}},200);
       }
 
-      if (role === 'admin') {
-        po.approval_status = 'admin';
-        po.current_approver = 'creator'; // Hand over to creator for PI
-        await po.save();
+      // Admin or other authorized role approval
+      po.approval_status = 'admin';
+      po.current_approver = 'creator'; // Hand over to creator for PI
+      await po.save();
         
         // Update inventory when PO is finally approved (move from PO to GRN)
         try {

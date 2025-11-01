@@ -477,7 +477,6 @@ export class DCPOController {
       const { id } = req.params;
       const { action, comments } = req.body;
       const userId = req.user?.id;
-      const userRoleId = req.user?.roleId;
 
       if (!userId) {
         return ResponseHandler.error(res, 'User authentication required', 401);
@@ -491,22 +490,12 @@ export class DCPOController {
         return ResponseHandler.error(res, 'Action must be either APPROVED or REJECTED', 400);
       }
 
-      // Check if user has permission for direct approval (Role ID 1, 3, or 7)
-      if (![1, 3, 7].includes(userRoleId)) {
-        return ResponseHandler.error(res, 'Access denied. Only authorized users can perform direct approval', 403);
-      }
-
       if (action === 'REJECTED' && !comments) {
         return ResponseHandler.error(res, 'Comments are required for rejection', 400);
       }
 
-      // Determine approver role based on user role
-      let approverRole = 'admin'; // Default for role ID 1, 3, 7
-      if (userRoleId === 3) {
-        approverRole = 'category_head';
-      } else if (userRoleId === 7) {
-        approverRole = 'creator';
-      }
+      // Determine approver role (default to admin)
+      const approverRole = 'admin';
 
       const result = await DCPOService.directApproval(
         parseInt(id),

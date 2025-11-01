@@ -8,20 +8,13 @@ import { VENDOR_CONSTANTS } from '../../constants/vendorConstants';
 export class DCVendorController {
   /**
    * Create a new vendor under a Distribution Center
-   * Only admin users can create vendors
    */
   static async createVendor(req: AuthRequest, res: Response) {
     try {
       const userId = req.user?.id;
-      const userRole = req.user?.role;
 
       if (!userId) {
         return ResponseHandler.error(res, 'User not authenticated', 401);
-      }
-
-      // Ensure only admin can create vendors
-      if (userRole !== 'admin') {
-        return ResponseHandler.error(res, VENDOR_CONSTANTS.ERRORS.UNAUTHORIZED, 403);
       }
 
       const vendorData = {
@@ -144,21 +137,14 @@ export class DCVendorController {
 
   /**
    * Update a vendor
-   * Only admin users can update vendors
    */
   static async updateVendor(req: AuthRequest, res: Response) {
     try {
       const { id } = req.params;
       const userId = req.user?.id;
-      const userRole = req.user?.role;
 
       if (!userId) {
         return ResponseHandler.error(res, 'User not authenticated', 401);
-      }
-
-      // Ensure only admin can update vendors
-      if (userRole !== 'admin') {
-        return ResponseHandler.error(res, VENDOR_CONSTANTS.ERRORS.UNAUTHORIZED, 403);
       }
 
       const updateData = {
@@ -187,17 +173,10 @@ export class DCVendorController {
 
   /**
    * Delete a vendor
-   * Only admin users can delete vendors
    */
   static async deleteVendor(req: AuthRequest, res: Response) {
     try {
       const { id } = req.params;
-      const userRole = req.user?.role;
-
-      // Ensure only admin can delete vendors
-      if (userRole !== 'admin') {
-        return ResponseHandler.error(res, VENDOR_CONSTANTS.ERRORS.UNAUTHORIZED, 403);
-      }
 
       await VendorDCService.deleteVendor(parseInt(id, 10));
 

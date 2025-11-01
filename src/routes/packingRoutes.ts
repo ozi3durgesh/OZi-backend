@@ -166,13 +166,24 @@ interface MulterS3File extends Express.Multer.File {
 export function formatDeliveryPartner(deliveryPartner: DeliveryMan | null) {
   if (!deliveryPartner) return null;
 
-  return {
-    id: deliveryPartner.id,
-    name: `${deliveryPartner.f_name} ${deliveryPartner.l_name}`,
-    phone: deliveryPartner.phone,
-    vehicleId: deliveryPartner.vehicle_id,
-    image: deliveryPartner.image, // profile image if needed
-  };
+  // Ensure we have a DeliveryMan object with required fields
+  if (!deliveryPartner.f_name || !deliveryPartner.l_name) {
+    console.error('Invalid deliveryPartner object: missing required fields', deliveryPartner);
+    return null;
+  }
+
+  try {
+    return {
+      id: deliveryPartner.id,
+      name: `${deliveryPartner.f_name || ''} ${deliveryPartner.l_name || ''}`.trim(),
+      phone: deliveryPartner.phone || '',
+      vehicleId: deliveryPartner.vehicle_id || null,
+      image: deliveryPartner.image || null, // profile image if needed
+    };
+  } catch (error) {
+    console.error('Error formatting delivery partner:', error);
+    return null;
+  }
 }
 
 /**
@@ -214,11 +225,22 @@ router.post("/:waveId/pack-and-seal", upload.single("photo"), async (req, res) =
       });
     }
 
-    // Get delivery partner from delivery_men table
+    // Get delivery partner from delivery_men table (NOT orders table)
     let deliveryPartner: DeliveryMan | null = null;
     
     if (order.delivery_man_id) {
-      deliveryPartner = await DeliveryMan.findByPk(order.delivery_man_id);
+      try {
+        // Ensure we're querying DeliveryMan model, not Order
+        deliveryPartner = await DeliveryMan.findByPk(order.delivery_man_id);
+        if (deliveryPartner && !deliveryPartner.f_name) {
+          // If we got something that's not a valid DeliveryMan, reset it
+          console.warn(`Invalid DeliveryMan record found for ID ${order.delivery_man_id}`);
+          deliveryPartner = null;
+        }
+      } catch (error) {
+        console.error('Error fetching delivery partner:', error);
+        deliveryPartner = null;
+      }
     }
     
     // Update wave status and photo, but don't touch riderId
@@ -241,6 +263,8 @@ router.post("/:waveId/pack-and-seal", upload.single("photo"), async (req, res) =
     //   photoPath: wave.photoPath,
     // });
 
+    const formattedPartner = deliveryPartner ? formatDeliveryPartner(deliveryPartner) : null;
+
     return res.status(201).json({
       statusCode: 201,
       success: true,
@@ -253,7 +277,7 @@ router.post("/:waveId/pack-and-seal", upload.single("photo"), async (req, res) =
           mimetype: photo.mimetype,
           size: photo.size,
         },
-        deliveryPartner: deliveryPartner ? formatDeliveryPartner(deliveryPartner) : null,
+        deliveryPartner: formattedPartner,
       },
     });
   } catch (error) {
@@ -288,12 +312,25 @@ router.get("/:waveId/refresh", async (req, res) => {
       });
     }
 
-    // Get delivery partner from delivery_men table
+    // Get delivery partner from delivery_men table (NOT orders table)
     let deliveryPartner: DeliveryMan | null = null;
     
     if (order.delivery_man_id) {
-      deliveryPartner = await DeliveryMan.findByPk(order.delivery_man_id);
+      try {
+        // Ensure we're querying DeliveryMan model, not Order
+        deliveryPartner = await DeliveryMan.findByPk(order.delivery_man_id);
+        if (deliveryPartner && !deliveryPartner.f_name) {
+          // If we got something that's not a valid DeliveryMan, reset it
+          console.warn(`Invalid DeliveryMan record found for ID ${order.delivery_man_id}`);
+          deliveryPartner = null;
+        }
+      } catch (error) {
+        console.error('Error fetching delivery partner:', error);
+        deliveryPartner = null;
+      }
     }
+
+    const formattedPartner = deliveryPartner ? formatDeliveryPartner(deliveryPartner) : null;
 
     return res.status(200).json({
       statusCode: 200,
@@ -303,9 +340,9 @@ router.get("/:waveId/refresh", async (req, res) => {
         status: wave.status,
         riderId: null, // Not using riderId anymore
         riderAssignedAt: null,
-        deliveryPartner: deliveryPartner ? formatDeliveryPartner(deliveryPartner) : null,
+        deliveryPartner: formattedPartner,
       },
-      message: deliveryPartner
+      message: formattedPartner
         ? "Delivery partner assigned"
         : "No delivery partner assigned yet",
     });
