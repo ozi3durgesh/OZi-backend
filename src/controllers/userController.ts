@@ -179,11 +179,6 @@ export class UserController {
 
   static async listUsers(req: AuthRequest, res: Response): Promise<Response> {
     try {
-      // Check if requester has permission to view users
-      if (!req.user?.permissions.includes('users_roles:manage')) {
-        return ResponseHandler.error(res, 'Insufficient permissions', 403);
-      }
-
       const { page = 1, limit = 10, role } = req.query;
       const offset = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
 
