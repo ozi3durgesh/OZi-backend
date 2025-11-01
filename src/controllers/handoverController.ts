@@ -8,7 +8,7 @@ import {
   ApiResponse,
   LMSIntegrationConfig 
 } from '../types';
-import sequelize from '../config/database';
+import sequelize, { QueryTypes } from '../config/database';
 import { ResponseHandler } from '../middleware/responseHandler';
 import DeliveryMan from '../models/DeliveryMan';
 import DirectInventoryService from '../services/DirectInventoryService';
@@ -1005,9 +1005,16 @@ export const dispatchWave = async (req: Request, res: Response) => {
       if (quantity > 0) {
         try {
           // First check current inventory to ensure we don't go negative
-          let currentInventory = await DirectInventoryService.getInventorySummary(sku);
-          
-          if (!currentInventory) {
+          const inventoryQuery = await sequelize.query(
+            'SELECT * FROM inventory WHERE sku = ? FOR UPDATE',
+            {
+              replacements: [sku],
+              type: QueryTypes.SELECT,
+              transaction
+            }
+          );
+
+          if (inventoryQuery.length === 0) {
             // Skip inventory validation if record doesn't exist
             console.log(`Inventory record not found for SKU ${sku}, skipping inventory update`);
             inventoryUpdateResults.push({
@@ -1018,30 +1025,26 @@ export const dispatchWave = async (req: Request, res: Response) => {
             continue; // Skip to next SKU
           }
 
-          // Check if we have enough putaway quantity to dispatch
-          if (currentInventory.fc_putaway_quantity < quantity) {
+          const currentInventory = inventoryQuery[0] as any;
+
+          // Validation: Check if we have enough sale_available_quantity to dispatch
+          const saleAvailableQty = currentInventory.sale_available_quantity || 0;
+          const picklistQty = currentInventory.fc_picklist_quantity || 0;
+          const availableQuantity = saleAvailableQty - picklistQty;
+          
+          if (availableQuantity < quantity) {
             await transaction.rollback();
             return res.status(400).json({
               success: false,
-              message: `Insufficient putaway quantity for SKU ${sku}. Available: ${currentInventory.fc_putaway_quantity}, Required: ${quantity}`,
+              message: `Insufficient sale available quantity for SKU ${sku}. Available: ${availableQuantity} (sale_available: ${saleAvailableQty} - picklist: ${picklistQty}), Required: ${quantity}`,
             });
           }
 
-          // Check if we have enough picklist quantity (items should be picked before dispatch)
-          if (currentInventory.fc_picklist_quantity < quantity) {
-            await transaction.rollback();
-            return res.status(400).json({
-              success: false,
-              message: `Insufficient picklist quantity for SKU ${sku}. Available: ${currentInventory.fc_picklist_quantity}, Required: ${quantity}. Items must be picked before dispatch.`,
-            });
-          }
-
-          // Update inventory: reduce fc_putaway_quantity (items are leaving the warehouse)
-          // Note: fc_picklist_quantity was already updated during scanning, so we only reduce fc_putaway_quantity
-          const putawayResult = await DirectInventoryService.updateInventory({
+          // Update inventory: increase fc_picklist_quantity (items are being dispatched)
+          const picklistResult = await DirectInventoryService.updateInventory({
             sku: sku,
-            operation: INVENTORY_OPERATIONS.PUTAWAY,
-            quantity: -quantity, // Negative to reduce putaway quantity
+            operation: INVENTORY_OPERATIONS.PICKLIST,
+            quantity: quantity, // Positive to increase picklist quantity
             referenceId: `DISPATCH-WAVE-${waveId}`,
             operationDetails: {
               waveId: waveId,
@@ -1050,21 +1053,34 @@ export const dispatchWave = async (req: Request, res: Response) => {
               dispatchNotes: dispatchNotes,
               dispatchedAt: new Date(),
               dispatchedBy: staffId,
-              previousPutawayQuantity: currentInventory.fc_putaway_quantity,
-              newPutawayQuantity: currentInventory.fc_putaway_quantity - quantity,
-              operation: 'dispatch_putaway_reduction'
+              previousPicklistQuantity: picklistQty,
+              newPicklistQuantity: picklistQty + quantity,
+              operation: 'dispatch_picklist_increase'
             },
             performedBy: staffId
           });
 
-          if (!putawayResult.success) {
-            throw new Error(`Failed to reduce putaway quantity: ${putawayResult.message}`);
+          if (!picklistResult.success) {
+            throw new Error(`Failed to increase picklist quantity: ${picklistResult.message}`);
           }
+
+          // Reduce sale_available_quantity directly (without affecting fc_putaway_quantity)
+          await sequelize.query(
+            `UPDATE inventory SET 
+             sale_available_quantity = GREATEST(0, sale_available_quantity - ?),
+             updated_at = CURRENT_TIMESTAMP
+             WHERE sku = ?`,
+            {
+              replacements: [quantity, sku],
+              type: QueryTypes.UPDATE,
+              transaction
+            }
+          );
 
           const inventoryResult = {
             success: true,
             message: 'Inventory updated successfully',
-            putawayUpdate: putawayResult
+            picklistUpdate: picklistResult
           };
 
           inventoryUpdateResults.push({
@@ -1072,7 +1088,7 @@ export const dispatchWave = async (req: Request, res: Response) => {
             success: inventoryResult.success,
             message: inventoryResult.message,
             data: {
-              putawayUpdate: inventoryResult.putawayUpdate
+              picklistUpdate: inventoryResult.picklistUpdate
             }
           });
 
