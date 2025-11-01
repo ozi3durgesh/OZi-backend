@@ -26,8 +26,9 @@ export class JwtUtils {
       throw new Error('User not found');
     }
 
+    // Format permissions as module-action (e.g., "users-create" instead of "users:create")
     const permissions = (userWithPermissions as any).Role?.Permissions 
-      ? (userWithPermissions as any).Role.Permissions.map((p: any) => `${p.module}:${p.action}`)
+      ? (userWithPermissions as any).Role.Permissions.map((p: any) => `${p.module}-${p.action}`)
       : [];
 
     const payload: JwtPayload = {

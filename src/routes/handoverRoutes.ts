@@ -1,6 +1,6 @@
 // routes/handoverRoutes.ts
 import { Router } from 'express';
-import { authenticate } from '../middleware/auth';
+import { authenticate, hasPermission } from '../middleware/auth';
 import { HandoverController, dispatchWave } from '../controllers/handoverController';
 import multer from "multer";
 import multerS3 from "multer-s3";
@@ -41,28 +41,13 @@ const upload = multer({
  * @desc Update picklist quantity during picking process
  * @access Picker, Manager
  */
-router.post('/picklist-quantity', HandoverController.updatePicklistQuantity);
+router.post('/picklist-quantity', hasPermission('handover-create'), HandoverController.updatePicklistQuantity);
 
-/**
- * @route GET /api/handover/inventory/:sku
- * @desc Get inventory status for a specific SKU
- * @access Manager, Picker, Dispatcher
- */
-router.get('/inventory/:sku', HandoverController.getInventoryStatus);
+router.get('/inventory/:sku', hasPermission('handover-view'), HandoverController.getInventoryStatus);
 
-/**
- * @route POST /api/handover/dispatch
- * @desc Handover packed products to dispatch and generate AWB/Manifest ID
- * @access Manager, Dispatcher
- */
-router.post('/dispatch', HandoverController.handoverToDispatch);
+router.post('/dispatch', hasPermission('dispatch-create'), HandoverController.handoverToDispatch);
 
-/**
- * @route POST /api/handover/:waveId/dispatch
- * @desc Dispatch wave with photo upload
- * @access Manager, Dispatcher
- */
-router.post("/:waveId/dispatch", upload.single("handoverPhoto"), dispatchWave);
+router.post("/:waveId/dispatch", hasPermission('dispatch-create'), upload.single("handoverPhoto"), dispatchWave);
 
 /**
  * @route POST /api/handover/assign-rider

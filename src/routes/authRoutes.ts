@@ -21,7 +21,7 @@ router.post('/select-dc', authenticate, AuthController.selectDc);
 router.post('/refresh-token', AuthController.refreshToken);
 router.post('/logout', authenticate, AuthController.logout);
 router.post('/logout-all', authenticate, AuthController.logoutAll);
-router.post('/logout/:userId', authenticate, hasPermission('users_roles:manage'), AuthController.logoutUser);
+router.post('/logout/:userId', authenticate, hasPermission('users-view'), AuthController.logoutUser);
 router.get('/roles', AuthController.getRoles);
 router.get('/profile', authenticate, AuthController.getProfile);
 

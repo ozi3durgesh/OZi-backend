@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, isAdmin, isCategoryHead } from '../../middleware/auth';
+import { authenticate, hasPermission } from '../../middleware/auth';
 import { DCPOController } from '../../controllers/DC/dcPOController';
 import dcSkuSplittingRoutes from './dcSkuSplittingRoutes';
 import multer from 'multer';
@@ -30,29 +30,29 @@ router.use(authenticate);
  * Following the approval workflow: Creator >> Category Head >> Admin/Founder >> Creator Review
  */
 
-// Create DC Purchase Order (Admin only)
-router.post('/purchase-orders', isAdmin, DCPOController.createDCPO);
+// Create DC Purchase Order
+router.post('/purchase-orders', hasPermission('dc_po_raise-create'), DCPOController.createDCPO);
 
-// Get all DC Purchase Orders (Authenticated users)
-router.get('/purchase-orders', DCPOController.getDCPOs);
+// Get all DC Purchase Orders
+router.get('/purchase-orders', hasPermission('dc_po_raise-view'), DCPOController.getDCPOs);
 
-// Get DC Purchase Order by ID (Authenticated users)
-router.get('/purchase-orders/:id', DCPOController.getDCPOById);
+// Get DC Purchase Order by ID
+router.get('/purchase-orders/:id', hasPermission('dc_po_raise-view'), DCPOController.getDCPOById);
 
-// Get complete product details for a DC Purchase Order (Authenticated users)
-router.get('/purchase-orders/:id/products', DCPOController.getDCPOProductDetails);
+// Get complete product details for a DC Purchase Order
+router.get('/purchase-orders/:id/products', hasPermission('dc_po_raise-view'), DCPOController.getDCPOProductDetails);
 
-// Update DC Purchase Order (Admin only, only if status is DRAFT)
-router.put('/purchase-orders/:id', isAdmin, DCPOController.updateDCPO);
+// Update DC Purchase Order (only if status is DRAFT)
+router.put('/purchase-orders/:id', hasPermission('dc_po_approve-edit'), DCPOController.updateDCPO);
 
-// Submit DC Purchase Order for approval (Admin only)
-router.post('/purchase-orders/:id/submit', isAdmin, DCPOController.submitForApproval);
+// Submit DC Purchase Order for approval
+router.post('/purchase-orders/:id/submit', hasPermission('dc_po_approve-edit'), DCPOController.submitForApproval);
 
-// Creator upload PI and set delivery date (Authenticated users)
-router.post('/purchase-orders/:id/upload-pi', upload.single('piFile'), DCPOController.uploadPIAndSetDeliveryDate);
+// Creator upload PI and set delivery date
+router.post('/purchase-orders/:id/upload-pi', hasPermission('dc_po_payments-create'), upload.single('piFile'), DCPOController.uploadPIAndSetDeliveryDate);
 
-// Delete DC Purchase Order (Admin only, only if status is DRAFT)
-router.delete('/purchase-orders/:id', isAdmin, DCPOController.deleteDCPO);
+// Delete DC Purchase Order (only if status is DRAFT)
+router.delete('/purchase-orders/:id', hasPermission('dc_po_approve-edit'), DCPOController.deleteDCPO);
 
 // Approval workflow routes (public routes for email links)
 // Get approval details by token (for frontend approval page)
@@ -61,11 +61,11 @@ router.get('/approval/:token', DCPOController.getApprovalDetails);
 // Process approval/rejection via token (public route for email links)
 router.post('/approval/:token', DCPOController.processApproval);
 
-router.put('/purchase-orders/:id/edit', DCPOController.editPO);
-router.put('/purchase-orders/:id/approve',isCategoryHead, DCPOController.approvePO);
+router.put('/purchase-orders/:id/edit', hasPermission('dc_po_approve-edit'), DCPOController.editPO);
+router.put('/purchase-orders/:id/approve', hasPermission('dc_po_approve'), DCPOController.approvePO);
 
-// Direct approval/rejection without hierarchy (Authorized users - Role ID 1, 3, or 7)
-router.post('/purchase-orders/:id/direct-approve', DCPOController.directApproval);
+// Direct approval/rejection without hierarchy
+router.post('/purchase-orders/:id/direct-approve', hasPermission('dc_po_approve'), DCPOController.directApproval);
 
 // SKU Splitting routes
 router.use('/', dcSkuSplittingRoutes);

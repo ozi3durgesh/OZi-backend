@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { DCGrnController } from '../../controllers/DC/dcGrnController';
-import { authenticate } from '../../middleware/auth';
+import { authenticate, hasPermission } from '../../middleware/auth';
 
 const router = Router();
 
@@ -12,62 +12,22 @@ router.use(authenticate);
  * @desc Get DC PO products for GRN creation
  * @access Authenticated
  */
-router.get('/dc-po/:dcPoId/products', DCGrnController.getDCPOProductsForGRN);
+router.get('/dc-po/:dcPoId/products', hasPermission('dc_grns-view'), DCGrnController.getDCPOProductsForGRN);
 
-/**
- * @route POST /api/dc/grn
- * @desc Create a new DC-GRN
- * @access Authenticated
- */
-router.post('/', DCGrnController.createDCGrn);
+router.post('/', hasPermission('dc_grns-create'), DCGrnController.createDCGrn);
 
-/**
- * @route GET /api/dc/grn/actual
- * @desc Get actual DC GRN records (not POs)
- * @access Authenticated
- */
-router.get('/actual', DCGrnController.getActualDCGrnList);
+router.get('/actual', hasPermission('dc_grns-view'), DCGrnController.getActualDCGrnList);
 
-/**
- * @route GET /api/dc/grn/list
- * @desc Get DC GRN list with SKU splits grouped by PO
- * @access Authenticated
- */
-router.get('/list', DCGrnController.getDCGrnList);
+router.get('/list', hasPermission('dc_grns-view'), DCGrnController.getDCGrnList);
 
-/**
- * @route GET /api/dc/grn/:id
- * @desc Get DC-GRN by ID with full details
- * @access Authenticated
- */
-router.get('/:id', DCGrnController.getDCGrnById);
+router.get('/:id', hasPermission('dc_grns-view'), DCGrnController.getDCGrnById);
 
-/**
- * @route GET /api/dc/grn/dc-po/:dcPoId
- * @desc Get DC-GRNs by DC PO ID
- * @access Authenticated
- */
-router.get('/dc-po/:dcPoId', DCGrnController.getDCGrnsByDCPOId);
+router.get('/dc-po/:dcPoId', hasPermission('dc_grns-view'), DCGrnController.getDCGrnsByDCPOId);
 
-/**
- * @route PUT /api/dc/grn/:id/status
- * @desc Update DC-GRN status
- * @access Authenticated
- */
-router.put('/:id/status', DCGrnController.updateDCGrnStatus);
+router.put('/:id/status', hasPermission('dc_grns-create'), DCGrnController.updateDCGrnStatus);
 
-/**
- * @route GET /api/dc/grn/products/ready-for-master
- * @desc Get products ready for product-master insertion
- * @access Authenticated
- */
-router.get('/products/ready-for-master', DCGrnController.getProductsReadyForProductMaster);
+router.get('/products/ready-for-master', hasPermission('dc_grns-view'), DCGrnController.getProductsReadyForProductMaster);
 
-/**
- * @route GET /api/dc/grn/stats
- * @desc Get DC-GRN statistics
- * @access Authenticated
- */
-router.get('/stats', DCGrnController.getDCGrnStats);
+router.get('/stats', hasPermission('dc_grns-view'), DCGrnController.getDCGrnStats);
 
 export default router;

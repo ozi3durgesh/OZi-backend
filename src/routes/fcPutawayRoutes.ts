@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate } from '../middleware/auth';
+import { authenticate, hasPermission } from '../middleware/auth';
 import { FCFilterMiddlewareFactory } from '../middleware/fcFilterMiddleware';
 import { FCPutawayController } from '../controllers/fcPutawayController';
 
@@ -9,28 +9,13 @@ const router = Router();
 router.use(authenticate);
 router.use(FCFilterMiddlewareFactory.createPutawayFilter());
 
-// 1. GRN Putaway List (GET with pagination)
-router.get('/grn-list', FCPutawayController.getGrnPutawayList);
-
-// 2. Return Putaway List (GET with pagination)
-router.get('/return-list', FCPutawayController.getReturnPutawayList);
-
-// 3. Get GRN Details by ID (GET)
-router.get('/grn/:id', FCPutawayController.getGrnDetailsById);
-
-// 4. Scan SKU API (POST)
-router.post('/scan-sku', FCPutawayController.scanSku);
-
-// 5. Scan SKU Product Detail API (POST)
-router.post('/scan-sku-product-detail', FCPutawayController.scanSkuProductDetail);
-
-// 6. Get Scanned Product Details (GET)
-router.get('/product-details', FCPutawayController.getScannedProductDetails);
-
-// 7. Confirm Putaway (POST/PUT)
-router.post('/confirm', FCPutawayController.confirmPutaway);
-
-// Debug endpoint
-router.get('/debug', FCPutawayController.debugDatabase);
+router.get('/grn-list', hasPermission('fc_putaway-view'), FCPutawayController.getGrnPutawayList);
+router.get('/return-list', hasPermission('fc_putaway-view'), FCPutawayController.getReturnPutawayList);
+router.get('/grn/:id', hasPermission('fc_putaway-view'), FCPutawayController.getGrnDetailsById);
+router.post('/scan-sku', hasPermission('fc_putaway-create'), FCPutawayController.scanSku);
+router.post('/scan-sku-product-detail', hasPermission('fc_putaway-create'), FCPutawayController.scanSkuProductDetail);
+router.get('/product-details', hasPermission('fc_putaway-view'), FCPutawayController.getScannedProductDetails);
+router.post('/confirm', hasPermission('fc_putaway-create'), FCPutawayController.confirmPutaway);
+router.get('/debug', hasPermission('fc_putaway-view'), FCPutawayController.debugDatabase);
 
 export default router;

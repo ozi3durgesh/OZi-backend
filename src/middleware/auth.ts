@@ -77,15 +77,24 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
       return;
     }
 
+    // Use permissions from JWT token if available (more efficient), otherwise load from DB
+    // Format permissions as module-action (e.g., "users-create" instead of "users:create")
+    let permissions: string[] = [];
+    if (payload.permissions && payload.permissions.length > 0) {
+      // Use permissions from JWT token (already formatted correctly)
+      permissions = payload.permissions;
+    } else if (user.Role?.Permissions) {
+      // Fallback to loading from database if not in token
+      permissions = user.Role.Permissions.map((p: any) => `${p.module}-${p.action}`);
+    }
+
     // Attach user and permissions to request
     req.user = {
       id: user.id,
       email: user.email,
       roleId: user.roleId,
       role: user.Role?.name || '',
-      permissions: user.Role?.Permissions 
-        ? user.Role.Permissions.map(p => `${p.module}:${p.action}`)
-        : [],
+      permissions,
       availabilityStatus: user.availabilityStatus,
       createdAt: user.createdAt,
       currentFcId: payload.currentFcId,
