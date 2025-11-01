@@ -620,15 +620,7 @@ export class EasyEcomWebhookController {
         return;
       }
 
-      // Only refresh if status is failed-ordered
-      if (order.order_status !== 'failed-ordered') {
-        ResponseHandler.success(res, {
-          message: 'Order status is not failed-ordered, no refresh needed',
-          order_id: orderId,
-          current_status: order.order_status
-        });
-        return;
-      }
+      const originalStatus = order.order_status;
 
       // Extract SKUs with quantities and fc_id from order
       const orderData = order.get({ plain: true }) as any;
@@ -723,13 +715,15 @@ export class EasyEcomWebhookController {
           }
 
           const inv = inventory[0] as any;
-          const availableQuantity = inv.sale_available_quantity - (order as any).quantity;
+          const saleAvailableQty = inv.sale_available_quantity || 0;
+          const orderedQty = item.quantity;
           
-          if (availableQuantity < item.quantity) {
+          // Check if sale_available_quantity >= ordered quantity
+          if (saleAvailableQty < orderedQty) {
             inventoryCheckPassed = false;
             failedSkus.push({
               sku: item.sku,
-              reason: `Insufficient quantity. Available: ${availableQuantity}, Required: ${item.quantity}`
+              reason: `Insufficient quantity. Available: ${saleAvailableQty}, Required: ${orderedQty}`
             });
           }
         } catch (error: any) {
@@ -742,44 +736,80 @@ export class EasyEcomWebhookController {
         }
       }
 
-      // If inventory check passed, update status to normal
+      // Update order status based on inventory check
       if (inventoryCheckPassed) {
-        await order.update({ order_status: 'pending' });
-        
-        // Get wave ID if exists
-        let waveId: number | null = null;
-        const wave = await PickingWave.findOne({
-          where: { orderId: parseInt(orderId.toString()) }
-        });
-        if (wave) {
-          waveId = wave.id;
+        // Inventory is sufficient - update to pending if it was failed-ordered
+        if (originalStatus === 'failed-ordered') {
+          await order.update({ order_status: 'pending' });
+          
+          // Get wave ID if exists
+          let waveId: number | null = null;
+          const wave = await PickingWave.findOne({
+            where: { orderId: parseInt(orderId.toString()) }
+          });
+          if (wave) {
+            waveId = wave.id;
+          }
+
+          // Emit websocket event
+          socketManager.emit('orderStatusUpdate', {
+            orderId: parseInt(orderId.toString()),
+            status: 'pending',
+            waveId: waveId,
+            reason: 'Inventory check passed after refresh'
+          });
+
+          console.log(`✅ Order ${orderId} status updated to pending after inventory refresh`);
+
+          ResponseHandler.success(res, {
+            message: 'Order status refreshed successfully',
+            order_id: orderId,
+            previous_status: 'failed-ordered',
+            new_status: 'pending',
+            inventory_check_passed: true
+          });
+        } else {
+          // Already pending and inventory is sufficient
+          ResponseHandler.success(res, {
+            message: 'Order inventory check passed',
+            order_id: orderId,
+            current_status: 'pending',
+            inventory_check_passed: true
+          });
+        }
+      } else {
+        // Inventory check failed - mark as failed-ordered if not already
+        if (originalStatus !== 'failed-ordered') {
+          await order.update({ order_status: 'failed-ordered' });
+          
+          // Get wave ID if exists
+          let waveId: number | null = null;
+          const wave = await PickingWave.findOne({
+            where: { orderId: parseInt(orderId.toString()) }
+          });
+          if (wave) {
+            waveId = wave.id;
+          }
+
+          // Emit websocket event
+          socketManager.emit('orderStatusUpdate', {
+            orderId: parseInt(orderId.toString()),
+            status: 'failed-ordered',
+            waveId: waveId,
+            reason: 'Inventory check failed after refresh',
+            failedSkus: failedSkus
+          });
+
+          console.log(`❌ Order ${orderId} status updated to failed-ordered due to insufficient inventory`);
+        } else {
+          console.log(`❌ Order ${orderId} still has inventory issues:`, failedSkus);
         }
 
-        // Emit websocket event
-        socketManager.emit('orderStatusUpdate', {
-          orderId: parseInt(orderId.toString()),
-          status: 'pending',
-          waveId: waveId,
-          reason: 'Inventory check passed after refresh'
-        });
-
-        console.log(`✅ Order ${orderId} status updated to pending after inventory refresh`);
-
         ResponseHandler.success(res, {
-          message: 'Order status refreshed successfully',
+          message: 'Order status refresh completed but inventory check failed',
           order_id: orderId,
-          previous_status: 'failed-ordered',
-          new_status: 'pending',
-          inventory_check_passed: true
-        });
-      } else {
-        // Still failed, keep failed-ordered status
-        console.log(`❌ Order ${orderId} still has inventory issues:`, failedSkus);
-
-        ResponseHandler.success(res, {
-          message: 'Order status refresh completed but inventory check still failed',
-          order_id: orderId,
-          status: 'failed-ordered',
+          previous_status: originalStatus,
+          current_status: 'failed-ordered',
           failed_skus: failedSkus,
           inventory_check_passed: false
         });
