@@ -1820,9 +1820,9 @@ export class PickingController {
     // Check permissions
     const userPermissions = req.user!.permissions || [];
     const canView =
-      userPermissions.includes('picking:view') ||
-      userPermissions.includes('picking:assign_manage') ||
-      (userPermissions.includes('picking:execute') && wave.pickerId === req.user!.id);
+      userPermissions.includes('picklist-view') ||
+      userPermissions.includes('picklist-create') ||
+      (wave.pickerId === req.user!.id);
     if (!canView) {
       return ResponseHandler.error(res, 'Insufficient permissions to view this wave', 403);
     }
@@ -1925,7 +1925,7 @@ export class PickingController {
 
       // Check permissions
       const userPermissions = req.user!.permissions || [];
-      const canManage = userPermissions.includes('picking:assign_manage') || userPermissions.includes('picking:view');
+      const canManage = userPermissions.includes('picklist-create');
       if (!canManage) {
         return ResponseHandler.error(res, 'Insufficient permissions to manage this wave', 403);
       }
