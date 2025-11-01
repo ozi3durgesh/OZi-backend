@@ -692,7 +692,7 @@ export class ReturnRequestItemController {
         where: { 
           status: RETURN_CONSTANTS.STATUSES.RECEIVED,
           fc_id :  currentFc,
-          grn_status: { [require('sequelize').Op.or]: [null, 'pending'] }
+          // grn_status: { [require('sequelize').Op.or]: [null, 'pending'] }
         },
         include: [
           { model: Order, as: 'originalOrder', attributes: ['id', 'user_id', 'order_amount', 'created_at'] },
@@ -732,7 +732,7 @@ export class ReturnRequestItemController {
         const returnOrder = returnOrdersMap.get(returnOrderId);
         returnOrder.Line.push({
           id: item.id,
-          sku_id: item.item_id,
+          item_id: item.item_id,
           ordered_qty: item.quantity,
           received_qty: item.quantity, // default to ordered qty
           pending_qty: 0,
@@ -871,7 +871,7 @@ export class ReturnRequestItemController {
         lines: returnRequestItems.map(item => ({
           id: item.id,
           item_id: item.item_id,
-          sku_id: item.item_id, // Using item_id as SKU for return items
+          // sku_id: item.item_id, // Using item_id as SKU for return items
           ordered_qty: item.quantity,
           received_qty: item.quantity, // For returns, received = ordered
           pending_qty: 0,
