@@ -287,7 +287,7 @@ export class EasyEcomWebhookController {
           }
 
           const inv = inventory[0] as any;
-          const availableQuantity = (inv.sale_available_quantity || 0) - (inv.fc_picklist_quantity || 0);
+          const availableQuantity = inv.sale_available_quantity - order.quantity;
           
           // Check if quantity is sufficient (Case 2)
           if (availableQuantity < item.quantity) {
@@ -722,7 +722,7 @@ export class EasyEcomWebhookController {
           }
 
           const inv = inventory[0] as any;
-          const availableQuantity = (inv.sale_available_quantity || 0) - (inv.fc_picklist_quantity || 0);
+          const availableQuantity = inv.sale_available_quantity - (order as any).quantity;
           
           if (availableQuantity < item.quantity) {
             inventoryCheckPassed = false;
