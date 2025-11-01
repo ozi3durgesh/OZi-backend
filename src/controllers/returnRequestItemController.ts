@@ -55,7 +55,7 @@ export class ReturnRequestItemController {
       
       // Create return request items for each item
       const returnRequestItems: any[] = [];
-      
+      console.log("currentFc------------", currentFc)
       for (const itemData of returnData.items) {
         const returnRequestItem = await ReturnRequestItem.create({
           fc_id : currentFc,
@@ -904,7 +904,8 @@ export class ReturnRequestItemController {
     try {
       const { returnOrderId } = req.params;
       const { status, lines, closeReason } = req.body;
-
+      console.log("reached 00oidsfndjksn-----------");
+      
       if (!lines || !Array.isArray(lines) || lines.length === 0) {
         return ResponseHandler.error(res, 'Lines array is required', 400);
       }
@@ -913,11 +914,12 @@ export class ReturnRequestItemController {
       const returnRequestItems = await ReturnRequestItem.findAll({
         where: { return_order_id: returnOrderId },
         include: [
-          { model: Order, as: 'originalOrder', attributes: ['id', 'order_id', 'user_id', 'order_amount', 'created_at'] },
-          { model: Product, as: 'product', attributes: ['SKU', 'ProductName', 'Category', 'Brand', 'MRP', 'COST', 'EAN_UPC', 'ImageURL'] }
+          { model: Order, as: 'originalOrder', attributes: ['id', 'user_id', 'order_amount', 'created_at'] },
+          { model: ProductMaster, as: 'product', attributes: ['sku_id', 'name', 'Category', 'brand_id', 'MRP', 'EAN_UPC', 'image_url'] }
         ]
       });
-
+      console.log("passed thied rrri");
+      
       if (returnRequestItems.length === 0) {
         return ResponseHandler.error(res, 'Return request items not found', 404);
       }
@@ -1291,7 +1293,9 @@ export class ReturnRequestItemController {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
       const offset = (page - 1) * limit;
-      const currentFc = req.user.currentFc;
+      const currentFc = req.user.currentFcId;
+      console.log(currentFc);
+      
       // Find return request items with completed GRN that are ready for putaway
       const { count, rows } = await ReturnRequestItem.findAndCountAll({
         where: { 
@@ -1301,8 +1305,8 @@ export class ReturnRequestItemController {
           received_quantity: { [require('sequelize').Op.gt]: 0 }
         },
         include: [
-          { model: Order, as: 'originalOrder', attributes: ['id', 'order_id', 'user_id'] },
-          { model: Product, as: 'product', attributes: ['SKU', 'ProductName', 'Category', 'Brand'] }
+          { model: Order, as: 'originalOrder', attributes: ['id', 'user_id'] },
+          { model: ProductMaster, as: 'product', attributes: ['sku_id', 'name', 'category', 'brand_id'] }
         ],
         order: [['updated_at', 'DESC']],
         limit,
@@ -1419,10 +1423,11 @@ export class ReturnRequestItemController {
           received_quantity: { [require('sequelize').Op.gt]: 0 }
         },
         include: [
-          { model: Order, as: 'originalOrder', attributes: ['id', 'order_id', 'user_id'] },
-          { model: Product, as: 'product', attributes: ['SKU', 'ProductName', 'Category', 'Brand', 'MRP', 'COST', 'EAN_UPC', 'ImageURL'] }
+          { model: Order, as: 'originalOrder', attributes: ['id', 'user_id'] },
+          { model: ProductMaster, as: 'product', attributes: ['sku_id', 'name', 'category', 'brand_id', 'MRP', 'EAN_UPC', 'image_url'] }
         ]
       });
+
 
       if (!returnRequestItem) {
         return ResponseHandler.error(res, `No return item found for SKU ${resolvedSku} with return_item_id ${return_item_id} that is ready for putaway`, 404);

@@ -493,7 +493,7 @@ Order.hasMany(ReturnRequestItem, { foreignKey: 'original_order_id', sourceKey: '
 ReturnRequestItem.belongsTo(Order, { foreignKey: 'original_order_id', targetKey: 'id', as: 'originalOrder' });
 
 // Product associations
-ProductMaster.hasMany(ReturnRequestItem, { foreignKey: 'item_id', sourceKey: 'sku_id', as: 'returnRequestItems' });
-ReturnRequestItem.belongsTo(ProductMaster, { foreignKey: 'item_id', targetKey: 'sku_id', as: 'product' });
+ProductMaster.hasMany(ReturnRequestItem, { foreignKey: 'item_id', sourceKey: 'id', as: 'returnRequestItems' });
+ReturnRequestItem.belongsTo(ProductMaster, { foreignKey: 'item_id', targetKey: 'id', as: 'product' });
 
 export default ReturnRequestItem;
