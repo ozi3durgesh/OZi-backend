@@ -289,6 +289,7 @@ export async function createManualCreditNote(data: CreateCreditNoteInput) {
       dcPurchaseOrderId: linkedPOId,
       grnId: grnId ?? null,
       paymentTransactionId: null,
+      creditNoteNumber,
       creditAmount,
       reason,
       status: "PENDING",
