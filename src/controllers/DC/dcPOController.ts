@@ -487,11 +487,6 @@ export class DCPOController {
         return ResponseHandler.error(res, 'Action must be either APPROVED or REJECTED', 400);
       }
 
-      // Check if user has permission for direct approval (Role ID 1, 3, or 7)
-      if (![1, 3, 7].includes(userRoleId)) {
-        return ResponseHandler.error(res, 'Access denied. Only authorized users can perform direct approval', 403);
-      }
-
       if (action === 'REJECTED' && !comments) {
         return ResponseHandler.error(res, 'Comments are required for rejection', 400);
       }
