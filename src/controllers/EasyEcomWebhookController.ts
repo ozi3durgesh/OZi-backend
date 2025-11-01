@@ -261,13 +261,13 @@ export class EasyEcomWebhookController {
       
       console.log(`📦 Extracted ${skuData.length} SKUs:`, skuData);
 
-      // Step 2: Check inventory availability (Case 1 & Case 2)
+      // Step 2: Check inventory availability - verify sale_available_quantity >= ordered quantity
       let inventoryCheckFailed = false;
       const failedSkus: Array<{ sku: string; reason: string }> = [];
       
       for (const item of skuData) {
         try {
-          // Check if SKU exists on fc_id (Case 1)
+          // Check if SKU exists with matching fc_id in inventory table
           const inventory = await sequelize.query(
             'SELECT * FROM inventory WHERE sku = ? AND fc_id = ?',
             {
@@ -282,21 +282,22 @@ export class EasyEcomWebhookController {
               sku: item.sku,
               reason: `SKU not found in inventory for fc_id ${item.fc_id}`
             });
-            console.error(`❌ Case 1 failed: SKU ${item.sku} not found in inventory for fc_id ${item.fc_id}`);
+            console.error(`❌ SKU ${item.sku} not found in inventory for fc_id ${item.fc_id}`);
             continue;
           }
 
           const inv = inventory[0] as any;
-          const availableQuantity = inv.sale_available_quantity - order.quantity;
+          const saleAvailableQty = inv.sale_available_quantity || 0;
+          const orderedQty = item.quantity;
           
-          // Check if quantity is sufficient (Case 2)
-          if (availableQuantity < item.quantity) {
+          // Check if sale_available_quantity >= ordered quantity
+          if (saleAvailableQty < orderedQty) {
             inventoryCheckFailed = true;
             failedSkus.push({
               sku: item.sku,
-              reason: `Insufficient quantity. Available: ${availableQuantity}, Required: ${item.quantity}`
+              reason: `Insufficient quantity. Available: ${saleAvailableQty}, Required: ${orderedQty}`
             });
-            console.error(`❌ Case 2 failed: SKU ${item.sku} has insufficient quantity. Available: ${availableQuantity}, Required: ${item.quantity}`);
+            console.error(`❌ SKU ${item.sku} has insufficient sale_available_quantity. Available: ${saleAvailableQty}, Required: ${orderedQty}`);
           }
         } catch (error: any) {
           console.error(`❌ Error checking inventory for SKU ${item.sku}:`, error);
