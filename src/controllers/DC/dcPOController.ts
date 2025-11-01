@@ -473,7 +473,6 @@ export class DCPOController {
       const { id } = req.params;
       const { action, comments } = req.body;
       const userId = req.user?.id;
-      const userRoleId = req.user?.roleId;
 
       if (!userId) {
         return ResponseHandler.error(res, 'User authentication required', 401);
@@ -491,13 +490,8 @@ export class DCPOController {
         return ResponseHandler.error(res, 'Comments are required for rejection', 400);
       }
 
-      // Determine approver role based on user role
-      let approverRole = 'admin'; // Default for role ID 1, 3, 7
-      if (userRoleId === 3) {
-        approverRole = 'category_head';
-      } else if (userRoleId === 7) {
-        approverRole = 'creator';
-      }
+      // Determine approver role (default to admin)
+      const approverRole = 'admin';
 
       const result = await DCPOService.directApproval(
         parseInt(id),

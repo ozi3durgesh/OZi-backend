@@ -15,15 +15,9 @@ export class DCFCPOController {
   static async getFCPOsForApproval(req: AuthRequest, res: Response): Promise<Response> {
     try {
       const userId = req.user?.id;
-      const userRoleId = req.user?.roleId;
 
       if (!userId) {
         return ResponseHandler.error(res, 'User authentication required', 401);
-      }
-
-      // Check if user has DC access (Role ID 1, 3, or 7)
-      if (![1, 3, 7].includes(userRoleId)) {
-        return ResponseHandler.error(res, FC_PO_CONSTANTS.ERRORS.ACCESS_DENIED, 403);
       }
 
       const {
@@ -77,15 +71,9 @@ export class DCFCPOController {
     try {
       const { id } = req.params;
       const userId = req.user?.id;
-      const userRoleId = req.user?.roleId;
 
       if (!userId) {
         return ResponseHandler.error(res, 'User authentication required', 401);
-      }
-
-      // Check if user has DC access (Role ID 1, 3, or 7)
-      if (![1, 3, 7].includes(userRoleId)) {
-        return ResponseHandler.error(res, FC_PO_CONSTANTS.ERRORS.ACCESS_DENIED, 403);
       }
 
       if (!id) {
@@ -122,15 +110,9 @@ export class DCFCPOController {
   static async getFCPOStatistics(req: AuthRequest, res: Response): Promise<Response> {
     try {
       const userId = req.user?.id;
-      const userRoleId = req.user?.roleId;
 
       if (!userId) {
         return ResponseHandler.error(res, 'User authentication required', 401);
-      }
-
-      // Check if user has DC access (Role ID 1, 3, or 7)
-      if (![1, 3, 7].includes(userRoleId)) {
-        return ResponseHandler.error(res, FC_PO_CONSTANTS.ERRORS.ACCESS_DENIED, 403);
       }
 
       const dcId = req.user?.currentDcId || req.query.dcId;
@@ -177,7 +159,6 @@ export class DCFCPOController {
       const { id } = req.params;
       const { action, comments } = req.body;
       const userId = req.user?.id;
-      const userRoleId = req.user?.roleId;
 
       if (!userId) {
         return ResponseHandler.error(res, 'User authentication required', 401);
@@ -189,11 +170,6 @@ export class DCFCPOController {
 
       if (!action || !['APPROVED', 'REJECTED'].includes(action)) {
         return ResponseHandler.error(res, 'Action must be either APPROVED or REJECTED', 400);
-      }
-
-      // Check if user has DC access (Role ID 1, 3, or 7)
-      if (![1, 3, 7].includes(userRoleId)) {
-        return ResponseHandler.error(res, FC_PO_CONSTANTS.ERRORS.ACCESS_DENIED, 403);
       }
 
       if (action === 'REJECTED' && !comments) {
@@ -215,7 +191,7 @@ export class DCFCPOController {
         return ResponseHandler.error(res, 'This FC Purchase Order is not assigned to your DC', 403);
       }
 
-      const approverRole = userRoleId === 1 ? 'dc_admin' : 'dc_manager';
+      const approverRole = 'dc_manager'; // Default approver role
 
       const result = await FCPOService.processApproval(
         parseInt(id),

@@ -153,14 +153,6 @@ export class UserController {
         return ResponseHandler.error(res, 'Admin role changes must be done through registration endpoint', 403);
       }
 
-      // Prevent changing the last admin user
-      if (user.roleId === 1) { // Assuming admin role ID is 1
-        const adminUsers = await User.count({ where: { roleId: 1 } });
-        if (adminUsers <= 1) {
-          return ResponseHandler.error(res, 'Cannot change role of the last admin user', 403);
-        }
-      }
-
       user.roleId = finalRoleId;
       await user.save();
 
@@ -239,14 +231,6 @@ export class UserController {
         return ResponseHandler.error(res, 'User not found', 404);
       }
 
-      // Prevent deactivating the last admin user
-      if (user.roleId === 1) { // Assuming admin role ID is 1
-        const adminUsers = await User.count({ where: { roleId: 1, isActive: true } });
-        if (adminUsers <= 1) {
-          return ResponseHandler.error(res, 'Cannot deactivate the last admin user', 403);
-        }
-      }
-
       // Prevent deactivating self
       if (parseInt(userId) === req.user?.id) {
         return ResponseHandler.error(res, 'Cannot deactivate your own account', 403);
@@ -303,14 +287,6 @@ export class UserController {
         return ResponseHandler.error(res, 'Insufficient permissions', 403);
       }
 
-      // Prevent toggling the last admin user to inactive
-      if (user.roleId === 1 && !isActive) { // Assuming admin role ID is 1
-        const adminUsers = await User.count({ where: { roleId: 1, isActive: true } });
-        if (adminUsers <= 1) {
-          return ResponseHandler.error(res, 'Cannot deactivate the last admin user', 403);
-        }
-      }
-
       // Update the user's isActive status
       user.isActive = isActive;
       await user.save();
@@ -348,14 +324,6 @@ export class UserController {
       // Check if user is already deactivated
       if (!user.isActive) {
         return ResponseHandler.error(res, 'Account is already deactivated', 400);
-      }
-
-      // Prevent deactivating the last admin user
-      if (user.roleId === 1) { // Assuming admin role ID is 1
-        const adminUsers = await User.count({ where: { roleId: 1, isActive: true } });
-        if (adminUsers <= 1) {
-          return ResponseHandler.error(res, 'Cannot deactivate the last admin user', 403);
-        }
       }
 
       // Deactivate the user

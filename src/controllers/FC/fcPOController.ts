@@ -155,14 +155,13 @@ export class FCPOController {
   }
 
   /**
-   * Approve/Reject FC Purchase Order (DC Dashboard - Role ID 1 or 3)
+   * Approve/Reject FC Purchase Order (DC Dashboard)
    */
   static async processApproval(req: AuthRequest, res: Response): Promise<Response> {
     try {
       const { id } = req.params;
       const { action, comments } = req.body;
       const userId = req.user?.id;
-      const userRoleId = req.user?.roleId;
 
       if (!userId) {
         return ResponseHandler.error(res, 'User authentication required', 401);
@@ -176,16 +175,11 @@ export class FCPOController {
         return ResponseHandler.error(res, 'Action must be either APPROVED or REJECTED', 400);
       }
 
-      // Check if user has DC access (Role ID 1, 3, or 7)
-      if (![1, 3, 7].includes(userRoleId)) {
-        return ResponseHandler.error(res, FC_PO_CONSTANTS.ERRORS.ACCESS_DENIED, 403);
-      }
-
       if (action === 'REJECTED' && !comments) {
         return ResponseHandler.error(res, 'Comments are required for rejection', 400);
       }
 
-      const approverRole = userRoleId === 1 ? 'dc_admin' : 'dc_manager';
+      const approverRole = 'dc_manager'; // Default approver role
 
       const fcPO = await FCPOService.processApproval(
         parseInt(id),
