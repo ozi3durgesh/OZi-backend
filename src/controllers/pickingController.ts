@@ -1,6 +1,6 @@
 // controllers/pickingController.ts
 import { Request, Response } from 'express';
-import { PickingWave, PicklistItem, PickingException, User, Order, ScannerBin, ScannerSku, Role } from '../models';
+import { PickingWave, PicklistItem, PickingException, User, Order, ScannerBin, ScannerSku, Role, FulfillmentCenter } from '../models';
 import { ResponseHandler } from '../middleware/responseHandler';
 import { OrderAttributes } from '../types';
 import Product from '../models/productModel';
@@ -995,15 +995,6 @@ export class PickingController {
         return ResponseHandler.error(res, 'Wave not found', 404);
       }
 
-      // Check permissions
-      const userPermissions = req.user!.permissions || [];
-      const canStart =
-        userPermissions.includes('picklist-create') ||
-        (wave.pickerId === pickerId);
-      if (!canStart) {
-        return ResponseHandler.error(res, 'Insufficient permissions to start this wave', 403);
-      }
-
       if (wave.status !== 'ASSIGNED') {
         return ResponseHandler.error(res, 'Wave is not assigned to you', 400);
       }
@@ -1020,20 +1011,30 @@ export class PickingController {
         }
       }
 
+      // Validate fulfillment center exists if fc_id is provided
+      let validFcId = wave.fc_id; // Default to existing fc_id
+      if (fc_id) {
+        const fc = await FulfillmentCenter.findByPk(fc_id);
+        if (!fc) {
+          return ResponseHandler.error(res, `Fulfillment center with id ${fc_id} not found`, 404);
+        }
+        validFcId = fc_id;
+      }
+
       // Update wave status and fc_id
       await wave.update({
         status: 'PICKING',
         startedAt: new Date(),
-        fc_id: fc_id || wave.fc_id // Set fc_id from auth token
+        fc_id: validFcId
       });
 
       // Update fc_id for all picklist items in this wave
-      if (fc_id) {
+      if (validFcId) {
         await PicklistItem.update(
-          { fc_id: fc_id },
+          { fc_id: validFcId },
           { where: { waveId: parseInt(waveId.toString()) } }
         );
-        console.log(`✅ Updated fc_id to ${fc_id} for wave ${waveId} and all picklist items`);
+        console.log(`✅ Updated fc_id to ${validFcId} for wave ${waveId} and all picklist items`);
       }
 
       // Get picklist items with pagination

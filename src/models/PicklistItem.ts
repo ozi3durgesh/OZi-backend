@@ -157,7 +157,7 @@ PicklistItem.init(
       type: DataTypes.INTEGER,
       allowNull: true,
       references: {
-        model: 'fulfillment_centers',
+        model: 'FulfillmentCenters',
         key: 'id'
       }
     },

@@ -96,7 +96,7 @@ PickingWave.init({
   createdAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   updatedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   orderId: { type: DataTypes.INTEGER, allowNull: true, references: { model: 'Orders', key: 'id' } }, // Reference to Orders table
-  fc_id: { type: DataTypes.INTEGER, allowNull: true, references: { model: 'fulfillment_centers', key: 'id' } }, // FC ID
+  fc_id: { type: DataTypes.INTEGER, allowNull: true, references: { model: 'FulfillmentCenters', key: 'id' } }, // FC ID
   // New fields
   handoverAt: { type: DataTypes.DATE, allowNull: true },
   handoverBy: { type: DataTypes.INTEGER, allowNull: true },
