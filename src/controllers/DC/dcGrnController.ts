@@ -1172,11 +1172,26 @@ export class DCGrnController {
         const displayStatus = (statusFilter?.toLowerCase() === 'approved' && calculatedGrnStatus === 'completed') 
           ? 'approved' 
           : calculatedGrnStatus;
+
+        let totalGrnAmount = 0;
+
+        if (processedLines && processedLines.length > 0) {
+          totalGrnAmount = processedLines.reduce((sum: number, line: any) => {
+            const rlp = parseFloat(line?.product_details?.rlp || 0);
+            const receivedQty = parseFloat(line?.received_qty || 0);
+            return sum + rlp * receivedQty;
+          }, 0);
+        }
+        console.log(po.totalAmount);
         
         return {
           id: hasGrn ? latestGrn.id : po.id,
           po_id: po.id,
+          vendorId: po.vendorId,
           status: displayStatus,
+          totalGrnAmount: totalGrnAmount,
+          canGenerateCreditNote:po.totalAmount>totalGrnAmount,
+          creditNoteAmount: po.totalAmount-totalGrnAmount,
           closeReason: hasGrn ? latestGrn.closeReason : (po.status === 'REJECTED' ? po.rejectionReason : null),
           created_by: hasGrn ? latestGrn.created_by : (po.CreatedBy?.id || null),
           created_at: hasGrn ? latestGrn.created_at : po.createdAt,
