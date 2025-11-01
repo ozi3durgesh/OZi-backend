@@ -452,12 +452,12 @@ export class PickingController {
    */
   static async getNextPicker(): Promise<any> {
     try {
-      // Get all active pickers with picking permissions (roleId = 4 for wh_staff_2)
+      // Get all active pickers with picking permissions (roleId = 7 for wh_staff_2)
       const pickers = await User.findAll({
         where: {
           isActive: true,
           availabilityStatus: 'available',
-          roleId: 4 // wh_staff_2 role has picking permissions
+          roleId: 7 // wh_staff_2 role has picking permissions
         },
         order: [['id', 'ASC']],
         attributes: ['id', 'email', 'availabilityStatus']
@@ -515,12 +515,12 @@ export class PickingController {
       if (!targetPickerId) {
         console.log(`Auto-assigning wave ${waveId} using round-robin`);
         
-        // Get all available pickers with picking permissions (roleId = 4 for wh_staff_2)
+        // Get all available pickers with picking permissions (roleId = 7 for wh_staff_2)
         // Exclude users who are off-shift (availabilityStatus = 'off-shift')
         const pickers = await User.findAll({
           where: {
             availabilityStatus: 'available',
-            roleId: 4 // wh_staff_2 role has picking permissions
+            roleId: 7 // wh_staff_2 role has picking permissions
           },
           order: [['id', 'ASC']],
           attributes: ['id', 'email', 'availabilityStatus', 'isActive', 'roleId']
@@ -581,8 +581,8 @@ export class PickingController {
         return ResponseHandler.error(res, `Picker is not available. Current status: ${picker.availabilityStatus}`, 400);
       }
 
-      // Check if picker has picking permissions (roleId 4 = wh_staff_2 has picking permissions)
-      if (picker.roleId !== 4) {
+      // Check if picker has picking permissions (roleId 7 = wh_staff_2 has picking permissions)
+      if (picker.roleId !== 7) {
         return ResponseHandler.error(res, 'Picker does not have picking permissions', 403);
       }
 
